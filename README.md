@@ -1,2 +1,2 @@
 # gooze
-Mutagen for Go Lang
+A Golang mutation testing tool inspired by TMNT "ooze" mutagen.

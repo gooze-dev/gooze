@@ -1,0 +1,29 @@
+version: "2"
+run:
+  timeout: 5m
+  tests: true
+  allow-parallel-runners: true
+
+linters:
+  disable:
+    - depguard
+    - exhaustruct
+    - gochecknoinits
+    - wsl
+  enable:
+    - revive
+    - staticcheck
+    - govet
+    - errcheck
+    - wsl_v5
+
+linters-settings:
+  wsl_v5:
+    allow-first-in-block: true
+    allow-whole-block: false
+    branch-max-lines: 2
+
+issues:
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0
