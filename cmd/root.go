@@ -2,24 +2,86 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 
+	"github.com/mouse-blink/gooze/internal/domain"
+	m "github.com/mouse-blink/gooze/internal/model"
 	"github.com/spf13/cobra"
 )
 
-// rootCmd represents the base command when called without any subcommands.
-var rootCmd = &cobra.Command{
-	Use:   "gooze",
-	Short: "A brief description of your application",
-	Long: `A longer description that spans multiple lines and likely contains
-examples and usage of using your application. For example:
+var listFlag bool
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	// Run: func(cmd *cobra.Command, args []string) { },
+// rootCmd represents the base command when called without any subcommands.
+var rootCmd = newRootCmd()
+
+func newRootCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "gooze [paths...]",
+		Short: "Go mutation testing tool",
+		Long: `Gooze is a mutation testing tool for Go that helps you assess the quality
+of your test suite by introducing small changes (mutations) to your code
+and verifying that your tests catch them.
+
+Supports Go-style path patterns:
+  - ./...          recursively scan current directory
+  - ./pkg/...      recursively scan pkg directory
+  - ./cmd ./pkg    scan multiple directories`,
+		RunE: runRoot,
+	}
+
+	cmd.Flags().BoolVarP(&listFlag, "list", "l", false, "list all source files and their mutation scopes")
+
+	return cmd
+}
+
+func runRoot(cmd *cobra.Command, args []string) error {
+	// Default to current directory if no paths specified
+	paths := args
+	if len(paths) == 0 {
+		paths = []string{"."}
+	}
+
+	// Process each path
+	var allSources []m.Source
+
+	for _, path := range paths {
+		sources, err := processPath(path)
+		if err != nil {
+			return fmt.Errorf("error processing %s: %w", path, err)
+		}
+
+		allSources = append(allSources, sources...)
+	}
+
+	// Handle list flag
+	if listFlag {
+		return listSources(cmd, allSources)
+	}
+
+	// TODO: implement mutation testing logic
+	cmd.Println("Mutation testing not yet implemented. Use --list to see source files.")
+
+	return nil
+}
+
+func processPath(path string) ([]m.Source, error) {
+	wf := domain.NewWorkflow()
+	// GetSources now handles both recursive (./...) and non-recursive patterns
+	return wf.GetSources(m.Path(path))
+}
+
+func listSources(cmd *cobra.Command, sources []m.Source) error {
+	if len(sources) == 0 {
+		cmd.Println("No source files found")
+		return nil
+	}
+
+	for _, source := range sources {
+		cmd.Println(source.Origin)
+	}
+
+	return nil
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -29,14 +91,4 @@ func Execute() {
 	if err != nil {
 		os.Exit(1)
 	}
-}
-
-func init() {
-	// Here you will define your flags and configuration settings.
-	// Cobra supports persistent flags, which, if defined here,
-	// will be global for your application.
-	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.gooze.yaml)")
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

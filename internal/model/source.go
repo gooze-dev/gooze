@@ -1,20 +1,21 @@
 package model
 
+// Path represents a file system path.
 type Path string
 
 // ScopeType defines where code elements can be mutated
 type ScopeType string
 
 const (
-	// ScopeGlobal: package-level declarations (const, var, type)
+	// ScopeGlobal represents package-level declarations (const, var, type).
 	// Always scanned for mutations like: boolean literals, numbers in consts
 	ScopeGlobal ScopeType = "global"
 
-	// ScopeInit: init() functions
+	// ScopeInit represents init() functions.
 	// Scanned for all mutation types
 	ScopeInit ScopeType = "init"
 
-	// ScopeFunction: regular function bodies
+	// ScopeFunction represents regular function bodies.
 	// Scanned for function-specific mutations
 	ScopeFunction ScopeType = "function"
 )
@@ -27,6 +28,7 @@ type CodeScope struct {
 	Name      string // function/variable name for debugging
 }
 
+// Source represents a Go source file with mutation scopes.
 type Source struct {
 	Hash   string
 	Origin Path

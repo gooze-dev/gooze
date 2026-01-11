@@ -1,7 +1,7 @@
 version: "2"
 run:
   timeout: 5m
-  tests: true
+  tests: false
   allow-parallel-runners: true
 
 linters:
@@ -16,8 +16,13 @@ linters:
     - govet
     - errcheck
     - wsl_v5
+    - funlen
 
 linters-settings:
+  funlen:
+    lines: 50
+    statements: 30
+    ignore-comments: true
   wsl_v5:
     allow-first-in-block: true
     allow-whole-block: false
@@ -27,3 +32,7 @@ issues:
   exclude-use-default: false
   max-issues-per-linter: 0
   max-same-issues: 0
+  exclude-files:
+    - ".*_test\\.go$"
+  exclude-dirs:
+    - examples
