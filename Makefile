@@ -4,6 +4,10 @@ bin := ./.bin
 COBRA_CLI_VERSION := v1.3.0
 GOLANGCI_LINT_VERSION := v2.8.0
 
+# Whitelisted packages (exclude examples explicitly)
+PKG_WHITELIST :=  ./cmd/... ./internal/...
+
+
 .PHONY: install-tools
 
 install-tools:
@@ -17,10 +21,10 @@ build:
 	@go build -o $(bin)/$(name) main.go
 
 lint:
-	$(bin)/golangci-lint run ./...
+	$(bin)/golangci-lint run $(PKG_WHITELIST)
 
 test:
-	@go test -v ./...
+	@go test -v $(PKG_WHITELIST)
 
 clean:
 	@rm -rf $(bin)
@@ -29,5 +33,5 @@ run: build
 	@$(bin)/$(name)
 
 fmt:
-	@go fmt ./...
-	@$(bin)/golangci-lint fmt ./...
+	@go fmt $(PKG_WHITELIST)
+	@$(bin)/golangci-lint fmt $(PKG_WHITELIST)
