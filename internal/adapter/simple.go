@@ -15,24 +15,10 @@ func NewSimpleUI(cmd *cobra.Command) *SimpleUI {
 	return &SimpleUI{cmd: cmd}
 }
 
-// Display shows source files using simple text output.
-func (p *SimpleUI) Display(sources []m.Source) error {
-	if len(sources) == 0 {
-		p.cmd.Println("No source files found")
-		return nil
-	}
-
-	for _, source := range sources {
-		p.cmd.Println(source.Origin)
-	}
-
-	return nil
-}
-
 // ShowNotImplemented displays a "not implemented" message.
 func (p *SimpleUI) ShowNotImplemented(count int) error {
 	p.cmd.Printf("Found %d source files\n", count)
-	p.cmd.Println("Mutation testing not yet implemented. Use --list to see source files.")
+	p.cmd.Println("Mutation testing not yet implemented. Use --list or -l flag to see mutation counts.")
 
 	return nil
 }

@@ -12,7 +12,6 @@ import (
 )
 
 var listFlag bool
-var listMutationsFlag bool
 
 // rootCmd represents the base command when called without any subcommands.
 var rootCmd = newRootCmd()
@@ -32,8 +31,7 @@ Supports Go-style path patterns:
 		RunE: runRoot,
 	}
 
-	cmd.Flags().BoolVarP(&listFlag, "list", "l", false, "list all source files and their mutation scopes")
-	cmd.Flags().BoolVarP(&listMutationsFlag, "list-mutations-scopes", "s", false, "list all source files and count of mutations applicable")
+	cmd.Flags().BoolVarP(&listFlag, "list", "l", false, "list all source files and count of mutations applicable")
 
 	return cmd
 }
@@ -63,8 +61,8 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	useTTY := adapter.IsTTY(cmd.OutOrStdout())
 	ui := adapter.NewUI(cmd, useTTY)
 
-	// Handle list-mutations-scopes flag - show mutation counts
-	if listMutationsFlag {
+	// Handle list flag - show mutation counts
+	if listFlag {
 		// Calculate estimations for all sources
 		estimations := make(map[m.Path]int)
 
@@ -78,11 +76,6 @@ func runRoot(cmd *cobra.Command, args []string) error {
 		}
 
 		return ui.DisplayMutationEstimations(estimations)
-	}
-
-	// Handle list flag - show sources with UI
-	if listFlag {
-		return ui.Display(sources)
 	}
 
 	// Without -l flag, show "not implemented" message
