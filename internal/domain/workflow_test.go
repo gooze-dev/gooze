@@ -4,6 +4,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	m "github.com/mouse-blink/gooze/internal/model"
@@ -19,7 +20,7 @@ func TestGetSources(t *testing.T) {
 		}
 
 		wf := NewWorkflow()
-		sources, err := wf.GetSources(m.Path(root))
+		sources, err := wf.GetSources(m.Path(filepath.Join(root, "...")))
 		if err != nil {
 			t.Fatalf("GetSources error: %v", err)
 		}
@@ -39,6 +40,39 @@ func TestGetSources(t *testing.T) {
 		// Ensure type.go (no functions) is not included if present
 		if _, present := findLinesFor(sources, filepath.Join(root, "type.go")); present {
 			t.Errorf("did not expect type.go to be reported (contains no functions)")
+		}
+	})
+
+	t.Run("excludes *_test.go files from sources", func(t *testing.T) {
+		root := t.TempDir()
+
+		// Copy example project which includes a test file
+		srcDir := "../../examples/basic"
+		if err := copyExampleDir(srcDir, root); err != nil {
+			t.Fatalf("failed to copy example: %v", err)
+		}
+
+		wf := NewWorkflow()
+		sources, err := wf.GetSources(m.Path(root))
+		if err != nil {
+			t.Fatalf("GetSources error: %v", err)
+		}
+		if len(sources) == 0 {
+			t.Fatalf("expected at least one source")
+		}
+
+		// Ensure no test files are included
+		for _, s := range sources {
+			base := filepath.Base(string(s.Origin))
+			if strings.HasSuffix(base, "_test.go") {
+				t.Errorf("should not include test files: %s", s.Origin)
+			}
+		}
+
+		// Ensure main.go is present
+		mainPath := filepath.Join(root, "main.go")
+		if _, ok := findSourceFor(sources, mainPath); !ok {
+			t.Errorf("expected to include main.go in sources")
 		}
 	})
 
@@ -798,6 +832,77 @@ func TestTestMutation(t *testing.T) {
 
 		if report.MutationID != mutation.ID {
 			t.Errorf("report.MutationID = %s, want %s", report.MutationID, mutation.ID)
+		}
+	})
+
+	t.Run("subfolder source - mutation killed", func(t *testing.T) {
+		root := t.TempDir()
+
+		// Create a small module with nested package
+		writeFile(t, filepath.Join(root, "go.mod"), "module example.com/submut\n\ngo 1.22\n")
+
+		subdir := filepath.Join(root, "pkg")
+		if err := os.MkdirAll(subdir, 0o755); err != nil {
+			t.Fatalf("mkdir subdir: %v", err)
+		}
+
+		// Source file inside subfolder with arithmetic to mutate
+		writeFile(t, filepath.Join(subdir, "calc.go"), `package pkg
+
+func Calculate(a, b int) int {
+    return a + b
+}
+`)
+
+		// Matching test in the same subfolder
+		writeFile(t, filepath.Join(subdir, "calc_test.go"), `package pkg
+
+import "testing"
+
+func TestCalculate(t *testing.T) {
+    if got := Calculate(2, 1); got != 3 {
+        t.Fatalf("want 3, got %d", got)
+    }
+}
+`)
+
+		wf := NewWorkflow()
+		sources, err := wf.GetSources(m.Path(filepath.Join(root, "...")))
+		if err != nil {
+			t.Fatalf("GetSources error: %v", err)
+		}
+		if len(sources) == 0 {
+			t.Fatalf("expected at least one source")
+		}
+
+		// Find calc.go inside subfolder
+		var calcSrc m.Source
+		found := false
+		for _, s := range sources {
+			if filepath.Base(string(s.Origin)) == "calc.go" {
+				calcSrc = s
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("calc.go not found in sources")
+		}
+
+		muts, err := wf.GenerateMutations(calcSrc, m.MutationArithmetic)
+		if err != nil {
+			t.Fatalf("GenerateMutations error: %v", err)
+		}
+		if len(muts) == 0 {
+			t.Fatalf("expected at least one mutation in calc.go")
+		}
+
+		rep, err := wf.TestMutation(calcSrc, muts[0])
+		if err != nil {
+			t.Fatalf("TestMutation error: %v", err)
+		}
+		if !rep.Killed {
+			t.Errorf("expected mutation to be killed for subfolder source")
 		}
 	})
 

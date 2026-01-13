@@ -12,10 +12,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	m "github.com/mouse-blink/gooze/internal/model"
 )
+
+const goFileExt = ".go"
 
 // Workflow defines the interface for mutation testing operations.
 type Workflow interface {
@@ -130,7 +133,12 @@ func handleDirectory(path, rootStr string, recursive bool) error {
 // processFile parses and extracts scopes from a single Go file.
 func (w *workflow) processFile(path string, fset *token.FileSet) (m.Source, bool, error) {
 	// Skip non-Go files
-	if filepath.Ext(path) != ".go" {
+	if filepath.Ext(path) != goFileExt {
+		return m.Source{}, false, nil
+	}
+
+	// Skip test files (e.g., *_test.go)
+	if isTestFile(path) {
 		return m.Source{}, false, nil
 	}
 
@@ -170,6 +178,15 @@ func (w *workflow) processFile(path string, fset *token.FileSet) (m.Source, bool
 	}
 
 	return source, true, nil
+}
+
+// isTestFile returns true if the given path is a Go test file.
+func isTestFile(p string) bool {
+	if filepath.Ext(p) != goFileExt {
+		return false
+	}
+
+	return strings.HasSuffix(p, "_test.go")
 }
 
 // extractScopes analyzes an AST and returns all relevant code scopes.
@@ -317,6 +334,7 @@ func (w *workflow) EstimateMutations(source m.Source, mutationType m.MutationTyp
 func (w *workflow) TestMutation(source m.Source, mutation m.Mutation) (m.Report, error) {
 	report := m.Report{
 		MutationID: mutation.ID,
+		SourceFile: mutation.SourceFile,
 		Killed:     false,
 	}
 

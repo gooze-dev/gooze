@@ -78,8 +78,57 @@ func runRoot(cmd *cobra.Command, args []string) error {
 		return ui.DisplayMutationEstimations(estimations)
 	}
 
-	// Without -l flag, show "not implemented" message
-	return ui.ShowNotImplemented(len(sources))
+	// Default behavior: run mutation testing
+	return runMutationTests(wf, ui, sources)
+}
+
+// runMutationTests executes mutation testing on all sources.
+func runMutationTests(wf domain.Workflow, ui adapter.UI, sources []m.Source) error {
+	if len(sources) == 0 {
+		return ui.ShowNotImplemented(0)
+	}
+
+	// Create a map to track reports per source file
+	type FileResult struct {
+		Source  m.Source
+		Reports []m.Report
+	}
+
+	fileResults := make(map[m.Path]interface{})
+
+	// Initialize all sources with empty reports
+	for _, source := range sources {
+		fileResults[source.Origin] = &FileResult{
+			Source:  source,
+			Reports: []m.Report{},
+		}
+	}
+
+	for _, source := range sources {
+		// Generate mutations for this source
+		mutations, err := wf.GenerateMutations(source, m.MutationArithmetic)
+		if err != nil {
+			return fmt.Errorf("failed to generate mutations for %s: %w", source.Origin, err)
+		}
+
+		// Test each mutation
+		for _, mutation := range mutations {
+			report, err := wf.TestMutation(source, mutation)
+			if err != nil {
+				return fmt.Errorf("failed to test mutation %s: %w", mutation.ID, err)
+			}
+
+			value, ok := fileResults[source.Origin].(*FileResult)
+			if !ok {
+				return fmt.Errorf("unexpected file result type for %s", source.Origin)
+			}
+
+			value.Reports = append(value.Reports, report)
+		}
+	}
+
+	// Display results
+	return ui.DisplayMutationResults(sources, fileResults)
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.

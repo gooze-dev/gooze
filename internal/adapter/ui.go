@@ -12,4 +12,6 @@ type UI interface {
 	ShowNotImplemented(count int) error
 	// DisplayMutationEstimations displays pre-calculated mutation estimations.
 	DisplayMutationEstimations(estimations map[m.Path]int) error
+	// DisplayMutationResults displays mutation testing results.
+	DisplayMutationResults(sources []m.Source, fileResults map[m.Path]interface{}) error
 }
