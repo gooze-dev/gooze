@@ -4,6 +4,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/mouse-blink/gooze/internal/adapter"
+
 	m "github.com/mouse-blink/gooze/internal/model"
 )
 
@@ -12,7 +14,7 @@ func TestEstimateMutations(t *testing.T) {
 		basicPath := filepath.Join("..", "..", "examples", "basic", "main.go")
 		source := loadSourceFromFile(t, basicPath)
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		count, err := wf.EstimateMutations(source, m.MutationArithmetic)
 		if err != nil {
 			t.Fatalf("EstimateMutations failed: %v", err)
@@ -28,7 +30,7 @@ func TestEstimateMutations(t *testing.T) {
 		scopesPath := filepath.Join("..", "..", "examples", "scopes", "main.go")
 		source := loadSourceFromFile(t, scopesPath)
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		count, err := wf.EstimateMutations(source, m.MutationArithmetic)
 		if err != nil {
 			t.Fatalf("EstimateMutations failed: %v", err)
@@ -44,7 +46,7 @@ func TestEstimateMutations(t *testing.T) {
 		emptyPath := filepath.Join("..", "..", "examples", "empty", "main.go")
 		source := loadSourceFromFile(t, emptyPath)
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		count, err := wf.EstimateMutations(source, m.MutationArithmetic)
 		if err != nil {
 			t.Fatalf("EstimateMutations failed: %v", err)
@@ -63,7 +65,7 @@ func TestEstimateMutations(t *testing.T) {
 			Scopes: []m.CodeScope{},
 		}
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		_, err := wf.EstimateMutations(invalidSource, m.MutationArithmetic)
 		if err == nil {
 			t.Error("expected error for invalid source, got nil")
@@ -74,7 +76,7 @@ func TestEstimateMutations(t *testing.T) {
 		basicPath := filepath.Join("..", "..", "examples", "basic", "main.go")
 		source := loadSourceFromFile(t, basicPath)
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 
 		// Get estimate
 		estimated, err := wf.EstimateMutations(source, m.MutationArithmetic)
@@ -97,7 +99,7 @@ func TestEstimateMutations(t *testing.T) {
 		basicPath := filepath.Join("..", "..", "examples", "basic", "main.go")
 		source := loadSourceFromFile(t, basicPath)
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		_, err := wf.EstimateMutations(source, m.MutationType("unsupported"))
 		if err == nil {
 			t.Error("expected error for unsupported mutation type, got nil")

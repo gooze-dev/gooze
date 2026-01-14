@@ -11,5 +11,9 @@ packages:
   github.com/mouse-blink/gooze/internal/adapter:
     config:
       dir: internal/adapter/mocks
+      outpkg: mocks
     interfaces:
       UI:
+      GoFileAdapter:
+      SourceFSAdapter:
+      TestRunnerAdapter:

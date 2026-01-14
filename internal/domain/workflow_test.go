@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mouse-blink/gooze/internal/adapter"
 	m "github.com/mouse-blink/gooze/internal/model"
 )
 
@@ -19,7 +20,7 @@ func TestGetSources(t *testing.T) {
 			t.Fatalf("failed to copy basic example: %v", err)
 		}
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		sources, err := wf.GetSources(m.Path(filepath.Join(root, "...")))
 		if err != nil {
 			t.Fatalf("GetSources error: %v", err)
@@ -52,7 +53,7 @@ func TestGetSources(t *testing.T) {
 			t.Fatalf("failed to copy example: %v", err)
 		}
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		sources, err := wf.GetSources(m.Path(root))
 		if err != nil {
 			t.Fatalf("GetSources error: %v", err)
@@ -92,7 +93,7 @@ import "testing"
 func TestMain(t *testing.T) {}
 `)
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		sources, err := wf.GetSources(m.Path(root))
 		if err != nil {
 			t.Fatalf("GetSources error: %v", err)
@@ -139,7 +140,7 @@ func TestMain(t *testing.T) {}
 		// Remove test file
 		os.Remove(filepath.Join(root, "main_test.go"))
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		sources, err := wf.GetSources(m.Path(root))
 		if err != nil {
 			t.Fatalf("GetSources error: %v", err)
@@ -159,7 +160,7 @@ func TestMain(t *testing.T) {}
 		// Use nofunc example which has only type declarations
 		root := "../../examples/nofunc"
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		sources, err := wf.GetSources(m.Path(root))
 		if err != nil {
 			t.Fatalf("GetSources error: %v", err)
@@ -173,7 +174,7 @@ func TestMain(t *testing.T) {}
 		// Use examples/nested which has sub/child.go structure
 		root := "../../examples/nested"
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		// Use ./... pattern for recursive scanning
 		sources, err := wf.GetSources(m.Path(root + "/..."))
 		if err != nil {
@@ -187,7 +188,7 @@ func TestMain(t *testing.T) {}
 
 	t.Run("nonexistent root returns error", func(t *testing.T) {
 		root := filepath.Join(t.TempDir(), "no_such_dir")
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		_, err := wf.GetSources(m.Path(root))
 		if err == nil {
 			t.Fatalf("expected error for nonexistent root")
@@ -196,7 +197,7 @@ func TestMain(t *testing.T) {}
 
 	t.Run("empty directory returns no sources", func(t *testing.T) {
 		root := t.TempDir()
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		sources, err := wf.GetSources(m.Path(root))
 		if err != nil {
 			t.Fatalf("GetSources error: %v", err)
@@ -221,7 +222,7 @@ func TestMain(t *testing.T) {}
 			t.Fatalf("failed to write good.go: %v", err)
 		}
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		sources, err := wf.GetSources(m.Path(root))
 		if err != nil {
 			t.Fatalf("GetSources error: %v", err)
@@ -239,7 +240,7 @@ func TestMain(t *testing.T) {}
 	t.Run("detects global constants with proper scope", func(t *testing.T) {
 		root := "../../examples/constants"
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		sources, err := wf.GetSources(m.Path(root))
 		if err != nil {
 			t.Fatalf("GetSources error: %v", err)
@@ -274,7 +275,7 @@ func TestMain(t *testing.T) {}
 	t.Run("detects global variables with proper scope", func(t *testing.T) {
 		root := "../../examples/variables"
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		sources, err := wf.GetSources(m.Path(root))
 		if err != nil {
 			t.Fatalf("GetSources error: %v", err)
@@ -299,7 +300,7 @@ func TestMain(t *testing.T) {}
 	t.Run("detects init function with ScopeInit type", func(t *testing.T) {
 		root := "../../examples/initfunc"
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		sources, err := wf.GetSources(m.Path(root))
 		if err != nil {
 			t.Fatalf("GetSources error: %v", err)
@@ -328,7 +329,7 @@ func TestMain(t *testing.T) {}
 	t.Run("detects mixed scopes in same file", func(t *testing.T) {
 		root := "../../examples/mixed"
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		sources, err := wf.GetSources(m.Path(root))
 		if err != nil {
 			t.Fatalf("GetSources error: %v", err)
@@ -363,7 +364,7 @@ func TestMain(t *testing.T) {}
 	t.Run("backward compatibility - Lines contains function lines only", func(t *testing.T) {
 		root := "../../examples/compat"
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		sources, err := wf.GetSources(m.Path(root))
 		if err != nil {
 			t.Fatalf("GetSources error: %v", err)
@@ -401,7 +402,7 @@ func TestMain(t *testing.T) {}
 	t.Run("excludes files with only type declarations", func(t *testing.T) {
 		root := "../../examples/types"
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		sources, err := wf.GetSources(m.Path(root))
 		if err != nil {
 			t.Fatalf("GetSources error: %v", err)
@@ -416,7 +417,7 @@ func TestMain(t *testing.T) {}
 	t.Run("example basic has functions", func(t *testing.T) {
 		root := "../../examples/basic"
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		sources, err := wf.GetSources(m.Path(root))
 		if err != nil {
 			t.Fatalf("GetSources error: %v", err)
@@ -430,7 +431,7 @@ func TestMain(t *testing.T) {}
 	t.Run("handles ./... pattern for recursive scanning", func(t *testing.T) {
 		root := "../../examples/nested/..."
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		sources, err := wf.GetSources(m.Path(root))
 		if err != nil {
 			t.Fatalf("GetSources error: %v", err)
@@ -446,7 +447,7 @@ func TestMain(t *testing.T) {}
 	t.Run("non-recursive without ./... stops at directory level", func(t *testing.T) {
 		root := "../../examples/nested"
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		sources, err := wf.GetSources(m.Path(root))
 		if err != nil {
 			t.Fatalf("GetSources error: %v", err)
@@ -463,7 +464,7 @@ func TestMain(t *testing.T) {}
 		path1 := "../../examples/constants"
 		path2 := "../../examples/variables"
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		sources, err := wf.GetSources(m.Path(path1), m.Path(path2))
 		if err != nil {
 			t.Fatalf("GetSources error: %v", err)
@@ -496,7 +497,7 @@ func TestMain(t *testing.T) {}
 		recursivePath := "../../examples/nested/..."
 		nonRecursivePath := "../../examples/constants"
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		sources, err := wf.GetSources(m.Path(recursivePath), m.Path(nonRecursivePath))
 		if err != nil {
 			t.Fatalf("GetSources error: %v", err)
@@ -531,7 +532,7 @@ func TestMain(t *testing.T) {}
 	t.Run("./... pattern on single file directory works", func(t *testing.T) {
 		root := "../../examples/constants/..."
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		sources, err := wf.GetSources(m.Path(root))
 		if err != nil {
 			t.Fatalf("GetSources error: %v", err)
@@ -543,7 +544,7 @@ func TestMain(t *testing.T) {}
 	})
 
 	t.Run("empty path list returns empty sources", func(t *testing.T) {
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		sources, err := wf.GetSources()
 		if err != nil {
 			t.Fatalf("GetSources error: %v", err)
@@ -558,7 +559,7 @@ func TestMain(t *testing.T) {}
 		dir2 := "../../examples/variables"
 		dir3 := "../../examples/initfunc"
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		sources, err := wf.GetSources(m.Path(dir1), m.Path(dir2), m.Path(dir3))
 		if err != nil {
 			t.Fatalf("GetSources error: %v", err)
@@ -600,7 +601,7 @@ func TestMain(t *testing.T) {}
 		dir1 := "../../examples/nested/..."
 		dir2 := "../../examples/basic/..."
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		sources, err := wf.GetSources(m.Path(dir1), m.Path(dir2))
 		if err != nil {
 			t.Fatalf("GetSources error: %v", err)
@@ -637,7 +638,7 @@ func TestMain(t *testing.T) {}
 		nonRecursive := "../../examples/constants"
 		recursive2 := "../../examples/basic/..."
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		sources, err := wf.GetSources(m.Path(recursive1), m.Path(nonRecursive), m.Path(recursive2))
 		if err != nil {
 			t.Fatalf("GetSources error: %v", err)
@@ -679,7 +680,7 @@ func TestMain(t *testing.T) {}
 	t.Run("multiple paths with duplicates are deduplicated", func(t *testing.T) {
 		dir := "../../examples/constants"
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		// Pass same directory twice
 		sources, err := wf.GetSources(m.Path(dir), m.Path(dir))
 		if err != nil {
@@ -799,7 +800,7 @@ func TestTestMutation(t *testing.T) {
 			t.Fatalf("failed to copy example: %v", err)
 		}
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		sources, err := wf.GetSources(m.Path(root))
 		if err != nil {
 			t.Fatalf("GetSources error: %v", err)
@@ -866,7 +867,7 @@ func TestCalculate(t *testing.T) {
 }
 `)
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		sources, err := wf.GetSources(m.Path(filepath.Join(root, "...")))
 		if err != nil {
 			t.Fatalf("GetSources error: %v", err)
@@ -918,7 +919,7 @@ func TestCalculate(t *testing.T) {
 		// Remove test file to simulate no tests
 		os.Remove(filepath.Join(root, "main_test.go"))
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		sources, err := wf.GetSources(m.Path(root))
 		if err != nil {
 			t.Fatalf("GetSources error: %v", err)
@@ -960,7 +961,7 @@ func TestCalculate(t *testing.T) {
 			t.Fatalf("failed to copy example: %v", err)
 		}
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		sources, err := wf.GetSources(m.Path(root))
 		if err != nil {
 			t.Fatalf("GetSources error: %v", err)
@@ -994,7 +995,7 @@ func TestCalculate(t *testing.T) {
 			t.Fatalf("failed to copy example: %v", err)
 		}
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 
 		// Get sources - should automatically detect test file
 		sources, err := wf.GetSources(m.Path(root))
@@ -1042,7 +1043,7 @@ func TestCalculate(t *testing.T) {
 			t.Fatalf("failed to copy example: %v", err)
 		}
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		sources, err := wf.GetSources(m.Path(root))
 		if err != nil {
 			t.Fatalf("GetSources error: %v", err)
@@ -1084,7 +1085,7 @@ func TestCalculate(t *testing.T) {
 			t.Fatalf("failed to copy example: %v", err)
 		}
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		sources, err := wf.GetSources(m.Path(root))
 		if err != nil {
 			t.Fatalf("GetSources error: %v", err)
@@ -1134,7 +1135,7 @@ func TestCalculate(t *testing.T) {
 			t.Fatalf("failed to copy example: %v", err)
 		}
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		sources, err := wf.GetSources(m.Path(root))
 		if err != nil {
 			t.Fatalf("GetSources error: %v", err)
@@ -1179,7 +1180,7 @@ func TestCalculate(t *testing.T) {
 			t.Fatalf("failed to copy example: %v", err)
 		}
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 		sources, err := wf.GetSources(m.Path(root))
 		if err != nil {
 			t.Fatalf("GetSources error: %v", err)

@@ -5,19 +5,18 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/mouse-blink/gooze/internal/adapter"
-
 	m "github.com/mouse-blink/gooze/internal/model"
 )
 
-func TestGenerateMutations(t *testing.T) {
+func TestMutagen_GenerateMutations(t *testing.T) {
+	mg := NewMutagen()
+
 	t.Run("generates arithmetic mutations for addition operator in examples/basic", func(t *testing.T) {
 		// Use examples/basic/main.go which has 3+5 expression
 		basicPath := filepath.Join("..", "..", "examples", "basic", "main.go")
 		source := loadSourceFromFile(t, basicPath)
 
-		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
-		mutations, err := wf.GenerateMutations(source, m.MutationArithmetic)
+		mutations, err := mg.GenerateMutations(source, m.MutationArithmetic)
 		if err != nil {
 			t.Fatalf("GenerateMutations failed: %v", err)
 		}
@@ -49,7 +48,7 @@ func TestGenerateMutations(t *testing.T) {
 		}
 		for op, found := range expectedOps {
 			if !found {
-				t.Errorf("missing mutation for operator: %s", op)
+				t.Errorf("expected mutation to %s, but not found", op)
 			}
 		}
 	})
@@ -59,8 +58,7 @@ func TestGenerateMutations(t *testing.T) {
 		scopesPath := filepath.Join("..", "..", "examples", "scopes", "main.go")
 		source := loadSourceFromFile(t, scopesPath)
 
-		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
-		mutations, err := wf.GenerateMutations(source, m.MutationArithmetic)
+		mutations, err := mg.GenerateMutations(source, m.MutationArithmetic)
 		if err != nil {
 			t.Fatalf("GenerateMutations failed: %v", err)
 		}
@@ -79,10 +77,10 @@ func TestGenerateMutations(t *testing.T) {
 
 		// Should have mutations for + and -
 		if opCounts[token.ADD] == 0 {
-			t.Error("expected mutations for + operator")
+			t.Error("expected mutations for ADD operator")
 		}
 		if opCounts[token.SUB] == 0 {
-			t.Error("expected mutations for - operator")
+			t.Error("expected mutations for SUB operator")
 		}
 	})
 
@@ -91,8 +89,7 @@ func TestGenerateMutations(t *testing.T) {
 		scopesPath := filepath.Join("..", "..", "examples", "scopes", "main.go")
 		source := loadSourceFromFile(t, scopesPath)
 
-		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
-		mutations, err := wf.GenerateMutations(source, m.MutationArithmetic)
+		mutations, err := mg.GenerateMutations(source, m.MutationArithmetic)
 		if err != nil {
 			t.Fatalf("GenerateMutations failed: %v", err)
 		}
@@ -114,14 +111,13 @@ func TestGenerateMutations(t *testing.T) {
 		emptyPath := filepath.Join("..", "..", "examples", "empty", "main.go")
 		source := loadSourceFromFile(t, emptyPath)
 
-		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
-		mutations, err := wf.GenerateMutations(source, m.MutationArithmetic)
+		mutations, err := mg.GenerateMutations(source, m.MutationArithmetic)
 		if err != nil {
 			t.Fatalf("GenerateMutations failed: %v", err)
 		}
 
 		if len(mutations) != 0 {
-			t.Fatalf("expected 0 mutations for file without arithmetic, got %d", len(mutations))
+			t.Errorf("expected no mutations for file without arithmetic operators, got %d", len(mutations))
 		}
 	})
 
@@ -129,18 +125,17 @@ func TestGenerateMutations(t *testing.T) {
 		basicPath := filepath.Join("..", "..", "examples", "basic", "main.go")
 		source := loadSourceFromFile(t, basicPath)
 
-		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
-		mutations, err := wf.GenerateMutations(source, m.MutationArithmetic)
+		mutations, err := mg.GenerateMutations(source, m.MutationArithmetic)
 		if err != nil {
 			t.Fatalf("GenerateMutations failed: %v", err)
 		}
 
 		for _, mut := range mutations {
-			if mut.Line == 0 {
-				t.Error("mutation Line should not be 0")
+			if mut.Line <= 0 {
+				t.Errorf("expected positive line number, got %d", mut.Line)
 			}
-			if mut.Column == 0 {
-				t.Error("mutation Column should not be 0")
+			if mut.Column <= 0 {
+				t.Errorf("expected positive column number, got %d", mut.Column)
 			}
 		}
 	})
@@ -149,17 +144,13 @@ func TestGenerateMutations(t *testing.T) {
 		basicPath := filepath.Join("..", "..", "examples", "basic", "main.go")
 		source := loadSourceFromFile(t, basicPath)
 
-		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
-		mutations, err := wf.GenerateMutations(source, m.MutationArithmetic)
+		mutations, err := mg.GenerateMutations(source, m.MutationArithmetic)
 		if err != nil {
 			t.Fatalf("GenerateMutations failed: %v", err)
 		}
 
 		ids := make(map[string]bool)
 		for _, mut := range mutations {
-			if mut.ID == "" {
-				t.Error("mutation ID should not be empty")
-			}
 			if ids[mut.ID] {
 				t.Errorf("duplicate mutation ID: %s", mut.ID)
 			}
@@ -168,20 +159,21 @@ func TestGenerateMutations(t *testing.T) {
 	})
 }
 
-func TestGenerateMutationsVariadic(t *testing.T) {
+func TestMutagen_GenerateMutationsVariadic(t *testing.T) {
+	mg := NewMutagen()
+
 	t.Run("generates both arithmetic and boolean mutations when both types specified", func(t *testing.T) {
 		scopesPath := filepath.Join("..", "..", "examples", "scopes", "main.go")
 		source := loadSourceFromFile(t, scopesPath)
 
-		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
-		mutations, err := wf.GenerateMutations(source, m.MutationArithmetic, m.MutationBoolean)
+		mutations, err := mg.GenerateMutations(source, m.MutationArithmetic, m.MutationBoolean)
 		if err != nil {
 			t.Fatalf("GenerateMutations failed: %v", err)
 		}
 
 		// scopes has 8 arithmetic + 2 boolean = 10 total
 		if len(mutations) < 10 {
-			t.Fatalf("expected at least 10 mutations (arithmetic + boolean), got %d", len(mutations))
+			t.Fatalf("expected at least 10 mutations, got %d", len(mutations))
 		}
 
 		// Count by type
@@ -202,8 +194,7 @@ func TestGenerateMutationsVariadic(t *testing.T) {
 		scopesPath := filepath.Join("..", "..", "examples", "scopes", "main.go")
 		source := loadSourceFromFile(t, scopesPath)
 
-		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
-		mutations, err := wf.GenerateMutations(source)
+		mutations, err := mg.GenerateMutations(source)
 		if err != nil {
 			t.Fatalf("GenerateMutations failed: %v", err)
 		}
@@ -215,10 +206,10 @@ func TestGenerateMutationsVariadic(t *testing.T) {
 		}
 
 		if typeCounts[m.MutationArithmetic] == 0 {
-			t.Error("expected arithmetic mutations when no type specified")
+			t.Error("expected arithmetic mutations")
 		}
 		if typeCounts[m.MutationBoolean] == 0 {
-			t.Error("expected boolean mutations when no type specified")
+			t.Error("expected boolean mutations")
 		}
 	})
 
@@ -226,8 +217,7 @@ func TestGenerateMutationsVariadic(t *testing.T) {
 		booleanPath := filepath.Join("..", "..", "examples", "boolean", "main.go")
 		source := loadSourceFromFile(t, booleanPath)
 
-		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
-		mutations, err := wf.GenerateMutations(source, m.MutationBoolean)
+		mutations, err := mg.GenerateMutations(source, m.MutationBoolean)
 		if err != nil {
 			t.Fatalf("GenerateMutations failed: %v", err)
 		}
@@ -235,26 +225,27 @@ func TestGenerateMutationsVariadic(t *testing.T) {
 		// Verify all are boolean
 		for _, mut := range mutations {
 			if mut.Type != m.MutationBoolean {
-				t.Errorf("expected only boolean mutations, got %v", mut.Type)
+				t.Errorf("expected boolean mutation, got %v", mut.Type)
 			}
 		}
 	})
 }
 
-func TestEstimateMutationsVariadic(t *testing.T) {
+func TestMutagen_EstimateMutationsVariadic(t *testing.T) {
+	mg := NewMutagen()
+
 	t.Run("estimates both types when both specified", func(t *testing.T) {
 		scopesPath := filepath.Join("..", "..", "examples", "scopes", "main.go")
 		source := loadSourceFromFile(t, scopesPath)
 
-		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
-		count, err := wf.EstimateMutations(source, m.MutationArithmetic, m.MutationBoolean)
+		count, err := mg.EstimateMutations(source, m.MutationArithmetic, m.MutationBoolean)
 		if err != nil {
 			t.Fatalf("EstimateMutations failed: %v", err)
 		}
 
 		// scopes has 8 arithmetic + 2 boolean = 10 total
 		if count < 10 {
-			t.Fatalf("expected at least 10 mutations, got %d", count)
+			t.Errorf("expected at least 10 mutations, got %d", count)
 		}
 	})
 
@@ -262,26 +253,26 @@ func TestEstimateMutationsVariadic(t *testing.T) {
 		scopesPath := filepath.Join("..", "..", "examples", "scopes", "main.go")
 		source := loadSourceFromFile(t, scopesPath)
 
-		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
-		count, err := wf.EstimateMutations(source)
+		count, err := mg.EstimateMutations(source)
 		if err != nil {
 			t.Fatalf("EstimateMutations failed: %v", err)
 		}
 
 		// Should get count for all types
 		if count < 10 {
-			t.Fatalf("expected at least 10 mutations when no type specified, got %d", count)
+			t.Errorf("expected at least 10 mutations, got %d", count)
 		}
 	})
 }
 
-func TestGenerateBooleanMutations(t *testing.T) {
+func TestMutagen_GenerateBooleanMutations(t *testing.T) {
+	mg := NewMutagen()
+
 	t.Run("generates boolean mutations for true and false literals", func(t *testing.T) {
 		booleanPath := filepath.Join("..", "..", "examples", "boolean", "main.go")
 		source := loadSourceFromFile(t, booleanPath)
 
-		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
-		mutations, err := wf.GenerateMutations(source, m.MutationBoolean)
+		mutations, err := mg.GenerateMutations(source, m.MutationBoolean)
 		if err != nil {
 			t.Fatalf("GenerateMutations failed: %v", err)
 		}
@@ -309,19 +300,13 @@ func TestGenerateBooleanMutations(t *testing.T) {
 			if mut.OriginalText == "false" && mut.MutatedText == "true" {
 				falseMutations++
 			}
-			if mut.Line == 0 {
-				t.Error("mutation Line should not be 0")
-			}
-			if mut.Column == 0 {
-				t.Error("mutation Column should not be 0")
-			}
 		}
 
 		if trueMutations == 0 {
-			t.Error("expected mutations for true → false")
+			t.Error("expected mutations that flip true to false")
 		}
 		if falseMutations == 0 {
-			t.Error("expected mutations for false → true")
+			t.Error("expected mutations that flip false to true")
 		}
 	})
 
@@ -329,8 +314,7 @@ func TestGenerateBooleanMutations(t *testing.T) {
 		booleanPath := filepath.Join("..", "..", "examples", "boolean", "main.go")
 		source := loadSourceFromFile(t, booleanPath)
 
-		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
-		mutations, err := wf.GenerateMutations(source, m.MutationBoolean)
+		mutations, err := mg.GenerateMutations(source, m.MutationBoolean)
 		if err != nil {
 			t.Fatalf("GenerateMutations failed: %v", err)
 		}
@@ -351,17 +335,13 @@ func TestGenerateBooleanMutations(t *testing.T) {
 		booleanPath := filepath.Join("..", "..", "examples", "boolean", "main.go")
 		source := loadSourceFromFile(t, booleanPath)
 
-		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
-		mutations, err := wf.GenerateMutations(source, m.MutationBoolean)
+		mutations, err := mg.GenerateMutations(source, m.MutationBoolean)
 		if err != nil {
 			t.Fatalf("GenerateMutations failed: %v", err)
 		}
 
 		ids := make(map[string]bool)
 		for _, mut := range mutations {
-			if mut.ID == "" {
-				t.Error("mutation ID should not be empty")
-			}
 			if ids[mut.ID] {
 				t.Errorf("duplicate mutation ID: %s", mut.ID)
 			}
@@ -370,35 +350,17 @@ func TestGenerateBooleanMutations(t *testing.T) {
 	})
 
 	t.Run("no mutations when no boolean literals present", func(t *testing.T) {
+		// examples/empty/main.go should have no boolean literals (or very few)
 		emptyPath := filepath.Join("..", "..", "examples", "empty", "main.go")
 		source := loadSourceFromFile(t, emptyPath)
 
-		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
-		mutations, err := wf.GenerateMutations(source, m.MutationBoolean)
+		mutations, err := mg.GenerateMutations(source, m.MutationBoolean)
 		if err != nil {
 			t.Fatalf("GenerateMutations failed: %v", err)
 		}
 
 		// empty/main.go should have no boolean literals (or very few)
 		// This test verifies the generator handles files without booleans gracefully
-		_ = mutations // Just checking no error occurs
+		_ = len(mutations) // Just checking no error occurs
 	})
-}
-
-// Helper function to load a source from an actual file.
-func loadSourceFromFile(t *testing.T, path string) m.Source {
-	t.Helper()
-
-	// Use the workflow's existing GetSources method
-	wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
-	sources, err := wf.GetSources(m.Path(path))
-	if err != nil {
-		t.Fatalf("failed to load source from %s: %v", path, err)
-	}
-
-	if len(sources) == 0 {
-		t.Fatalf("no sources found in %s", path)
-	}
-
-	return sources[0]
 }

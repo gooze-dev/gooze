@@ -49,8 +49,13 @@ func runRoot(cmd *cobra.Command, args []string) error {
 		mPaths[i] = m.Path(p)
 	}
 
+	// Create adapters
+	fsAdapter := adapter.NewLocalSourceFSAdapter()
+	goAdapter := adapter.NewLocalGoFileAdapter()
+	testAdapter := adapter.NewLocalTestRunnerAdapter()
+
 	// Get all sources from all paths
-	wf := domain.NewWorkflow()
+	wf := domain.NewWorkflow(fsAdapter, goAdapter, testAdapter)
 
 	sources, err := wf.GetSources(mPaths...)
 	if err != nil {

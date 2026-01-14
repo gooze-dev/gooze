@@ -4,6 +4,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/mouse-blink/gooze/internal/adapter"
+
 	m "github.com/mouse-blink/gooze/internal/model"
 )
 
@@ -12,7 +14,7 @@ func TestBooleanMutationIntegration(t *testing.T) {
 		booleanPath := filepath.Join("..", "..", "examples", "boolean", "main.go")
 		source := loadSourceFromFile(t, booleanPath)
 
-		wf := NewWorkflow()
+		wf := NewWorkflow(adapter.NewLocalSourceFSAdapter(), adapter.NewLocalGoFileAdapter(), adapter.NewLocalTestRunnerAdapter())
 
 		// Generate boolean mutations
 		mutations, err := wf.GenerateMutations(source, m.MutationBoolean)

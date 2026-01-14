@@ -1,20 +1,12 @@
 package domain
 
 import (
-	"bytes"
-	"context"
-	"crypto/sha256"
 	"fmt"
-	"go/ast"
-	"go/parser"
 	"go/token"
-	"io"
 	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
-	"time"
 
+	"github.com/mouse-blink/gooze/internal/adapter"
 	m "github.com/mouse-blink/gooze/internal/model"
 )
 
@@ -28,11 +20,23 @@ type Workflow interface {
 	TestMutation(sources m.Source, mutation m.Mutation) (m.Report, error)
 }
 
-type workflow struct{}
+type workflow struct {
+	fsAdapter   adapter.SourceFSAdapter
+	goAdapter   adapter.GoFileAdapter
+	testAdapter adapter.TestRunnerAdapter
+	mutagen     Mutagen
+	orch        Orchestrator
+}
 
-// NewWorkflow creates a new Workflow instance.
-func NewWorkflow() Workflow {
-	return &workflow{}
+// NewWorkflow creates a new Workflow instance with the provided adapters.
+func NewWorkflow(fsAdapter adapter.SourceFSAdapter, goAdapter adapter.GoFileAdapter, testAdapter adapter.TestRunnerAdapter) Workflow {
+	return &workflow{
+		fsAdapter:   fsAdapter,
+		goAdapter:   goAdapter,
+		testAdapter: testAdapter,
+		mutagen:     NewMutagen(),
+		orch:        NewOrchestrator(fsAdapter, testAdapter),
+	}
 }
 
 // GetSources walks directory trees and identifies code scopes for mutation testing.
@@ -46,7 +50,7 @@ func (w *workflow) GetSources(roots ...m.Path) ([]m.Source, error) {
 		return []m.Source{}, nil
 	}
 
-	seen := make(map[string]struct{})
+	seen := make(map[string]bool)
 
 	var allSources []m.Source
 
@@ -57,13 +61,9 @@ func (w *workflow) GetSources(roots ...m.Path) ([]m.Source, error) {
 		}
 
 		for _, source := range sources {
-			absPath, err := filepath.Abs(string(source.Origin))
-			if err != nil {
-				absPath = filepath.Clean(string(source.Origin))
-			}
-
-			if _, exists := seen[absPath]; !exists {
-				seen[absPath] = struct{}{}
+			absPath := string(source.Origin)
+			if !seen[absPath] {
+				seen[absPath] = true
 
 				allSources = append(allSources, source)
 			}
@@ -73,11 +73,21 @@ func (w *workflow) GetSources(roots ...m.Path) ([]m.Source, error) {
 	return allSources, nil
 }
 
+// GenerateMutations delegates to the mutagen for pure mutation generation.
+func (w *workflow) GenerateMutations(source m.Source, mutationTypes ...m.MutationType) ([]m.Mutation, error) {
+	return w.mutagen.GenerateMutations(source, mutationTypes...)
+}
+
+// EstimateMutations delegates to the mutagen for mutation estimation.
+func (w *workflow) EstimateMutations(source m.Source, mutationTypes ...m.MutationType) (int, error) {
+	return w.mutagen.EstimateMutations(source, mutationTypes...)
+}
+
 // scanPath scans a single path (with optional /... suffix) for Go source files.
 func (w *workflow) scanPath(root m.Path) ([]m.Source, error) {
 	rootStr, recursive := parseRootPath(string(root))
 
-	if _, err := os.Stat(rootStr); err != nil {
+	if _, err := w.fsAdapter.FileInfo(m.Path(rootStr)); err != nil {
 		return nil, fmt.Errorf("root path error: %w", err)
 	}
 
@@ -85,16 +95,20 @@ func (w *workflow) scanPath(root m.Path) ([]m.Source, error) {
 
 	fset := token.NewFileSet()
 
-	err := filepath.Walk(rootStr, func(path string, info os.FileInfo, err error) error {
+	err := w.fsAdapter.Walk(m.Path(rootStr), recursive, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 
 		if info.IsDir() {
-			return handleDirectory(path, rootStr, recursive)
+			if !recursive && path != rootStr {
+				return fmt.Errorf("skip directory") // Skip subdirectories if not recursive
+			}
+
+			return nil
 		}
 
-		source, shouldInclude, processErr := w.processFile(path, fset)
+		source, shouldInclude, processErr := w.processFile(m.Path(path), fset)
 		if processErr != nil {
 			return processErr
 		}
@@ -121,141 +135,60 @@ func parseRootPath(rootStr string) (path string, recursive bool) {
 	return rootStr, false
 }
 
-// handleDirectory determines if directory traversal should continue.
-func handleDirectory(path, rootStr string, recursive bool) error {
-	if !recursive && path != rootStr {
-		return filepath.SkipDir
-	}
-
-	return nil
-}
-
 // processFile parses and extracts scopes from a single Go file.
-func (w *workflow) processFile(path string, fset *token.FileSet) (m.Source, bool, error) {
+func (w *workflow) processFile(path m.Path, fset *token.FileSet) (m.Source, bool, error) {
+	pathStr := string(path)
+
 	// Skip non-Go files
-	if filepath.Ext(path) != goFileExt {
+	if !strings.HasSuffix(pathStr, goFileExt) {
 		return m.Source{}, false, nil
 	}
 
 	// Skip test files (e.g., *_test.go)
-	if isTestFile(path) {
+	if strings.HasSuffix(pathStr, "_test.go") {
 		return m.Source{}, false, nil
 	}
 
-	file, parseErr := parser.ParseFile(fset, path, nil, parser.ParseComments)
-	if parseErr != nil {
-		// Skip files with parse errors instead of failing the entire scan
-		return m.Source{}, false, nil //nolint:nilerr // Intentionally skip parse errors
+	src, err := w.fsAdapter.ReadFile(path)
+	if err != nil {
+		return m.Source{}, false, nil //nolint:nilerr // Intentionally skip unreadable files
 	}
 
-	scopes := extractScopes(fset, file)
+	file, err := w.goAdapter.Parse(fset, pathStr, src)
+	if err != nil {
+		return m.Source{}, false, nil //nolint:nilerr // Intentionally skip unparsable files
+	}
+
+	scopes := w.goAdapter.ExtractScopes(fset, file)
 	if len(scopes) == 0 {
 		return m.Source{}, false, nil
 	}
 
-	functionLines := extractFunctionLines(scopes)
+	functionLines := w.goAdapter.FunctionLines(scopes)
 	hasGlobals := hasGlobalScopes(scopes)
 
-	// Only include if has functions/init or global declarations
+	// Include only if it has functions/init or global declarations
 	if len(functionLines) == 0 && !hasGlobals {
 		return m.Source{}, false, nil
 	}
 
-	hash, hashErr := hashFile(path)
-	if hashErr != nil {
-		return m.Source{}, false, fmt.Errorf("hash error for %s: %w", path, hashErr)
+	hash, err := w.fsAdapter.HashFile(path)
+	if err != nil {
+		return m.Source{}, false, fmt.Errorf("hash error for %s: %w", path, err)
 	}
 
-	// Automatically detect corresponding test file
-	testFile := findTestFile(path)
+	// Detect corresponding test file
+	testFile, _ := w.fsAdapter.DetectTestFile(path)
 
 	source := m.Source{
 		Hash:   hash,
-		Origin: m.Path(path),
+		Origin: path,
 		Test:   testFile,
 		Lines:  functionLines,
 		Scopes: scopes,
 	}
 
 	return source, true, nil
-}
-
-// isTestFile returns true if the given path is a Go test file.
-func isTestFile(p string) bool {
-	if filepath.Ext(p) != goFileExt {
-		return false
-	}
-
-	return strings.HasSuffix(p, "_test.go")
-}
-
-// extractScopes analyzes an AST and returns all relevant code scopes.
-func extractScopes(fset *token.FileSet, file *ast.File) []m.CodeScope {
-	var scopes []m.CodeScope
-
-	for _, decl := range file.Decls {
-		switch d := decl.(type) {
-		case *ast.GenDecl:
-			// Handle package-level declarations (const, var, type)
-			if d.Tok == token.CONST || d.Tok == token.VAR {
-				for _, spec := range d.Specs {
-					if vs, ok := spec.(*ast.ValueSpec); ok {
-						for _, name := range vs.Names {
-							scope := m.CodeScope{
-								Type:      m.ScopeGlobal,
-								StartLine: fset.Position(vs.Pos()).Line,
-								EndLine:   fset.Position(vs.End()).Line,
-								Name:      name.Name,
-							}
-							scopes = append(scopes, scope)
-						}
-					}
-				}
-			}
-
-		case *ast.FuncDecl:
-			// Handle functions
-			startLine := fset.Position(d.Pos()).Line
-			endLine := fset.Position(d.End()).Line
-
-			// Distinguish init functions from regular functions
-			scopeType := m.ScopeFunction
-
-			funcName := d.Name.Name
-			if funcName == "init" {
-				scopeType = m.ScopeInit
-			}
-
-			scope := m.CodeScope{
-				Type:      scopeType,
-				StartLine: startLine,
-				EndLine:   endLine,
-				Name:      funcName,
-			}
-			scopes = append(scopes, scope)
-		}
-	}
-
-	return scopes
-}
-
-// extractFunctionLines extracts line numbers for functions only (backward compatibility).
-func extractFunctionLines(scopes []m.CodeScope) []int {
-	var lines []int
-
-	seen := make(map[int]struct{})
-
-	for _, scope := range scopes {
-		// Only include function and init scopes, not global
-		if scope.Type == m.ScopeFunction || scope.Type == m.ScopeInit {
-			if _, exists := seen[scope.StartLine]; !exists {
-				lines = append(lines, scope.StartLine)
-				seen[scope.StartLine] = struct{}{}
-			}
-		}
-	}
-
-	return lines
 }
 
 // hasGlobalScopes checks if there are any global const/var scopes.
@@ -269,440 +202,7 @@ func hasGlobalScopes(scopes []m.CodeScope) bool {
 	return false
 }
 
-// hashFile computes SHA-256 hash of a file.
-func hashFile(path string) (string, error) {
-	f, err := os.Open(path) // #nosec G304 -- path comes from trusted file system walk
-	if err != nil {
-		return "", err
-	}
-
-	defer func() {
-		if closeErr := f.Close(); closeErr != nil && err == nil {
-			err = closeErr
-		}
-	}()
-
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return "", err
-	}
-
-	return fmt.Sprintf("%x", h.Sum(nil)), nil
-}
-
-// findTestFile attempts to locate the corresponding test file for a source file.
-// For a file like "calc.go", it looks for "calc_test.go" in the same directory.
-func findTestFile(sourcePath string) m.Path {
-	// Skip if already a test file
-	if filepath.Ext(sourcePath) != ".go" {
-		return ""
-	}
-
-	if len(sourcePath) >= 8 && sourcePath[len(sourcePath)-8:] == "_test.go" {
-		return ""
-	}
-
-	// Build test file path: source.go -> source_test.go
-	dir := filepath.Dir(sourcePath)
-	base := filepath.Base(sourcePath)
-	base = base[:len(base)-3] // Remove ".go"
-	testFile := filepath.Join(dir, base+"_test.go")
-
-	// Check if test file exists
-	if _, err := os.Stat(testFile); err == nil {
-		return m.Path(testFile)
-	}
-
-	return ""
-}
-
-// EstimateMutations calculates the total number of mutations for a source and mutation type.
-func (w *workflow) EstimateMutations(source m.Source, mutationTypes ...m.MutationType) (int, error) {
-	// Default to all types if none specified
-	if len(mutationTypes) == 0 {
-		mutationTypes = []m.MutationType{m.MutationArithmetic, m.MutationBoolean}
-	}
-
-	// Validate mutation types
-	for _, mutationType := range mutationTypes {
-		if mutationType != m.MutationArithmetic && mutationType != m.MutationBoolean {
-			return 0, fmt.Errorf("unsupported mutation type: %v", mutationType)
-		}
-	}
-
-	mutations, err := w.GenerateMutations(source, mutationTypes...)
-	if err != nil {
-		return 0, fmt.Errorf("failed to estimate mutations for %s: %w", source.Origin, err)
-	}
-
-	return len(mutations), nil
-}
-
 // TestMutation applies a mutation to source code and runs tests to check if the mutation is detected.
 func (w *workflow) TestMutation(source m.Source, mutation m.Mutation) (m.Report, error) {
-	report := m.Report{
-		MutationID: mutation.ID,
-		SourceFile: mutation.SourceFile,
-		Killed:     false,
-	}
-
-	// If no test file specified, mutation survives
-	if source.Test == "" {
-		report.Output = "no test file specified"
-		return report, nil
-	}
-
-	// Setup temporary testing environment
-	tmpDir, projectRoot, err := setupMutationTest(source)
-	if err != nil {
-		report.Error = err
-		return report, err
-	}
-
-	defer cleanupTempDir(tmpDir)
-
-	// Apply mutation to source file in temp directory
-	if err := writeMutatedSource(tmpDir, projectRoot, source, mutation); err != nil {
-		report.Error = err
-		return report, err
-	}
-
-	// Run test and evaluate mutation
-	if err := evaluateMutation(tmpDir, projectRoot, source, &report); err != nil {
-		return report, err
-	}
-
-	return report, nil
-}
-
-// setupMutationTest prepares the temporary testing environment.
-func setupMutationTest(source m.Source) (tmpDir, projectRoot string, err error) {
-	// Find the project root directory based on go.mod
-	projectRoot, err = findProjectRoot(string(source.Origin))
-	if err != nil {
-		return "", "", fmt.Errorf("failed to find project root: %w", err)
-	}
-
-	// Create temporary directory for mutation testing
-	tmpDir, err = os.MkdirTemp("", "gooze-mutation-*")
-	if err != nil {
-		return "", "", fmt.Errorf("failed to create temp dir: %w", err)
-	}
-
-	// Copy entire project to temporary directory
-	if err := copyDir(projectRoot, tmpDir); err != nil {
-		_ = os.RemoveAll(tmpDir)
-		return "", "", fmt.Errorf("failed to copy project: %w", err)
-	}
-
-	return tmpDir, projectRoot, nil
-}
-
-// cleanupTempDir removes the temporary directory, logging errors if cleanup fails.
-func cleanupTempDir(tmpDir string) {
-	if err := os.RemoveAll(tmpDir); err != nil {
-		// Log but don't fail on cleanup errors
-		_ = err
-	}
-}
-
-// writeMutatedSource applies mutation and writes to temp directory.
-func writeMutatedSource(tmpDir, projectRoot string, source m.Source, mutation m.Mutation) error {
-	// Calculate relative paths from project root
-	relSourcePath, err := filepath.Rel(projectRoot, string(source.Origin))
-	if err != nil {
-		return fmt.Errorf("failed to get relative source path: %w", err)
-	}
-
-	// Path to source file in temp directory
-	tmpSourcePath := filepath.Join(tmpDir, relSourcePath)
-
-	// Read original source file from temp directory
-	// #nosec G304 - tmpSourcePath is internally generated, not user input
-	originalContent, err := os.ReadFile(tmpSourcePath)
-	if err != nil {
-		return fmt.Errorf("failed to read source file: %w", err)
-	}
-
-	// Apply mutation to create mutated content
-	mutatedContent, err := applyMutation(originalContent, mutation)
-	if err != nil {
-		return fmt.Errorf("failed to apply mutation: %w", err)
-	}
-
-	// Write mutated content to temp directory with restricted permissions
-	if err := os.WriteFile(tmpSourcePath, mutatedContent, 0o600); err != nil {
-		return fmt.Errorf("failed to write mutated file: %w", err)
-	}
-
-	return nil
-}
-
-// evaluateMutation runs tests and determines if mutation was killed.
-func evaluateMutation(tmpDir, projectRoot string, source m.Source, report *m.Report) error {
-	// Calculate relative test file path
-	relTestPath, err := filepath.Rel(projectRoot, string(source.Test))
-	if err != nil {
-		return fmt.Errorf("failed to get relative test path: %w", err)
-	}
-
-	// Path to test file in temp directory
-	tmpTestPath := filepath.Join(tmpDir, relTestPath)
-
-	// Run only the specific test file in temporary directory
-	output, testErr := runGoTest(tmpDir, tmpTestPath)
-	report.Output = output
-
-	// If test failed (non-zero exit), mutation was killed
-	if testErr != nil {
-		report.Killed = true
-	}
-
-	return nil
-}
-
-// applyMutation applies a mutation to source code content.
-func applyMutation(content []byte, mutation m.Mutation) ([]byte, error) {
-	// First check if the line exists
-	lines := splitLines(content)
-	if mutation.Line < 1 || mutation.Line > len(lines) {
-		return nil, fmt.Errorf("line %d out of range (file has %d lines)", mutation.Line, len(lines))
-	}
-
-	fset := token.NewFileSet()
-
-	file, err := parser.ParseFile(fset, "", content, parser.ParseComments)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse content: %w", err)
-	}
-
-	// Find the target mutation position to verify it exists
-	var mutationFound bool
-
-	ast.Inspect(file, func(n ast.Node) bool {
-		if mutationFound {
-			return false
-		}
-
-		switch mutation.Type {
-		case m.MutationArithmetic:
-			mutationFound = checkArithmeticMutation(n, fset, mutation)
-		case m.MutationBoolean:
-			mutationFound = checkBooleanMutation(n, fset, mutation)
-		}
-
-		return !mutationFound
-	})
-
-	if !mutationFound {
-		return nil, fmt.Errorf("mutation not found at line %d, column %d", mutation.Line, mutation.Column)
-	}
-
-	// Replace the operator/text in the target line
-	targetLine := lines[mutation.Line-1]
-	newLine := replaceInLine(targetLine, mutation)
-	lines[mutation.Line-1] = newLine
-
-	buf := joinLines(lines)
-
-	return buf, nil
-}
-
-// replaceInLine replaces the operator or text at the specified column in a line.
-func replaceInLine(line string, mutation m.Mutation) string {
-	if mutation.Column < 1 || mutation.Column > len(line) {
-		return line
-	}
-
-	// Find and replace the operator or text
-	runes := []rune(line)
-
-	var originalOp, mutatedOp string
-
-	if mutation.Type == m.MutationBoolean {
-		originalOp = mutation.OriginalText
-		mutatedOp = mutation.MutatedText
-	} else {
-		originalOp = mutation.OriginalOp.String()
-		mutatedOp = mutation.MutatedOp.String()
-	}
-
-	// Column is 1-indexed
-	col := mutation.Column - 1
-
-	// Check if the original operator is at this position
-	if col+len(originalOp) <= len(runes) {
-		opInLine := string(runes[col : col+len(originalOp)])
-		if opInLine == originalOp {
-			result := string(runes[:col]) + mutatedOp + string(runes[col+len(originalOp):])
-			return result
-		}
-	}
-
-	return line
-}
-
-func checkArithmeticMutation(n ast.Node, fset *token.FileSet, mutation m.Mutation) bool {
-	binExpr, ok := n.(*ast.BinaryExpr)
-	if !ok {
-		return false
-	}
-
-	pos := fset.Position(binExpr.OpPos)
-
-	return pos.Line == mutation.Line && pos.Column == mutation.Column && binExpr.Op == mutation.OriginalOp
-}
-
-func checkBooleanMutation(n ast.Node, fset *token.FileSet, mutation m.Mutation) bool {
-	ident, ok := n.(*ast.Ident)
-	if !ok {
-		return false
-	}
-
-	pos := fset.Position(ident.Pos())
-
-	return pos.Line == mutation.Line && pos.Column == mutation.Column && ident.Name == mutation.OriginalText
-}
-
-// splitLines splits content into lines, preserving line endings.
-func splitLines(content []byte) []string {
-	s := string(content)
-
-	var lines []string
-
-	start := 0
-
-	for i := range len(s) {
-		if s[i] == '\n' {
-			lines = append(lines, s[start:i+1])
-			start = i + 1
-		}
-	}
-
-	if start < len(s) {
-		lines = append(lines, s[start:])
-	}
-
-	return lines
-}
-
-// joinLines joins lines back into content.
-func joinLines(lines []string) []byte {
-	var result string
-	for _, line := range lines {
-		result += line
-	}
-
-	return []byte(result)
-}
-
-// findProjectRoot searches for go.mod file walking up the directory tree.
-func findProjectRoot(startPath string) (string, error) {
-	dir := filepath.Dir(startPath)
-
-	for {
-		goModPath := filepath.Join(dir, "go.mod")
-		if _, err := os.Stat(goModPath); err == nil {
-			return dir, nil
-		}
-
-		parent := filepath.Dir(dir)
-
-		if parent == dir {
-			// Reached root without finding go.mod
-			return "", fmt.Errorf("go.mod not found in any parent directory of %s", startPath)
-		}
-
-		dir = parent
-	}
-}
-
-// copyDir recursively copies a directory tree.
-func copyDir(src, dst string) error {
-	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		// Calculate relative path
-		relPath, err := filepath.Rel(src, path)
-		if err != nil {
-			return err
-		}
-
-		// Skip common directories that don't need to be copied
-		if info.IsDir() {
-			baseName := filepath.Base(path)
-			if baseName == ".git" || baseName == "vendor" || baseName == "node_modules" {
-				return filepath.SkipDir
-			}
-		}
-
-		targetPath := filepath.Join(dst, relPath)
-
-		if info.IsDir() {
-			return os.MkdirAll(targetPath, info.Mode())
-		}
-
-		// Copy file
-		return copyFile(path, targetPath, info.Mode())
-	})
-}
-
-// copyFile copies a single file.
-func copyFile(src, dst string, mode os.FileMode) error {
-	// #nosec G304 - src is internal project file path, not user input
-	sourceFile, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-
-	defer func() {
-		if closeErr := sourceFile.Close(); closeErr != nil {
-			_ = closeErr
-		}
-	}()
-
-	if err := os.MkdirAll(filepath.Dir(dst), 0o750); err != nil {
-		return err
-	}
-
-	// #nosec G304 - dst is internal destination path, not user input
-	destFile, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-
-	defer func() {
-		if closeErr := destFile.Close(); closeErr != nil {
-			_ = closeErr
-		}
-	}()
-
-	if _, err := io.Copy(destFile, sourceFile); err != nil {
-		return err
-	}
-
-	return os.Chmod(dst, mode)
-}
-
-// runGoTest runs 'go test' on a specific test file in the given directory.
-func runGoTest(workDir, testFile string) (string, error) {
-	// Create context with timeout to avoid hanging tests
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, "go", "test", "-v", testFile)
-	cmd.Dir = workDir
-
-	var stdout, stderr bytes.Buffer
-
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	err := cmd.Run()
-
-	output := stdout.String() + stderr.String()
-
-	return output, err
+	return w.orch.TestMutation(source, mutation)
 }

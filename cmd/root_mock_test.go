@@ -3,6 +3,7 @@ package cmd
 import (
 	"testing"
 
+	"github.com/mouse-blink/gooze/internal/adapter"
 	mockAdapter "github.com/mouse-blink/gooze/internal/adapter/mocks"
 	mockDomain "github.com/mouse-blink/gooze/internal/domain/mocks"
 	m "github.com/mouse-blink/gooze/internal/model"
@@ -20,9 +21,9 @@ func TestRunRoot_WithMocks(t *testing.T) {
 			{Origin: m.Path("helper.go")},
 		}
 
-		estimations := map[m.Path]int{
-			m.Path("main.go"):   5,
-			m.Path("helper.go"): 3,
+		estimations := map[m.Path]adapter.MutationEstimation{
+			m.Path("main.go"):   {Arithmetic: 5, Boolean: 0},
+			m.Path("helper.go"): {Arithmetic: 3, Boolean: 0},
 		}
 
 		// Mock expectations - using simple On/Return pattern
@@ -143,8 +144,8 @@ func TestUIMock_DisplayMutationEstimations(t *testing.T) {
 		mockUI := mockAdapter.NewMockUI(t)
 
 		// Setup test data
-		estimations := map[m.Path]int{
-			m.Path("main.go"): 5,
+		estimations := map[m.Path]adapter.MutationEstimation{
+			m.Path("main.go"): {Arithmetic: 5, Boolean: 0},
 		}
 
 		// Setup expectation
@@ -185,11 +186,11 @@ func TestUIMock_DisplayMutationEstimations(t *testing.T) {
 
 		// Setup expectation with empty map
 		mockUI.EXPECT().
-			DisplayMutationEstimations(map[m.Path]int{}).
+			DisplayMutationEstimations(map[m.Path]adapter.MutationEstimation{}).
 			Return(nil)
 
 		// Use mock
-		err := mockUI.DisplayMutationEstimations(map[m.Path]int{})
+		err := mockUI.DisplayMutationEstimations(map[m.Path]adapter.MutationEstimation{})
 
 		// Verify
 		if err != nil {
