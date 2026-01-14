@@ -27,13 +27,14 @@ func (p *SimpleUI) ShowNotImplemented(count int) error {
 }
 
 // DisplayMutationEstimations displays pre-calculated mutation estimations.
-func (p *SimpleUI) DisplayMutationEstimations(estimations map[m.Path]int) error {
+func (p *SimpleUI) DisplayMutationEstimations(estimations map[m.Path]MutationEstimation) error {
 	if len(estimations) == 0 {
-		p.cmd.Printf("\nTotal: 0 arithmetic mutations across 0 files\n")
+		p.cmd.Printf("\nTotal: 0 mutations across 0 files\n")
 		return nil
 	}
 
-	totalMutations := 0
+	totalArithmetic := 0
+	totalBoolean := 0
 
 	// Sort paths for consistent output
 	paths := make([]m.Path, 0, len(estimations))
@@ -50,13 +51,20 @@ func (p *SimpleUI) DisplayMutationEstimations(estimations map[m.Path]int) error 
 		}
 	}
 
+	// Display per-file counts
 	for _, path := range paths {
-		count := estimations[path]
-		p.cmd.Printf("%s: %d arithmetic mutations\n", path, count)
-		totalMutations += count
+		est := estimations[path]
+		p.cmd.Printf("%s:\n", path)
+		p.cmd.Printf("  - %d arithmetic mutations\n", est.Arithmetic)
+		p.cmd.Printf("  - %d boolean mutations\n", est.Boolean)
+		totalArithmetic += est.Arithmetic
+		totalBoolean += est.Boolean
 	}
 
-	p.cmd.Printf("\nTotal: %d arithmetic mutations across %d files\n", totalMutations, len(estimations))
+	// Display totals
+	p.cmd.Printf("\nTotal across %d file(s):\n", len(estimations))
+	p.cmd.Printf("  - %d arithmetic mutations\n", totalArithmetic)
+	p.cmd.Printf("  - %d boolean mutations\n", totalBoolean)
 
 	return nil
 }
@@ -129,7 +137,7 @@ func countReportStats(reports []m.Report) (killed, survived int) {
 }
 
 func (p *SimpleUI) displayFileReports(origin m.Path, fileMutations int, reports []m.Report) error {
-	if err := p.outPrintf("%s: %d arithmetic mutations\n", origin, fileMutations); err != nil {
+	if err := p.outPrintf("%s: %d mutations\n", origin, fileMutations); err != nil {
 		return err
 	}
 

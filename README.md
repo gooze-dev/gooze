@@ -6,11 +6,11 @@ A Golang mutation testing tool inspired by TMNT "ooze" mutagen.
 
 ## Complete Go Mutation Testing Categories
 
-- [ ] Boolean Literal
+- [x] Boolean Literal
 - [ ] Numbers
 - [ ] Unary / Negation
-- [ ] Arithmetic
-- [ ] Core Logic & Arithmetic
+- [x] Arithmetic
+- [ ] Core Logic
 - [ ] Statement
 - [ ] Statement Deletion
 - [ ] Return Value

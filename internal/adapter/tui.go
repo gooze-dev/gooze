@@ -38,10 +38,11 @@ func (p *TUI) ShowNotImplemented(count int) error {
 }
 
 // DisplayMutationEstimations shows pre-calculated mutation estimations using TUI.
-func (p *TUI) DisplayMutationEstimations(estimations map[m.Path]int) error {
+func (p *TUI) DisplayMutationEstimations(estimations map[m.Path]MutationEstimation) error {
 	// Convert map to sorted slice for display
 	counts := make([]mutationCount, 0, len(estimations))
-	total := 0
+	totalArithmetic := 0
+	totalBoolean := 0
 
 	// Sort paths for consistent output
 	paths := make([]m.Path, 0, len(estimations))
@@ -59,15 +60,17 @@ func (p *TUI) DisplayMutationEstimations(estimations map[m.Path]int) error {
 	}
 
 	for _, path := range paths {
-		count := estimations[path]
+		est := estimations[path]
 		counts = append(counts, mutationCount{
-			file:  string(path),
-			count: count,
+			file:       string(path),
+			arithmetic: est.Arithmetic,
+			boolean:    est.Boolean,
 		})
-		total += count
+		totalArithmetic += est.Arithmetic
+		totalBoolean += est.Boolean
 	}
 
-	model := newMutationCountModel(counts, total, m.MutationArithmetic)
+	model := newMutationCountModel(counts, totalArithmetic, totalBoolean)
 
 	// Get initial terminal size
 	if f, ok := p.output.(*os.File); ok {
@@ -94,8 +97,9 @@ func (p *TUI) DisplayMutationEstimations(estimations map[m.Path]int) error {
 
 // mutationCount holds the mutation count for a single file.
 type mutationCount struct {
-	file  string
-	count int
+	file       string
+	arithmetic int
+	boolean    int
 }
 
 // notImplementedModel represents a simple model for showing "not implemented" message.
@@ -125,24 +129,24 @@ func (nm notImplementedModel) View() string {
 
 // mutationCountModel represents the Bubble Tea model for displaying mutation counts.
 type mutationCountModel struct {
-	counts       []mutationCount
-	total        int
-	mutationType m.MutationType
-	height       int
-	width        int
-	offset       int // Current scroll offset
-	quitting     bool
+	counts          []mutationCount
+	totalArithmetic int
+	totalBoolean    int
+	height          int
+	width           int
+	offset          int // Current scroll offset
+	quitting        bool
 }
 
-func newMutationCountModel(counts []mutationCount, total int, mutationType m.MutationType) mutationCountModel {
+func newMutationCountModel(counts []mutationCount, totalArithmetic int, totalBoolean int) mutationCountModel {
 	return mutationCountModel{
-		counts:       counts,
-		total:        total,
-		mutationType: mutationType,
-		height:       0, // Will be set on first WindowSizeMsg
-		width:        0,
-		offset:       0,
-		quitting:     false,
+		counts:          counts,
+		totalArithmetic: totalArithmetic,
+		totalBoolean:    totalBoolean,
+		height:          0, // Will be set on first WindowSizeMsg
+		width:           0,
+		offset:          0,
+		quitting:        false,
 	}
 }
 
@@ -305,12 +309,7 @@ func (mcm mutationCountModel) renderHeader(b *strings.Builder) {
 func (mcm mutationCountModel) renderMutationCountList(b *strings.Builder) {
 	totalFiles := len(mcm.counts)
 
-	mutationTypeName := "arithmetic"
-	if mcm.mutationType != m.MutationArithmetic {
-		mutationTypeName = "unknown"
-	}
-
-	fmt.Fprintf(b, "  🔢 %s mutations summary:\n\n", mutationTypeName)
+	b.WriteString("  🔢 mutations summary:\n\n")
 
 	// Calculate pagination
 	itemsPerPage := mcm.itemsPerPage()
@@ -338,17 +337,27 @@ func (mcm mutationCountModel) renderMutationCountList(b *strings.Builder) {
 	}
 
 	for _, mc := range displayCounts {
-		if mc.count == 0 {
-			// Gray out only the zero count value
-			fmt.Fprintf(b, "  %s: %s%d mutations%s\n", mc.file, grayColor, mc.count, resetColor)
-		} else {
-			fmt.Fprintf(b, "  %s: %d mutations\n", mc.file, mc.count)
+		arithmeticColor := ""
+		booleanColor := ""
+
+		if mc.arithmetic == 0 {
+			arithmeticColor = grayColor
 		}
+
+		if mc.boolean == 0 {
+			booleanColor = grayColor
+		}
+
+		fmt.Fprintf(b, "  %s: %s%d%s arithmetic, %s%d%s boolean\n",
+			mc.file,
+			arithmeticColor, mc.arithmetic, resetColor,
+			booleanColor, mc.boolean, resetColor)
 	}
 
 	// Total count
 	b.WriteString("\n")
-	fmt.Fprintf(b, "  📊 Total: %d %s mutations across %d file(s)\n", mcm.total, mutationTypeName, totalFiles)
+	fmt.Fprintf(b, "  📊 Total: %d arithmetic mutations across %d file(s)\n", mcm.totalArithmetic, totalFiles)
+	fmt.Fprintf(b, "  📊 Total: %d boolean mutations across %d file(s)\n", mcm.totalBoolean, totalFiles)
 
 	// Footer with navigation help
 	if needsPagination {

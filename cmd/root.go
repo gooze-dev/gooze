@@ -64,15 +64,23 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	// Handle list flag - show mutation counts
 	if listFlag {
 		// Calculate estimations for all sources
-		estimations := make(map[m.Path]int)
+		estimations := make(map[m.Path]adapter.MutationEstimation)
 
 		for _, source := range sources {
-			count, err := wf.EstimateMutations(source, m.MutationArithmetic)
+			arithmeticCount, err := wf.EstimateMutations(source, m.MutationArithmetic)
 			if err != nil {
-				return fmt.Errorf("failed to estimate mutations for %s: %w", source.Origin, err)
+				return fmt.Errorf("failed to estimate arithmetic mutations for %s: %w", source.Origin, err)
 			}
 
-			estimations[source.Origin] = count
+			booleanCount, err := wf.EstimateMutations(source, m.MutationBoolean)
+			if err != nil {
+				return fmt.Errorf("failed to estimate boolean mutations for %s: %w", source.Origin, err)
+			}
+
+			estimations[source.Origin] = adapter.MutationEstimation{
+				Arithmetic: arithmeticCount,
+				Boolean:    booleanCount,
+			}
 		}
 
 		return ui.DisplayMutationEstimations(estimations)
@@ -105,8 +113,8 @@ func runMutationTests(wf domain.Workflow, ui adapter.UI, sources []m.Source) err
 	}
 
 	for _, source := range sources {
-		// Generate mutations for this source
-		mutations, err := wf.GenerateMutations(source, m.MutationArithmetic)
+		// Generate all mutations for this source (both arithmetic and boolean)
+		mutations, err := wf.GenerateMutations(source) // No type specified = all types
 		if err != nil {
 			return fmt.Errorf("failed to generate mutations for %s: %w", source.Origin, err)
 		}

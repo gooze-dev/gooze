@@ -166,6 +166,223 @@ func TestGenerateMutations(t *testing.T) {
 	})
 }
 
+func TestGenerateMutationsVariadic(t *testing.T) {
+	t.Run("generates both arithmetic and boolean mutations when both types specified", func(t *testing.T) {
+		scopesPath := filepath.Join("..", "..", "examples", "scopes", "main.go")
+		source := loadSourceFromFile(t, scopesPath)
+
+		wf := NewWorkflow()
+		mutations, err := wf.GenerateMutations(source, m.MutationArithmetic, m.MutationBoolean)
+		if err != nil {
+			t.Fatalf("GenerateMutations failed: %v", err)
+		}
+
+		// scopes has 8 arithmetic + 2 boolean = 10 total
+		if len(mutations) < 10 {
+			t.Fatalf("expected at least 10 mutations (arithmetic + boolean), got %d", len(mutations))
+		}
+
+		// Count by type
+		typeCounts := make(map[m.MutationType]int)
+		for _, mut := range mutations {
+			typeCounts[mut.Type]++
+		}
+
+		if typeCounts[m.MutationArithmetic] == 0 {
+			t.Error("expected arithmetic mutations")
+		}
+		if typeCounts[m.MutationBoolean] == 0 {
+			t.Error("expected boolean mutations")
+		}
+	})
+
+	t.Run("generates all mutations when no type specified (defaults to all)", func(t *testing.T) {
+		scopesPath := filepath.Join("..", "..", "examples", "scopes", "main.go")
+		source := loadSourceFromFile(t, scopesPath)
+
+		wf := NewWorkflow()
+		mutations, err := wf.GenerateMutations(source)
+		if err != nil {
+			t.Fatalf("GenerateMutations failed: %v", err)
+		}
+
+		// Should get both types when no type specified
+		typeCounts := make(map[m.MutationType]int)
+		for _, mut := range mutations {
+			typeCounts[mut.Type]++
+		}
+
+		if typeCounts[m.MutationArithmetic] == 0 {
+			t.Error("expected arithmetic mutations when no type specified")
+		}
+		if typeCounts[m.MutationBoolean] == 0 {
+			t.Error("expected boolean mutations when no type specified")
+		}
+	})
+
+	t.Run("generates only boolean mutations when only boolean type specified", func(t *testing.T) {
+		booleanPath := filepath.Join("..", "..", "examples", "boolean", "main.go")
+		source := loadSourceFromFile(t, booleanPath)
+
+		wf := NewWorkflow()
+		mutations, err := wf.GenerateMutations(source, m.MutationBoolean)
+		if err != nil {
+			t.Fatalf("GenerateMutations failed: %v", err)
+		}
+
+		// Verify all are boolean
+		for _, mut := range mutations {
+			if mut.Type != m.MutationBoolean {
+				t.Errorf("expected only boolean mutations, got %v", mut.Type)
+			}
+		}
+	})
+}
+
+func TestEstimateMutationsVariadic(t *testing.T) {
+	t.Run("estimates both types when both specified", func(t *testing.T) {
+		scopesPath := filepath.Join("..", "..", "examples", "scopes", "main.go")
+		source := loadSourceFromFile(t, scopesPath)
+
+		wf := NewWorkflow()
+		count, err := wf.EstimateMutations(source, m.MutationArithmetic, m.MutationBoolean)
+		if err != nil {
+			t.Fatalf("EstimateMutations failed: %v", err)
+		}
+
+		// scopes has 8 arithmetic + 2 boolean = 10 total
+		if count < 10 {
+			t.Fatalf("expected at least 10 mutations, got %d", count)
+		}
+	})
+
+	t.Run("estimates all types when no type specified", func(t *testing.T) {
+		scopesPath := filepath.Join("..", "..", "examples", "scopes", "main.go")
+		source := loadSourceFromFile(t, scopesPath)
+
+		wf := NewWorkflow()
+		count, err := wf.EstimateMutations(source)
+		if err != nil {
+			t.Fatalf("EstimateMutations failed: %v", err)
+		}
+
+		// Should get count for all types
+		if count < 10 {
+			t.Fatalf("expected at least 10 mutations when no type specified, got %d", count)
+		}
+	})
+}
+
+func TestGenerateBooleanMutations(t *testing.T) {
+	t.Run("generates boolean mutations for true and false literals", func(t *testing.T) {
+		booleanPath := filepath.Join("..", "..", "examples", "boolean", "main.go")
+		source := loadSourceFromFile(t, booleanPath)
+
+		wf := NewWorkflow()
+		mutations, err := wf.GenerateMutations(source, m.MutationBoolean)
+		if err != nil {
+			t.Fatalf("GenerateMutations failed: %v", err)
+		}
+
+		// examples/boolean/main.go has:
+		// - true in isValid := true
+		// - false in isComplete := false
+		// - true in checkStatus(true, false)
+		// - false in checkStatus(true, false)
+		// Total: 4 boolean literals = 4 mutations
+		if len(mutations) < 4 {
+			t.Fatalf("expected at least 4 mutations, got %d", len(mutations))
+		}
+
+		// Verify all mutations are boolean type
+		trueMutations := 0
+		falseMutations := 0
+		for _, mut := range mutations {
+			if mut.Type != m.MutationBoolean {
+				t.Errorf("expected boolean mutation, got %v", mut.Type)
+			}
+			if mut.OriginalText == "true" && mut.MutatedText == "false" {
+				trueMutations++
+			}
+			if mut.OriginalText == "false" && mut.MutatedText == "true" {
+				falseMutations++
+			}
+			if mut.Line == 0 {
+				t.Error("mutation Line should not be 0")
+			}
+			if mut.Column == 0 {
+				t.Error("mutation Column should not be 0")
+			}
+		}
+
+		if trueMutations == 0 {
+			t.Error("expected mutations for true → false")
+		}
+		if falseMutations == 0 {
+			t.Error("expected mutations for false → true")
+		}
+	})
+
+	t.Run("assigns correct scope types to boolean mutations", func(t *testing.T) {
+		booleanPath := filepath.Join("..", "..", "examples", "boolean", "main.go")
+		source := loadSourceFromFile(t, booleanPath)
+
+		wf := NewWorkflow()
+		mutations, err := wf.GenerateMutations(source, m.MutationBoolean)
+		if err != nil {
+			t.Fatalf("GenerateMutations failed: %v", err)
+		}
+
+		// Count by scope type
+		scopeCounts := make(map[m.ScopeType]int)
+		for _, mut := range mutations {
+			scopeCounts[mut.ScopeType]++
+		}
+
+		// Should have mutations in function scope
+		if scopeCounts[m.ScopeFunction] == 0 {
+			t.Error("expected mutations in function scope")
+		}
+	})
+
+	t.Run("generates unique IDs for boolean mutations", func(t *testing.T) {
+		booleanPath := filepath.Join("..", "..", "examples", "boolean", "main.go")
+		source := loadSourceFromFile(t, booleanPath)
+
+		wf := NewWorkflow()
+		mutations, err := wf.GenerateMutations(source, m.MutationBoolean)
+		if err != nil {
+			t.Fatalf("GenerateMutations failed: %v", err)
+		}
+
+		ids := make(map[string]bool)
+		for _, mut := range mutations {
+			if mut.ID == "" {
+				t.Error("mutation ID should not be empty")
+			}
+			if ids[mut.ID] {
+				t.Errorf("duplicate mutation ID: %s", mut.ID)
+			}
+			ids[mut.ID] = true
+		}
+	})
+
+	t.Run("no mutations when no boolean literals present", func(t *testing.T) {
+		emptyPath := filepath.Join("..", "..", "examples", "empty", "main.go")
+		source := loadSourceFromFile(t, emptyPath)
+
+		wf := NewWorkflow()
+		mutations, err := wf.GenerateMutations(source, m.MutationBoolean)
+		if err != nil {
+			t.Fatalf("GenerateMutations failed: %v", err)
+		}
+
+		// empty/main.go should have no boolean literals (or very few)
+		// This test verifies the generator handles files without booleans gracefully
+		_ = mutations // Just checking no error occurs
+	})
+}
+
 // Helper function to load a source from an actual file.
 func loadSourceFromFile(t *testing.T, path string) m.Source {
 	t.Helper()

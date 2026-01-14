@@ -23,8 +23,8 @@ const goFileExt = ".go"
 // Workflow defines the interface for mutation testing operations.
 type Workflow interface {
 	GetSources(roots ...m.Path) ([]m.Source, error)
-	GenerateMutations(sources m.Source, mutationType m.MutationType) ([]m.Mutation, error)
-	EstimateMutations(sources m.Source, mutationType m.MutationType) (int, error)
+	GenerateMutations(sources m.Source, mutationType ...m.MutationType) ([]m.Mutation, error)
+	EstimateMutations(sources m.Source, mutationType ...m.MutationType) (int, error)
 	TestMutation(sources m.Source, mutation m.Mutation) (m.Report, error)
 }
 
@@ -317,12 +317,20 @@ func findTestFile(sourcePath string) m.Path {
 }
 
 // EstimateMutations calculates the total number of mutations for a source and mutation type.
-func (w *workflow) EstimateMutations(source m.Source, mutationType m.MutationType) (int, error) {
-	if mutationType != m.MutationArithmetic {
-		return 0, fmt.Errorf("unsupported mutation type: %v", mutationType)
+func (w *workflow) EstimateMutations(source m.Source, mutationTypes ...m.MutationType) (int, error) {
+	// Default to all types if none specified
+	if len(mutationTypes) == 0 {
+		mutationTypes = []m.MutationType{m.MutationArithmetic, m.MutationBoolean}
 	}
 
-	mutations, err := w.GenerateMutations(source, mutationType)
+	// Validate mutation types
+	for _, mutationType := range mutationTypes {
+		if mutationType != m.MutationArithmetic && mutationType != m.MutationBoolean {
+			return 0, fmt.Errorf("unsupported mutation type: %v", mutationType)
+		}
+	}
+
+	mutations, err := w.GenerateMutations(source, mutationTypes...)
 	if err != nil {
 		return 0, fmt.Errorf("failed to estimate mutations for %s: %w", source.Origin, err)
 	}
@@ -472,29 +480,27 @@ func applyMutation(content []byte, mutation m.Mutation) ([]byte, error) {
 	var mutationFound bool
 
 	ast.Inspect(file, func(n ast.Node) bool {
-		binExpr, ok := n.(*ast.BinaryExpr)
-		if !ok {
-			return true
-		}
-
-		pos := fset.Position(binExpr.OpPos)
-
-		// Check if this is the mutation we want to apply
-		if pos.Line == mutation.Line && pos.Column == mutation.Column && binExpr.Op == mutation.OriginalOp {
-			mutationFound = true
+		if mutationFound {
 			return false
 		}
 
-		return true
+		switch mutation.Type {
+		case m.MutationArithmetic:
+			mutationFound = checkArithmeticMutation(n, fset, mutation)
+		case m.MutationBoolean:
+			mutationFound = checkBooleanMutation(n, fset, mutation)
+		}
+
+		return !mutationFound
 	})
 
 	if !mutationFound {
 		return nil, fmt.Errorf("mutation not found at line %d, column %d", mutation.Line, mutation.Column)
 	}
 
-	// Replace the operator in the target line
+	// Replace the operator/text in the target line
 	targetLine := lines[mutation.Line-1]
-	newLine := replaceOperatorInLine(targetLine, mutation)
+	newLine := replaceInLine(targetLine, mutation)
 	lines[mutation.Line-1] = newLine
 
 	buf := joinLines(lines)
@@ -502,16 +508,24 @@ func applyMutation(content []byte, mutation m.Mutation) ([]byte, error) {
 	return buf, nil
 }
 
-// replaceOperatorInLine replaces the operator at the specified column in a line.
-func replaceOperatorInLine(line string, mutation m.Mutation) string {
+// replaceInLine replaces the operator or text at the specified column in a line.
+func replaceInLine(line string, mutation m.Mutation) string {
 	if mutation.Column < 1 || mutation.Column > len(line) {
 		return line
 	}
 
-	// Find and replace the operator
+	// Find and replace the operator or text
 	runes := []rune(line)
-	originalOp := mutation.OriginalOp.String()
-	mutatedOp := mutation.MutatedOp.String()
+
+	var originalOp, mutatedOp string
+
+	if mutation.Type == m.MutationBoolean {
+		originalOp = mutation.OriginalText
+		mutatedOp = mutation.MutatedText
+	} else {
+		originalOp = mutation.OriginalOp.String()
+		mutatedOp = mutation.MutatedOp.String()
+	}
 
 	// Column is 1-indexed
 	col := mutation.Column - 1
@@ -526,6 +540,28 @@ func replaceOperatorInLine(line string, mutation m.Mutation) string {
 	}
 
 	return line
+}
+
+func checkArithmeticMutation(n ast.Node, fset *token.FileSet, mutation m.Mutation) bool {
+	binExpr, ok := n.(*ast.BinaryExpr)
+	if !ok {
+		return false
+	}
+
+	pos := fset.Position(binExpr.OpPos)
+
+	return pos.Line == mutation.Line && pos.Column == mutation.Column && binExpr.Op == mutation.OriginalOp
+}
+
+func checkBooleanMutation(n ast.Node, fset *token.FileSet, mutation m.Mutation) bool {
+	ident, ok := n.(*ast.Ident)
+	if !ok {
+		return false
+	}
+
+	pos := fset.Position(ident.Pos())
+
+	return pos.Line == mutation.Line && pos.Column == mutation.Column && ident.Name == mutation.OriginalText
 }
 
 // splitLines splits content into lines, preserving line endings.

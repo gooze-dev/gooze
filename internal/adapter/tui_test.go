@@ -30,7 +30,7 @@ func TestTUI_DisplayMutationEstimations_Empty(t *testing.T) {
 	var buf bytes.Buffer
 	tui := NewTUI(&buf)
 
-	estimations := map[m.Path]int{}
+	estimations := map[m.Path]MutationEstimation{}
 	err := tui.DisplayMutationEstimations(estimations)
 	if err != nil {
 		t.Fatalf("DisplayMutationEstimations() error = %v", err)
@@ -46,9 +46,9 @@ func TestTUI_DisplayMutationEstimations_SmallList(t *testing.T) {
 	var buf bytes.Buffer
 	tui := NewTUI(&buf)
 
-	estimations := map[m.Path]int{
-		"main.go":   5,
-		"helper.go": 3,
+	estimations := map[m.Path]MutationEstimation{
+		"main.go":   {Arithmetic: 5, Boolean: 2},
+		"helper.go": {Arithmetic: 3, Boolean: 1},
 	}
 
 	err := tui.DisplayMutationEstimations(estimations)
@@ -64,7 +64,10 @@ func TestTUI_DisplayMutationEstimations_SmallList(t *testing.T) {
 		t.Error("Output should contain main.go")
 	}
 	if !strings.Contains(output, "Total: 8 arithmetic mutations") {
-		t.Error("Output should contain total count")
+		t.Error("Output should contain arithmetic total count")
+	}
+	if !strings.Contains(output, "Total: 3 boolean mutations") {
+		t.Error("Output should contain boolean total count")
 	}
 }
 
@@ -136,20 +139,28 @@ func TestTUI_DisplayMutationResults_WithResults(t *testing.T) {
 func TestMutationCountModel_View_Basic(t *testing.T) {
 	model := mutationCountModel{
 		counts: []mutationCount{
-			{file: "main.go", count: 5},
+			{file: "main.go", arithmetic: 5, boolean: 2},
 		},
-		total:        5,
-		mutationType: m.MutationArithmetic,
-		height:       24,
+		totalArithmetic: 5,
+		totalBoolean:    2,
+		height:          24,
 	}
 
 	view := model.View()
 
 	wantStrings := []string{
 		"Gooze - Mutation Testing",
-		"arithmetic mutations summary",
-		"main.go: 5 mutations",
+		"mutations summary",
+		"main.go",
+		"5 arithmetic",
+		"2 boolean",
 		"Total: 5 arithmetic mutations across 1 file(s)",
+		"Total: 2 boolean mutations across 1 file(s)",
+	}
+
+	// Should NOT say "arithmetic mutations summary" since we show both types
+	if strings.Contains(view, "arithmetic mutations summary") {
+		t.Error("Title should not say 'arithmetic mutations summary' when showing both types")
 	}
 
 	for _, want := range wantStrings {
@@ -159,14 +170,14 @@ func TestMutationCountModel_View_Basic(t *testing.T) {
 	}
 }
 
-func TestMutationCountModel_View_ZeroMutations(t *testing.T) {
+func TestMutationCountModel_View_Empty(t *testing.T) {
 	model := mutationCountModel{
 		counts: []mutationCount{
-			{file: "empty.go", count: 0},
+			{file: "empty.go", arithmetic: 0, boolean: 0},
 		},
-		total:        0,
-		mutationType: m.MutationArithmetic,
-		height:       24,
+		totalArithmetic: 0,
+		totalBoolean:    0,
+		height:          24,
 	}
 
 	view := model.View()
@@ -174,8 +185,8 @@ func TestMutationCountModel_View_ZeroMutations(t *testing.T) {
 	if !strings.Contains(view, "empty.go") {
 		t.Error("View() should contain file with zero mutations")
 	}
-	if !strings.Contains(view, "0 mutations") {
-		t.Error("View() should show zero mutations")
+	if !strings.Contains(view, "0 arithmetic") || !strings.Contains(view, "0 boolean") {
+		t.Errorf("View() should show zero mutations, got:\n%s", view)
 	}
 }
 
@@ -270,22 +281,25 @@ func TestNotImplementedModel_View(t *testing.T) {
 func TestMutationCountModel_Pagination_VisibleContent(t *testing.T) {
 	// Create a model with many files requiring pagination
 	counts := make([]mutationCount, 100)
-	totalCount := 0
+	totalArithmetic := 0
+	totalBoolean := 0
 	for i := range counts {
 		counts[i] = mutationCount{
-			file:  "file" + strings.Repeat("_", i%10) + ".go",
-			count: i + 1,
+			file:       "file" + strings.Repeat("_", i%10) + ".go",
+			arithmetic: i + 1,
+			boolean:    i % 3,
 		}
-		totalCount += i + 1
+		totalArithmetic += i + 1
+		totalBoolean += i % 3
 	}
 
 	model := mutationCountModel{
-		counts:       counts,
-		total:        totalCount,
-		mutationType: m.MutationArithmetic,
-		height:       20, // Small height to force pagination
-		width:        80,
-		offset:       0,
+		counts:          counts,
+		totalArithmetic: totalArithmetic,
+		totalBoolean:    totalBoolean,
+		height:          20, // Small height to force pagination
+		width:           80,
+		offset:          0,
 	}
 
 	// Test that pagination is needed
@@ -508,18 +522,18 @@ func TestMutationResultsModel_LongMutationList_TruncatesCorrectly(t *testing.T) 
 func TestMutationCountModel_NoPagination_ShowsAllContent(t *testing.T) {
 	// Small list that fits on screen
 	counts := []mutationCount{
-		{file: "file1.go", count: 5},
-		{file: "file2.go", count: 3},
-		{file: "file3.go", count: 0},
+		{file: "file1.go", arithmetic: 5, boolean: 1},
+		{file: "file2.go", arithmetic: 3, boolean: 0},
+		{file: "file3.go", arithmetic: 0, boolean: 2},
 	}
 
 	model := mutationCountModel{
-		counts:       counts,
-		total:        8,
-		mutationType: m.MutationArithmetic,
-		height:       50, // Large height, no pagination needed
-		width:        80,
-		offset:       0,
+		counts:          counts,
+		totalArithmetic: 8,
+		totalBoolean:    3,
+		height:          50, // Large height, no pagination needed
+		width:           80,
+		offset:          0,
 	}
 
 	// Should not need pagination

@@ -9,16 +9,20 @@ type MutationType string
 const (
 	// MutationArithmetic represents arithmetic operator mutations (+, -, *, /, %).
 	MutationArithmetic MutationType = "arithmetic"
+	// MutationBoolean represents boolean literal mutations (true <-> false).
+	MutationBoolean MutationType = "boolean"
 )
 
 // Mutation represents a code mutation for testing.
 type Mutation struct {
-	ID         string
-	Type       MutationType
-	SourceFile Path
-	OriginalOp token.Token
-	MutatedOp  token.Token
-	Line       int
-	Column     int
-	ScopeType  ScopeType
+	ID           string
+	Type         MutationType
+	SourceFile   Path
+	OriginalOp   token.Token
+	MutatedOp    token.Token
+	OriginalText string // For identifier-based mutations (e.g., "true" -> "false")
+	MutatedText  string // For identifier-based mutations (e.g., "false" -> "true")
+	Line         int
+	Column       int
+	ScopeType    ScopeType
 }
