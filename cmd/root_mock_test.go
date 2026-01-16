@@ -3,8 +3,8 @@ package cmd
 import (
 	"testing"
 
-	"github.com/mouse-blink/gooze/internal/adapter"
-	mockAdapter "github.com/mouse-blink/gooze/internal/adapter/mocks"
+	"github.com/mouse-blink/gooze/internal/controller"
+	mockController "github.com/mouse-blink/gooze/internal/controller/mocks"
 	mockDomain "github.com/mouse-blink/gooze/internal/domain/mocks"
 	m "github.com/mouse-blink/gooze/internal/model"
 )
@@ -13,7 +13,7 @@ func TestRunRoot_WithMocks(t *testing.T) {
 	t.Run("displays mutation estimations when list flag is used", func(t *testing.T) {
 		// Create mocks
 		mockWorkflow := mockDomain.NewMockWorkflow(t)
-		mockUI := mockAdapter.NewMockUI(t)
+		mockUI := mockController.NewMockUI(t)
 
 		// Setup test data
 		sources := []m.Source{
@@ -21,7 +21,7 @@ func TestRunRoot_WithMocks(t *testing.T) {
 			{Origin: m.Path("helper.go")},
 		}
 
-		estimations := map[m.Path]adapter.MutationEstimation{
+		estimations := map[m.Path]controller.MutationEstimation{
 			m.Path("main.go"):   {Arithmetic: 5, Boolean: 0},
 			m.Path("helper.go"): {Arithmetic: 3, Boolean: 0},
 		}
@@ -51,7 +51,7 @@ func TestRunRoot_WithMocks(t *testing.T) {
 	t.Run("shows not implemented message without list flag", func(t *testing.T) {
 		// Create mocks
 		mockWorkflow := mockDomain.NewMockWorkflow(t)
-		mockUI := mockAdapter.NewMockUI(t)
+		mockUI := mockController.NewMockUI(t)
 
 		// Setup test data
 		sources := []m.Source{
@@ -141,10 +141,10 @@ func TestWorkflowMock_GetSources(t *testing.T) {
 func TestUIMock_DisplayMutationEstimations(t *testing.T) {
 	t.Run("displays mutation estimations successfully", func(t *testing.T) {
 		// Create mock
-		mockUI := mockAdapter.NewMockUI(t)
+		mockUI := mockController.NewMockUI(t)
 
 		// Setup test data
-		estimations := map[m.Path]adapter.MutationEstimation{
+		estimations := map[m.Path]controller.MutationEstimation{
 			m.Path("main.go"): {Arithmetic: 5, Boolean: 0},
 		}
 
@@ -164,7 +164,7 @@ func TestUIMock_DisplayMutationEstimations(t *testing.T) {
 
 	t.Run("shows not implemented message", func(t *testing.T) {
 		// Create mock
-		mockUI := mockAdapter.NewMockUI(t)
+		mockUI := mockController.NewMockUI(t)
 
 		// Setup expectation
 		mockUI.EXPECT().
@@ -182,15 +182,15 @@ func TestUIMock_DisplayMutationEstimations(t *testing.T) {
 
 	t.Run("handles empty estimations", func(t *testing.T) {
 		// Create mock
-		mockUI := mockAdapter.NewMockUI(t)
+		mockUI := mockController.NewMockUI(t)
 
 		// Setup expectation with empty map
 		mockUI.EXPECT().
-			DisplayMutationEstimations(map[m.Path]adapter.MutationEstimation{}).
+			DisplayMutationEstimations(map[m.Path]controller.MutationEstimation{}).
 			Return(nil)
 
 		// Use mock
-		err := mockUI.DisplayMutationEstimations(map[m.Path]adapter.MutationEstimation{})
+		err := mockUI.DisplayMutationEstimations(map[m.Path]controller.MutationEstimation{})
 
 		// Verify
 		if err != nil {

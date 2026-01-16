@@ -13,7 +13,12 @@ packages:
       dir: internal/adapter/mocks
       outpkg: mocks
     interfaces:
-      UI:
       GoFileAdapter:
       SourceFSAdapter:
       TestRunnerAdapter:
+  github.com/mouse-blink/gooze/internal/controller:
+    config:
+      dir: internal/controller/mocks
+      outpkg: mocks
+    interfaces:
+      UI:

@@ -1,5 +1,5 @@
-// Package adapter provides output adapters for displaying mutation testing results.
-package adapter
+// Package controller provides output adapters for displaying mutation testing results.
+package controller
 
 import (
 	m "github.com/mouse-blink/gooze/internal/model"

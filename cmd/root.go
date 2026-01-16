@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/mouse-blink/gooze/internal/adapter"
+	"github.com/mouse-blink/gooze/internal/controller"
 	"github.com/mouse-blink/gooze/internal/domain"
 	m "github.com/mouse-blink/gooze/internal/model"
 	"github.com/spf13/cobra"
@@ -65,13 +66,13 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	}
 
 	// Use factory to create appropriate UI based on TTY detection
-	useTTY := adapter.IsTTY(cmd.OutOrStdout())
-	ui := adapter.NewUI(cmd, useTTY)
+	useTTY := controller.IsTTY(cmd.OutOrStdout())
+	ui := controller.NewUI(cmd, useTTY)
 
 	// Handle list flag - show mutation counts
 	if listFlag {
 		// Calculate estimations for all sources
-		estimations := make(map[m.Path]adapter.MutationEstimation)
+		estimations := make(map[m.Path]controller.MutationEstimation)
 
 		for _, source := range sources {
 			arithmeticCount, err := wf.EstimateMutations(source, m.MutationArithmetic)
@@ -84,7 +85,7 @@ func runRoot(cmd *cobra.Command, args []string) error {
 				return fmt.Errorf("failed to estimate boolean mutations for %s: %w", source.Origin, err)
 			}
 
-			estimations[source.Origin] = adapter.MutationEstimation{
+			estimations[source.Origin] = controller.MutationEstimation{
 				Arithmetic: arithmeticCount,
 				Boolean:    booleanCount,
 			}
@@ -98,7 +99,7 @@ func runRoot(cmd *cobra.Command, args []string) error {
 }
 
 // runMutationTests executes mutation testing on all sources.
-func runMutationTests(wf domain.Workflow, ui adapter.UI, sources []m.Source, threads int) error {
+func runMutationTests(wf domain.Workflow, ui controller.UI, sources []m.Source, threads int) error {
 	if len(sources) == 0 {
 		return ui.ShowNotImplemented(0)
 	}

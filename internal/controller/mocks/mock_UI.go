@@ -3,7 +3,7 @@
 package mocks
 
 import (
-	adapter "github.com/mouse-blink/gooze/internal/adapter"
+	adapter "github.com/mouse-blink/gooze/internal/controller"
 	mock "github.com/stretchr/testify/mock"
 
 	model "github.com/mouse-blink/gooze/internal/model"

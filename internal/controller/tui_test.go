@@ -1,4 +1,4 @@
-package adapter
+package controller
 
 import (
 	"bytes"
