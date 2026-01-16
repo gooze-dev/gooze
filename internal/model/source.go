@@ -26,6 +26,8 @@ type File struct {
 	Hash string
 }
 
+// Source represents a pair of source and test files along with their package name.
+// Source represents a Go source file and its optional test file metadata.
 type Source struct {
 	Origin  *File
 	Test    *File

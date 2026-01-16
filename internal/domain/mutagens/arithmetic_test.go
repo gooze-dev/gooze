@@ -41,7 +41,7 @@ func TestGenerateArithmeticMutations(t *testing.T) {
 
 	expectedOps := map[string]bool{"-": false, "*": false, "/": false, "%": false}
 	for i, mutation := range mutations {
-		if mutation.ID != uint(i) {
+		if mutation.ID != i {
 			t.Fatalf("expected mutation ID %d, got %d", i, mutation.ID)
 		}
 		if mutation.Type != m.MutationArithmetic {

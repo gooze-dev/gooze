@@ -3,6 +3,7 @@ package adapter
 
 import (
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"go/parser"
 	"go/token"
@@ -85,8 +86,7 @@ func (a *LocalSourceFSAdapter) Get(roots []m.Path) ([]m.Source, error) {
 	}
 
 	seen := make(map[string]struct{})
-
-	var sources []m.Source
+	sources := make([]m.Source, 0, len(roots))
 
 	for _, root := range roots {
 		rootPath, recursive, err := normalizeRootPath(string(root))
@@ -102,47 +102,21 @@ func (a *LocalSourceFSAdapter) Get(roots []m.Path) ([]m.Source, error) {
 		if !info.IsDir() {
 			source, ok, err := a.processFilePath(rootPath)
 			if err != nil {
+				if isInvalidSourceErr(err) {
+					continue
+				}
+
 				return nil, err
 			}
 
 			if ok {
-				if _, exists := seen[string(source.Origin.Path)]; !exists {
-					seen[string(source.Origin.Path)] = struct{}{}
-					sources = append(sources, source)
-				}
+				addSourceIfNew(&sources, seen, source)
 			}
 
 			continue
 		}
 
-		err = a.Walk(m.Path(rootPath), recursive, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-
-			if info.IsDir() {
-				return nil
-			}
-
-			source, ok, err := a.processFilePath(path)
-			if err != nil {
-				return err
-			}
-
-			if !ok {
-				return nil
-			}
-
-			if _, exists := seen[string(source.Origin.Path)]; exists {
-				return nil
-			}
-
-			seen[string(source.Origin.Path)] = struct{}{}
-			sources = append(sources, source)
-
-			return nil
-		})
-		if err != nil {
+		if err := a.collectSourcesFromDir(rootPath, recursive, seen, &sources); err != nil {
 			return nil, err
 		}
 	}
@@ -334,6 +308,48 @@ func (a *LocalSourceFSAdapter) JoinPath(elem ...string) m.Path {
 	return m.Path(filepath.Join(elem...))
 }
 
+func addSourceIfNew(sources *[]m.Source, seen map[string]struct{}, source m.Source) {
+	if source.Origin == nil {
+		return
+	}
+
+	if _, exists := seen[string(source.Origin.Path)]; exists {
+		return
+	}
+
+	seen[string(source.Origin.Path)] = struct{}{}
+	*sources = append(*sources, source)
+}
+
+func (a *LocalSourceFSAdapter) collectSourcesFromDir(rootPath string, recursive bool, seen map[string]struct{}, sources *[]m.Source) error {
+	return a.Walk(m.Path(rootPath), recursive, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if info.IsDir() {
+			return nil
+		}
+
+		source, ok, err := a.processFilePath(path)
+		if err != nil {
+			if isInvalidSourceErr(err) {
+				return nil
+			}
+
+			return err
+		}
+
+		if !ok {
+			return nil
+		}
+
+		addSourceIfNew(sources, seen, source)
+
+		return nil
+	})
+}
+
 func normalizeRootPath(root string) (string, bool, error) {
 	rootStr, recursive := parseRootPath(root)
 
@@ -384,18 +400,18 @@ func (a *LocalSourceFSAdapter) processFilePath(path string) (m.Source, bool, err
 
 	src, err := a.ReadFile(m.Path(absPath))
 	if err != nil {
-		return m.Source{}, false, nil
+		return m.Source{}, false, fmt.Errorf("%w: read source file: %w", errInvalidSource, err)
 	}
 
 	fset := token.NewFileSet()
 
 	file, err := parser.ParseFile(fset, absPath, src, parser.AllErrors)
 	if err != nil {
-		return m.Source{}, false, nil
+		return m.Source{}, false, fmt.Errorf("%w: parse source file: %w", errInvalidSource, err)
 	}
 
 	if file.Name == nil {
-		return m.Source{}, false, nil
+		return m.Source{}, false, fmt.Errorf("%w: missing package name", errInvalidSource)
 	}
 
 	originHash, err := a.HashFile(m.Path(absPath))
@@ -405,20 +421,7 @@ func (a *LocalSourceFSAdapter) processFilePath(path string) (m.Source, bool, err
 
 	origin := &m.File{Path: m.Path(absPath), Hash: originHash}
 
-	var testFile *m.File
-
-	if testPath, _ := a.DetectTestFile(m.Path(absPath)); testPath != "" {
-		testSrc, err := a.ReadFile(testPath)
-		if err == nil {
-			testFset := token.NewFileSet()
-			testAST, parseErr := parser.ParseFile(testFset, string(testPath), testSrc, parser.AllErrors)
-			if parseErr == nil && testAST != nil && testAST.Name != nil {
-				if testHash, err := a.HashFile(testPath); err == nil {
-					testFile = &m.File{Path: testPath, Hash: testHash}
-				}
-			}
-		}
-	}
+	testFile := a.detectTestFile(m.Path(absPath))
 
 	packageName := file.Name.Name
 
@@ -427,4 +430,36 @@ func (a *LocalSourceFSAdapter) processFilePath(path string) (m.Source, bool, err
 		Test:    testFile,
 		Package: &packageName,
 	}, true, nil
+}
+
+func (a *LocalSourceFSAdapter) detectTestFile(sourcePath m.Path) *m.File {
+	testPath, err := a.DetectTestFile(sourcePath)
+	if err != nil || testPath == "" {
+		return nil
+	}
+
+	testSrc, err := a.ReadFile(testPath)
+	if err != nil {
+		return nil
+	}
+
+	testFset := token.NewFileSet()
+
+	testAST, err := parser.ParseFile(testFset, string(testPath), testSrc, parser.AllErrors)
+	if err != nil || testAST == nil || testAST.Name == nil {
+		return nil
+	}
+
+	testHash, err := a.HashFile(testPath)
+	if err != nil {
+		return nil
+	}
+
+	return &m.File{Path: testPath, Hash: testHash}
+}
+
+var errInvalidSource = errors.New("invalid source file")
+
+func isInvalidSourceErr(err error) bool {
+	return errors.Is(err, errInvalidSource)
 }

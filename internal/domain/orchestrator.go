@@ -41,6 +41,7 @@ func (to *orchestrator) TestMutation(mutation m.Mutation) (m.Result, error) {
 	if tmpDir != "" {
 		defer to.cleanupTempDir(tmpDir)
 	}
+
 	if err != nil {
 		return m.Result{}, err
 	}

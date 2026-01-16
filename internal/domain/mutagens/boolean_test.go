@@ -47,7 +47,7 @@ func TestGenerateBooleanMutations(t *testing.T) {
 	}
 
 	for i, mutation := range mutations {
-		if mutation.ID != uint(5+i) {
+		if mutation.ID != 5+i {
 			t.Fatalf("expected mutation ID %d, got %d", 5+i, mutation.ID)
 		}
 		if mutation.Type != m.MutationBoolean {

@@ -55,10 +55,10 @@ Supports Go-style path patterns:
   - ./...          recursively scan current directory
   - ./pkg/...      recursively scan pkg directory
   - ./cmd ./pkg    scan multiple directories`,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, args []string) error {
 			shardIndex, totalShards := parseShardFlag(shardFlag)
 
-			var paths []m.Path
+			paths := make([]m.Path, 0, len(args))
 			for _, arg := range args {
 				paths = append(paths, m.Path(arg))
 			}
@@ -70,10 +70,11 @@ Supports Go-style path patterns:
 			if listFlag {
 				return workflow.Estimate(estimateArgs)
 			}
+
 			return workflow.Test(domain.TestArgs{
 				EstimateArgs:    estimateArgs,
 				Reports:         ".gooze-reports",
-				Threads:         uint(parallelFlag),
+				Threads:         parallelFlag,
 				ShardIndex:      shardIndex,
 				TotalShardCount: totalShards,
 			})
@@ -82,6 +83,7 @@ Supports Go-style path patterns:
 	cmd.Flags().BoolVarP(&listFlag, "list", "l", false, "list all source files and count of mutations applicable")
 	cmd.Flags().IntVarP(&parallelFlag, "parallel", "p", 1, "number of parallel workers for mutation testing")
 	cmd.Flags().StringVarP(&shardFlag, "shard", "s", "", "shard index and total shard count in the format INDEX/TOTAL (e.g., 0/3)")
+
 	return cmd
 }
 
@@ -94,14 +96,17 @@ func Execute() {
 	}
 }
 
-func parseShardFlag(shard string) (uint, uint) {
+func parseShardFlag(shard string) (int, int) {
 	if shard == "" {
 		return 0, 1
 	}
-	var index, total uint
+
+	var index, total int
+
 	_, err := fmt.Sscanf(shard, "%d/%d", &index, &total)
-	if err != nil || total == 0 || index >= total {
+	if err != nil || total <= 0 || index < 0 || index >= total {
 		return 0, 1
 	}
+
 	return index, total
 }

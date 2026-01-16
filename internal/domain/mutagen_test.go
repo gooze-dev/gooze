@@ -29,7 +29,7 @@ func TestMutagen_GenerateMutation_ArithmeticBasic(t *testing.T) {
 	expectedOps := map[string]bool{"-": false, "*": false, "/": false, "%": false}
 
 	for i, mutation := range mutations {
-		if mutation.ID != uint(i) {
+		if mutation.ID != i {
 			t.Fatalf("expected mutation ID %d, got %d", i, mutation.ID)
 		}
 		if mutation.Type != m.MutationArithmetic {
@@ -77,7 +77,7 @@ func TestMutagen_GenerateMutation_BooleanLiterals(t *testing.T) {
 	}
 
 	for i, mutation := range mutations {
-		if mutation.ID != uint(5+i) {
+		if mutation.ID != 5+i {
 			t.Fatalf("expected mutation ID %d, got %d", 5+i, mutation.ID)
 		}
 		if mutation.Type != m.MutationBoolean {

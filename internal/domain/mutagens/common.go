@@ -1,3 +1,4 @@
+// Package mutagens provides functions to generate code mutations.
 package mutagens
 
 import "go/token"
@@ -20,5 +21,6 @@ func replaceRange(content []byte, start, end int, replacement string) []byte {
 	mutated = append(mutated, content[:start]...)
 	mutated = append(mutated, []byte(replacement)...)
 	mutated = append(mutated, content[end:]...)
+
 	return mutated
 }

@@ -9,6 +9,8 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// DefaultMutations defines the default mutation types to be applied.
+// DefaultMutations defines the default set of mutation types to generate.
 var DefaultMutations = []m.MutationType{m.MutationArithmetic, m.MutationBoolean}
 
 // EstimateArgs contains the arguments for estimating mutations.
@@ -21,9 +23,9 @@ type EstimateArgs struct {
 type TestArgs struct {
 	EstimateArgs
 	Reports         m.Path
-	Threads         uint
-	ShardIndex      uint
-	TotalShardCount uint
+	Threads         int
+	ShardIndex      int
+	TotalShardCount int
 }
 
 // Workflow defines the interface for the mutation testing workflow.
@@ -59,9 +61,11 @@ func (w *workflow) Estimate(args EstimateArgs) error {
 	if err != nil {
 		return fmt.Errorf("generate mutations: %w", err)
 	}
+
 	for _, mutation := range allMutations {
 		fmt.Printf("Mutation ID: %d, Type: %v, Source: %s\n", mutation.ID, mutation.Type, mutation.Source.Origin.Path)
 	}
+
 	return nil
 }
 
@@ -77,14 +81,17 @@ func (w *workflow) Test(args TestArgs) error {
 	if err != nil {
 		return fmt.Errorf("run mutation tests: %w", err)
 	}
+
 	for _, report := range reports {
 		fmt.Printf("Source: %s\n", report.Source.Origin.Path)
+
 		for mutationType, results := range report.Result {
 			for _, result := range results {
 				fmt.Printf("Mutation ID: %s, Type: %v, Status: %v\n", result.MutationID, mutationType, result.Status)
 			}
 		}
 	}
+
 	err = w.SaveReports(args.Reports, reports)
 	if err != nil {
 		return fmt.Errorf("save reports: %w", err)
@@ -98,6 +105,7 @@ func (w *workflow) GetMutations(paths []m.Path) ([]m.Mutation, error) {
 	if err != nil {
 		return nil, fmt.Errorf("get sources: %w", err)
 	}
+
 	changedSSources, err := w.GetChangedSources(sources)
 	if err != nil {
 		return nil, fmt.Errorf("get changed sources: %w", err)
@@ -107,6 +115,7 @@ func (w *workflow) GetMutations(paths []m.Path) ([]m.Mutation, error) {
 	if err != nil {
 		return nil, fmt.Errorf("generate mutations: %w", err)
 	}
+
 	return allMutations, nil
 }
 
@@ -133,7 +142,7 @@ func (w *workflow) GenerateAllMutations(sources []m.Source) ([]m.Mutation, error
 	return allMutations, nil
 }
 
-func (w *workflow) ShardMutations(allMutations []m.Mutation, shardIndex uint, totalShardCount uint) []m.Mutation {
+func (w *workflow) ShardMutations(allMutations []m.Mutation, shardIndex int, totalShardCount int) []m.Mutation {
 	if totalShardCount == 0 {
 		return allMutations
 	}
@@ -149,7 +158,7 @@ func (w *workflow) ShardMutations(allMutations []m.Mutation, shardIndex uint, to
 	return shardMutations
 }
 
-func (w *workflow) TestReports(allMutations []m.Mutation, threads uint) ([]m.Report, error) {
+func (w *workflow) TestReports(allMutations []m.Mutation, threads int) ([]m.Report, error) {
 	reports := []m.Report{}
 	errors := []error{}
 
@@ -160,7 +169,7 @@ func (w *workflow) TestReports(allMutations []m.Mutation, threads uint) ([]m.Rep
 
 	var group errgroup.Group
 	if threads > 0 {
-		group.SetLimit(int(threads))
+		group.SetLimit(threads)
 	}
 
 	for _, mutation := range allMutations {

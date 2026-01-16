@@ -7,6 +7,12 @@ import (
 	m "github.com/mouse-blink/gooze/internal/model"
 )
 
+const (
+	booleanTrue  = "true"
+	booleanFalse = "false"
+)
+
+// GenerateBooleanMutations generates boolean literal mutations for the given AST node.
 func GenerateBooleanMutations(n ast.Node, fset *token.FileSet, content []byte, source m.Source, mutationID *int) []m.Mutation {
 	ident, ok := n.(*ast.Ident)
 	if !ok {
@@ -27,8 +33,9 @@ func GenerateBooleanMutations(n ast.Node, fset *token.FileSet, content []byte, s
 
 	*mutationID++
 	mutatedCode := replaceRange(content, start, end, mutated)
+
 	return []m.Mutation{{
-		ID:          uint(*mutationID - 1),
+		ID:          *mutationID - 1,
 		Source:      source,
 		Type:        m.MutationBoolean,
 		MutatedCode: mutatedCode,
@@ -36,13 +43,13 @@ func GenerateBooleanMutations(n ast.Node, fset *token.FileSet, content []byte, s
 }
 
 func isBooleanLiteralV2(name string) bool {
-	return name == "true" || name == "false"
+	return name == booleanTrue || name == booleanFalse
 }
 
 func flipBooleanV2(original string) string {
-	if original == "true" {
-		return "false"
+	if original == booleanTrue {
+		return booleanFalse
 	}
 
-	return "true"
+	return booleanTrue
 }

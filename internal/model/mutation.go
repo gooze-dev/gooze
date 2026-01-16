@@ -11,8 +11,11 @@ const (
 	MutationBoolean MutationType = "boolean"
 )
 
+// Mutation represents a code mutation with its details.
+// Mutation represents a single mutation applied to source code.
 type Mutation struct {
-	ID          uint
+	// ID is the unique identifier for a mutation within a test run.
+	ID          int
 	Source      Source
 	Type        MutationType
 	MutatedCode []byte
