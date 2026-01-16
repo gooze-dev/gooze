@@ -1,68 +1,74 @@
 package mutagens
 
 import (
+	"bytes"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"os"
+	"path/filepath"
 	"testing"
-
-	m "github.com/mouse-blink/gooze/internal/model"
 )
 
-func TestFindScopeType(t *testing.T) {
-	scopes := []m.CodeScope{
-		{StartLine: 1, EndLine: 5, Type: m.ScopeGlobal},
-		{StartLine: 6, EndLine: 15, Type: m.ScopeFunction},
-		{StartLine: 16, EndLine: 20, Type: m.ScopeInit},
+func TestOffsetForPos(t *testing.T) {
+	booleanPath := filepath.Join("..", "..", "..", "examples", "boolean", "main.go")
+	content, err := os.ReadFile(booleanPath)
+	if err != nil {
+		t.Fatalf("failed to read %s: %v", booleanPath, err)
 	}
 
-	tests := []struct {
-		line     int
-		expected m.ScopeType
-	}{
-		{1, m.ScopeGlobal},
-		{3, m.ScopeGlobal},
-		{5, m.ScopeGlobal},
-		{6, m.ScopeFunction},
-		{10, m.ScopeFunction},
-		{15, m.ScopeFunction},
-		{16, m.ScopeInit},
-		{18, m.ScopeInit},
-		{20, m.ScopeInit},
-		{21, m.ScopeFunction}, // Outside any scope, defaults to function
-		{0, m.ScopeFunction},  // Before any scope, defaults to function
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, booleanPath, content, parser.ParseComments)
+	if err != nil {
+		t.Fatalf("failed to parse source %s: %v", booleanPath, err)
 	}
 
-	for _, tt := range tests {
-		t.Run("", func(t *testing.T) {
-			result := FindScopeType(scopes, tt.line)
-			if result != tt.expected {
-				t.Errorf("FindScopeType(scopes, %d) = %v, expected %v", tt.line, result, tt.expected)
-			}
-		})
+	var literalPos token.Pos
+	ast.Inspect(file, func(n ast.Node) bool {
+		ident, ok := n.(*ast.Ident)
+		if !ok {
+			return true
+		}
+		if ident.Name == "true" || ident.Name == "false" {
+			literalPos = ident.Pos()
+			return false
+		}
+		return true
+	})
+
+	if literalPos == token.NoPos {
+		t.Fatal("expected to find boolean literal")
+	}
+
+	offset, ok := offsetForPos(fset, literalPos)
+	if !ok {
+		t.Fatal("expected offsetForPosV2 to return ok")
+	}
+
+	if !(bytes.HasPrefix(content[offset:], []byte("true")) || bytes.HasPrefix(content[offset:], []byte("false"))) {
+		start := offset
+		end := offset + 10
+		if start < 0 {
+			start = 0
+		}
+		if end > len(content) {
+			end = len(content)
+		}
+		snippet := string(content[start:end])
+		t.Fatalf("unexpected offset %d; snippet=%q", offset, snippet)
 	}
 }
 
-func TestFindScopeType_EmptyScopes(t *testing.T) {
-	var scopes []m.CodeScope
+func TestReplaceRange(t *testing.T) {
+	original := []byte("abcde")
+	mutated := replaceRange(original, 1, 4, "XYZ")
 
-	result := FindScopeType(scopes, 10)
-	if result != m.ScopeFunction {
-		t.Errorf("FindScopeType(empty, 10) = %v, expected %v", result, m.ScopeFunction)
-	}
-}
-
-func TestFindScopeType_NoMatchingScope(t *testing.T) {
-	scopes := []m.CodeScope{
-		{StartLine: 1, EndLine: 5, Type: m.ScopeGlobal},
+	if string(mutated) != "aXYZe" {
+		t.Fatalf("replaceRangeV2 result = %q, expected %q", string(mutated), "aXYZe")
 	}
 
-	// Test line before first scope
-	result := FindScopeType(scopes, 0)
-	if result != m.ScopeFunction {
-		t.Errorf("FindScopeType(scopes, 0) = %v, expected %v", result, m.ScopeFunction)
-	}
-
-	// Test line after last scope
-	result = FindScopeType(scopes, 10)
-	if result != m.ScopeFunction {
-		t.Errorf("FindScopeType(scopes, 10) = %v, expected %v", result, m.ScopeFunction)
+	unchanged := replaceRange(original, 10, 12, "nope")
+	if !bytes.Equal(unchanged, original) {
+		t.Fatalf("expected out-of-range replacement to return original content")
 	}
 }

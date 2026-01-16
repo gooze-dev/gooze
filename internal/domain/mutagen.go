@@ -4,10 +4,9 @@ package domain
 import (
 	"fmt"
 	"go/ast"
-	"go/parser"
 	"go/token"
-	"os"
 
+	"github.com/mouse-blink/gooze/internal/adapter"
 	"github.com/mouse-blink/gooze/internal/domain/mutagens"
 	m "github.com/mouse-blink/gooze/internal/model"
 )
@@ -18,11 +17,17 @@ type Mutagen interface {
 }
 
 // mutagen handles pure mutation generation logic.
-type mutagen struct{}
+type mutagen struct {
+	adapter.GoFileAdapter
+	adapter.SourceFSAdapter
+}
 
 // NewMutagen creates a new Mutagen instance.
-func NewMutagen() Mutagen {
-	return &mutagen{}
+func NewMutagen(goFileAdapter adapter.GoFileAdapter, sourceFSAdapter adapter.SourceFSAdapter) Mutagen {
+	return &mutagen{
+		GoFileAdapter:   goFileAdapter,
+		SourceFSAdapter: sourceFSAdapter,
+	}
 }
 
 func (mg *mutagen) GenerateMutation(source m.SourceV2, startingIndex int, mutationTypes ...m.MutationType) ([]m.MutationV2, error) {
@@ -40,13 +45,17 @@ func (mg *mutagen) GenerateMutation(source m.SourceV2, startingIndex int, mutati
 		}
 	}
 
-	content, err := os.ReadFile(string(source.Origin.Path))
+	if mg.SourceFSAdapter == nil || mg.GoFileAdapter == nil {
+		return nil, fmt.Errorf("missing adapters")
+	}
+
+	content, err := mg.ReadFile(source.Origin.Path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read %s: %w", source.Origin.Path, err)
 	}
 
 	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, string(source.Origin.Path), content, parser.ParseComments)
+	file, err := mg.Parse(fset, string(source.Origin.Path), content)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse %s: %w", source.Origin.Path, err)
 	}
@@ -58,9 +67,9 @@ func (mg *mutagen) GenerateMutation(source m.SourceV2, startingIndex int, mutati
 		ast.Inspect(file, func(n ast.Node) bool {
 			switch mutationType {
 			case m.MutationArithmetic:
-				mutations = append(mutations, mutagens.GenerateArithmeticMutationsV2(n, fset, content, source, &mutationID)...)
+				mutations = append(mutations, mutagens.GenerateArithmeticMutations(n, fset, content, source, &mutationID)...)
 			case m.MutationBoolean:
-				mutations = append(mutations, mutagens.GenerateBooleanMutationsV2(n, fset, content, source, &mutationID)...)
+				mutations = append(mutations, mutagens.GenerateBooleanMutations(n, fset, content, source, &mutationID)...)
 			}
 
 			return true

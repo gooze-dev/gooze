@@ -11,24 +11,28 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var goFileAdapter adapter.GoFileAdapter
 var soirceFSAdapter adapter.SourceFSAdapter
 var reportStore adapter.ReportStore
 var fsAdapter adapter.SourceFSAdapter
 var testAdapter adapter.TestRunnerAdapter
 var orchestrator domain.Orchestrator
+var mutagen domain.Mutagen
 var workflow domain.Workflow
 
 func init() {
+	goFileAdapter = adapter.NewLocalGoFileAdapter()
 	soirceFSAdapter = adapter.NewLocalSourceFSAdapter()
 	reportStore = adapter.NewReportStore()
 	fsAdapter = adapter.NewLocalSourceFSAdapter()
 	testAdapter = adapter.NewLocalTestRunnerAdapter()
 	orchestrator = domain.NewOrchestrator(fsAdapter, testAdapter)
+	mutagen = domain.NewMutagen(goFileAdapter, soirceFSAdapter)
 	workflow = domain.NewWorkflow(
 		soirceFSAdapter,
 		reportStore,
 		orchestrator,
-		domain.NewMutagen(),
+		mutagen,
 	)
 }
 

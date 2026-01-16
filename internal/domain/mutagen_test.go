@@ -7,11 +7,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mouse-blink/gooze/internal/adapter"
 	m "github.com/mouse-blink/gooze/internal/model"
 )
 
 func TestMutagen_GenerateMutation_ArithmeticBasic(t *testing.T) {
-	mg := NewMutagen()
+	mg := newTestMutagen()
 
 	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "basic", "main.go"))
 	original := readFileBytes(t, source.Origin.Path)
@@ -54,7 +55,7 @@ func TestMutagen_GenerateMutation_ArithmeticBasic(t *testing.T) {
 }
 
 func TestMutagen_GenerateMutation_BooleanLiterals(t *testing.T) {
-	mg := NewMutagen()
+	mg := newTestMutagen()
 
 	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "boolean", "main.go"))
 	original := readFileBytes(t, source.Origin.Path)
@@ -102,7 +103,7 @@ func TestMutagen_GenerateMutation_BooleanLiterals(t *testing.T) {
 }
 
 func TestMutagen_GenerateMutation_DefaultTypes(t *testing.T) {
-	mg := NewMutagen()
+	mg := newTestMutagen()
 
 	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "basic", "main.go"))
 	mutations, err := mg.GenerateMutation(source, 0)
@@ -116,7 +117,7 @@ func TestMutagen_GenerateMutation_DefaultTypes(t *testing.T) {
 }
 
 func TestMutagen_GenerateMutation_InvalidType(t *testing.T) {
-	mg := NewMutagen()
+	mg := newTestMutagen()
 
 	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "basic", "main.go"))
 	_, err := mg.GenerateMutation(source, 0, m.MutationType("invalid"))
@@ -126,7 +127,7 @@ func TestMutagen_GenerateMutation_InvalidType(t *testing.T) {
 }
 
 func TestMutagen_GenerateMutation_InvalidSource(t *testing.T) {
-	mg := NewMutagen()
+	mg := newTestMutagen()
 
 	_, err := mg.GenerateMutation(m.SourceV2{}, 0, m.MutationArithmetic)
 	if err == nil {
@@ -156,4 +157,8 @@ func readFileBytes(t *testing.T, path m.Path) []byte {
 	}
 
 	return content
+}
+
+func newTestMutagen() Mutagen {
+	return NewMutagen(adapter.NewLocalGoFileAdapter(), adapter.NewLocalSourceFSAdapter())
 }

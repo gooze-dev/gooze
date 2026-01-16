@@ -1,60 +1,48 @@
 package mutagens
 
 import (
-	"fmt"
 	"go/ast"
 	"go/token"
 
 	m "github.com/mouse-blink/gooze/internal/model"
 )
 
-const (
-	trueStr  = "true"
-	falseStr = "false"
-)
-
-// ProcessBooleanMutations generates boolean mutations for a node.
-func ProcessBooleanMutations(n ast.Node, fset *token.FileSet, source m.Source, mutationID *int) []m.Mutation {
+func GenerateBooleanMutations(n ast.Node, fset *token.FileSet, content []byte, source m.SourceV2, mutationID *int) []m.MutationV2 {
 	ident, ok := n.(*ast.Ident)
 	if !ok {
 		return nil
 	}
 
-	if !isBooleanLiteral(ident.Name) {
+	if !isBooleanLiteralV2(ident.Name) {
 		return nil
 	}
 
-	pos := fset.Position(ident.Pos())
+	start, ok := offsetForPos(fset, ident.Pos())
+	if !ok {
+		return nil
+	}
 
-	scopeType := FindScopeType(source.Scopes, pos.Line)
+	end := start + len(ident.Name)
+	mutated := flipBooleanV2(ident.Name)
+
 	*mutationID++
-	original := ident.Name
-	mutated := flipBoolean(original)
-
-	return []m.Mutation{{
-		ID:           fmt.Sprintf("BOOL_%d", *mutationID),
-		Type:         m.MutationBoolean,
-		SourceFile:   source.Origin,
-		OriginalOp:   token.ILLEGAL, // Not used for boolean mutations
-		MutatedOp:    token.ILLEGAL, // Not used for boolean mutations
-		OriginalText: original,
-		MutatedText:  mutated,
-		Line:         pos.Line,
-		Column:       pos.Column,
-		ScopeType:    scopeType,
+	mutatedCode := replaceRange(content, start, end, mutated)
+	return []m.MutationV2{{
+		ID:          uint(*mutationID - 1),
+		Source:      source,
+		Type:        m.MutationBoolean,
+		MutatedCode: mutatedCode,
 	}}
 }
 
-// isBooleanLiteral checks if a string is a boolean literal.
-func isBooleanLiteral(name string) bool {
-	return name == trueStr || name == falseStr
+func isBooleanLiteralV2(name string) bool {
+	return name == "true" || name == "false"
 }
 
-// flipBoolean returns the opposite boolean literal.
-func flipBoolean(original string) string {
-	if original == trueStr {
-		return falseStr
+func flipBooleanV2(original string) string {
+	if original == "true" {
+		return "false"
 	}
 
-	return trueStr
+	return "true"
 }

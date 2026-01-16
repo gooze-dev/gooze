@@ -1,17 +1,24 @@
 package mutagens
 
-import (
-	m "github.com/mouse-blink/gooze/internal/model"
-)
+import "go/token"
 
-// FindScopeType determines which scope a line belongs to.
-func FindScopeType(scopes []m.CodeScope, line int) m.ScopeType {
-	for _, scope := range scopes {
-		if line >= scope.StartLine && line <= scope.EndLine {
-			return scope.Type
-		}
+func offsetForPos(fset *token.FileSet, pos token.Pos) (int, bool) {
+	file := fset.File(pos)
+	if file == nil {
+		return 0, false
 	}
 
-	// Default to function scope if not found in any scope
-	return m.ScopeFunction
+	return file.Offset(pos), true
+}
+
+func replaceRange(content []byte, start, end int, replacement string) []byte {
+	if start < 0 || end < start || end > len(content) {
+		return content
+	}
+
+	mutated := make([]byte, 0, len(content)-(end-start)+len(replacement))
+	mutated = append(mutated, content[:start]...)
+	mutated = append(mutated, []byte(replacement)...)
+	mutated = append(mutated, content[end:]...)
+	return mutated
 }
