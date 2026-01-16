@@ -442,7 +442,7 @@ func containsPath(paths []string, target string) bool {
 	return false
 }
 
-func findSourceV2ByOrigin(sources []m.SourceV2, origin string) *m.SourceV2 {
+func findSourceV2ByOrigin(sources []m.Source, origin string) *m.Source {
 	for i := range sources {
 		if sources[i].Origin == nil {
 			continue
@@ -455,7 +455,7 @@ func findSourceV2ByOrigin(sources []m.SourceV2, origin string) *m.SourceV2 {
 	return nil
 }
 
-func assertSourceV2(t *testing.T, source *m.SourceV2, originPath string, originContent []byte, pkg string, testPath string, testContent []byte) {
+func assertSourceV2(t *testing.T, source *m.Source, originPath string, originContent []byte, pkg string, testPath string, testContent []byte) {
 	t.Helper()
 
 	if source == nil {

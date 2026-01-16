@@ -299,23 +299,23 @@ func (_c *MockSourceFSAdapter_FindProjectRoot_Call) RunAndReturn(run func(model.
 }
 
 // Get provides a mock function with given fields: root
-func (_m *MockSourceFSAdapter) Get(root []model.Path) ([]model.SourceV2, error) {
+func (_m *MockSourceFSAdapter) Get(root []model.Path) ([]model.Source, error) {
 	ret := _m.Called(root)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Get")
 	}
 
-	var r0 []model.SourceV2
+	var r0 []model.Source
 	var r1 error
-	if rf, ok := ret.Get(0).(func([]model.Path) ([]model.SourceV2, error)); ok {
+	if rf, ok := ret.Get(0).(func([]model.Path) ([]model.Source, error)); ok {
 		return rf(root)
 	}
-	if rf, ok := ret.Get(0).(func([]model.Path) []model.SourceV2); ok {
+	if rf, ok := ret.Get(0).(func([]model.Path) []model.Source); ok {
 		r0 = rf(root)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]model.SourceV2)
+			r0 = ret.Get(0).([]model.Source)
 		}
 	}
 
@@ -346,12 +346,12 @@ func (_c *MockSourceFSAdapter_Get_Call) Run(run func(root []model.Path)) *MockSo
 	return _c
 }
 
-func (_c *MockSourceFSAdapter_Get_Call) Return(_a0 []model.SourceV2, _a1 error) *MockSourceFSAdapter_Get_Call {
+func (_c *MockSourceFSAdapter_Get_Call) Return(_a0 []model.Source, _a1 error) *MockSourceFSAdapter_Get_Call {
 	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *MockSourceFSAdapter_Get_Call) RunAndReturn(run func([]model.Path) ([]model.SourceV2, error)) *MockSourceFSAdapter_Get_Call {
+func (_c *MockSourceFSAdapter_Get_Call) RunAndReturn(run func([]model.Path) ([]model.Source, error)) *MockSourceFSAdapter_Get_Call {
 	_c.Call.Return(run)
 	return _c
 }

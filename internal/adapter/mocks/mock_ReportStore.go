@@ -21,23 +21,23 @@ func (_m *MockReportStore) EXPECT() *MockReportStore_Expecter {
 }
 
 // LoadReports provides a mock function with given fields: path
-func (_m *MockReportStore) LoadReports(path model.Path) ([]model.ReportV2, error) {
+func (_m *MockReportStore) LoadReports(path model.Path) ([]model.Report, error) {
 	ret := _m.Called(path)
 
 	if len(ret) == 0 {
 		panic("no return value specified for LoadReports")
 	}
 
-	var r0 []model.ReportV2
+	var r0 []model.Report
 	var r1 error
-	if rf, ok := ret.Get(0).(func(model.Path) ([]model.ReportV2, error)); ok {
+	if rf, ok := ret.Get(0).(func(model.Path) ([]model.Report, error)); ok {
 		return rf(path)
 	}
-	if rf, ok := ret.Get(0).(func(model.Path) []model.ReportV2); ok {
+	if rf, ok := ret.Get(0).(func(model.Path) []model.Report); ok {
 		r0 = rf(path)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]model.ReportV2)
+			r0 = ret.Get(0).([]model.Report)
 		}
 	}
 
@@ -68,18 +68,18 @@ func (_c *MockReportStore_LoadReports_Call) Run(run func(path model.Path)) *Mock
 	return _c
 }
 
-func (_c *MockReportStore_LoadReports_Call) Return(_a0 []model.ReportV2, _a1 error) *MockReportStore_LoadReports_Call {
+func (_c *MockReportStore_LoadReports_Call) Return(_a0 []model.Report, _a1 error) *MockReportStore_LoadReports_Call {
 	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *MockReportStore_LoadReports_Call) RunAndReturn(run func(model.Path) ([]model.ReportV2, error)) *MockReportStore_LoadReports_Call {
+func (_c *MockReportStore_LoadReports_Call) RunAndReturn(run func(model.Path) ([]model.Report, error)) *MockReportStore_LoadReports_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // SaveReports provides a mock function with given fields: path, reports
-func (_m *MockReportStore) SaveReports(path model.Path, reports []model.ReportV2) error {
+func (_m *MockReportStore) SaveReports(path model.Path, reports []model.Report) error {
 	ret := _m.Called(path, reports)
 
 	if len(ret) == 0 {
@@ -87,7 +87,7 @@ func (_m *MockReportStore) SaveReports(path model.Path, reports []model.ReportV2
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(model.Path, []model.ReportV2) error); ok {
+	if rf, ok := ret.Get(0).(func(model.Path, []model.Report) error); ok {
 		r0 = rf(path, reports)
 	} else {
 		r0 = ret.Error(0)
@@ -108,9 +108,9 @@ func (_e *MockReportStore_Expecter) SaveReports(path interface{}, reports interf
 	return &MockReportStore_SaveReports_Call{Call: _e.mock.On("SaveReports", path, reports)}
 }
 
-func (_c *MockReportStore_SaveReports_Call) Run(run func(path model.Path, reports []model.ReportV2)) *MockReportStore_SaveReports_Call {
+func (_c *MockReportStore_SaveReports_Call) Run(run func(path model.Path, reports []model.Report)) *MockReportStore_SaveReports_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(model.Path), args[1].([]model.ReportV2))
+		run(args[0].(model.Path), args[1].([]model.Report))
 	})
 	return _c
 }
@@ -120,7 +120,7 @@ func (_c *MockReportStore_SaveReports_Call) Return(_a0 error) *MockReportStore_S
 	return _c
 }
 
-func (_c *MockReportStore_SaveReports_Call) RunAndReturn(run func(model.Path, []model.ReportV2) error) *MockReportStore_SaveReports_Call {
+func (_c *MockReportStore_SaveReports_Call) RunAndReturn(run func(model.Path, []model.Report) error) *MockReportStore_SaveReports_Call {
 	_c.Call.Return(run)
 	return _c
 }

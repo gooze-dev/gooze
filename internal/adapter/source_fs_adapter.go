@@ -20,7 +20,7 @@ import (
 //
 //nolint:interfacebloat // A richer interface keeps workflow logic decoupled from os/fs.
 type SourceFSAdapter interface {
-	Get(root []m.Path) ([]m.SourceV2, error)
+	Get(root []m.Path) ([]m.Source, error)
 
 	// Walk traverses the provided root path. When recursive is false the
 	// implementation should limit itself to the root directory (no sub-dirs).
@@ -79,14 +79,14 @@ func NewLocalSourceFSAdapter() *LocalSourceFSAdapter {
 }
 
 // Get collects Go source files for the provided roots and returns SourceV2 entries.
-func (a *LocalSourceFSAdapter) Get(roots []m.Path) ([]m.SourceV2, error) {
+func (a *LocalSourceFSAdapter) Get(roots []m.Path) ([]m.Source, error) {
 	if len(roots) == 0 {
-		return []m.SourceV2{}, nil
+		return []m.Source{}, nil
 	}
 
 	seen := make(map[string]struct{})
 
-	var sources []m.SourceV2
+	var sources []m.Source
 
 	for _, root := range roots {
 		rootPath, recursive, err := normalizeRootPath(string(root))
@@ -368,39 +368,39 @@ func parseRootPath(rootStr string) (path string, recursive bool) {
 	return rootStr, false
 }
 
-func (a *LocalSourceFSAdapter) processFilePath(path string) (m.SourceV2, bool, error) {
+func (a *LocalSourceFSAdapter) processFilePath(path string) (m.Source, bool, error) {
 	if filepath.Ext(path) != ".go" {
-		return m.SourceV2{}, false, nil
+		return m.Source{}, false, nil
 	}
 
 	if strings.HasSuffix(path, "_test.go") {
-		return m.SourceV2{}, false, nil
+		return m.Source{}, false, nil
 	}
 
 	absPath, err := filepath.Abs(path)
 	if err != nil {
-		return m.SourceV2{}, false, err
+		return m.Source{}, false, err
 	}
 
 	src, err := a.ReadFile(m.Path(absPath))
 	if err != nil {
-		return m.SourceV2{}, false, nil
+		return m.Source{}, false, nil
 	}
 
 	fset := token.NewFileSet()
 
 	file, err := parser.ParseFile(fset, absPath, src, parser.AllErrors)
 	if err != nil {
-		return m.SourceV2{}, false, nil
+		return m.Source{}, false, nil
 	}
 
 	if file.Name == nil {
-		return m.SourceV2{}, false, nil
+		return m.Source{}, false, nil
 	}
 
 	originHash, err := a.HashFile(m.Path(absPath))
 	if err != nil {
-		return m.SourceV2{}, false, err
+		return m.Source{}, false, err
 	}
 
 	origin := &m.File{Path: m.Path(absPath), Hash: originHash}
@@ -422,7 +422,7 @@ func (a *LocalSourceFSAdapter) processFilePath(path string) (m.SourceV2, bool, e
 
 	packageName := file.Name.Name
 
-	return m.SourceV2{
+	return m.Source{
 		Origin:  origin,
 		Test:    testFile,
 		Package: &packageName,

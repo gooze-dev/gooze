@@ -129,13 +129,13 @@ func TestMutagen_GenerateMutation_InvalidType(t *testing.T) {
 func TestMutagen_GenerateMutation_InvalidSource(t *testing.T) {
 	mg := newTestMutagen()
 
-	_, err := mg.GenerateMutation(m.SourceV2{}, 0, m.MutationArithmetic)
+	_, err := mg.GenerateMutation(m.Source{}, 0, m.MutationArithmetic)
 	if err == nil {
 		t.Fatalf("expected error for missing source origin")
 	}
 }
 
-func makeSourceV2(t *testing.T, path string) m.SourceV2 {
+func makeSourceV2(t *testing.T, path string) m.Source {
 	t.Helper()
 
 	abs, err := filepath.Abs(path)
@@ -143,7 +143,7 @@ func makeSourceV2(t *testing.T, path string) m.SourceV2 {
 		t.Fatalf("failed to resolve path: %v", err)
 	}
 
-	return m.SourceV2{
+	return m.Source{
 		Origin: &m.File{Path: m.Path(abs)},
 	}
 }

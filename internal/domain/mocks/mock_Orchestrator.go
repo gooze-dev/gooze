@@ -56,7 +56,7 @@ type MockOrchestrator_TestMutation_Call struct {
 }
 
 // TestMutation is a helper method to define mock.On call
-//   - mutation model.MutationV2
+//   - mutation model.Mutation
 func (_e *MockOrchestrator_Expecter) TestMutation(mutation interface{}) *MockOrchestrator_TestMutation_Call {
 	return &MockOrchestrator_TestMutation_Call{Call: _e.mock.On("TestMutation", mutation)}
 }

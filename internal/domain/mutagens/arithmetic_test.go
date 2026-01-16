@@ -26,7 +26,7 @@ func TestGenerateArithmeticMutations(t *testing.T) {
 		t.Fatalf("failed to parse source %s: %v", basicPath, err)
 	}
 
-	source := m.SourceV2{Origin: &m.File{Path: m.Path(basicPath)}}
+	source := m.Source{Origin: &m.File{Path: m.Path(basicPath)}}
 	mutationID := 0
 	var mutations []m.Mutation
 

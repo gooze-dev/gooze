@@ -1,20 +1,5 @@
 package model
 
-// Report represents the result of testing a mutation.
-type Report struct {
-	MutationID string
-	SourceFile Path   // source file that was mutated
-	Killed     bool   // true if test detected the mutation (test failed)
-	Output     string // test output/error message
-	Error      error  // error executing test (not test failure)
-}
-
-// FileResult holds the mutation testing results for a single source file.
-type FileResult struct {
-	Source  Source
-	Reports []Report
-}
-
 // TestStatus represents the status of a mutation test.
 type TestStatus int
 
@@ -36,8 +21,8 @@ type Result map[MutationType][]struct {
 	Err        error
 }
 
-// ReportV2 represents the result of testing a mutation in v2 format.
-type ReportV2 struct {
-	Source SourceV2
+// Report represents the result of testing a mutation source file.
+type Report struct {
+	Source Source
 	Result Result
 }

@@ -20,7 +20,7 @@ func TestWorkflow_Test_Success(t *testing.T) {
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
 	mockMutagen := new(domainmocks.MockMutagen)
 
-	sources := []m.SourceV2{
+	sources := []m.Source{
 		{
 			Origin: &m.File{Path: "test.go", Hash: "hash1"},
 			Test:   &m.File{Path: "test_test.go", Hash: "test_hash1"},
@@ -91,7 +91,7 @@ func TestWorkflow_Test_GenerateMutationsError(t *testing.T) {
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
 	mockMutagen := new(domainmocks.MockMutagen)
 
-	sources := []m.SourceV2{
+	sources := []m.Source{
 		{Origin: &m.File{Path: "test.go", Hash: "hash1"}},
 	}
 
@@ -122,7 +122,7 @@ func TestWorkflow_Test_TestMutationError(t *testing.T) {
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
 	mockMutagen := new(domainmocks.MockMutagen)
 
-	sources := []m.SourceV2{
+	sources := []m.Source{
 		{Origin: &m.File{Path: "test.go", Hash: "hash1"}},
 	}
 
@@ -161,7 +161,7 @@ func TestWorkflow_Test_SaveReportsError(t *testing.T) {
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
 	mockMutagen := new(domainmocks.MockMutagen)
 
-	sources := []m.SourceV2{
+	sources := []m.Source{
 		{Origin: &m.File{Path: "test.go", Hash: "hash1"}},
 	}
 
@@ -202,14 +202,14 @@ func TestWorkflow_Test_NoMutations(t *testing.T) {
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
 	mockMutagen := new(domainmocks.MockMutagen)
 
-	sources := []m.SourceV2{
+	sources := []m.Source{
 		{Origin: &m.File{Path: "test.go", Hash: "hash1"}},
 	}
 
 	// No mutations generated
 	mockFSAdapter.EXPECT().Get(mock.Anything).Return(sources, nil)
 	mockMutagen.EXPECT().GenerateMutation(mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1]).Return([]m.Mutation{}, nil)
-	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.MatchedBy(func(reports []m.ReportV2) bool {
+	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.MatchedBy(func(reports []m.Report) bool {
 		return len(reports) == 0
 	})).Return(nil)
 
@@ -241,7 +241,7 @@ func TestWorkflow_Test_MultipleThreads(t *testing.T) {
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
 	mockMutagen := new(domainmocks.MockMutagen)
 
-	source := m.SourceV2{
+	source := m.Source{
 		Origin: &m.File{Path: "test.go", Hash: "hash1"},
 	}
 
@@ -251,10 +251,10 @@ func TestWorkflow_Test_MultipleThreads(t *testing.T) {
 		{ID: 2, Source: source},
 	}
 
-	mockFSAdapter.EXPECT().Get(mock.Anything).Return([]m.SourceV2{source}, nil)
+	mockFSAdapter.EXPECT().Get(mock.Anything).Return([]m.Source{source}, nil)
 	mockMutagen.EXPECT().GenerateMutation(mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1]).Return(mutations, nil)
 	mockOrchestrator.EXPECT().TestMutation(mock.Anything).Return(m.Result{}, nil).Times(3)
-	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.MatchedBy(func(reports []m.ReportV2) bool {
+	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.MatchedBy(func(reports []m.Report) bool {
 		return len(reports) == 3
 	})).Return(nil)
 
@@ -284,7 +284,7 @@ func TestWorkflow_Test_WithSharding(t *testing.T) {
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
 	mockMutagen := new(domainmocks.MockMutagen)
 
-	source := m.SourceV2{
+	source := m.Source{
 		Origin: &m.File{Path: "test.go", Hash: "hash1"},
 	}
 
@@ -298,11 +298,11 @@ func TestWorkflow_Test_WithSharding(t *testing.T) {
 		{ID: 5, Source: source},
 	}
 
-	mockFSAdapter.EXPECT().Get(mock.Anything).Return([]m.SourceV2{source}, nil)
+	mockFSAdapter.EXPECT().Get(mock.Anything).Return([]m.Source{source}, nil)
 	mockMutagen.EXPECT().GenerateMutation(mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1]).Return(mutations, nil)
 	// Only 2 mutations should be tested (IDs 0 and 3, since shardIndex=0, totalShards=3)
 	mockOrchestrator.EXPECT().TestMutation(mock.Anything).Return(m.Result{}, nil).Times(2)
-	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.MatchedBy(func(reports []m.ReportV2) bool {
+	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.MatchedBy(func(reports []m.Report) bool {
 		return len(reports) == 2
 	})).Return(nil)
 
@@ -332,10 +332,10 @@ func TestWorkflow_Test_MultipleSources(t *testing.T) {
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
 	mockMutagen := new(domainmocks.MockMutagen)
 
-	source1 := m.SourceV2{
+	source1 := m.Source{
 		Origin: &m.File{Path: "file1.go", Hash: "hash1"},
 	}
-	source2 := m.SourceV2{
+	source2 := m.Source{
 		Origin: &m.File{Path: "file2.go", Hash: "hash2"},
 	}
 
@@ -347,11 +347,11 @@ func TestWorkflow_Test_MultipleSources(t *testing.T) {
 		{ID: 2, Source: source2},
 	}
 
-	mockFSAdapter.EXPECT().Get(mock.Anything).Return([]m.SourceV2{source1, source2}, nil)
+	mockFSAdapter.EXPECT().Get(mock.Anything).Return([]m.Source{source1, source2}, nil)
 	mockMutagen.EXPECT().GenerateMutation(source1, 0, domain.DefaultMutations[0], domain.DefaultMutations[1]).Return(mutations1, nil)
 	mockMutagen.EXPECT().GenerateMutation(source2, 2, domain.DefaultMutations[0], domain.DefaultMutations[1]).Return(mutations2, nil)
 	mockOrchestrator.EXPECT().TestMutation(mock.Anything).Return(m.Result{}, nil).Times(3)
-	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.MatchedBy(func(reports []m.ReportV2) bool {
+	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.MatchedBy(func(reports []m.Report) bool {
 		return len(reports) == 3
 	})).Return(nil)
 

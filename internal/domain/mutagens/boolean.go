@@ -7,7 +7,7 @@ import (
 	m "github.com/mouse-blink/gooze/internal/model"
 )
 
-func GenerateBooleanMutations(n ast.Node, fset *token.FileSet, content []byte, source m.SourceV2, mutationID *int) []m.Mutation {
+func GenerateBooleanMutations(n ast.Node, fset *token.FileSet, content []byte, source m.Source, mutationID *int) []m.Mutation {
 	ident, ok := n.(*ast.Ident)
 	if !ok {
 		return nil

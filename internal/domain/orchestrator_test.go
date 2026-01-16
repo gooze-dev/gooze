@@ -16,7 +16,7 @@ func TestOrchestrator_TestMutation_NoOrigin(t *testing.T) {
 	mutation := m.Mutation{
 		ID:   1,
 		Type: m.MutationArithmetic,
-		Source: m.SourceV2{
+		Source: m.Source{
 			Origin: nil,
 			Test:   &m.File{Path: m.Path("/project/main_test.go")},
 		},
@@ -32,7 +32,7 @@ func TestOrchestrator_TestMutation_NoTestFile(t *testing.T) {
 	mutation := m.Mutation{
 		ID:   2,
 		Type: m.MutationBoolean,
-		Source: m.SourceV2{
+		Source: m.Source{
 			Origin: &m.File{Path: m.Path("/project/main.go")},
 			Test:   nil,
 		},
@@ -95,7 +95,7 @@ func makeTestMutation() m.Mutation {
 		ID:          1,
 		Type:        m.MutationArithmetic,
 		MutatedCode: []byte("package main\nfunc main() { _ = 1 + 1 }\n"),
-		Source: m.SourceV2{
+		Source: m.Source{
 			Origin: &m.File{Path: m.Path("/project/main.go")},
 			Test:   &m.File{Path: m.Path("/project/main_test.go")},
 		},

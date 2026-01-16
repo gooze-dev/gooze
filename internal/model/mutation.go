@@ -13,7 +13,7 @@ const (
 
 type Mutation struct {
 	ID          uint
-	Source      SourceV2
+	Source      Source
 	Type        MutationType
 	MutatedCode []byte
 }

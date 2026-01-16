@@ -110,12 +110,12 @@ func (w *workflow) GetMutations(paths []m.Path) ([]m.Mutation, error) {
 	return allMutations, nil
 }
 
-func (w *workflow) GetChangedSources(sources []m.SourceV2) ([]m.SourceV2, error) {
+func (w *workflow) GetChangedSources(sources []m.Source) ([]m.Source, error) {
 	// Placeholder for future implementation
 	return sources, nil
 }
 
-func (w *workflow) GenerateAllMutations(sources []m.SourceV2) ([]m.Mutation, error) {
+func (w *workflow) GenerateAllMutations(sources []m.Source) ([]m.Mutation, error) {
 	mutationsIndex := 0
 
 	var allMutations []m.Mutation
@@ -149,8 +149,8 @@ func (w *workflow) ShardMutations(allMutations []m.Mutation, shardIndex uint, to
 	return shardMutations
 }
 
-func (w *workflow) TestReports(allMutations []m.Mutation, threads uint) ([]m.ReportV2, error) {
-	reports := []m.ReportV2{}
+func (w *workflow) TestReports(allMutations []m.Mutation, threads uint) ([]m.Report, error) {
+	reports := []m.Report{}
 	errors := []error{}
 
 	var (
@@ -178,7 +178,7 @@ func (w *workflow) TestReports(allMutations []m.Mutation, threads uint) ([]m.Rep
 				return nil
 			}
 
-			report := m.ReportV2{
+			report := m.Report{
 				Source: currentMutation.Source,
 				Result: mutationResult,
 			}

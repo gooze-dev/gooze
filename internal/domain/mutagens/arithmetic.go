@@ -7,7 +7,7 @@ import (
 	m "github.com/mouse-blink/gooze/internal/model"
 )
 
-func GenerateArithmeticMutations(n ast.Node, fset *token.FileSet, content []byte, source m.SourceV2, mutationID *int) []m.Mutation {
+func GenerateArithmeticMutations(n ast.Node, fset *token.FileSet, content []byte, source m.Source, mutationID *int) []m.Mutation {
 	binExpr, ok := n.(*ast.BinaryExpr)
 	if !ok {
 		return nil

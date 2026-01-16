@@ -26,7 +26,7 @@ func TestGenerateBooleanMutations(t *testing.T) {
 		t.Fatalf("failed to parse source %s: %v", booleanPath, err)
 	}
 
-	source := m.SourceV2{Origin: &m.File{Path: m.Path(booleanPath)}}
+	source := m.Source{Origin: &m.File{Path: m.Path(booleanPath)}}
 	mutationID := 5
 	var mutations []m.Mutation
 
