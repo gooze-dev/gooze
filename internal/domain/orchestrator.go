@@ -15,6 +15,7 @@ import (
 // mutation is killed or survives.
 type Orchestrator interface {
 	TestMutation(source m.Source, mutation m.Mutation) (m.Report, error)
+	TestMutationV2(mutation m.MutationV2) (m.Result, error)
 }
 
 type orchestrator struct {
@@ -29,6 +30,10 @@ func NewOrchestrator(fsAdapter adapter.SourceFSAdapter, testAdapter adapter.Test
 		fsAdapter:   fsAdapter,
 		testAdapter: testAdapter,
 	}
+}
+
+func (to *orchestrator) TestMutationV2(mutation m.MutationV2) (m.Result, error) {
+	panic("not implemented")
 }
 
 // TestMutation applies a mutation to source code and runs tests to check if the mutation is detected.

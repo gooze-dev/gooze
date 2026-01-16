@@ -26,3 +26,10 @@ type Mutation struct {
 	Column       int
 	ScopeType    ScopeType
 }
+
+type MutationV2 struct {
+	ID          uint
+	Source      SourceV2
+	Type        MutationType
+	MutatedCode []byte
+}

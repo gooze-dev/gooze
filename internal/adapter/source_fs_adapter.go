@@ -4,6 +4,8 @@ package adapter
 import (
 	"crypto/sha256"
 	"fmt"
+	"go/parser"
+	"go/token"
 	"io"
 	"os"
 	"path/filepath"
@@ -18,6 +20,8 @@ import (
 //
 //nolint:interfacebloat // A richer interface keeps workflow logic decoupled from os/fs.
 type SourceFSAdapter interface {
+	Get(root []m.Path) ([]m.SourceV2, error)
+
 	// Walk traverses the provided root path. When recursive is false the
 	// implementation should limit itself to the root directory (no sub-dirs).
 	Walk(root m.Path, recursive bool, fn FilepathWalkFunc) error
@@ -72,6 +76,78 @@ type LocalSourceFSAdapter struct{}
 // be wired into the workflow.
 func NewLocalSourceFSAdapter() *LocalSourceFSAdapter {
 	return &LocalSourceFSAdapter{}
+}
+
+// Get collects Go source files for the provided roots and returns SourceV2 entries.
+func (a *LocalSourceFSAdapter) Get(roots []m.Path) ([]m.SourceV2, error) {
+	if len(roots) == 0 {
+		return []m.SourceV2{}, nil
+	}
+
+	seen := make(map[string]struct{})
+
+	var sources []m.SourceV2
+
+	for _, root := range roots {
+		rootPath, recursive, err := normalizeRootPath(string(root))
+		if err != nil {
+			return nil, err
+		}
+
+		info, err := a.FileInfo(m.Path(rootPath))
+		if err != nil {
+			return nil, fmt.Errorf("root path error: %w", err)
+		}
+
+		if !info.IsDir() {
+			source, ok, err := a.processFilePath(rootPath)
+			if err != nil {
+				return nil, err
+			}
+
+			if ok {
+				if _, exists := seen[string(source.Origin.Path)]; !exists {
+					seen[string(source.Origin.Path)] = struct{}{}
+					sources = append(sources, source)
+				}
+			}
+
+			continue
+		}
+
+		err = a.Walk(m.Path(rootPath), recursive, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+
+			if info.IsDir() {
+				return nil
+			}
+
+			source, ok, err := a.processFilePath(path)
+			if err != nil {
+				return err
+			}
+
+			if !ok {
+				return nil
+			}
+
+			if _, exists := seen[string(source.Origin.Path)]; exists {
+				return nil
+			}
+
+			seen[string(source.Origin.Path)] = struct{}{}
+			sources = append(sources, source)
+
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return sources, nil
 }
 
 // Walk iterates over files under root, optionally descending into subdirectories.
@@ -256,4 +332,92 @@ func (a *LocalSourceFSAdapter) RelPath(base, target m.Path) (m.Path, error) {
 // JoinPath joins path elements into a single path.
 func (a *LocalSourceFSAdapter) JoinPath(elem ...string) m.Path {
 	return m.Path(filepath.Join(elem...))
+}
+
+func normalizeRootPath(root string) (string, bool, error) {
+	rootStr, recursive := parseRootPath(root)
+
+	if strings.HasPrefix(rootStr, "~") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", false, err
+		}
+
+		suffix := strings.TrimPrefix(rootStr, "~")
+		suffix = strings.TrimPrefix(suffix, string(os.PathSeparator))
+		rootStr = filepath.Join(home, suffix)
+	}
+
+	if rootStr == "" {
+		rootStr = "."
+	}
+
+	abs, err := filepath.Abs(rootStr)
+	if err != nil {
+		return "", false, err
+	}
+
+	return abs, recursive, nil
+}
+
+func parseRootPath(rootStr string) (path string, recursive bool) {
+	if len(rootStr) >= 4 && rootStr[len(rootStr)-4:] == "/..." {
+		return rootStr[:len(rootStr)-4], true
+	}
+
+	return rootStr, false
+}
+
+func (a *LocalSourceFSAdapter) processFilePath(path string) (m.SourceV2, bool, error) {
+	if filepath.Ext(path) != ".go" {
+		return m.SourceV2{}, false, nil
+	}
+
+	if strings.HasSuffix(path, "_test.go") {
+		return m.SourceV2{}, false, nil
+	}
+
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return m.SourceV2{}, false, err
+	}
+
+	src, err := a.ReadFile(m.Path(absPath))
+	if err != nil {
+		return m.SourceV2{}, false, nil
+	}
+
+	fset := token.NewFileSet()
+
+	file, err := parser.ParseFile(fset, absPath, src, parser.PackageClauseOnly)
+	if err != nil {
+		return m.SourceV2{}, false, nil
+	}
+
+	if file.Name == nil {
+		return m.SourceV2{}, false, nil
+	}
+
+	originHash, err := a.HashFile(m.Path(absPath))
+	if err != nil {
+		return m.SourceV2{}, false, err
+	}
+
+	origin := &m.File{Path: m.Path(absPath), Hash: originHash}
+
+	var testFile *m.File
+
+	if testPath, _ := a.DetectTestFile(m.Path(absPath)); testPath != "" {
+		if testHash, err := a.HashFile(testPath); err == nil {
+			testFile = &m.File{Path: testPath, Hash: testHash}
+		}
+	}
+
+	packageName := file.Name.Name
+
+	return m.SourceV2{
+		Origin:  origin,
+		Test:    testFile,
+		Package: &packageName,
+	}, true, nil
 }

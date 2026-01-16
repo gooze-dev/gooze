@@ -298,6 +298,64 @@ func (_c *MockSourceFSAdapter_FindProjectRoot_Call) RunAndReturn(run func(model.
 	return _c
 }
 
+// Get provides a mock function with given fields: root
+func (_m *MockSourceFSAdapter) Get(root []model.Path) ([]model.SourceV2, error) {
+	ret := _m.Called(root)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Get")
+	}
+
+	var r0 []model.SourceV2
+	var r1 error
+	if rf, ok := ret.Get(0).(func([]model.Path) ([]model.SourceV2, error)); ok {
+		return rf(root)
+	}
+	if rf, ok := ret.Get(0).(func([]model.Path) []model.SourceV2); ok {
+		r0 = rf(root)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]model.SourceV2)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func([]model.Path) error); ok {
+		r1 = rf(root)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockSourceFSAdapter_Get_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Get'
+type MockSourceFSAdapter_Get_Call struct {
+	*mock.Call
+}
+
+// Get is a helper method to define mock.On call
+//   - root []model.Path
+func (_e *MockSourceFSAdapter_Expecter) Get(root interface{}) *MockSourceFSAdapter_Get_Call {
+	return &MockSourceFSAdapter_Get_Call{Call: _e.mock.On("Get", root)}
+}
+
+func (_c *MockSourceFSAdapter_Get_Call) Run(run func(root []model.Path)) *MockSourceFSAdapter_Get_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].([]model.Path))
+	})
+	return _c
+}
+
+func (_c *MockSourceFSAdapter_Get_Call) Return(_a0 []model.SourceV2, _a1 error) *MockSourceFSAdapter_Get_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockSourceFSAdapter_Get_Call) RunAndReturn(run func([]model.Path) ([]model.SourceV2, error)) *MockSourceFSAdapter_Get_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // HashFile provides a mock function with given fields: path
 func (_m *MockSourceFSAdapter) HashFile(path model.Path) (string, error) {
 	ret := _m.Called(path)

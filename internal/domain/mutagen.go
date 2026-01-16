@@ -15,6 +15,7 @@ import (
 type Mutagen interface {
 	GenerateMutations(source m.Source, mutationTypes ...m.MutationType) ([]m.Mutation, error)
 	EstimateMutations(source m.Source, mutationTypes ...m.MutationType) (int, error)
+	GenerateMutationV2(source m.SourceV2, startingIndex int, mutationTypes ...m.MutationType) ([]m.MutationV2, error)
 }
 
 // mutagen handles pure mutation generation logic.
@@ -23,6 +24,10 @@ type mutagen struct{}
 // NewMutagen creates a new Mutagen instance.
 func NewMutagen() Mutagen {
 	return &mutagen{}
+}
+
+func (mg *mutagen) GenerateMutationV2(_ m.SourceV2, _ int, _ ...m.MutationType) ([]m.MutationV2, error) {
+	panic("Not implemented")
 }
 
 // GenerateMutations analyzes a source file and generates mutations based on type.

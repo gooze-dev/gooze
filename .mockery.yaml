@@ -6,8 +6,11 @@ packages:
   github.com/mouse-blink/gooze/internal/domain:
     config:
       dir: internal/domain/mocks
+      outpkg: mocks
     interfaces:
       Workflow:
+      Orchestrator:
+      Mutagen:
   github.com/mouse-blink/gooze/internal/adapter:
     config:
       dir: internal/adapter/mocks
@@ -16,6 +19,7 @@ packages:
       GoFileAdapter:
       SourceFSAdapter:
       TestRunnerAdapter:
+      ReportStore:
   github.com/mouse-blink/gooze/internal/controller:
     config:
       dir: internal/controller/mocks

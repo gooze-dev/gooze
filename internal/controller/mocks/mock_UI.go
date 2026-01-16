@@ -3,7 +3,7 @@
 package mocks
 
 import (
-	adapter "github.com/mouse-blink/gooze/internal/controller"
+	controller "github.com/mouse-blink/gooze/internal/controller"
 	mock "github.com/stretchr/testify/mock"
 
 	model "github.com/mouse-blink/gooze/internal/model"
@@ -23,7 +23,7 @@ func (_m *MockUI) EXPECT() *MockUI_Expecter {
 }
 
 // DisplayMutationEstimations provides a mock function with given fields: estimations
-func (_m *MockUI) DisplayMutationEstimations(estimations map[model.Path]adapter.MutationEstimation) error {
+func (_m *MockUI) DisplayMutationEstimations(estimations map[model.Path]controller.MutationEstimation) error {
 	ret := _m.Called(estimations)
 
 	if len(ret) == 0 {
@@ -31,7 +31,7 @@ func (_m *MockUI) DisplayMutationEstimations(estimations map[model.Path]adapter.
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(map[model.Path]adapter.MutationEstimation) error); ok {
+	if rf, ok := ret.Get(0).(func(map[model.Path]controller.MutationEstimation) error); ok {
 		r0 = rf(estimations)
 	} else {
 		r0 = ret.Error(0)
@@ -46,14 +46,14 @@ type MockUI_DisplayMutationEstimations_Call struct {
 }
 
 // DisplayMutationEstimations is a helper method to define mock.On call
-//   - estimations map[model.Path]adapter.MutationEstimation
+//   - estimations map[model.Path]controller.MutationEstimation
 func (_e *MockUI_Expecter) DisplayMutationEstimations(estimations interface{}) *MockUI_DisplayMutationEstimations_Call {
 	return &MockUI_DisplayMutationEstimations_Call{Call: _e.mock.On("DisplayMutationEstimations", estimations)}
 }
 
-func (_c *MockUI_DisplayMutationEstimations_Call) Run(run func(estimations map[model.Path]adapter.MutationEstimation)) *MockUI_DisplayMutationEstimations_Call {
+func (_c *MockUI_DisplayMutationEstimations_Call) Run(run func(estimations map[model.Path]controller.MutationEstimation)) *MockUI_DisplayMutationEstimations_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(map[model.Path]adapter.MutationEstimation))
+		run(args[0].(map[model.Path]controller.MutationEstimation))
 	})
 	return _c
 }
@@ -63,7 +63,7 @@ func (_c *MockUI_DisplayMutationEstimations_Call) Return(_a0 error) *MockUI_Disp
 	return _c
 }
 
-func (_c *MockUI_DisplayMutationEstimations_Call) RunAndReturn(run func(map[model.Path]adapter.MutationEstimation) error) *MockUI_DisplayMutationEstimations_Call {
+func (_c *MockUI_DisplayMutationEstimations_Call) RunAndReturn(run func(map[model.Path]controller.MutationEstimation) error) *MockUI_DisplayMutationEstimations_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -38,3 +38,15 @@ type Source struct {
 	// Scopes provides detailed scope information for selective mutation
 	Scopes []CodeScope
 }
+
+// File represents a source code file.
+type File struct {
+	Path Path
+	Hash string
+}
+
+type SourceV2 struct {
+	Origin  *File
+	Test    *File
+	Package *string
+}
