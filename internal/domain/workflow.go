@@ -13,7 +13,7 @@ import (
 
 // DefaultMutations defines the default mutation types to be applied.
 // DefaultMutations defines the default set of mutation types to generate.
-var DefaultMutations = []m.MutationType{m.MutationArithmetic, m.MutationBoolean}
+var DefaultMutations = []m.MutationType{m.MutationArithmetic, m.MutationBoolean, m.MutationComparison}
 
 // EstimateArgs contains the arguments for estimating mutations.
 type EstimateArgs struct {

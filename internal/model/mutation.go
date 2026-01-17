@@ -9,6 +9,8 @@ const (
 	MutationArithmetic MutationType = "arithmetic"
 	// MutationBoolean represents boolean literal mutations (true <-> false).
 	MutationBoolean MutationType = "boolean"
+	// MutationComparison represents comparison operator mutations (<, >, <=, >=, ==, !=).
+	MutationComparison MutationType = "comparison"
 )
 
 // Mutation represents a code mutation with its details.

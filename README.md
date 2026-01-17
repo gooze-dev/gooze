@@ -10,6 +10,7 @@ A Golang mutation testing tool inspired by TMNT "ooze" mutagen.
 - [ ] Numbers
 - [ ] Unary / Negation
 - [x] Arithmetic
+- [x] Comparison / Relational
 - [ ] Core Logic
 - [ ] Statement
 - [ ] Statement Deletion
