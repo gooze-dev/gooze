@@ -46,7 +46,10 @@ lint:
 	@$(bin)/golangci-lint run $(PKG_WHITELIST)
 
 test:
-	@go test -v $(PKG_WHITELIST)
+	@packages=$$(go list $(PKG_WHITELIST) | grep -v '/mocks$$' | grep -v '/examples/'); \
+	coverpkgs=$$(echo "$$packages" | paste -sd, -); \
+	go test -coverpkg="$$coverpkgs" $$packages -coverprofile=coverage.out -cover; \
+	go tool cover -html=coverage.out -o coverage.html
 
 clean:
 	@rm -rf $(bin)

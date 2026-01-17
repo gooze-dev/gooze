@@ -40,6 +40,31 @@ func TestIsTTY_WithTerminal(t *testing.T) {
 	_ = result
 }
 
+func TestIsTTY_WithInvalidFile(t *testing.T) {
+	file, err := os.CreateTemp("", "gooze-tty")
+	if err != nil {
+		t.Fatalf("CreateTemp error: %v", err)
+	}
+	file.Close()
+	defer os.Remove(file.Name())
+
+	if IsTTY(file) {
+		t.Fatalf("IsTTY(invalid file) = true, want false")
+	}
+}
+
+func TestIsTTY_WithCharDevice(t *testing.T) {
+	file, err := os.Open("/dev/null")
+	if err != nil {
+		t.Skip("/dev/null not available")
+	}
+	defer file.Close()
+
+	if !IsTTY(file) {
+		t.Fatalf("IsTTY(/dev/null) = false, want true")
+	}
+}
+
 func TestIsTTY_WithNonTerminal(t *testing.T) {
 	// Create a buffer which is not a terminal
 	var buf bytes.Buffer
