@@ -2,6 +2,56 @@
 
 A Golang mutation testing tool inspired by TMNT "ooze" mutagen.
 
+Gooze helps you measure test suite quality by introducing small, controlled mutations
+into your Go source and running tests to see which changes are caught. It supports
+Go path patterns (like `./...`) for fast targeting and can parallelize mutation runs
+to speed up larger projects.
+
+## Quick Start
+
+### Install
+
+Install the latest `gooze` binary to your Go bin directory.
+
+```bash
+go install github.com/mouse-blink/gooze@latest
+```
+
+
+### List files and mutation counts
+
+Preview which files will be mutated and how many mutations apply.
+
+```bash
+gooze list ./...
+```
+
+### Run mutation testing
+
+Execute mutation testing across the target paths.
+
+```bash
+gooze run ./...
+```
+
+With parallel workers:
+
+```bash
+gooze run -p 4 ./...
+```
+
+> Tips:
+> - Use `gooze list` to preview the files and mutation counts before running tests.
+> - Use `--parallel` to reduce total runtime on multi-core machines.
+
+### UI modes
+
+Gooze automatically selects the UI based on whether output is a TTY:
+
+- **Interactive TUI**: Used when running in a terminal.
+- **Simple/CI UI**: Used when output is redirected or in CI.
+
+To skip the interactive UI, pipe output (e.g., `gooze run ./... | cat`).
 
 
 ## Complete Go Mutation Testing Categories
