@@ -82,7 +82,7 @@ func resolveMutationTypes(mutationTypes []m.MutationType) ([]m.MutationType, err
 
 	for _, mutationType := range mutationTypes {
 		if mutationType != m.MutationArithmetic && mutationType != m.MutationBoolean && mutationType != m.MutationComparison && mutationType != m.MutationLogical && mutationType != m.MutationUnary {
-			return nil, fmt.Errorf("unsupported mutation type: %v", mutationType)
+			return nil, fmt.Errorf("unsupported mutation type: %s", mutationType.Name)
 		}
 	}
 

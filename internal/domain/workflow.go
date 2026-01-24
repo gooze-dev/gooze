@@ -182,7 +182,7 @@ func (w *workflow) TestReports(allMutations []m.Mutation, threads int) ([]m.Repo
 	errors := []error{}
 
 	effectiveThreads := threads
-	if effectiveThreads < 1 {
+	if effectiveThreads <= 0 {
 		effectiveThreads = 1
 	}
 

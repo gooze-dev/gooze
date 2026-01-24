@@ -120,7 +120,7 @@ func TestMutagen_GenerateMutation_InvalidType(t *testing.T) {
 	mg := newTestMutagen()
 
 	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "basic", "main.go"))
-	_, err := mg.GenerateMutation(source, 0, m.MutationType("invalid"))
+	_, err := mg.GenerateMutation(source, 0, m.MutationType{Name: "invalid", Version: 1})
 	if err == nil {
 		t.Fatalf("expected error for invalid mutation type")
 	}
