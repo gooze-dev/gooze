@@ -5,140 +5,13 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strings"
 	"testing"
 
-	controllermocks "github.com/mouse-blink/gooze/internal/controller/mocks"
-	"github.com/mouse-blink/gooze/internal/domain"
-	domainmocks "github.com/mouse-blink/gooze/internal/domain/mocks"
 	m "github.com/mouse-blink/gooze/internal/model"
 	"github.com/spf13/cobra"
-	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
-
-func TestRootCmd_ListFlag(t *testing.T) {
-	// Setup mocks
-	mockWorkflow := domainmocks.NewMockWorkflow(t)
-	mockUI := controllermocks.NewMockUI(t)
-
-	// Create a new root command for testing
-	cmd := newRootCmd()
-	cmd.SetOut(&bytes.Buffer{})
-	cmd.SetErr(&bytes.Buffer{})
-
-	// Override the global workflow
-	originalWorkflow := workflow
-	workflow = mockWorkflow
-	defer func() { workflow = originalWorkflow }()
-
-	// Set expectations
-	mockWorkflow.On("Estimate", mock.MatchedBy(func(args domain.EstimateArgs) bool {
-		return args.UseCache == true
-	})).Return(nil)
-
-	// Execute command with --list flag
-	cmd.SetArgs([]string{"--list", "./..."})
-	err := cmd.Execute()
-	if err != nil {
-		t.Fatalf("Execute() error = %v", err)
-	}
-
-	mockWorkflow.AssertExpectations(t)
-	mockUI.AssertExpectations(t)
-}
-
-func TestRootCmd_TestMode(t *testing.T) {
-	// Setup mocks
-	mockWorkflow := domainmocks.NewMockWorkflow(t)
-
-	// Create a new root command for testing
-	cmd := newRootCmd()
-	cmd.SetOut(&bytes.Buffer{})
-	cmd.SetErr(&bytes.Buffer{})
-
-	// Override the global workflow
-	originalWorkflow := workflow
-	workflow = mockWorkflow
-	defer func() { workflow = originalWorkflow }()
-
-	// Set expectations
-	mockWorkflow.On("Test", mock.MatchedBy(func(args domain.TestArgs) bool {
-		return args.Threads == 2 &&
-			args.ShardIndex == 0 &&
-			args.TotalShardCount == 1 &&
-			args.Reports == m.Path(".gooze-reports")
-	})).Return(nil)
-
-	// Execute command without --list flag
-	cmd.SetArgs([]string{"--parallel", "2", "./..."})
-	err := cmd.Execute()
-	if err != nil {
-		t.Fatalf("Execute() error = %v", err)
-	}
-
-	mockWorkflow.AssertExpectations(t)
-}
-
-func TestRootCmd_WithSharding(t *testing.T) {
-	// Setup mocks
-	mockWorkflow := domainmocks.NewMockWorkflow(t)
-
-	// Create a new root command for testing
-	cmd := newRootCmd()
-	cmd.SetOut(&bytes.Buffer{})
-	cmd.SetErr(&bytes.Buffer{})
-
-	// Override the global workflow
-	originalWorkflow := workflow
-	workflow = mockWorkflow
-	defer func() { workflow = originalWorkflow }()
-
-	// Set expectations for shard 1/3
-	mockWorkflow.On("Test", mock.MatchedBy(func(args domain.TestArgs) bool {
-		return args.ShardIndex == 1 && args.TotalShardCount == 3
-	})).Return(nil)
-
-	// Execute command with sharding
-	cmd.SetArgs([]string{"--shard", "1/3", "./..."})
-	err := cmd.Execute()
-	if err != nil {
-		t.Fatalf("Execute() error = %v", err)
-	}
-
-	mockWorkflow.AssertExpectations(t)
-}
-
-func TestRootCmd_MultiplePaths(t *testing.T) {
-	// Setup mocks
-	mockWorkflow := domainmocks.NewMockWorkflow(t)
-
-	// Create a new root command for testing
-	cmd := newRootCmd()
-	cmd.SetOut(&bytes.Buffer{})
-	cmd.SetErr(&bytes.Buffer{})
-
-	// Override the global workflow
-	originalWorkflow := workflow
-	workflow = mockWorkflow
-	defer func() { workflow = originalWorkflow }()
-
-	// Set expectations
-	mockWorkflow.On("Test", mock.MatchedBy(func(args domain.TestArgs) bool {
-		return len(args.Paths) == 3 &&
-			args.Paths[0] == m.Path("./cmd") &&
-			args.Paths[1] == m.Path("./pkg") &&
-			args.Paths[2] == m.Path("./internal")
-	})).Return(nil)
-
-	// Execute command with multiple paths
-	cmd.SetArgs([]string{"./cmd", "./pkg", "./internal"})
-	err := cmd.Execute()
-	if err != nil {
-		t.Fatalf("Execute() error = %v", err)
-	}
-
-	mockWorkflow.AssertExpectations(t)
-}
 
 func TestParseShardFlag(t *testing.T) {
 	tests := []struct {
@@ -162,72 +35,69 @@ func TestParseShardFlag(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gotIndex, gotTotal := parseShardFlag(tt.shard)
-			if gotIndex != tt.wantIndex {
-				t.Errorf("parseShardFlag() index = %v, want %v", gotIndex, tt.wantIndex)
-			}
-			if gotTotal != tt.wantTotal {
-				t.Errorf("parseShardFlag() total = %v, want %v", gotTotal, tt.wantTotal)
-			}
+			assert.Equal(t, tt.wantIndex, gotIndex, "index")
+			assert.Equal(t, tt.wantTotal, gotTotal, "total")
+		})
+	}
+}
+
+func TestParsePaths(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want []m.Path
+	}{
+		{"empty", []string{}, []m.Path{}},
+		{"single", []string{"./..."}, []m.Path{m.Path("./...")}},
+		{
+			"multiple",
+			[]string{"./cmd", "./pkg", "./internal"},
+			[]m.Path{m.Path("./cmd"), m.Path("./pkg"), m.Path("./internal")},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parsePaths(tt.args)
+			require.Len(t, got, len(tt.want))
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
 func TestNewRootCmd(t *testing.T) {
 	cmd := newRootCmd()
-	if cmd.Use != "gooze [paths...]" {
-		t.Errorf("newRootCmd() Use = %v, want %v", cmd.Use, "gooze [paths...]")
-	}
-	if cmd.Short == "" {
-		t.Error("newRootCmd() Short should not be empty")
-	}
-	if cmd.Long == "" {
-		t.Error("newRootCmd() Long should not be empty")
-	}
+	assert.Equal(t, "gooze", cmd.Use)
+	assert.NotEmpty(t, cmd.Short)
+	assert.NotEmpty(t, cmd.Long)
+	assert.Equal(t, rootLongDescription, cmd.Long)
+}
 
-	// Check flags
-	listFlag := cmd.Flags().Lookup("list")
-	if listFlag == nil {
-		t.Error("newRootCmd() missing --list flag")
-	}
-	parallelFlag := cmd.Flags().Lookup("parallel")
-	if parallelFlag == nil {
-		t.Error("newRootCmd() missing --parallel flag")
-	}
-	shardFlag := cmd.Flags().Lookup("shard")
-	if shardFlag == nil {
-		t.Error("newRootCmd() missing --shard flag")
-	}
+func TestRootCmd_HelpOutput(t *testing.T) {
+	cmd := newRootCmd()
+	output := &bytes.Buffer{}
+	cmd.SetOut(output)
+	cmd.SetErr(&bytes.Buffer{})
+
+	cmd.SetArgs([]string{})
+	err := cmd.Execute()
+
+	require.NoError(t, err)
+	assert.Contains(t, output.String(), "Usage:")
+	assert.Contains(t, output.String(), "Supports Go-style path patterns")
 }
 
 func TestInit(t *testing.T) {
 	// Test that init() created all the necessary instances
-	if ui == nil {
-		t.Error("init() ui is nil")
-	}
-	if goFileAdapter == nil {
-		t.Error("init() goFileAdapter is nil")
-	}
-	if soirceFSAdapter == nil {
-		t.Error("init() soirceFSAdapter is nil")
-	}
-	if reportStore == nil {
-		t.Error("init() reportStore is nil")
-	}
-	if fsAdapter == nil {
-		t.Error("init() fsAdapter is nil")
-	}
-	if testAdapter == nil {
-		t.Error("init() testAdapter is nil")
-	}
-	if orchestrator == nil {
-		t.Error("init() orchestrator is nil")
-	}
-	if mutagen == nil {
-		t.Error("init() mutagen is nil")
-	}
-	if workflow == nil {
-		t.Error("init() workflow is nil")
-	}
+	assert.NotNil(t, ui)
+	assert.NotNil(t, goFileAdapter)
+	assert.NotNil(t, soirceFSAdapter)
+	assert.NotNil(t, reportStore)
+	assert.NotNil(t, fsAdapter)
+	assert.NotNil(t, testAdapter)
+	assert.NotNil(t, orchestrator)
+	assert.NotNil(t, mutagen)
+	assert.NotNil(t, workflow)
 }
 
 func TestExecute(t *testing.T) {
@@ -276,9 +146,7 @@ func TestExecute_WithError(t *testing.T) {
 	// This will cause os.Exit(1) to be called, which we can't intercept
 	// So we just verify the command itself errors
 	err := rootCmd.Execute()
-	if err == nil {
-		t.Error("Expected command to return an error")
-	}
+	require.Error(t, err)
 }
 
 func TestExecute_ProcessLevel_Success(t *testing.T) {
@@ -307,18 +175,11 @@ func TestExecute_ProcessLevel_Success(t *testing.T) {
 	cmd.Env = append(os.Environ(), "TEST_EXECUTE_SUBPROCESS=1")
 	output, err := cmd.CombinedOutput()
 
-	if err != nil {
-		t.Errorf("Process exited with error: %v, output: %s", err, output)
-	}
-
-	if !strings.Contains(string(output), "success") {
-		t.Errorf("Expected 'success' in output, got: %s", output)
-	}
+	require.NoError(t, err, "output: %s", output)
+	assert.Contains(t, string(output), "success")
 
 	if exitErr, ok := err.(*exec.ExitError); ok {
-		if exitErr.ExitCode() != 0 {
-			t.Errorf("Expected exit code 0, got %d", exitErr.ExitCode())
-		}
+		assert.Equal(t, 0, exitErr.ExitCode())
 	}
 }
 
@@ -348,19 +209,13 @@ func TestExecute_ProcessLevel_Failure(t *testing.T) {
 	cmd.Env = append(os.Environ(), "TEST_EXECUTE_SUBPROCESS_FAIL=1")
 	output, err := cmd.CombinedOutput()
 
-	if err == nil {
-		t.Error("Expected process to exit with error")
-	}
+	require.Error(t, err)
 
 	if exitErr, ok := err.(*exec.ExitError); ok {
-		if exitErr.ExitCode() != 1 {
-			t.Errorf("Expected exit code 1, got %d", exitErr.ExitCode())
-		}
+		assert.Equal(t, 1, exitErr.ExitCode())
 	} else {
-		t.Errorf("Expected exec.ExitError, got %T", err)
+		assert.Fail(t, "expected exec.ExitError", "got %T", err)
 	}
 
-	if !strings.Contains(string(output), "error occurred") {
-		t.Logf("Output: %s", output)
-	}
+	assert.Contains(t, string(output), "error occurred")
 }

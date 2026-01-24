@@ -40,53 +40,37 @@ func init() {
 	)
 }
 
-var listFlag bool
-var parallelFlag int
-var shardFlag string
+const pathPatternsHelp = `Supports Go-style path patterns:
+  - ./...          recursively scan current directory
+  - ./pkg/...      recursively scan pkg directory
+  - ./cmd ./pkg    scan multiple directories`
+
+const rootLongDescription = `Gooze is a mutation testing tool for Go that helps you assess the quality
+of your test suite by introducing small changes (mutations) to your code
+and verifying that your tests catch them.
+
+` + pathPatternsHelp
+
+const runLongDescription = `Run mutation testing for the given paths (default: current module).
+
+` + pathPatternsHelp
+
+const listLongDescription = `List source files and the number of applicable mutations.
+
+` + pathPatternsHelp
 
 // rootCmd represents the base command when called without any subcommands.
 var rootCmd = newRootCmd()
 
 func newRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "gooze [paths...]",
+		Use:   "gooze",
 		Short: "Go mutation testing tool",
-		Long: `Gooze is a mutation testing tool for Go that helps you assess the quality
-of your test suite by introducing small changes (mutations) to your code
-and verifying that your tests catch them.
-
-Supports Go-style path patterns:
-  - ./...          recursively scan current directory
-  - ./pkg/...      recursively scan pkg directory
-  - ./cmd ./pkg    scan multiple directories`,
-		RunE: func(_ *cobra.Command, args []string) error {
-			shardIndex, totalShards := parseShardFlag(shardFlag)
-
-			paths := make([]m.Path, 0, len(args))
-			for _, arg := range args {
-				paths = append(paths, m.Path(arg))
-			}
-
-			estimateArgs := domain.EstimateArgs{
-				Paths:    paths,
-				UseCache: listFlag,
-			}
-			if listFlag {
-				return workflow.Estimate(estimateArgs)
-			}
-
-			return workflow.Test(domain.TestArgs{
-				EstimateArgs:    estimateArgs,
-				Reports:         ".gooze-reports",
-				Threads:         parallelFlag,
-				ShardIndex:      shardIndex,
-				TotalShardCount: totalShards,
-			})
+		Long:  rootLongDescription,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return cmd.Help()
 		},
 	}
-	cmd.Flags().BoolVarP(&listFlag, "list", "l", false, "list all source files and count of mutations applicable")
-	cmd.Flags().IntVarP(&parallelFlag, "parallel", "p", 1, "number of parallel workers for mutation testing")
-	cmd.Flags().StringVarP(&shardFlag, "shard", "s", "", "shard index and total shard count in the format INDEX/TOTAL (e.g., 0/3)")
 
 	return cmd
 }
@@ -113,4 +97,13 @@ func parseShardFlag(shard string) (int, int) {
 	}
 
 	return index, total
+}
+
+func parsePaths(args []string) []m.Path {
+	paths := make([]m.Path, 0, len(args))
+	for _, arg := range args {
+		paths = append(paths, m.Path(arg))
+	}
+
+	return paths
 }
