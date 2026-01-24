@@ -164,7 +164,7 @@ func (w *workflow) GenerateAllMutations(sources []m.Source) ([]m.Mutation, error
 }
 
 func (w *workflow) ShardMutations(allMutations []m.Mutation, shardIndex int, totalShardCount int) []m.Mutation {
-	if totalShardCount == 0 {
+	if totalShardCount <= 0 {
 		return allMutations
 	}
 
@@ -183,6 +183,11 @@ func (w *workflow) TestReports(allMutations []m.Mutation, threads int) ([]m.Repo
 	reports := []m.Report{}
 	errors := []error{}
 
+	effectiveThreads := threads
+	if effectiveThreads < 1 {
+		effectiveThreads = 1
+	}
+
 	var (
 		reportsMutex    sync.Mutex
 		errorsMutex     sync.Mutex
@@ -190,24 +195,22 @@ func (w *workflow) TestReports(allMutations []m.Mutation, threads int) ([]m.Repo
 	)
 
 	var group errgroup.Group
-	if threads > 0 {
-		group.SetLimit(threads)
-	}
+	group.SetLimit(effectiveThreads)
 
 	for _, mutation := range allMutations {
 		currentMutation := mutation
-		group.Go(w.processMutation(currentMutation, &threadIDCounter, threads, &reportsMutex, &errorsMutex, &reports, &errors))
+		group.Go(w.processMutation(currentMutation, &threadIDCounter, effectiveThreads, &reportsMutex, &errorsMutex, &reports, &errors))
 	}
 
 	if err := group.Wait(); err != nil {
 		return reports, err
 	}
 
-	if len(errors) > 0 {
-		return reports, fmt.Errorf("errors occurred during mutation testing: %v", errors)
+	if len(errors) == 0 {
+		return reports, nil
 	}
 
-	return reports, nil
+	return reports, fmt.Errorf("errors occurred during mutation testing: %v", errors)
 }
 
 func (w *workflow) processMutation(
@@ -259,7 +262,7 @@ func (w *workflow) processMutation(
 
 func getMutationStatus(result m.Result, mutation m.Mutation) m.TestStatus {
 	entries, ok := result[mutation.Type]
-	if !ok || len(entries) == 0 {
+	if !ok || len(entries) < 1 {
 		return m.Error
 	}
 

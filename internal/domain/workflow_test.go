@@ -2,7 +2,9 @@ package domain_test
 
 import (
 	"errors"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	adaptermocks "github.com/mouse-blink/gooze/internal/adapter/mocks"
 	controllermocks "github.com/mouse-blink/gooze/internal/controller/mocks"
@@ -378,6 +380,447 @@ func TestWorkflow_Test_WithSharding(t *testing.T) {
 	mockOrchestrator.AssertExpectations(t)
 }
 
+func TestWorkflow_ShardMutations_InvalidShardReturnsEmpty(t *testing.T) {
+	// Arrange
+	mutations := []m.Mutation{
+		{ID: 0},
+		{ID: 1},
+		{ID: 2},
+	}
+
+	wf := domain.NewWorkflow(nil, nil, nil, nil, nil)
+
+	// Act
+	result := wf.(interface {
+		ShardMutations([]m.Mutation, int, int) []m.Mutation
+	}).ShardMutations(mutations, 2, 2)
+
+	// Assert
+	assert.Empty(t, result)
+}
+
+func TestWorkflow_ShardMutations_ShardIndexGreaterThanTotalReturnsEmpty(t *testing.T) {
+	// Arrange
+	mutations := []m.Mutation{
+		{ID: 0},
+		{ID: 1},
+		{ID: 2},
+	}
+
+	wf := domain.NewWorkflow(nil, nil, nil, nil, nil)
+
+	// Act
+	result := wf.(interface {
+		ShardMutations([]m.Mutation, int, int) []m.Mutation
+	}).ShardMutations(mutations, 3, 2)
+
+	// Assert
+	assert.Empty(t, result)
+}
+
+func TestWorkflow_ShardMutations_NonPositiveTotalReturnsAll(t *testing.T) {
+	// Arrange
+	mutations := []m.Mutation{
+		{ID: 0},
+		{ID: 1},
+		{ID: 2},
+	}
+
+	wf := domain.NewWorkflow(nil, nil, nil, nil, nil)
+
+	// Act
+	resultZero := wf.(interface {
+		ShardMutations([]m.Mutation, int, int) []m.Mutation
+	}).ShardMutations(mutations, 0, 0)
+
+	resultNegative := wf.(interface {
+		ShardMutations([]m.Mutation, int, int) []m.Mutation
+	}).ShardMutations(mutations, 0, -3)
+
+	// Assert
+	assert.Len(t, resultZero, len(mutations))
+	assert.Len(t, resultNegative, len(mutations))
+}
+
+func TestWorkflow_ShardMutations_MiddleShardSelectsExactMatches(t *testing.T) {
+	// Arrange
+	mutations := []m.Mutation{
+		{ID: 0},
+		{ID: 1},
+		{ID: 2},
+		{ID: 3},
+		{ID: 4},
+		{ID: 5},
+	}
+
+	wf := domain.NewWorkflow(nil, nil, nil, nil, nil)
+
+	// Act
+	result := wf.(interface {
+		ShardMutations([]m.Mutation, int, int) []m.Mutation
+	}).ShardMutations(mutations, 1, 3)
+
+	// Assert
+	if assert.Len(t, result, 2) {
+		assert.Equal(t, 1, result[0].ID)
+		assert.Equal(t, 4, result[1].ID)
+	}
+}
+
+func TestWorkflow_TestThreadsZeroDoesNotPanic(t *testing.T) {
+	// Arrange
+	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
+	mockReportStore := new(adaptermocks.MockReportStore)
+	mockUI := new(controllermocks.MockUI)
+	mockOrchestrator := new(domainmocks.MockOrchestrator)
+	mockMutagen := new(domainmocks.MockMutagen)
+
+	source := m.Source{
+		Origin: &m.File{FullPath: "test.go", Hash: "hash1"},
+	}
+
+	mutations := []m.Mutation{
+		{ID: 0, Source: source, Type: m.MutationArithmetic},
+	}
+
+	mockUI.EXPECT().Start(mock.Anything).Return(nil).Once()
+	mockUI.EXPECT().Wait().Return().Once()
+	mockUI.EXPECT().Close().Return().Once()
+	mockUI.EXPECT().DisplayConcurencyInfo(mock.Anything, mock.Anything, mock.Anything).Return()
+	mockUI.EXPECT().DusplayUpcomingTestsInfo(mock.Anything).Return()
+	mockUI.EXPECT().DisplayStartingTestInfo(mutations[0], 0).Return().Once()
+	mockUI.EXPECT().DisplayCompletedTestInfo(mutations[0], mock.Anything).Return().Once()
+	mockFSAdapter.EXPECT().Get(mock.Anything, domain.DefaultIgnorePattern).Return([]m.Source{source}, nil)
+	mockMutagen.EXPECT().GenerateMutation(mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4]).Return(mutations, nil)
+	mockOrchestrator.EXPECT().TestMutation(mutations[0]).Return(m.Result{}, nil)
+	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.Anything).Return(nil)
+
+	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockUI, mockOrchestrator, mockMutagen)
+
+	// Act
+	args := domain.TestArgs{
+		Reports:         "reports.json",
+		Threads:         0,
+		ShardIndex:      0,
+		TotalShardCount: 1,
+	}
+	err := wf.Test(args)
+
+	// Assert
+	assert.NoError(t, err)
+}
+
+func TestWorkflow_TestThreadIDWithinBounds(t *testing.T) {
+	// Arrange
+	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
+	mockReportStore := new(adaptermocks.MockReportStore)
+	mockUI := new(controllermocks.MockUI)
+	mockOrchestrator := new(domainmocks.MockOrchestrator)
+	mockMutagen := new(domainmocks.MockMutagen)
+
+	source := m.Source{
+		Origin: &m.File{FullPath: "test.go", Hash: "hash1"},
+	}
+
+	mutations := []m.Mutation{
+		{ID: 0, Source: source, Type: m.MutationArithmetic},
+		{ID: 1, Source: source, Type: m.MutationArithmetic},
+	}
+
+	mockUI.EXPECT().Start(mock.Anything).Return(nil).Once()
+	mockUI.EXPECT().Wait().Return().Once()
+	mockUI.EXPECT().Close().Return().Once()
+	mockUI.EXPECT().DisplayConcurencyInfo(mock.Anything, mock.Anything, mock.Anything).Return()
+	mockUI.EXPECT().DusplayUpcomingTestsInfo(mock.Anything).Return()
+	mockUI.EXPECT().DisplayStartingTestInfo(mock.Anything, mock.MatchedBy(func(id int) bool {
+		return id >= 0 && id < 2
+	})).Return().Times(2)
+	mockUI.EXPECT().DisplayCompletedTestInfo(mock.Anything, mock.Anything).Return().Times(2)
+	mockFSAdapter.EXPECT().Get(mock.Anything, domain.DefaultIgnorePattern).Return([]m.Source{source}, nil)
+	mockMutagen.EXPECT().GenerateMutation(mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4]).Return(mutations, nil)
+	mockOrchestrator.EXPECT().TestMutation(mock.Anything).Return(m.Result{}, nil).Times(2)
+	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.MatchedBy(func(reports []m.Report) bool {
+		return len(reports) == 2
+	})).Return(nil)
+
+	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockUI, mockOrchestrator, mockMutagen)
+
+	// Act
+	args := domain.TestArgs{
+		Reports:         "reports.json",
+		Threads:         2,
+		ShardIndex:      0,
+		TotalShardCount: 1,
+	}
+	err := wf.Test(args)
+
+	// Assert
+	assert.NoError(t, err)
+}
+
+func TestWorkflow_TestThreadIDIsUniqueForThreadsTwo(t *testing.T) {
+	// Arrange
+	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
+	mockReportStore := new(adaptermocks.MockReportStore)
+	mockUI := new(controllermocks.MockUI)
+	mockOrchestrator := new(domainmocks.MockOrchestrator)
+	mockMutagen := new(domainmocks.MockMutagen)
+
+	source := m.Source{
+		Origin: &m.File{FullPath: "test.go", Hash: "hash1"},
+	}
+
+	mutations := []m.Mutation{
+		{ID: 0, Source: source, Type: m.MutationArithmetic},
+		{ID: 1, Source: source, Type: m.MutationArithmetic},
+	}
+
+	threadIDs := make([]int, 0, 2)
+
+	mockUI.EXPECT().Start(mock.Anything).Return(nil).Once()
+	mockUI.EXPECT().Wait().Return().Once()
+	mockUI.EXPECT().Close().Return().Once()
+	mockUI.EXPECT().DisplayConcurencyInfo(mock.Anything, mock.Anything, mock.Anything).Return()
+	mockUI.EXPECT().DusplayUpcomingTestsInfo(mock.Anything).Return()
+	mockUI.EXPECT().DisplayStartingTestInfo(mock.Anything, mock.Anything).Run(func(_ m.Mutation, threadID int) {
+		threadIDs = append(threadIDs, threadID)
+	}).Return().Times(2)
+	mockUI.EXPECT().DisplayCompletedTestInfo(mock.Anything, mock.Anything).Return().Times(2)
+	mockFSAdapter.EXPECT().Get(mock.Anything, domain.DefaultIgnorePattern).Return([]m.Source{source}, nil)
+	mockMutagen.EXPECT().GenerateMutation(mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4]).Return(mutations, nil)
+	mockOrchestrator.EXPECT().TestMutation(mock.Anything).Return(m.Result{}, nil).Times(2)
+	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.MatchedBy(func(reports []m.Report) bool {
+		return len(reports) == 2
+	})).Return(nil)
+
+	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockUI, mockOrchestrator, mockMutagen)
+
+	// Act
+	args := domain.TestArgs{
+		Reports:         "reports.json",
+		Threads:         2,
+		ShardIndex:      0,
+		TotalShardCount: 1,
+	}
+	err := wf.Test(args)
+
+	// Assert
+	assert.NoError(t, err)
+	if assert.Len(t, threadIDs, 2) {
+		assert.NotEqual(t, threadIDs[0], threadIDs[1])
+	}
+}
+
+func TestWorkflow_TestWithSkippedMutation(t *testing.T) {
+	// Arrange
+	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
+	mockReportStore := new(adaptermocks.MockReportStore)
+	mockUI := new(controllermocks.MockUI)
+	mockOrchestrator := new(domainmocks.MockOrchestrator)
+	mockMutagen := new(domainmocks.MockMutagen)
+
+	diffCode := []byte("--- original\n+++ mutated\n@@ -1,1 +1,1 @@\n-\treturn 3 + 5\n+\treturn 3 - 5\n")
+
+	sources := []m.Source{
+		{
+			Origin: &m.File{FullPath: "test.go", Hash: "hash1"},
+			Test:   &m.File{FullPath: "test_test.go", Hash: "test_hash1"},
+		},
+	}
+
+	mutations := []m.Mutation{
+		{
+			ID:       0,
+			Source:   sources[0],
+			Type:     m.MutationArithmetic,
+			DiffCode: diffCode,
+		},
+	}
+
+	skippedResult := m.Result{
+		m.MutationArithmetic: []struct {
+			MutationID string
+			Status     m.TestStatus
+			Err        error
+		}{{MutationID: "0", Status: m.Skipped}},
+	}
+
+	mockUI.EXPECT().Start(mock.Anything).Return(nil).Once()
+	mockUI.EXPECT().Wait().Return().Once()
+	mockUI.EXPECT().Close().Return().Once()
+	mockUI.EXPECT().DisplayConcurencyInfo(mock.Anything, mock.Anything, mock.Anything).Return()
+	mockUI.EXPECT().DusplayUpcomingTestsInfo(1).Return()
+	mockUI.EXPECT().DisplayStartingTestInfo(mutations[0], 0).Return().Once()
+	mockUI.EXPECT().DisplayCompletedTestInfo(mutations[0], skippedResult).Return().Once()
+
+	mockFSAdapter.EXPECT().Get(mock.Anything, domain.DefaultIgnorePattern).Return(sources, nil)
+	mockMutagen.EXPECT().GenerateMutation(mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4]).Return(mutations, nil)
+	mockOrchestrator.EXPECT().TestMutation(mutations[0]).Return(skippedResult, nil)
+
+	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.MatchedBy(func(reports []m.Report) bool {
+		if len(reports) != 1 {
+			return false
+		}
+		report := reports[0]
+		return report.Diff == nil
+	})).Return(nil)
+
+	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockUI, mockOrchestrator, mockMutagen)
+
+	// Act
+	args := domain.TestArgs{
+		Reports:         "reports.json",
+		Threads:         1,
+		ShardIndex:      0,
+		TotalShardCount: 1,
+	}
+	err := wf.Test(args)
+
+	// Assert
+	assert.NoError(t, err)
+}
+
+func TestWorkflow_TestMutationIDExactMatchDoesNotUseHigherID(t *testing.T) {
+	// Arrange
+	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
+	mockReportStore := new(adaptermocks.MockReportStore)
+	mockUI := new(controllermocks.MockUI)
+	mockOrchestrator := new(domainmocks.MockOrchestrator)
+	mockMutagen := new(domainmocks.MockMutagen)
+
+	diffCode := []byte("--- original\n+++ mutated\n@@ -1,1 +1,1 @@\n-\treturn 3 + 5\n+\treturn 3 - 5\n")
+
+	sources := []m.Source{
+		{
+			Origin: &m.File{FullPath: "test.go", Hash: "hash1"},
+			Test:   &m.File{FullPath: "test_test.go", Hash: "test_hash1"},
+		},
+	}
+
+	mutations := []m.Mutation{
+		{
+			ID:       2,
+			Source:   sources[0],
+			Type:     m.MutationArithmetic,
+			DiffCode: diffCode,
+		},
+	}
+
+	result := m.Result{
+		m.MutationArithmetic: []struct {
+			MutationID string
+			Status     m.TestStatus
+			Err        error
+		}{
+			{MutationID: "1", Status: m.Killed},
+			{MutationID: "3", Status: m.Survived},
+		},
+	}
+
+	mockUI.EXPECT().Start(mock.Anything).Return(nil).Once()
+	mockUI.EXPECT().Wait().Return().Once()
+	mockUI.EXPECT().Close().Return().Once()
+	mockUI.EXPECT().DisplayConcurencyInfo(mock.Anything, mock.Anything, mock.Anything).Return()
+	mockUI.EXPECT().DusplayUpcomingTestsInfo(1).Return()
+	mockUI.EXPECT().DisplayStartingTestInfo(mutations[0], 0).Return().Once()
+	mockUI.EXPECT().DisplayCompletedTestInfo(mutations[0], result).Return().Once()
+
+	mockFSAdapter.EXPECT().Get(mock.Anything, domain.DefaultIgnorePattern).Return(sources, nil)
+	mockMutagen.EXPECT().GenerateMutation(mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4]).Return(mutations, nil)
+	mockOrchestrator.EXPECT().TestMutation(mutations[0]).Return(result, nil)
+
+	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.MatchedBy(func(reports []m.Report) bool {
+		if len(reports) != 1 {
+			return false
+		}
+		report := reports[0]
+		return report.Diff == nil
+	})).Return(nil)
+
+	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockUI, mockOrchestrator, mockMutagen)
+
+	// Act
+	args := domain.TestArgs{
+		Reports:         "reports.json",
+		Threads:         1,
+		ShardIndex:      0,
+		TotalShardCount: 1,
+	}
+	err := wf.Test(args)
+
+	// Assert
+	assert.NoError(t, err)
+}
+
+func TestWorkflow_TestEmptyResultEntriesReturnsError(t *testing.T) {
+	// Arrange
+	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
+	mockReportStore := new(adaptermocks.MockReportStore)
+	mockUI := new(controllermocks.MockUI)
+	mockOrchestrator := new(domainmocks.MockOrchestrator)
+	mockMutagen := new(domainmocks.MockMutagen)
+
+	diffCode := []byte("--- original\n+++ mutated\n@@ -1,1 +1,1 @@\n-\treturn 3 + 5\n+\treturn 3 - 5\n")
+
+	sources := []m.Source{
+		{
+			Origin: &m.File{FullPath: "test.go", Hash: "hash1"},
+			Test:   &m.File{FullPath: "test_test.go", Hash: "test_hash1"},
+		},
+	}
+
+	mutations := []m.Mutation{
+		{
+			ID:       0,
+			Source:   sources[0],
+			Type:     m.MutationArithmetic,
+			DiffCode: diffCode,
+		},
+	}
+
+	result := m.Result{
+		m.MutationArithmetic: []struct {
+			MutationID string
+			Status     m.TestStatus
+			Err        error
+		}{},
+	}
+
+	mockUI.EXPECT().Start(mock.Anything).Return(nil).Once()
+	mockUI.EXPECT().Wait().Return().Once()
+	mockUI.EXPECT().Close().Return().Once()
+	mockUI.EXPECT().DisplayConcurencyInfo(mock.Anything, mock.Anything, mock.Anything).Return()
+	mockUI.EXPECT().DusplayUpcomingTestsInfo(1).Return()
+	mockUI.EXPECT().DisplayStartingTestInfo(mutations[0], 0).Return().Once()
+	mockUI.EXPECT().DisplayCompletedTestInfo(mutations[0], result).Return().Once()
+
+	mockFSAdapter.EXPECT().Get(mock.Anything, domain.DefaultIgnorePattern).Return(sources, nil)
+	mockMutagen.EXPECT().GenerateMutation(mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4]).Return(mutations, nil)
+	mockOrchestrator.EXPECT().TestMutation(mutations[0]).Return(result, nil)
+
+	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.MatchedBy(func(reports []m.Report) bool {
+		if len(reports) != 1 {
+			return false
+		}
+		report := reports[0]
+		return report.Diff == nil
+	})).Return(nil)
+
+	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockUI, mockOrchestrator, mockMutagen)
+
+	// Act
+	args := domain.TestArgs{
+		Reports:         "reports.json",
+		Threads:         1,
+		ShardIndex:      0,
+		TotalShardCount: 1,
+	}
+	err := wf.Test(args)
+
+	// Assert
+	assert.NoError(t, err)
+}
+
 func TestWorkflow_Test_MultipleSources(t *testing.T) {
 	// Arrange
 	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
@@ -604,4 +1047,344 @@ func TestWorkflow_TestWithKilledMutation(t *testing.T) {
 	mockOrchestrator.AssertExpectations(t)
 	mockReportStore.AssertExpectations(t)
 	mockUI.AssertExpectations(t)
+}
+
+func TestWorkflow_Estimate_Success(t *testing.T) {
+	// Arrange
+	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
+	mockReportStore := new(adaptermocks.MockReportStore)
+	mockUI := new(controllermocks.MockUI)
+	mockOrchestrator := new(domainmocks.MockOrchestrator)
+	mockMutagen := new(domainmocks.MockMutagen)
+
+	sources := []m.Source{
+		{Origin: &m.File{FullPath: "test.go", Hash: "hash1"}},
+	}
+
+	mutations := []m.Mutation{
+		{ID: 0, Source: sources[0], Type: m.MutationArithmetic},
+	}
+
+	mockUI.EXPECT().Start(mock.Anything).Return(nil).Once()
+	mockUI.EXPECT().DisplayEstimation(mock.MatchedBy(func(ms []m.Mutation) bool {
+		return len(ms) == 1
+	}), nil).Return(nil).Once()
+	mockUI.EXPECT().Wait().Return().Once()
+	mockUI.EXPECT().Close().Return().Once()
+
+	mockFSAdapter.EXPECT().Get(mock.Anything, domain.DefaultIgnorePattern).Return(sources, nil)
+	mockMutagen.EXPECT().GenerateMutation(mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4]).Return(mutations, nil)
+
+	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockUI, mockOrchestrator, mockMutagen)
+
+	// Act
+	err := wf.Estimate(domain.EstimateArgs{Paths: []m.Path{"test.go"}})
+
+	// Assert
+	assert.NoError(t, err)
+}
+
+func TestWorkflow_Estimate_StartError(t *testing.T) {
+	// Arrange
+	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
+	mockReportStore := new(adaptermocks.MockReportStore)
+	mockUI := new(controllermocks.MockUI)
+	mockOrchestrator := new(domainmocks.MockOrchestrator)
+	mockMutagen := new(domainmocks.MockMutagen)
+
+	startErr := errors.New("start failed")
+	mockUI.EXPECT().Start(mock.Anything).Return(startErr).Once()
+
+	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockUI, mockOrchestrator, mockMutagen)
+
+	// Act
+	err := wf.Estimate(domain.EstimateArgs{Paths: []m.Path{"test.go"}})
+
+	// Assert
+	assert.ErrorIs(t, err, startErr)
+}
+
+func TestWorkflow_Estimate_GetMutationsError(t *testing.T) {
+	// Arrange
+	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
+	mockReportStore := new(adaptermocks.MockReportStore)
+	mockUI := new(controllermocks.MockUI)
+	mockOrchestrator := new(domainmocks.MockOrchestrator)
+	mockMutagen := new(domainmocks.MockMutagen)
+
+	getErr := errors.New("get mutations failed")
+
+	mockUI.EXPECT().Start(mock.Anything).Return(nil).Once()
+	mockUI.EXPECT().Close().Return().Once()
+	mockFSAdapter.EXPECT().Get(mock.Anything, domain.DefaultIgnorePattern).Return(nil, getErr)
+
+	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockUI, mockOrchestrator, mockMutagen)
+
+	// Act
+	err := wf.Estimate(domain.EstimateArgs{Paths: []m.Path{"test.go"}})
+
+	// Assert
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "get sources")
+}
+
+func TestWorkflow_Estimate_DisplayError(t *testing.T) {
+	// Arrange
+	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
+	mockReportStore := new(adaptermocks.MockReportStore)
+	mockUI := new(controllermocks.MockUI)
+	mockOrchestrator := new(domainmocks.MockOrchestrator)
+	mockMutagen := new(domainmocks.MockMutagen)
+
+	sources := []m.Source{
+		{Origin: &m.File{FullPath: "test.go", Hash: "hash1"}},
+	}
+
+	mutations := []m.Mutation{
+		{ID: 0, Source: sources[0], Type: m.MutationArithmetic},
+	}
+
+	displayErr := errors.New("display failed")
+
+	mockUI.EXPECT().Start(mock.Anything).Return(nil).Once()
+	mockUI.EXPECT().DisplayEstimation(mock.Anything, nil).Return(displayErr).Once()
+	mockUI.EXPECT().Close().Return().Once()
+
+	mockFSAdapter.EXPECT().Get(mock.Anything, domain.DefaultIgnorePattern).Return(sources, nil)
+	mockMutagen.EXPECT().GenerateMutation(mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4]).Return(mutations, nil)
+
+	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockUI, mockOrchestrator, mockMutagen)
+
+	// Act
+	err := wf.Estimate(domain.EstimateArgs{Paths: []m.Path{"test.go"}})
+
+	// Assert
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "display")
+}
+
+type blockingOrchestrator struct {
+	started    chan struct{}
+	block      chan struct{}
+	startCount int32
+	current    int32
+	max        int32
+}
+
+func (o *blockingOrchestrator) TestMutation(mutation m.Mutation) (m.Result, error) {
+	atomic.AddInt32(&o.current, 1)
+	for {
+		current := atomic.LoadInt32(&o.current)
+		max := atomic.LoadInt32(&o.max)
+		if current <= max || atomic.CompareAndSwapInt32(&o.max, max, current) {
+			break
+		}
+	}
+
+	o.started <- struct{}{}
+	if atomic.AddInt32(&o.startCount, 1) == 1 {
+		<-o.block
+	}
+
+	atomic.AddInt32(&o.current, -1)
+
+	result := m.Result{}
+	result[mutation.Type] = []struct {
+		MutationID string
+		Status     m.TestStatus
+		Err        error
+	}{
+		{
+			MutationID: "0",
+			Status:     m.Killed,
+			Err:        nil,
+		},
+	}
+
+	return result, nil
+}
+
+func TestWorkflow_TestThreadLimitIsRespected(t *testing.T) {
+	// Arrange
+	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
+	mockReportStore := new(adaptermocks.MockReportStore)
+	mockUI := new(controllermocks.MockUI)
+	mockMutagen := new(domainmocks.MockMutagen)
+
+	source := m.Source{
+		Origin: &m.File{FullPath: "test.go", Hash: "hash1"},
+	}
+
+	mutations := []m.Mutation{
+		{ID: 0, Source: source, Type: m.MutationArithmetic},
+		{ID: 1, Source: source, Type: m.MutationArithmetic},
+	}
+
+	blocking := &blockingOrchestrator{
+		started: make(chan struct{}, 2),
+		block:   make(chan struct{}),
+	}
+
+	mockUI.EXPECT().Start(mock.Anything).Return(nil).Once()
+	mockUI.EXPECT().Wait().Return().Once()
+	mockUI.EXPECT().Close().Return().Once()
+	mockUI.EXPECT().DisplayConcurencyInfo(mock.Anything, mock.Anything, mock.Anything).Return()
+	mockUI.EXPECT().DusplayUpcomingTestsInfo(mock.Anything).Return()
+	mockUI.EXPECT().DisplayStartingTestInfo(mock.Anything, mock.Anything).Return().Times(2)
+	mockUI.EXPECT().DisplayCompletedTestInfo(mock.Anything, mock.Anything).Return().Times(2)
+	mockFSAdapter.EXPECT().Get(mock.Anything, domain.DefaultIgnorePattern).Return([]m.Source{source}, nil)
+	mockMutagen.EXPECT().GenerateMutation(mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4]).Return(mutations, nil)
+	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.MatchedBy(func(reports []m.Report) bool {
+		return len(reports) == 2
+	})).Return(nil)
+
+	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockUI, blocking, mockMutagen)
+
+	// Act
+	args := domain.TestArgs{
+		Reports:         "reports.json",
+		Threads:         1,
+		ShardIndex:      0,
+		TotalShardCount: 1,
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- wf.Test(args)
+	}()
+
+	<-blocking.started
+	secondStartedEarly := false
+	select {
+	case <-blocking.started:
+		secondStartedEarly = true
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(blocking.block)
+
+	if !secondStartedEarly {
+		<-blocking.started
+	}
+
+	err := <-errCh
+
+	// Assert
+	assert.NoError(t, err)
+	assert.False(t, secondStartedEarly, "second mutation started before first completed with Threads=1")
+	assert.Equal(t, int32(1), atomic.LoadInt32(&blocking.max))
+}
+
+func TestWorkflow_TestThreadIDStartsAtZero(t *testing.T) {
+	// Arrange
+	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
+	mockReportStore := new(adaptermocks.MockReportStore)
+	mockUI := new(controllermocks.MockUI)
+	mockOrchestrator := new(domainmocks.MockOrchestrator)
+	mockMutagen := new(domainmocks.MockMutagen)
+
+	source := m.Source{
+		Origin: &m.File{FullPath: "test.go", Hash: "hash1"},
+	}
+
+	mutations := []m.Mutation{
+		{ID: 0, Source: source, Type: m.MutationArithmetic},
+	}
+
+	mockUI.EXPECT().Start(mock.Anything).Return(nil).Once()
+	mockUI.EXPECT().Wait().Return().Once()
+	mockUI.EXPECT().Close().Return().Once()
+	mockUI.EXPECT().DisplayConcurencyInfo(mock.Anything, mock.Anything, mock.Anything).Return()
+	mockUI.EXPECT().DusplayUpcomingTestsInfo(mock.Anything).Return()
+	mockUI.EXPECT().DisplayStartingTestInfo(mutations[0], 0).Return().Once()
+	mockUI.EXPECT().DisplayCompletedTestInfo(mutations[0], mock.Anything).Return().Once()
+	mockFSAdapter.EXPECT().Get(mock.Anything, domain.DefaultIgnorePattern).Return([]m.Source{source}, nil)
+	mockMutagen.EXPECT().GenerateMutation(mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4]).Return(mutations, nil)
+	mockOrchestrator.EXPECT().TestMutation(mutations[0]).Return(m.Result{}, nil)
+	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.Anything).Return(nil)
+
+	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockUI, mockOrchestrator, mockMutagen)
+
+	// Act
+	args := domain.TestArgs{
+		Reports:         "reports.json",
+		Threads:         3,
+		ShardIndex:      0,
+		TotalShardCount: 1,
+	}
+	err := wf.Test(args)
+
+	// Assert
+	assert.NoError(t, err)
+}
+
+func TestWorkflow_TestExactMutationIDMatch(t *testing.T) {
+	// Arrange
+	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
+	mockReportStore := new(adaptermocks.MockReportStore)
+	mockUI := new(controllermocks.MockUI)
+	mockOrchestrator := new(domainmocks.MockOrchestrator)
+	mockMutagen := new(domainmocks.MockMutagen)
+
+	diffCode := []byte("--- original\n+++ mutated\n@@ -1,1 +1,1 @@\n-\treturn 3 + 5\n+\treturn 3 - 5\n")
+
+	sources := []m.Source{
+		{
+			Origin: &m.File{FullPath: "test.go", Hash: "hash1"},
+			Test:   &m.File{FullPath: "test_test.go", Hash: "test_hash1"},
+		},
+	}
+
+	mutations := []m.Mutation{
+		{
+			ID:       1,
+			Source:   sources[0],
+			Type:     m.MutationArithmetic,
+			DiffCode: diffCode,
+		},
+	}
+
+	result := m.Result{
+		m.MutationArithmetic: []struct {
+			MutationID string
+			Status     m.TestStatus
+			Err        error
+		}{
+			{MutationID: "0", Status: m.Killed},
+			{MutationID: "1", Status: m.Survived},
+		},
+	}
+
+	mockUI.EXPECT().Start(mock.Anything).Return(nil).Once()
+	mockUI.EXPECT().Wait().Return().Once()
+	mockUI.EXPECT().Close().Return().Once()
+	mockUI.EXPECT().DisplayConcurencyInfo(mock.Anything, mock.Anything, mock.Anything).Return()
+	mockUI.EXPECT().DusplayUpcomingTestsInfo(1).Return()
+	mockUI.EXPECT().DisplayStartingTestInfo(mutations[0], 0).Return().Once()
+	mockUI.EXPECT().DisplayCompletedTestInfo(mutations[0], result).Return().Once()
+
+	mockFSAdapter.EXPECT().Get(mock.Anything, domain.DefaultIgnorePattern).Return(sources, nil)
+	mockMutagen.EXPECT().GenerateMutation(mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4]).Return(mutations, nil)
+	mockOrchestrator.EXPECT().TestMutation(mutations[0]).Return(result, nil)
+
+	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.MatchedBy(func(reports []m.Report) bool {
+		if len(reports) != 1 {
+			return false
+		}
+		report := reports[0]
+		return report.Diff != nil && string(*report.Diff) == string(diffCode)
+	})).Return(nil)
+
+	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockUI, mockOrchestrator, mockMutagen)
+
+	// Act
+	args := domain.TestArgs{
+		Reports:         "reports.json",
+		Threads:         1,
+		ShardIndex:      0,
+		TotalShardCount: 1,
+	}
+	err := wf.Test(args)
+
+	// Assert
+	assert.NoError(t, err)
 }
