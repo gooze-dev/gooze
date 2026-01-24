@@ -2,19 +2,22 @@
 package model
 
 // MutationType represents the category of mutation.
-type MutationType string
+type MutationType struct {
+	Name    string
+	Version int
+}
 
-const (
+var (
 	// MutationArithmetic represents arithmetic operator mutations (+, -, *, /, %).
-	MutationArithmetic MutationType = "arithmetic"
+	MutationArithmetic = MutationType{Name: "arithmetic", Version: 1}
 	// MutationBoolean represents boolean literal mutations (true <-> false).
-	MutationBoolean MutationType = "boolean"
+	MutationBoolean = MutationType{Name: "boolean", Version: 1}
 	// MutationComparison represents comparison operator mutations (<, >, <=, >=, ==, !=).
-	MutationComparison MutationType = "comparison"
+	MutationComparison = MutationType{Name: "comparison", Version: 1}
 	// MutationLogical represents logical operator mutations (&&, ||).
-	MutationLogical MutationType = "logical"
+	MutationLogical = MutationType{Name: "logical", Version: 1}
 	// MutationUnary represents unary operator mutations (-, +, !, ^).
-	MutationUnary MutationType = "unary"
+	MutationUnary = MutationType{Name: "unary", Version: 1}
 )
 
 // Mutation represents a code mutation with its details.

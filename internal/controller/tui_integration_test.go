@@ -104,7 +104,7 @@ func TestTestExecutionModelIntegration(t *testing.T) {
 	model = updated.(testExecutionModel)
 
 	// Start a mutation
-	startMsg := startMutationMsg{id: 1, thread: 0, kind: m.MutationArithmetic, fileHash: "hash-test", displayPath: "test.go"}
+	startMsg := startMutationMsg{id: 1, thread: 0, kind: "arithmetic", fileHash: "hash-test", displayPath: "test.go"}
 	updated, _ = model.Update(startMsg)
 	model = updated.(testExecutionModel)
 

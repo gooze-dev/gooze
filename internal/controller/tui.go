@@ -165,7 +165,7 @@ func (t *TUI) DisplayStartingTestInfo(currentMutation m.Mutation, threadID int) 
 	t.send(startMutationMsg{
 		id:          currentMutation.ID,
 		thread:      threadID,
-		kind:        currentMutation.Type,
+		kind:        currentMutation.Type.Name,
 		fileHash:    fileHash,
 		displayPath: path,
 	})
@@ -195,7 +195,7 @@ func (t *TUI) DisplayCompletedTestInfo(currentMutation m.Mutation, mutationResul
 
 	t.send(completedMutationMsg{
 		id:          currentMutation.ID,
-		kind:        currentMutation.Type,
+		kind:        currentMutation.Type.Name,
 		fileHash:    fileHash,
 		displayPath: path,
 		status:      status,
