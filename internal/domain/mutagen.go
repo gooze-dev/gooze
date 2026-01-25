@@ -13,7 +13,7 @@ import (
 
 // Mutagen defines the interface for mutation generation.
 type Mutagen interface {
-	GenerateMutation(source m.Source, startingIndex int, mutationTypes ...m.MutationType) ([]m.Mutation, error)
+	GenerateMutation(source m.Source, mutationTypes ...m.MutationType) ([]m.Mutation, error)
 }
 
 // mutagen handles pure mutation generation logic.
@@ -30,7 +30,7 @@ func NewMutagen(goFileAdapter adapter.GoFileAdapter, sourceFSAdapter adapter.Sou
 	}
 }
 
-func (mg *mutagen) GenerateMutation(source m.Source, startingIndex int, mutationTypes ...m.MutationType) ([]m.Mutation, error) {
+func (mg *mutagen) GenerateMutation(source m.Source, mutationTypes ...m.MutationType) ([]m.Mutation, error) {
 	if err := validateSource(source); err != nil {
 		return nil, err
 	}
@@ -49,11 +49,10 @@ func (mg *mutagen) GenerateMutation(source m.Source, startingIndex int, mutation
 		return nil, err
 	}
 
-	mutationID := startingIndex
 	mutations := make([]m.Mutation, 0)
 
 	for _, mutationType := range mutationTypes {
-		mutations = append(mutations, collectMutations(mutationType, file, fset, content, source, &mutationID)...)
+		mutations = append(mutations, collectMutations(mutationType, file, fset, content, source)...)
 	}
 
 	return mutations, nil
@@ -105,21 +104,21 @@ func (mg *mutagen) loadSourceAST(source m.Source) ([]byte, *token.FileSet, *ast.
 	return content, fset, file, nil
 }
 
-func collectMutations(mutationType m.MutationType, file *ast.File, fset *token.FileSet, content []byte, source m.Source, mutationID *int) []m.Mutation {
+func collectMutations(mutationType m.MutationType, file *ast.File, fset *token.FileSet, content []byte, source m.Source) []m.Mutation {
 	mutations := make([]m.Mutation, 0)
 
 	ast.Inspect(file, func(n ast.Node) bool {
 		switch mutationType {
 		case m.MutationArithmetic:
-			mutations = append(mutations, mutagens.GenerateArithmeticMutations(n, fset, content, source, mutationID)...)
+			mutations = append(mutations, mutagens.GenerateArithmeticMutations(n, fset, content, source)...)
 		case m.MutationBoolean:
-			mutations = append(mutations, mutagens.GenerateBooleanMutations(n, fset, content, source, mutationID)...)
+			mutations = append(mutations, mutagens.GenerateBooleanMutations(n, fset, content, source)...)
 		case m.MutationComparison:
-			mutations = append(mutations, mutagens.GenerateComparisonMutations(n, fset, content, source, mutationID)...)
+			mutations = append(mutations, mutagens.GenerateComparisonMutations(n, fset, content, source)...)
 		case m.MutationLogical:
-			mutations = append(mutations, mutagens.GenerateLogicalMutations(n, fset, content, source, mutationID)...)
+			mutations = append(mutations, mutagens.GenerateLogicalMutations(n, fset, content, source)...)
 		case m.MutationUnary:
-			mutations = append(mutations, mutagens.GenerateUnaryMutations(n, fset, content, source, mutationID)...)
+			mutations = append(mutations, mutagens.GenerateUnaryMutations(n, fset, content, source)...)
 		}
 
 		return true

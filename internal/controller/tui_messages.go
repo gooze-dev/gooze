@@ -13,7 +13,7 @@ type upcomingMsg struct {
 }
 
 type startMutationMsg struct {
-	id          int
+	id          string
 	thread      int
 	kind        interface{}
 	fileHash    string
@@ -21,7 +21,7 @@ type startMutationMsg struct {
 }
 
 type completedMutationMsg struct {
-	id          int
+	id          string
 	kind        interface{}
 	fileHash    string
 	displayPath string

@@ -14,7 +14,7 @@ func TestOrchestrator_TestMutation_NoOrigin(t *testing.T) {
 	orch := NewOrchestrator(nil, nil)
 
 	mutation := m.Mutation{
-		ID:   1,
+		ID:   "hash-1",
 		Type: m.MutationArithmetic,
 		Source: m.Source{
 			Origin: nil,
@@ -30,7 +30,7 @@ func TestOrchestrator_TestMutation_NoTestFile(t *testing.T) {
 	orch := NewOrchestrator(nil, nil)
 
 	mutation := m.Mutation{
-		ID:   2,
+		ID:   "test-hash-id",
 		Type: m.MutationBoolean,
 		Source: m.Source{
 			Origin: &m.File{FullPath: m.Path("/project/main.go")},
@@ -44,7 +44,7 @@ func TestOrchestrator_TestMutation_NoTestFile(t *testing.T) {
 	entries, ok := result[mutation.Type]
 	require.True(t, ok)
 	require.Len(t, entries, 1)
-	require.Equal(t, "2", entries[0].MutationID)
+	require.Equal(t, "test-hash-id", entries[0].MutationID)
 	require.Equal(t, m.Survived, entries[0].Status)
 }
 
@@ -92,7 +92,7 @@ func TestOrchestrator_TestMutation_TestFailureMarksKilled(t *testing.T) {
 
 func makeTestMutation() m.Mutation {
 	return m.Mutation{
-		ID:          1,
+		ID:          "test-mutation-hash",
 		Type:        m.MutationArithmetic,
 		MutatedCode: []byte("package main\nfunc main() { _ = 1 + 1 }\n"),
 		Source: m.Source{

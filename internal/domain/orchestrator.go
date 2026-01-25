@@ -85,7 +85,7 @@ func (to *orchestrator) resultForStatus(mutation m.Mutation, status m.TestStatus
 		Err        error
 	}{
 		{
-			MutationID: fmt.Sprintf("%d", mutation.ID),
+			MutationID: mutation.ID,
 			Status:     status,
 			Err:        nil,
 		},

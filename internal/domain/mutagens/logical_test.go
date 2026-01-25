@@ -60,11 +60,10 @@ func TestGenerateLogicalMutations(t *testing.T) {
 			source := m.Source{
 				Origin: &m.File{FullPath: "test.go"},
 			}
-			mutationID := 0
 			mutations := []m.Mutation{}
 
 			ast.Inspect(file, func(n ast.Node) bool {
-				mutations = append(mutations, GenerateLogicalMutations(n, fset, content, source, &mutationID)...)
+				mutations = append(mutations, GenerateLogicalMutations(n, fset, content, source)...)
 				return true
 			})
 

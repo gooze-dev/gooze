@@ -49,7 +49,7 @@ func (d testResultDelegate) Render(w io.Writer, m list.Model, index int, item li
 	idStyle, statusStyle, typeStyle, fileStyle, displayFile := d.getStylesAndFile(result, isSelected, fileWidth)
 
 	line := fmt.Sprintf("%s  %s  %s  %s",
-		idStyle.Render(fmt.Sprintf("%-4s", result.id[:min(4, len(result.id))])),
+		idStyle.Render(fmt.Sprintf("%-4s", result.id[:4])),
 		statusStyle.Render(fmt.Sprintf("%-8s", result.status)),
 		typeStyle.Render(fmt.Sprintf("%-10s", result.typ)),
 		fileStyle.Render(displayFile),
@@ -320,10 +320,8 @@ func (m testExecutionModel) renderThreadBox(accentColor lipgloss.Color) string {
 			// Construct ID string
 			idStr := ""
 			if mutationID != "" {
-				idStr = fmt.Sprintf("ID: %-5s ", mutationID)
-			}
-
-			// Calculate remaining width for file path
+				idStr = fmt.Sprintf("ID: %-4s ", mutationID[:4])
+			} // Calculate remaining width for file path
 			// available - prefix - id length
 			remainingForFile := availableWidth - prefixWidth - len(idStr)
 			if remainingForFile < 10 {
@@ -537,12 +535,12 @@ func truncateFile(text string, width int) string {
 
 func (m testExecutionModel) handleStartMutation(msg startMutationMsg) testExecutionModel {
 	m.currentFile = msg.displayPath
-	m.currentMutationID = fmt.Sprintf("%d", msg.id)
+	m.currentMutationID = msg.id
 	m.currentType = fmt.Sprintf("%v", msg.kind)
 	m.currentStatus = "running"
 	// Track which file this thread is working on
 	m.threadFiles[msg.thread] = msg.displayPath
-	m.threadMutationIDs[msg.thread] = fmt.Sprintf("%d", msg.id)
+	m.threadMutationIDs[msg.thread] = msg.id
 	m.rendered = true
 
 	return m
@@ -552,7 +550,7 @@ func (m testExecutionModel) handleCompletedMutation(msg completedMutationMsg) te
 	m.completedCount++
 	m.currentStatus = msg.status
 	result := testResult{
-		id:     fmt.Sprintf("%d", msg.id),
+		id:     msg.id[:4],
 		file:   msg.displayPath,
 		typ:    fmt.Sprintf("%v", msg.kind),
 		status: msg.status,

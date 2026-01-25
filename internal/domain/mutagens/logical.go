@@ -8,8 +8,8 @@ import (
 )
 
 // GenerateLogicalMutations generates logical operator mutations for the given AST node.
-func GenerateLogicalMutations(n ast.Node, fset *token.FileSet, content []byte, source m.Source, mutationID *int) []m.Mutation {
-	return generateBinaryExprMutations(n, fset, content, source, mutationID, m.MutationLogical, isLogicalOp, getLogicalAlternatives)
+func GenerateLogicalMutations(n ast.Node, fset *token.FileSet, content []byte, source m.Source) []m.Mutation {
+	return generateBinaryExprMutations(n, fset, content, source, m.MutationLogical, isLogicalOp, getLogicalAlternatives)
 }
 
 func isLogicalOp(op token.Token) bool {

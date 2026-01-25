@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -104,7 +105,7 @@ func TestTestExecutionModelIntegration(t *testing.T) {
 	model = updated.(testExecutionModel)
 
 	// Start a mutation
-	startMsg := startMutationMsg{id: 1, thread: 0, kind: "arithmetic", fileHash: "hash-test", displayPath: "test.go"}
+	startMsg := startMutationMsg{id: "hash-1", thread: 0, kind: "arithmetic", fileHash: "hash-test", displayPath: "test.go"}
 	updated, _ = model.Update(startMsg)
 	model = updated.(testExecutionModel)
 
@@ -115,7 +116,7 @@ func TestTestExecutionModelIntegration(t *testing.T) {
 	}
 
 	// Complete the mutation
-	completeMsg := completedMutationMsg{id: 1, kind: m.MutationArithmetic, fileHash: "hash-test", displayPath: "test.go", status: "killed"}
+	completeMsg := completedMutationMsg{id: "hash-1", kind: m.MutationArithmetic, fileHash: "hash-test", displayPath: "test.go", status: "killed"}
 	updated, _ = model.Update(completeMsg)
 	model = updated.(testExecutionModel)
 
@@ -133,7 +134,7 @@ func TestTestExecutionModelIntegration(t *testing.T) {
 
 	// Complete remaining mutations to finish
 	for i := 2; i <= 10; i++ {
-		completeMsg := completedMutationMsg{id: i, kind: m.MutationBoolean, fileHash: "hash-test", displayPath: "test.go", status: "survived"}
+		completeMsg := completedMutationMsg{id: fmt.Sprintf("hash-%d", i), kind: m.MutationBoolean, fileHash: "hash-test", displayPath: "test.go", status: "survived"}
 		updated, _ = model.Update(completeMsg)
 		model = updated.(testExecutionModel)
 	}
@@ -244,7 +245,7 @@ func TestRenderThreadBoxEdgeCases(t *testing.T) {
 	}
 
 	// Test with both file and mutation ID
-	m.threadMutationIDs = map[int]string{0: "123"}
+	m.threadMutationIDs = map[int]string{0: "abcd1234"}
 	box = m.renderThreadBox("6")
 	if !strings.Contains(box, "ID:") {
 		t.Fatalf("renderThreadBox missing ID label")

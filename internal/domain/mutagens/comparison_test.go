@@ -78,12 +78,11 @@ func TestGenerateComparisonMutations(t *testing.T) {
 			source := m.Source{
 				Origin: &m.File{FullPath: "test.go"},
 			}
-			mutationID := 0
 			mutations := []m.Mutation{}
 
 			// Traverse AST and collect mutations
 			ast.Inspect(file, func(n ast.Node) bool {
-				mutations = append(mutations, GenerateComparisonMutations(n, fset, content, source, &mutationID)...)
+				mutations = append(mutations, GenerateComparisonMutations(n, fset, content, source)...)
 				return true
 			})
 

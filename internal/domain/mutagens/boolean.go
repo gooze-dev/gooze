@@ -1,6 +1,8 @@
 package mutagens
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"go/ast"
 	"go/token"
 
@@ -13,7 +15,7 @@ const (
 )
 
 // GenerateBooleanMutations generates boolean literal mutations for the given AST node.
-func GenerateBooleanMutations(n ast.Node, fset *token.FileSet, content []byte, source m.Source, mutationID *int) []m.Mutation {
+func GenerateBooleanMutations(n ast.Node, fset *token.FileSet, content []byte, source m.Source) []m.Mutation {
 	ident, ok := n.(*ast.Ident)
 	if !ok {
 		return nil
@@ -31,12 +33,13 @@ func GenerateBooleanMutations(n ast.Node, fset *token.FileSet, content []byte, s
 	end := start + len(ident.Name)
 	mutated := flipBooleanV2(ident.Name)
 
-	*mutationID++
 	mutatedCode := replaceRange(content, start, end, mutated)
 	diff := diffCode(content, mutatedCode)
+	h := sha256.Sum256(mutatedCode)
+	id := fmt.Sprintf("%x", h)
 
 	return []m.Mutation{{
-		ID:          *mutationID - 1,
+		ID:          id,
 		Source:      source,
 		Type:        m.MutationBoolean,
 		MutatedCode: mutatedCode,

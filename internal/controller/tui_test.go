@@ -73,7 +73,7 @@ func TestTUI_DisplayCompletedTestInfo_WithDiff(t *testing.T) {
 	diffCode := []byte("--- original\n+++ mutated\n@@ -1,1 +1,1 @@\n-\treturn 3 + 5\n+\treturn 3 - 5\n")
 
 	mutation := m.Mutation{
-		ID:       10,
+		ID:       "hash-10",
 		Type:     m.MutationArithmetic,
 		Source:   m.Source{Origin: &m.File{ShortPath: "test.go", Hash: "hash1"}},
 		DiffCode: diffCode,
@@ -84,7 +84,7 @@ func TestTUI_DisplayCompletedTestInfo_WithDiff(t *testing.T) {
 			MutationID string
 			Status     m.TestStatus
 			Err        error
-		}{{MutationID: "10", Status: m.Survived}},
+		}{{MutationID: "hash-10", Status: m.Survived}},
 	}
 
 	// Start TUI in test mode
@@ -104,7 +104,7 @@ func TestTUI_DisplayCompletedTestInfo_WithoutDiff(t *testing.T) {
 	tui := NewTUI(&buf)
 
 	mutation := m.Mutation{
-		ID:     10,
+		ID:     "hash-10",
 		Type:   m.MutationArithmetic,
 		Source: m.Source{Origin: &m.File{ShortPath: "test.go", Hash: "hash1"}},
 		// No DiffCode
@@ -115,7 +115,7 @@ func TestTUI_DisplayCompletedTestInfo_WithoutDiff(t *testing.T) {
 			MutationID string
 			Status     m.TestStatus
 			Err        error
-		}{{MutationID: "10", Status: m.Killed}},
+		}{{MutationID: "hash-10", Status: m.Killed}},
 	}
 
 	// Start TUI in test mode
@@ -190,11 +190,11 @@ func TestTUI_DisplayMethods_NoProgram(t *testing.T) {
 var errSentinel = errors.New("boom")
 
 func mutationWithOrigin() m.Mutation {
-	return m.Mutation{ID: 1, Type: m.MutationArithmetic, Source: m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "path/a.go", Hash: "hash-a"}}}
+	return m.Mutation{ID: "hash-1", Type: m.MutationArithmetic, Source: m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "path/a.go", Hash: "hash-a"}}}
 }
 
 func mutationWithoutOrigin() m.Mutation {
-	return m.Mutation{ID: 2, Type: m.MutationBoolean}
+	return m.Mutation{ID: "hash-2", Type: m.MutationBoolean}
 }
 
 func completedResult() m.Result {
@@ -203,7 +203,7 @@ func completedResult() m.Result {
 			MutationID string
 			Status     m.TestStatus
 			Err        error
-		}{{MutationID: "1", Status: m.Killed}},
+		}{{MutationID: "hash-1", Status: m.Killed}},
 	}
 }
 

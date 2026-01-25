@@ -8,8 +8,8 @@ import (
 )
 
 // GenerateComparisonMutations generates comparison operator mutations for the given AST node.
-func GenerateComparisonMutations(n ast.Node, fset *token.FileSet, content []byte, source m.Source, mutationID *int) []m.Mutation {
-	return generateBinaryExprMutations(n, fset, content, source, mutationID, m.MutationComparison, isComparisonOp, getComparisonAlternatives)
+func GenerateComparisonMutations(n ast.Node, fset *token.FileSet, content []byte, source m.Source) []m.Mutation {
+	return generateBinaryExprMutations(n, fset, content, source, m.MutationComparison, isComparisonOp, getComparisonAlternatives)
 }
 
 func isComparisonOp(op token.Token) bool {

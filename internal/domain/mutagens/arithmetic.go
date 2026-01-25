@@ -9,8 +9,8 @@ import (
 )
 
 // GenerateArithmeticMutations generates arithmetic mutations for the given AST node.
-func GenerateArithmeticMutations(n ast.Node, fset *token.FileSet, content []byte, source m.Source, mutationID *int) []m.Mutation {
-	return generateBinaryExprMutations(n, fset, content, source, mutationID, m.MutationArithmetic, isArithmeticOp, getArithmeticAlternatives)
+func GenerateArithmeticMutations(n ast.Node, fset *token.FileSet, content []byte, source m.Source) []m.Mutation {
+	return generateBinaryExprMutations(n, fset, content, source, m.MutationArithmetic, isArithmeticOp, getArithmeticAlternatives)
 }
 
 func isArithmeticOp(op token.Token) bool {

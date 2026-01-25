@@ -79,32 +79,32 @@ func TestSimpleUI_OtherDisplays(t *testing.T) {
 
 	ui.DisplayConcurencyInfo(3, 1, 2)
 	ui.DusplayUpcomingTestsInfo(7)
-	ui.DisplayStartingTestInfo(m.Mutation{ID: 10, Type: m.MutationArithmetic}, 0)
-	ui.DisplayStartingTestInfo(m.Mutation{ID: 11, Type: m.MutationBoolean, Source: m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "path/a.go"}}}, 0)
+	ui.DisplayStartingTestInfo(m.Mutation{ID: "abcd1234567890", Type: m.MutationArithmetic}, 0)
+	ui.DisplayStartingTestInfo(m.Mutation{ID: "efgh5678901234", Type: m.MutationBoolean, Source: m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "path/a.go"}}}, 0)
 
 	result := m.Result{
 		m.MutationArithmetic: []struct {
 			MutationID string
 			Status     m.TestStatus
 			Err        error
-		}{{MutationID: "10", Status: m.Killed}},
+		}{{MutationID: "abcd1234567890", Status: m.Killed}},
 		m.MutationBoolean: []struct {
 			MutationID string
 			Status     m.TestStatus
 			Err        error
-		}{{MutationID: "11", Status: m.Survived}},
+		}{{MutationID: "efgh5678901234", Status: m.Survived}},
 	}
-	ui.DisplayCompletedTestInfo(m.Mutation{ID: 10, Type: m.MutationArithmetic}, result)
-	ui.DisplayCompletedTestInfo(m.Mutation{ID: 11, Type: m.MutationBoolean, Source: m.Source{Origin: &m.File{FullPath: "path/a.go"}}, DiffCode: []byte("--- original\n+++ mutated\n@@\n")}, result)
+	ui.DisplayCompletedTestInfo(m.Mutation{ID: "abcd1234567890", Type: m.MutationArithmetic}, result)
+	ui.DisplayCompletedTestInfo(m.Mutation{ID: "efgh5678901234", Type: m.MutationBoolean, Source: m.Source{Origin: &m.File{FullPath: "path/a.go"}}, DiffCode: []byte("--- original\n+++ mutated\n@@\n")}, result)
 
 	output := buf.String()
 	for _, want := range []string{
 		"Running 2 mutations",
 		"Upcoming mutations: 7",
-		"Starting mutation 10 (arithmetic)",
-		"Starting mutation 11 (boolean) a.go",
-		"Completed mutation 10 (arithmetic) -> killed",
-		"Completed mutation 11 (boolean) -> survived",
+		"Starting mutation abcd (arithmetic)",
+		"Starting mutation efgh (boolean) a.go",
+		"Completed mutation abcd (arithmetic) -> killed",
+		"Completed mutation efgh (boolean) -> survived",
 		"File: path/a.go",
 		"--- original",
 	} {

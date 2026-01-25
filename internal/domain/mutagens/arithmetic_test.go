@@ -27,11 +27,10 @@ func TestGenerateArithmeticMutations(t *testing.T) {
 	}
 
 	source := m.Source{Origin: &m.File{FullPath: m.Path(basicPath)}}
-	mutationID := 0
 	var mutations []m.Mutation
 
 	ast.Inspect(file, func(n ast.Node) bool {
-		mutations = append(mutations, GenerateArithmeticMutations(n, fset, content, source, &mutationID)...)
+		mutations = append(mutations, GenerateArithmeticMutations(n, fset, content, source)...)
 		return true
 	})
 
@@ -40,9 +39,9 @@ func TestGenerateArithmeticMutations(t *testing.T) {
 	}
 
 	expectedOps := map[string]bool{"-": false, "*": false, "/": false, "%": false}
-	for i, mutation := range mutations {
-		if mutation.ID != i {
-			t.Fatalf("expected mutation ID %d, got %d", i, mutation.ID)
+	for _, mutation := range mutations {
+		if len(mutation.ID) == 0 {
+			t.Fatalf("expected non-empty mutation ID")
 		}
 		if mutation.Type != m.MutationArithmetic {
 			t.Fatalf("expected arithmetic mutation, got %v", mutation.Type)
@@ -56,7 +55,7 @@ func TestGenerateArithmeticMutations(t *testing.T) {
 
 		// Test that DiffCode is generated
 		if len(mutation.DiffCode) == 0 {
-			t.Fatalf("expected DiffCode to be generated for mutation %d", i)
+			t.Fatalf("expected DiffCode to be generated for mutation %s", mutation.ID)
 		}
 		diffStr := string(mutation.DiffCode)
 		if !strings.Contains(diffStr, "--- original") || !strings.Contains(diffStr, "+++ mutated") {

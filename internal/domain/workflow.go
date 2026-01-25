@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -149,7 +150,7 @@ func (w *workflow) GenerateAllMutations(sources []m.Source) ([]m.Mutation, error
 	var allMutations []m.Mutation
 
 	for _, source := range sources {
-		mutations, err := w.GenerateMutation(source, mutationsIndex, DefaultMutations...)
+		mutations, err := w.GenerateMutation(source, DefaultMutations...)
 		if err != nil {
 			return nil, err
 		}
@@ -169,7 +170,15 @@ func (w *workflow) ShardMutations(allMutations []m.Mutation, shardIndex int, tot
 	var shardMutations []m.Mutation
 
 	for _, mutation := range allMutations {
-		if mutation.ID%totalShardCount == shardIndex {
+		// Use hash of the mutation ID to determine shard
+		h := sha256.Sum256([]byte(mutation.ID))
+
+		hashValue := int(h[0])<<24 + int(h[1])<<16 + int(h[2])<<8 + int(h[3])
+		if hashValue < 0 {
+			hashValue = -hashValue
+		}
+
+		if hashValue%totalShardCount == shardIndex {
 			shardMutations = append(shardMutations, mutation)
 		}
 	}
@@ -265,7 +274,7 @@ func getMutationStatus(result m.Result, mutation m.Mutation) m.TestStatus {
 	}
 
 	for _, entry := range entries {
-		if entry.MutationID == fmt.Sprintf("%d", mutation.ID) {
+		if entry.MutationID == mutation.ID {
 			return entry.Status
 		}
 	}

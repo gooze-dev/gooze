@@ -2,6 +2,8 @@
 package mutagens
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"go/ast"
 	"go/token"
 	"strings"
@@ -67,7 +69,6 @@ func generateBinaryExprMutations(
 	fset *token.FileSet,
 	content []byte,
 	source m.Source,
-	mutationID *int,
 	mutationType m.MutationType,
 	isValidOp func(token.Token) bool,
 	getAlternatives func(token.Token) []token.Token,
@@ -92,11 +93,12 @@ func generateBinaryExprMutations(
 	var mutations []m.Mutation
 
 	for _, mutatedOp := range getAlternatives(binExpr.Op) {
-		*mutationID++
 		mutatedCode := replaceRange(content, start, end, mutatedOp.String())
 		diff := diffCode(content, mutatedCode)
+		h := sha256.Sum256(mutatedCode)
+		id := fmt.Sprintf("%x", h)
 		mutations = append(mutations, m.Mutation{
-			ID:          *mutationID - 1,
+			ID:          id,
 			Source:      source,
 			Type:        mutationType,
 			MutatedCode: mutatedCode,

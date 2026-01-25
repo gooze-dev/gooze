@@ -56,11 +56,10 @@ func TestGenerateUnaryMutations(t *testing.T) {
 				},
 			}
 
-			mutationID := 0
 			var mutations []m.Mutation
 
 			ast.Inspect(file, func(n ast.Node) bool {
-				mutations = append(mutations, GenerateUnaryMutations(n, fset, []byte(tt.code), source, &mutationID)...)
+				mutations = append(mutations, GenerateUnaryMutations(n, fset, []byte(tt.code), source)...)
 				return true
 			})
 

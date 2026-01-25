@@ -39,16 +39,16 @@ func TestAnimateScrollFileAndTruncateFile(t *testing.T) {
 
 func TestTestExecutionModel_HandleStartAndComplete(t *testing.T) {
 	m := newTestExecutionModel()
-	m = m.handleStartMutation(startMutationMsg{id: 5, thread: 1, kind: "arith", fileHash: "hash-a", displayPath: "path/a.go"})
-	if m.currentFile != "path/a.go" || m.currentMutationID != "5" || m.currentType != "arith" || !m.rendered {
+	m = m.handleStartMutation(startMutationMsg{id: "hash-5", thread: 1, kind: "arith", fileHash: "hash-a", displayPath: "path/a.go"})
+	if m.currentFile != "path/a.go" || m.currentMutationID != "hash-5" || m.currentType != "arith" || !m.rendered {
 		t.Fatalf("handleStartMutation did not set state")
 	}
-	if m.threadFiles[1] != "path/a.go" || m.threadMutationIDs[1] != "5" {
+	if m.threadFiles[1] != "path/a.go" || m.threadMutationIDs[1] != "hash-5" {
 		t.Fatalf("thread tracking not set")
 	}
 
 	m.totalMutations = 1
-	m = m.handleCompletedMutation(completedMutationMsg{id: 5, kind: "arith", fileHash: "hash-a", displayPath: "path/a.go", status: "killed"})
+	m = m.handleCompletedMutation(completedMutationMsg{id: "hash-5", kind: "arith", fileHash: "hash-a", displayPath: "path/a.go", status: "killed"})
 	if m.completedCount != 1 || m.progressPercent != 1 || !m.testingFinished {
 		t.Fatalf("handleCompletedMutation did not complete progress")
 	}
@@ -61,7 +61,7 @@ func TestTestExecutionModel_HandleStartAndComplete(t *testing.T) {
 
 	// when totalMutations is zero, progress should not update
 	m.totalMutations = 0
-	m = m.handleCompletedMutation(completedMutationMsg{id: 6, kind: "arith", fileHash: "hash-b", displayPath: "path/b.go", status: "survived"})
+	m = m.handleCompletedMutation(completedMutationMsg{id: "hash-6", kind: "arith", fileHash: "hash-b", displayPath: "path/b.go", status: "survived"})
 	if m.progressPercent != 1 {
 		t.Fatalf("progressPercent = %v, want 1", m.progressPercent)
 	}
@@ -190,7 +190,7 @@ func TestTestExecutionModel_WindowSizeAndViews(t *testing.T) {
 	// thread box with multiple threads and idle
 	m.threads = 2
 	m.threadFiles = map[int]string{0: "", 1: "path/to/long/file.go"}
-	m.threadMutationIDs = map[int]string{1: "99"}
+	m.threadMutationIDs = map[int]string{1: "abcd5678"}
 	threadBox := m.renderThreadBox("6")
 	if !strings.Contains(threadBox, "Thread") {
 		t.Fatalf("renderThreadBox missing thread label")
@@ -223,7 +223,7 @@ func TestTestResultDelegateStyles(t *testing.T) {
 
 func TestTestResultDelegate_Render(t *testing.T) {
 	delegate := testResultDelegate{}
-	items := []list.Item{testResult{id: "1", file: "short.go", typ: "bool", status: "killed"}}
+	items := []list.Item{testResult{id: "abcd1234", file: "short.go", typ: "bool", status: "killed"}}
 	m := list.New(items, delegate, 60, 5)
 	var buf strings.Builder
 	delegate.Render(&buf, m, 0, items[0])
@@ -260,14 +260,14 @@ func TestTestExecutionModel_UpdateSwitch(t *testing.T) {
 	_, _ = m.Update(tea.WindowSizeMsg{Width: 50, Height: 10})
 	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	_, _ = m.Update(tickMsg(time.Now()))
-	model, _ := m.Update(startMutationMsg{id: 1, thread: 0, kind: "arith", fileHash: "hash-a", displayPath: "a.go"})
+	model, _ := m.Update(startMutationMsg{id: "hash-1", thread: 0, kind: "arith", fileHash: "hash-a", displayPath: "a.go"})
 	m = model.(testExecutionModel)
 
 	if view := m.View(); !strings.Contains(view, "Gooze Mutation Testing") {
 		t.Fatalf("View after start should show testing")
 	}
 
-	_, _ = m.Update(completedMutationMsg{id: 1, kind: "arith", fileHash: "hash-test", displayPath: "test.go", status: "killed"})
+	_, _ = m.Update(completedMutationMsg{id: "hash-1", kind: "arith", fileHash: "hash-test", displayPath: "test.go", status: "killed"})
 	_, _ = m.Update(concurrencyMsg{threads: 2, shardIndex: 1, shards: 3})
 	_, _ = m.Update(upcomingMsg{count: 10})
 	_, _ = m.Update(estimationMsg{})
@@ -290,30 +290,30 @@ func TestTestExecutionModel_ParallelMutationTracking(t *testing.T) {
 	m.threadMutationIDs = make(map[int]string)
 
 	// Simulate 4 mutations starting in parallel on different threads
-	m = m.handleStartMutation(startMutationMsg{id: 0, thread: 0, kind: "arith", fileHash: "hash-1", displayPath: "file1.go"})
-	m = m.handleStartMutation(startMutationMsg{id: 1, thread: 1, kind: "bool", fileHash: "hash-2", displayPath: "file2.go"})
-	m = m.handleStartMutation(startMutationMsg{id: 2, thread: 2, kind: "comp", fileHash: "hash-3", displayPath: "file3.go"})
-	m = m.handleStartMutation(startMutationMsg{id: 3, thread: 3, kind: "logic", fileHash: "hash-4", displayPath: "file4.go"})
+	m = m.handleStartMutation(startMutationMsg{id: "hash-0", thread: 0, kind: "arith", fileHash: "hash-1", displayPath: "file1.go"})
+	m = m.handleStartMutation(startMutationMsg{id: "hash-1", thread: 1, kind: "bool", fileHash: "hash-2", displayPath: "file2.go"})
+	m = m.handleStartMutation(startMutationMsg{id: "hash-2", thread: 2, kind: "comp", fileHash: "hash-3", displayPath: "file3.go"})
+	m = m.handleStartMutation(startMutationMsg{id: "hash-3", thread: 3, kind: "logic", fileHash: "hash-4", displayPath: "file4.go"})
 
 	// Verify each thread is tracking the correct mutation ID
-	if m.threadMutationIDs[0] != "0" {
-		t.Fatalf("thread 0 mutation ID = %q, want \"0\"", m.threadMutationIDs[0])
+	if m.threadMutationIDs[0] != "hash-0" {
+		t.Fatalf("thread 0 mutation ID = %q, want \"hash-0\"", m.threadMutationIDs[0])
 	}
-	if m.threadMutationIDs[1] != "1" {
-		t.Fatalf("thread 1 mutation ID = %q, want \"1\"", m.threadMutationIDs[1])
+	if m.threadMutationIDs[1] != "hash-1" {
+		t.Fatalf("thread 1 mutation ID = %q, want \"hash-1\"", m.threadMutationIDs[1])
 	}
-	if m.threadMutationIDs[2] != "2" {
-		t.Fatalf("thread 2 mutation ID = %q, want \"2\"", m.threadMutationIDs[2])
+	if m.threadMutationIDs[2] != "hash-2" {
+		t.Fatalf("thread 2 mutation ID = %q, want \"hash-2\"", m.threadMutationIDs[2])
 	}
-	if m.threadMutationIDs[3] != "3" {
-		t.Fatalf("thread 3 mutation ID = %q, want \"3\"", m.threadMutationIDs[3])
+	if m.threadMutationIDs[3] != "hash-3" {
+		t.Fatalf("thread 3 mutation ID = %q, want \"hash-3\"", m.threadMutationIDs[3])
 	}
 
 	// Simulate mutations completing in a different order (2, 0, 3, 1)
-	m = m.handleCompletedMutation(completedMutationMsg{id: 2, kind: "comp", fileHash: "hash-3", displayPath: "file3.go", status: "killed"})
-	m = m.handleCompletedMutation(completedMutationMsg{id: 0, kind: "arith", fileHash: "hash-1", displayPath: "file1.go", status: "survived"})
-	m = m.handleCompletedMutation(completedMutationMsg{id: 3, kind: "logic", fileHash: "hash-4", displayPath: "file4.go", status: "killed"})
-	m = m.handleCompletedMutation(completedMutationMsg{id: 1, kind: "bool", fileHash: "hash-2", displayPath: "file2.go", status: "killed"})
+	m = m.handleCompletedMutation(completedMutationMsg{id: "hash-2", kind: "comp", fileHash: "hash-3", displayPath: "file3.go", status: "killed"})
+	m = m.handleCompletedMutation(completedMutationMsg{id: "hash-0", kind: "arith", fileHash: "hash-1", displayPath: "file1.go", status: "survived"})
+	m = m.handleCompletedMutation(completedMutationMsg{id: "hash-3", kind: "logic", fileHash: "hash-4", displayPath: "file4.go", status: "killed"})
+	m = m.handleCompletedMutation(completedMutationMsg{id: "hash-1", kind: "bool", fileHash: "hash-2", displayPath: "file2.go", status: "killed"})
 
 	// Verify all results were recorded with correct IDs
 	if len(m.results) != 4 {
@@ -321,7 +321,7 @@ func TestTestExecutionModel_ParallelMutationTracking(t *testing.T) {
 	}
 
 	// Check that each result has the correct ID (they should be in completion order)
-	expectedIDs := []string{"2", "0", "3", "1"}
+	expectedIDs := []string{"hash", "hash", "hash", "hash"}
 	for i, expected := range expectedIDs {
 		if m.results[i].id != expected {
 			t.Fatalf("result[%d].id = %q, want %q", i, m.results[i].id, expected)

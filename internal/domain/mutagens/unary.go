@@ -1,6 +1,8 @@
 package mutagens
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"go/ast"
 	"go/token"
 
@@ -8,7 +10,7 @@ import (
 )
 
 // GenerateUnaryMutations generates unary operator mutations for the given AST node.
-func GenerateUnaryMutations(n ast.Node, fset *token.FileSet, content []byte, source m.Source, mutationID *int) []m.Mutation {
+func GenerateUnaryMutations(n ast.Node, fset *token.FileSet, content []byte, source m.Source) []m.Mutation {
 	unaryExpr, ok := n.(*ast.UnaryExpr)
 	if !ok {
 		return nil
@@ -29,11 +31,12 @@ func GenerateUnaryMutations(n ast.Node, fset *token.FileSet, content []byte, sou
 	var mutations []m.Mutation
 
 	for _, mutatedOp := range getUnaryAlternatives(unaryExpr.Op) {
-		*mutationID++
 		mutatedCode := replaceRange(content, start, end, mutatedOp.String())
 		diff := diffCode(content, mutatedCode)
+		h := sha256.Sum256(mutatedCode)
+		id := fmt.Sprintf("%x", h)
 		mutations = append(mutations, m.Mutation{
-			ID:          *mutationID - 1,
+			ID:          id,
 			Source:      source,
 			Type:        m.MutationUnary,
 			MutatedCode: mutatedCode,
@@ -42,11 +45,12 @@ func GenerateUnaryMutations(n ast.Node, fset *token.FileSet, content []byte, sou
 	}
 
 	// Also generate removal mutation (remove the unary operator entirely)
-	*mutationID++
 	mutatedCode := replaceRange(content, start, end, "")
 	diff := diffCode(content, mutatedCode)
+	h := sha256.Sum256(mutatedCode)
+	id := fmt.Sprintf("%x", h)
 	mutations = append(mutations, m.Mutation{
-		ID:          *mutationID - 1,
+		ID:          id,
 		Source:      source,
 		Type:        m.MutationUnary,
 		MutatedCode: mutatedCode,

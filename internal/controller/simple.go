@@ -113,7 +113,7 @@ func (s *SimpleUI) DisplayStartingTestInfo(currentMutation m.Mutation, _ int) {
 		path = string(currentMutation.Source.Origin.ShortPath)
 	}
 
-	s.printf("Starting mutation %d (%s) %s\n", currentMutation.ID, currentMutation.Type.Name, path)
+	s.printf("Starting mutation %s (%s) %s\n", currentMutation.ID[:4], currentMutation.Type.Name, path)
 }
 
 // DisplayCompletedTestInfo shows info about the mutation test completion.
@@ -123,7 +123,7 @@ func (s *SimpleUI) DisplayCompletedTestInfo(currentMutation m.Mutation, mutation
 		status = formatTestStatus(results[0].Status)
 	}
 
-	s.printf("Completed mutation %d (%s) -> %s\n", currentMutation.ID, currentMutation.Type.Name, status)
+	s.printf("Completed mutation %s (%s) -> %s\n", currentMutation.ID[:4], currentMutation.Type.Name, status)
 
 	if status == formatTestStatus(m.Survived) && len(currentMutation.DiffCode) > 0 {
 		path := ""

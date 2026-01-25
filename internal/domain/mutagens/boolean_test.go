@@ -27,11 +27,10 @@ func TestGenerateBooleanMutations(t *testing.T) {
 	}
 
 	source := m.Source{Origin: &m.File{FullPath: m.Path(booleanPath)}}
-	mutationID := 5
 	var mutations []m.Mutation
 
 	ast.Inspect(file, func(n ast.Node) bool {
-		mutations = append(mutations, GenerateBooleanMutations(n, fset, content, source, &mutationID)...)
+		mutations = append(mutations, GenerateBooleanMutations(n, fset, content, source)...)
 		return true
 	})
 
@@ -47,8 +46,8 @@ func TestGenerateBooleanMutations(t *testing.T) {
 	}
 
 	for i, mutation := range mutations {
-		if mutation.ID != 5+i {
-			t.Fatalf("expected mutation ID %d, got %d", 5+i, mutation.ID)
+		if len(mutation.ID) == 0 {
+			t.Fatalf("expected non-empty mutation ID for mutation %d", i)
 		}
 		if mutation.Type != m.MutationBoolean {
 			t.Fatalf("expected boolean mutation, got %v", mutation.Type)

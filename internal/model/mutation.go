@@ -7,6 +7,11 @@ type MutationType struct {
 	Version int
 }
 
+// String returns the string representation of the mutation type.
+func (mt MutationType) String() string {
+	return mt.Name
+}
+
 var (
 	// MutationArithmetic represents arithmetic operator mutations (+, -, *, /, %).
 	MutationArithmetic = MutationType{Name: "arithmetic", Version: 1}
@@ -24,7 +29,7 @@ var (
 // Mutation represents a single mutation applied to source code.
 type Mutation struct {
 	// ID is the unique identifier for a mutation within a test run.
-	ID          int
+	ID          string
 	Source      Source
 	Type        MutationType
 	MutatedCode []byte
