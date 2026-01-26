@@ -164,6 +164,13 @@ func TestLocalReportStore_SaveReports_WritesIndexYAML(t *testing.T) {
 	}
 
 	indexPath := filepath.Join(dir, "index.yaml")
+	if _, err := os.Stat(indexPath); err == nil {
+		t.Fatalf("expected index.yaml to not exist until RegenerateIndex is called")
+	}
+
+	if err := rs.RegenerateIndex(m.Path(dir)); err != nil {
+		t.Fatalf("RegenerateIndex returned error: %v", err)
+	}
 	data, err := os.ReadFile(indexPath)
 	if err != nil {
 		t.Fatalf("expected index.yaml to exist: %v", err)

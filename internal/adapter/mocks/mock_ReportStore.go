@@ -78,6 +78,52 @@ func (_c *MockReportStore_LoadReports_Call) RunAndReturn(run func(model.Path) ([
 	return _c
 }
 
+// RegenerateIndex provides a mock function with given fields: path
+func (_m *MockReportStore) RegenerateIndex(path model.Path) error {
+	ret := _m.Called(path)
+
+	if len(ret) == 0 {
+		panic("no return value specified for RegenerateIndex")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(model.Path) error); ok {
+		r0 = rf(path)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockReportStore_RegenerateIndex_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RegenerateIndex'
+type MockReportStore_RegenerateIndex_Call struct {
+	*mock.Call
+}
+
+// RegenerateIndex is a helper method to define mock.On call
+//   - path model.Path
+func (_e *MockReportStore_Expecter) RegenerateIndex(path interface{}) *MockReportStore_RegenerateIndex_Call {
+	return &MockReportStore_RegenerateIndex_Call{Call: _e.mock.On("RegenerateIndex", path)}
+}
+
+func (_c *MockReportStore_RegenerateIndex_Call) Run(run func(path model.Path)) *MockReportStore_RegenerateIndex_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(model.Path))
+	})
+	return _c
+}
+
+func (_c *MockReportStore_RegenerateIndex_Call) Return(_a0 error) *MockReportStore_RegenerateIndex_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockReportStore_RegenerateIndex_Call) RunAndReturn(run func(model.Path) error) *MockReportStore_RegenerateIndex_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // SaveReports provides a mock function with given fields: path, reports
 func (_m *MockReportStore) SaveReports(path model.Path, reports []model.Report) error {
 	ret := _m.Called(path, reports)

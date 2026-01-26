@@ -114,6 +114,10 @@ func (w *workflow) Test(args TestArgs) error {
 		return fmt.Errorf("save reports: %w", err)
 	}
 
+	err = w.RegenerateIndex(args.Reports)
+	if err != nil {
+		return fmt.Errorf("regenerate index: %w", err)
+	}
 	// Wait for UI to be closed by user (press 'q')
 	w.Wait()
 

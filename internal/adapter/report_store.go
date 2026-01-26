@@ -3,10 +3,12 @@ package adapter
 
 import (
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
@@ -16,6 +18,7 @@ import (
 // ReportStore persists and retrieves mutation reports.
 type ReportStore interface {
 	SaveReports(path m.Path, reports []m.Report) error
+	RegenerateIndex(path m.Path) error
 	LoadReports(path m.Path) ([]m.Report, error)
 }
 
@@ -104,14 +107,90 @@ func (rs *LocalReportStore) SaveReports(path m.Path, reports []m.Report) error {
 		return nil
 	}
 
-	index := rs.buildIndexFromReports(writtenReports)
+	return nil
+}
+
+// RegenerateIndex rebuilds and writes `index.yaml` from the report files in `path`.
+func (rs *LocalReportStore) RegenerateIndex(path m.Path) error {
+	dirPath := string(path)
+	if dirPath == "" {
+		return fmt.Errorf("reports directory path is required")
+	}
+
+	exists, err := rs.reportsDirExists(dirPath)
+	if err != nil {
+		return err
+	}
+
+	if !exists {
+		return nil
+	}
+
+	reports, err := rs.loadReportsFromDir(dirPath)
+	if err != nil {
+		return err
+	}
+
+	return rs.writeIndexForReports(dirPath, reports)
+}
+
+func (rs *LocalReportStore) reportsDirExists(dirPath string) (bool, error) {
+	if err := rs.validateReportsDir(dirPath); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+
+		return false, err
+	}
+
+	return true, nil
+}
+
+func (rs *LocalReportStore) loadReportsFromDir(dirPath string) ([]m.Report, error) {
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		return nil, fmt.Errorf("read reports directory: %w", err)
+	}
+
+	reports := make([]m.Report, 0)
+
+	for _, entry := range entries {
+		if !rs.shouldLoadReportEntry(entry) {
+			continue
+		}
+
+		filePath := filepath.Join(dirPath, entry.Name())
+		// #nosec G304 -- filePath is built from a trusted reports directory listing
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			return nil, fmt.Errorf("read report file %s: %w", filePath, err)
+		}
+
+		report, err := rs.unmarshalReport(data)
+		if err != nil {
+			return nil, fmt.Errorf("unmarshal report file %s: %w", filePath, err)
+		}
+
+		reports = append(reports, report)
+	}
+
+	return reports, nil
+}
+
+func (rs *LocalReportStore) writeIndexForReports(dirPath string, reports []m.Report) error {
+	indexPath := filepath.Join(dirPath, "index.yaml")
+	if len(reports) == 0 {
+		_ = os.Remove(indexPath)
+		return nil
+	}
+
+	index := rs.buildIndexFromReports(reports)
 
 	indexData, err := yaml.Marshal(index)
 	if err != nil {
 		return fmt.Errorf("marshal index YAML: %w", err)
 	}
 
-	indexPath := filepath.Join(dirPath, "index.yaml")
 	if err := os.WriteFile(indexPath, indexData, 0o600); err != nil {
 		return fmt.Errorf("write index file %s: %w", indexPath, err)
 	}
@@ -134,6 +213,19 @@ func (rs *LocalReportStore) marshalReport(report m.Report) ([]byte, error) {
 	}
 
 	return yaml.Marshal(encoded)
+}
+
+func (rs *LocalReportStore) unmarshalReport(data []byte) (m.Report, error) {
+	var decoded reportYAML
+	if err := yaml.Unmarshal(data, &decoded); err != nil {
+		return m.Report{}, err
+	}
+
+	return m.Report{
+		Source: decoded.Source,
+		Result: decodeResult(decoded.Result),
+		Diff:   decoded.Diff,
+	}, nil
 }
 
 func encodeResult(result m.Result) []resultEntryYAML {
@@ -180,6 +272,37 @@ func encodeResult(result m.Result) []resultEntryYAML {
 	}
 
 	return entries
+}
+
+func decodeResult(entries []resultEntryYAML) m.Result {
+	if len(entries) == 0 {
+		return m.Result{}
+	}
+
+	result := m.Result{}
+
+	for _, entry := range entries {
+		mutationType := m.MutationType{Name: entry.Name, Version: entry.Version}
+		result[mutationType] = make([]struct {
+			MutationID string
+			Status     m.TestStatus
+			Err        error
+		}, 0, len(entry.Mutations))
+
+		for _, mut := range entry.Mutations {
+			result[mutationType] = append(result[mutationType], struct {
+				MutationID string
+				Status     m.TestStatus
+				Err        error
+			}{
+				MutationID: mut.MutationID,
+				Status:     mut.Status,
+				Err:        nil,
+			})
+		}
+	}
+
+	return result
 }
 
 func (rs *LocalReportStore) buildIndexFromReports(reports []m.Report) indexEntry {
@@ -315,6 +438,36 @@ func (rs *LocalReportStore) reportFileExists(files []string, reportFile string) 
 	}
 
 	return false
+}
+
+func (rs *LocalReportStore) validateReportsDir(dirPath string) error {
+	info, err := os.Stat(dirPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return os.ErrNotExist
+		}
+
+		return fmt.Errorf("stat reports directory: %w", err)
+	}
+
+	if !info.IsDir() {
+		return fmt.Errorf("path is not a directory: %s", dirPath)
+	}
+
+	return nil
+}
+
+func (rs *LocalReportStore) shouldLoadReportEntry(entry os.DirEntry) bool {
+	if entry.IsDir() {
+		return false
+	}
+
+	name := entry.Name()
+	if name == "index.yaml" {
+		return false
+	}
+
+	return strings.HasSuffix(name, ".yaml") || strings.HasSuffix(name, ".yml")
 }
 
 // computeReportHash generates a stable hash for a report based on its mutations.
