@@ -34,6 +34,44 @@ Execute mutation testing across the target paths.
 gooze run ./...
 ```
 
+### Reports
+
+By default, Gooze writes mutation reports to `.gooze-reports` (override with `-o/--output`).
+
+- One YAML file per report: `<hash>.yaml`
+- An index file: `index.yaml`
+
+View the last run:
+
+```bash
+gooze view
+```
+
+Or point `view` at an explicit directory:
+
+```bash
+gooze view -o .gooze-reports
+```
+
+#### Sharded runs and merging
+
+When sharding is enabled (`-s/--shard INDEX/TOTAL`), reports are written to shard subdirectories:
+
+- `<output>/shard_0/`
+- `<output>/shard_1/`
+- ...
+
+Example distributed run (3 shards) and merge:
+
+```bash
+gooze run -o .gooze-reports -s 0/3 ./...
+gooze run -o .gooze-reports -s 1/3 ./...
+gooze run -o .gooze-reports -s 2/3 ./...
+
+gooze merge -o .gooze-reports
+gooze view -o .gooze-reports
+```
+
 With parallel workers:
 
 ```bash
@@ -43,7 +81,7 @@ gooze run -p 4 ./...
 Exclude files by regex (repeatable):
 
 ```bash
-gooze run -x '^vendor/' -x '_gen\.go$' ./...
+gooze run -x '^vendor/' -x '^mock_' ./...
 ```
 
 > Tips:
@@ -92,23 +130,19 @@ To skip the interactive UI, pipe output (e.g., `gooze run ./... | cat`).
 ## Roadmap
 
 ### Smart Test Execution
-- [ ] Run only matching `*_test.go` files for each mutated source file
-- [ ] Reduces test execution time by running relevant tests only
-
-### Git Integration
-- [ ] Mutate only files changed in git diff
-- [ ] Focus mutation testing on modified code
+- [x] Run only matching `*_test.go` files for each mutated source file
+- [x] Reduces test execution time by running relevant tests only
 
 ### Performance & Scalability
 - [x] `--parallel` flag for concurrent mutation testing
 - [x] Sharding support for distributed execution across multiple machines
 - [x] Compatible with parallel execution within shards
-- [ ] Automatic report merging from multiple shards
+- [x] Automatic report merging from multiple shards (`gooze merge`)
 
 ### Reporting
 - [ ] OCI artifact-based reports stored as container images
-- [ ] Per-file mutation reports for granular analysis
-- [ ] Index file with summary and aggregated metrics
+- [x] Per-file mutation reports for granular analysis
+- [x] Index file with summary (`index.yaml`)
 - [ ] Incremental testing: merge branch results with master OCI artifacts for unchanged files
 
 ### CI/CD Integration

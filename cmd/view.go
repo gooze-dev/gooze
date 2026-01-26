@@ -11,17 +11,12 @@ var viewCmd = newViewCmd()
 
 func newViewCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "view [reports-dir]",
+		Use:   "view",
 		Short: "View previously generated mutation reports",
 		Long:  "View previously generated mutation reports from a reports directory.",
-		Args:  cobra.MaximumNArgs(1),
-		RunE: func(_ *cobra.Command, args []string) error {
-			dir := reportsOutputDirFlag
-			if len(args) == 1 {
-				dir = args[0]
-			}
-
-			return workflow.View(domain.ViewArgs{Reports: m.Path(dir)})
+		Args:  cobra.ExactArgs(0),
+		RunE: func(_ *cobra.Command, _ []string) error {
+			return workflow.View(domain.ViewArgs{Reports: m.Path(reportsOutputDirFlag)})
 		},
 	}
 
