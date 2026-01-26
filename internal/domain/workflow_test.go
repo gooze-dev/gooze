@@ -3,6 +3,7 @@ package domain_test
 import (
 	"crypto/sha256"
 	"errors"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -339,10 +340,12 @@ func TestWorkflow_Test_WithSharding(t *testing.T) {
 	// Arrange
 	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
 	mockReportStore := new(adaptermocks.MockReportStore)
-	mockReportStore.EXPECT().RegenerateIndex(mock.Anything).Return(nil).Maybe()
 	mockUI := new(controllermocks.MockUI)
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
 	mockMutagen := new(domainmocks.MockMutagen)
+
+	baseReportsDir := m.Path("reports")
+	expectedShardDir := m.Path(filepath.Join(string(baseReportsDir), domain.ShardDirPrefix+"0"))
 
 	source := m.Source{
 		Origin: &m.File{FullPath: "test.go", Hash: "hash1"},
@@ -369,11 +372,11 @@ func TestWorkflow_Test_WithSharding(t *testing.T) {
 	mockMutagen.EXPECT().GenerateMutation(mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4]).Return(mutations, nil)
 	// With hash-based sharding, the number of mutations in shard 0 may vary
 	mockOrchestrator.EXPECT().TestMutation(mock.Anything).Return(m.Result{}, nil).Maybe()
-	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.MatchedBy(func(reports []m.Report) bool {
+	mockReportStore.EXPECT().SaveReports(expectedShardDir, mock.MatchedBy(func(reports []m.Report) bool {
 		// Accept any number of reports since hash-based sharding determines this
 		return true
 	})).Return(nil)
-	mockReportStore.EXPECT().RegenerateIndex(mock.Anything).Return(nil)
+	mockReportStore.EXPECT().RegenerateIndex(expectedShardDir).Return(nil)
 
 	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockUI, mockOrchestrator, mockMutagen)
 
@@ -382,7 +385,7 @@ func TestWorkflow_Test_WithSharding(t *testing.T) {
 		EstimateArgs: domain.EstimateArgs{
 			Paths: []m.Path{"test.go"},
 		},
-		Reports:         "reports.json",
+		Reports:         baseReportsDir,
 		Threads:         1,
 		ShardIndex:      0,
 		TotalShardCount: 3,

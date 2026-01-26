@@ -2,8 +2,12 @@ package domain
 
 import (
 	"crypto/sha256"
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -16,6 +20,9 @@ import (
 // DefaultMutations defines the default mutation types to be applied.
 // DefaultMutations defines the default set of mutation types to generate.
 var DefaultMutations = []m.MutationType{m.MutationArithmetic, m.MutationBoolean, m.MutationComparison, m.MutationLogical, m.MutationUnary}
+
+// ShardDirPrefix is the directory name prefix used when storing sharded reports.
+const ShardDirPrefix = "shard_"
 
 // EstimateArgs contains the arguments for estimating mutations.
 type EstimateArgs struct {
@@ -38,11 +45,17 @@ type ViewArgs struct {
 	Reports m.Path
 }
 
+// MergeArgs contains the arguments for merging sharded mutation test reports.
+type MergeArgs struct {
+	Reports m.Path
+}
+
 // Workflow defines the interface for the mutation testing workflow.
 type Workflow interface {
 	Estimate(args EstimateArgs) error
 	Test(args TestArgs) error
 	View(args ViewArgs) error
+	Merge(args MergeArgs) error
 }
 
 type workflow struct {
@@ -95,65 +108,151 @@ func (w *workflow) Estimate(args EstimateArgs) error {
 }
 
 func (w *workflow) Test(args TestArgs) error {
-	// Start with test execution mode
-	if err := w.Start(controller.WithTestMode()); err != nil {
-		return err
+	return w.withTestUI(func() error {
+		w.DisplayConcurencyInfo(args.Threads, args.ShardIndex, args.TotalShardCount)
+
+		reportsDir := shardReportsDir(args.Reports, args.ShardIndex, args.TotalShardCount)
+
+		allMutations, err := w.GetMutations(args.EstimateArgs)
+		if err != nil {
+			return fmt.Errorf("generate mutations: %w", err)
+		}
+
+		shardMutations := w.ShardMutations(allMutations, args.ShardIndex, args.TotalShardCount)
+		w.DusplayUpcomingTestsInfo(len(shardMutations))
+
+		reports, err := w.TestReports(shardMutations, args.Threads)
+		if err != nil {
+			return fmt.Errorf("run mutation tests: %w", err)
+		}
+
+		err = w.SaveReports(reportsDir, reports)
+		if err != nil {
+			return fmt.Errorf("save reports: %w", err)
+		}
+
+		err = w.RegenerateIndex(reportsDir)
+		if err != nil {
+			return fmt.Errorf("regenerate index: %w", err)
+		}
+
+		return nil
+	})
+}
+
+func shardReportsDir(base m.Path, shardIndex int, totalShardCount int) m.Path {
+	if totalShardCount <= 1 {
+		return base
 	}
-	defer w.Close()
 
-	w.DisplayConcurencyInfo(args.Threads, args.ShardIndex, args.TotalShardCount)
+	return m.Path(filepath.Join(string(base), fmt.Sprintf("%s%d", ShardDirPrefix, shardIndex)))
+}
 
-	allMutations, err := w.GetMutations(args.EstimateArgs)
-	if err != nil {
-		return fmt.Errorf("generate mutations: %w", err)
+func (w *workflow) View(args ViewArgs) error {
+	return w.withTestUI(func() error {
+		reports, err := w.LoadReports(args.Reports)
+		if err != nil {
+			return fmt.Errorf("load reports: %w", err)
+		}
+
+		mutations, results := viewItemsFromReports(reports)
+		if len(mutations) == 0 {
+			return nil
+		}
+
+		w.DusplayUpcomingTestsInfo(len(mutations))
+
+		for i, mutation := range mutations {
+			w.DisplayStartingTestInfo(mutation, 0)
+			w.DisplayCompletedTestInfo(mutation, results[i])
+		}
+
+		return nil
+	})
+}
+
+func (w *workflow) Merge(args MergeArgs) error {
+	base := args.Reports
+	if string(base) == "" {
+		return fmt.Errorf("reports directory path is required")
 	}
 
-	shardMutations := w.ShardMutations(allMutations, args.ShardIndex, args.TotalShardCount)
-	w.DusplayUpcomingTestsInfo(len(shardMutations))
-
-	reports, err := w.TestReports(shardMutations, args.Threads)
+	shardDirs, err := findShardDirs(string(base))
 	if err != nil {
-		return fmt.Errorf("run mutation tests: %w", err)
+		return fmt.Errorf("find shard directories: %w", err)
 	}
 
-	err = w.SaveReports(args.Reports, reports)
-	if err != nil {
-		return fmt.Errorf("save reports: %w", err)
+	if len(shardDirs) == 0 {
+		if err := w.RegenerateIndex(base); err != nil {
+			return fmt.Errorf("regenerate index: %w", err)
+		}
+
+		return nil
 	}
 
-	err = w.RegenerateIndex(args.Reports)
-	if err != nil {
+	merged := make([]m.Report, 0)
+
+	for _, shardDir := range shardDirs {
+		reports, err := w.LoadReports(m.Path(shardDir))
+		if err != nil {
+			return fmt.Errorf("load shard reports from %s: %w", shardDir, err)
+		}
+
+		merged = append(merged, reports...)
+	}
+
+	if err := w.SaveReports(base, merged); err != nil {
+		return fmt.Errorf("save merged reports: %w", err)
+	}
+
+	if err := w.RegenerateIndex(base); err != nil {
 		return fmt.Errorf("regenerate index: %w", err)
 	}
-	// Wait for UI to be closed by user (press 'q')
-	w.Wait()
 
 	return nil
 }
 
-func (w *workflow) View(args ViewArgs) error {
+func findShardDirs(baseDir string) ([]string, error) {
+	entries, err := os.ReadDir(baseDir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, os.ErrNotExist
+		}
+
+		return nil, err
+	}
+
+	shardDirs := make([]string, 0)
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		if !strings.HasPrefix(entry.Name(), ShardDirPrefix) {
+			continue
+		}
+
+		shardDirs = append(shardDirs, filepath.Join(baseDir, entry.Name()))
+	}
+
+	sort.Strings(shardDirs)
+
+	return shardDirs, nil
+}
+
+func (w *workflow) withTestUI(fn func() error) error {
 	if err := w.Start(controller.WithTestMode()); err != nil {
 		return err
 	}
 	defer w.Close()
 
-	reports, err := w.LoadReports(args.Reports)
+	err := fn()
 	if err != nil {
-		return fmt.Errorf("load reports: %w", err)
+		return err
 	}
 
-	mutations, results := viewItemsFromReports(reports)
-	if len(mutations) == 0 {
-		return nil
-	}
-
-	w.DusplayUpcomingTestsInfo(len(mutations))
-
-	for i, mutation := range mutations {
-		w.DisplayStartingTestInfo(mutation, 0)
-		w.DisplayCompletedTestInfo(mutation, results[i])
-	}
-
+	// Wait for UI to be closed by user (press 'q')
 	w.Wait()
 
 	return nil

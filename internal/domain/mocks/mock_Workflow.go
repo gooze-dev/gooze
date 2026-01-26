@@ -66,6 +66,52 @@ func (_c *MockWorkflow_Estimate_Call) RunAndReturn(run func(domain.EstimateArgs)
 	return _c
 }
 
+// Merge provides a mock function with given fields: args
+func (_m *MockWorkflow) Merge(args domain.MergeArgs) error {
+	ret := _m.Called(args)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Merge")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(domain.MergeArgs) error); ok {
+		r0 = rf(args)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockWorkflow_Merge_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Merge'
+type MockWorkflow_Merge_Call struct {
+	*mock.Call
+}
+
+// Merge is a helper method to define mock.On call
+//   - args domain.MergeArgs
+func (_e *MockWorkflow_Expecter) Merge(args interface{}) *MockWorkflow_Merge_Call {
+	return &MockWorkflow_Merge_Call{Call: _e.mock.On("Merge", args)}
+}
+
+func (_c *MockWorkflow_Merge_Call) Run(run func(args domain.MergeArgs)) *MockWorkflow_Merge_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(domain.MergeArgs))
+	})
+	return _c
+}
+
+func (_c *MockWorkflow_Merge_Call) Return(_a0 error) *MockWorkflow_Merge_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockWorkflow_Merge_Call) RunAndReturn(run func(domain.MergeArgs) error) *MockWorkflow_Merge_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Test provides a mock function with given fields: args
 func (_m *MockWorkflow) Test(args domain.TestArgs) error {
 	ret := _m.Called(args)
