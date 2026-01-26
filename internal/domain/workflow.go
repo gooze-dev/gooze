@@ -17,9 +17,8 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// DefaultMutations defines the default mutation types to be applied.
 // DefaultMutations defines the default set of mutation types to generate.
-var DefaultMutations = []m.MutationType{m.MutationArithmetic, m.MutationBoolean, m.MutationComparison, m.MutationLogical, m.MutationUnary}
+var DefaultMutations = []m.MutationType{m.MutationArithmetic, m.MutationBoolean, m.MutationNumbers, m.MutationComparison, m.MutationLogical, m.MutationUnary}
 
 // ShardDirPrefix is the directory name prefix used when storing sharded reports.
 const ShardDirPrefix = "shard_"

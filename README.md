@@ -102,7 +102,7 @@ To skip the interactive UI, pipe output (e.g., `gooze run ./... | cat`).
 ## Complete Go Mutation Testing Categories
 
 - [x] Boolean Literal
-- [ ] Numbers
+- [x] Numbers
 - [x] Unary / Negation
 - [x] Arithmetic
 - [x] Comparison / Relational

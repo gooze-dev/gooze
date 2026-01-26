@@ -111,8 +111,8 @@ func TestMutagen_GenerateMutation_DefaultTypes(t *testing.T) {
 		t.Fatalf("GenerateMutation failed: %v", err)
 	}
 
-	if len(mutations) != 4 {
-		t.Fatalf("expected 4 mutations, got %d", len(mutations))
+	if len(mutations) != 12 {
+		t.Fatalf("expected 12 mutations, got %d", len(mutations))
 	}
 }
 

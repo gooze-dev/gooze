@@ -17,6 +17,8 @@ var (
 	MutationArithmetic = MutationType{Name: "arithmetic", Version: 1}
 	// MutationBoolean represents boolean literal mutations (true <-> false).
 	MutationBoolean = MutationType{Name: "boolean", Version: 1}
+	// MutationNumbers represents numeric literal mutations (e.g. 5 -> 0, 5 -> 1).
+	MutationNumbers = MutationType{Name: "numbers", Version: 1}
 	// MutationComparison represents comparison operator mutations (<, >, <=, >=, ==, !=).
 	MutationComparison = MutationType{Name: "comparison", Version: 1}
 	// MutationLogical represents logical operator mutations (&&, ||).
