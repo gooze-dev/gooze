@@ -20,14 +20,14 @@ func (_m *MockMutagen) EXPECT() *MockMutagen_Expecter {
 	return &MockMutagen_Expecter{mock: &_m.Mock}
 }
 
-// GenerateMutation provides a mock function with given fields: source, startingIndex, mutationTypes
-func (_m *MockMutagen) GenerateMutation(source model.Source, startingIndex int, mutationTypes ...model.MutationType) ([]model.Mutation, error) {
+// GenerateMutation provides a mock function with given fields: source, mutationTypes
+func (_m *MockMutagen) GenerateMutation(source model.Source, mutationTypes ...model.MutationType) ([]model.Mutation, error) {
 	_va := make([]interface{}, len(mutationTypes))
 	for _i := range mutationTypes {
 		_va[_i] = mutationTypes[_i]
 	}
 	var _ca []interface{}
-	_ca = append(_ca, source, startingIndex)
+	_ca = append(_ca, source)
 	_ca = append(_ca, _va...)
 	ret := _m.Called(_ca...)
 
@@ -37,19 +37,19 @@ func (_m *MockMutagen) GenerateMutation(source model.Source, startingIndex int, 
 
 	var r0 []model.Mutation
 	var r1 error
-	if rf, ok := ret.Get(0).(func(model.Source, int, ...model.MutationType) ([]model.Mutation, error)); ok {
-		return rf(source, startingIndex, mutationTypes...)
+	if rf, ok := ret.Get(0).(func(model.Source, ...model.MutationType) ([]model.Mutation, error)); ok {
+		return rf(source, mutationTypes...)
 	}
-	if rf, ok := ret.Get(0).(func(model.Source, int, ...model.MutationType) []model.Mutation); ok {
-		r0 = rf(source, startingIndex, mutationTypes...)
+	if rf, ok := ret.Get(0).(func(model.Source, ...model.MutationType) []model.Mutation); ok {
+		r0 = rf(source, mutationTypes...)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]model.Mutation)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(model.Source, int, ...model.MutationType) error); ok {
-		r1 = rf(source, startingIndex, mutationTypes...)
+	if rf, ok := ret.Get(1).(func(model.Source, ...model.MutationType) error); ok {
+		r1 = rf(source, mutationTypes...)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -64,22 +64,21 @@ type MockMutagen_GenerateMutation_Call struct {
 
 // GenerateMutation is a helper method to define mock.On call
 //   - source model.Source
-//   - startingIndex int
 //   - mutationTypes ...model.MutationType
-func (_e *MockMutagen_Expecter) GenerateMutation(source interface{}, startingIndex interface{}, mutationTypes ...interface{}) *MockMutagen_GenerateMutation_Call {
+func (_e *MockMutagen_Expecter) GenerateMutation(source interface{}, mutationTypes ...interface{}) *MockMutagen_GenerateMutation_Call {
 	return &MockMutagen_GenerateMutation_Call{Call: _e.mock.On("GenerateMutation",
-		append([]interface{}{source, startingIndex}, mutationTypes...)...)}
+		append([]interface{}{source}, mutationTypes...)...)}
 }
 
-func (_c *MockMutagen_GenerateMutation_Call) Run(run func(source model.Source, startingIndex int, mutationTypes ...model.MutationType)) *MockMutagen_GenerateMutation_Call {
+func (_c *MockMutagen_GenerateMutation_Call) Run(run func(source model.Source, mutationTypes ...model.MutationType)) *MockMutagen_GenerateMutation_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		variadicArgs := make([]model.MutationType, len(args)-2)
-		for i, a := range args[2:] {
+		variadicArgs := make([]model.MutationType, len(args)-1)
+		for i, a := range args[1:] {
 			if a != nil {
 				variadicArgs[i] = a.(model.MutationType)
 			}
 		}
-		run(args[0].(model.Source), args[1].(int), variadicArgs...)
+		run(args[0].(model.Source), variadicArgs...)
 	})
 	return _c
 }
@@ -89,7 +88,7 @@ func (_c *MockMutagen_GenerateMutation_Call) Return(_a0 []model.Mutation, _a1 er
 	return _c
 }
 
-func (_c *MockMutagen_GenerateMutation_Call) RunAndReturn(run func(model.Source, int, ...model.MutationType) ([]model.Mutation, error)) *MockMutagen_GenerateMutation_Call {
+func (_c *MockMutagen_GenerateMutation_Call) RunAndReturn(run func(model.Source, ...model.MutationType) ([]model.Mutation, error)) *MockMutagen_GenerateMutation_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -300,12 +300,13 @@ func (_c *MockSourceFSAdapter_FindProjectRoot_Call) RunAndReturn(run func(model.
 
 // Get provides a mock function with given fields: root, ignore
 func (_m *MockSourceFSAdapter) Get(root []model.Path, ignore ...string) ([]model.Source, error) {
+	_va := make([]interface{}, len(ignore))
+	for _i := range ignore {
+		_va[_i] = ignore[_i]
+	}
 	var _ca []interface{}
 	_ca = append(_ca, root)
-	for _i := range ignore {
-		_ca = append(_ca, ignore[_i])
-	}
-
+	_ca = append(_ca, _va...)
 	ret := _m.Called(_ca...)
 
 	if len(ret) == 0 {
@@ -343,17 +344,19 @@ type MockSourceFSAdapter_Get_Call struct {
 //   - root []model.Path
 //   - ignore ...string
 func (_e *MockSourceFSAdapter_Expecter) Get(root interface{}, ignore ...interface{}) *MockSourceFSAdapter_Get_Call {
-	_ca := append([]interface{}{root}, ignore...)
-	return &MockSourceFSAdapter_Get_Call{Call: _e.mock.On("Get", _ca...)}
+	return &MockSourceFSAdapter_Get_Call{Call: _e.mock.On("Get",
+		append([]interface{}{root}, ignore...)...)}
 }
 
 func (_c *MockSourceFSAdapter_Get_Call) Run(run func(root []model.Path, ignore ...string)) *MockSourceFSAdapter_Get_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var _ca []string
-		for _i := 1; _i < len(args); _i++ {
-			_ca = append(_ca, args[_i].(string))
+		variadicArgs := make([]string, len(args)-1)
+		for i, a := range args[1:] {
+			if a != nil {
+				variadicArgs[i] = a.(string)
+			}
 		}
-		run(args[0].([]model.Path), _ca...)
+		run(args[0].([]model.Path), variadicArgs...)
 	})
 	return _c
 }

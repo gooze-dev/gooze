@@ -17,7 +17,7 @@ func TestMutagen_GenerateMutation_ArithmeticBasic(t *testing.T) {
 	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "basic", "main.go"))
 	original := readFileBytes(t, source.Origin.FullPath)
 
-	mutations, err := mg.GenerateMutation(source, 0, m.MutationArithmetic)
+	mutations, err := mg.GenerateMutation(source, m.MutationArithmetic)
 	if err != nil {
 		t.Fatalf("GenerateMutation failed: %v", err)
 	}
@@ -60,7 +60,7 @@ func TestMutagen_GenerateMutation_BooleanLiterals(t *testing.T) {
 	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "boolean", "main.go"))
 	original := readFileBytes(t, source.Origin.FullPath)
 
-	mutations, err := mg.GenerateMutation(source, 5, m.MutationBoolean)
+	mutations, err := mg.GenerateMutation(source, m.MutationBoolean)
 	if err != nil {
 		t.Fatalf("GenerateMutation failed: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestMutagen_GenerateMutation_DefaultTypes(t *testing.T) {
 	mg := newTestMutagen()
 
 	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "basic", "main.go"))
-	mutations, err := mg.GenerateMutation(source, 0)
+	mutations, err := mg.GenerateMutation(source)
 	if err != nil {
 		t.Fatalf("GenerateMutation failed: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestMutagen_GenerateMutation_InvalidType(t *testing.T) {
 	mg := newTestMutagen()
 
 	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "basic", "main.go"))
-	_, err := mg.GenerateMutation(source, 0, m.MutationType{Name: "invalid", Version: 1})
+	_, err := mg.GenerateMutation(source, m.MutationType{Name: "invalid", Version: 1})
 	if err == nil {
 		t.Fatalf("expected error for invalid mutation type")
 	}
@@ -129,7 +129,7 @@ func TestMutagen_GenerateMutation_InvalidType(t *testing.T) {
 func TestMutagen_GenerateMutation_InvalidSource(t *testing.T) {
 	mg := newTestMutagen()
 
-	_, err := mg.GenerateMutation(m.Source{}, 0, m.MutationArithmetic)
+	_, err := mg.GenerateMutation(m.Source{}, m.MutationArithmetic)
 	if err == nil {
 		t.Fatalf("expected error for missing source origin")
 	}

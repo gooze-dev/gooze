@@ -35,3 +35,6 @@ go.work.sum
 # Build and tools
 .bin/
 .vscode/
+
+# Output directory for mutation testing reports
+.gooze-reports/
