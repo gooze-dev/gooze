@@ -123,6 +123,8 @@ func collectMutations(mutationType m.MutationType, file *ast.File, fset *token.F
 			mutations = append(mutations, mutagens.GenerateUnaryMutations(n, fset, content, source)...)
 		case m.MutationBranch:
 			mutations = append(mutations, mutagens.GenerateBranchMutations(n, fset, content, source)...)
+		case m.MutationStatement:
+			mutations = append(mutations, mutagens.GenerateStatementMutations(n, fset, content, source)...)
 		}
 
 		return true
