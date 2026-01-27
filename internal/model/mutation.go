@@ -25,6 +25,8 @@ var (
 	MutationLogical = MutationType{Name: "logical", Version: 1}
 	// MutationUnary represents unary operator mutations (-, +, !, ^).
 	MutationUnary = MutationType{Name: "unary", Version: 1}
+	// MutationBranch represents branch/conditional mutations (if, for, switch conditions).
+	MutationBranch = MutationType{Name: "branch", Version: 1}
 )
 
 // Mutation represents a code mutation with its details.
