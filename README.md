@@ -226,11 +226,11 @@ To skip the interactive UI, pipe output (e.g., `gooze run ./... | cat`).
 - [x] Arithmetic
 - [x] Comparison / Relational
 - [x] Logical Operators
+- [x] Branch (if/else removal, condition inversion, switch case removal)
 - [ ] Core Logic
 - [ ] Statement
 - [ ] Statement Deletion
 - [ ] Return Value
-- [ ] Branch
 - [ ] Conditional
 - [ ] Loop
 - [ ] Control Flow & Loops

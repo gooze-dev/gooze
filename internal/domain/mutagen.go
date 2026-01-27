@@ -76,11 +76,11 @@ func validateAdapters(mg *mutagen) error {
 
 func resolveMutationTypes(mutationTypes []m.MutationType) ([]m.MutationType, error) {
 	if len(mutationTypes) == 0 {
-		return []m.MutationType{m.MutationArithmetic, m.MutationBoolean, m.MutationNumbers, m.MutationComparison, m.MutationLogical, m.MutationUnary}, nil
+		return []m.MutationType{m.MutationArithmetic, m.MutationBoolean, m.MutationNumbers, m.MutationComparison, m.MutationLogical, m.MutationUnary, m.MutationBranch}, nil
 	}
 
 	for _, mutationType := range mutationTypes {
-		if mutationType != m.MutationArithmetic && mutationType != m.MutationBoolean && mutationType != m.MutationNumbers && mutationType != m.MutationComparison && mutationType != m.MutationLogical && mutationType != m.MutationUnary {
+		if mutationType != m.MutationArithmetic && mutationType != m.MutationBoolean && mutationType != m.MutationNumbers && mutationType != m.MutationComparison && mutationType != m.MutationLogical && mutationType != m.MutationUnary && mutationType != m.MutationBranch {
 			return nil, fmt.Errorf("unsupported mutation type: %s", mutationType.Name)
 		}
 	}
@@ -121,6 +121,8 @@ func collectMutations(mutationType m.MutationType, file *ast.File, fset *token.F
 			mutations = append(mutations, mutagens.GenerateLogicalMutations(n, fset, content, source)...)
 		case m.MutationUnary:
 			mutations = append(mutations, mutagens.GenerateUnaryMutations(n, fset, content, source)...)
+		case m.MutationBranch:
+			mutations = append(mutations, mutagens.GenerateBranchMutations(n, fset, content, source)...)
 		}
 
 		return true
