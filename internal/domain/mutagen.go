@@ -125,6 +125,8 @@ func collectMutations(mutationType m.MutationType, file *ast.File, fset *token.F
 			mutations = append(mutations, mutagens.GenerateBranchMutations(n, fset, content, source)...)
 		case m.MutationStatement:
 			mutations = append(mutations, mutagens.GenerateStatementMutations(n, fset, content, source)...)
+		case m.MutationLoop:
+			mutations = append(mutations, mutagens.GenerateLoopMutations(n, fset, content, source)...)
 		}
 
 		return true

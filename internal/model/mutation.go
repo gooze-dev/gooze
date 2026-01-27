@@ -29,6 +29,8 @@ var (
 	MutationBranch = MutationType{Name: "branch", Version: 1}
 	// MutationStatement represents statement deletion mutations (assignments, expressions, defer, go, send).
 	MutationStatement = MutationType{Name: "statement", Version: 1}
+	// MutationLoop represents loop mutations (boundary conditions, loop body removal, break/continue removal).
+	MutationLoop = MutationType{Name: "loop", Version: 1}
 )
 
 // Mutation represents a code mutation with its details.

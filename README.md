@@ -228,12 +228,10 @@ To skip the interactive UI, pipe output (e.g., `gooze run ./... | cat`).
 - [x] Logical Operators
 - [x] Branch (if/else removal, condition inversion, switch case removal)
 - [x] Statement (statement deletion: assignments, expressions, defer, go, send)
+- [x] Loop (boundary conditions, loop body removal, break/continue removal)
 - [ ] Core Logic
 - [ ] Return Value
 - [ ] Conditional
-- [ ] Loop
-- [ ] Control Flow & Loops
-- [ ] Expression
 - [ ] Complex Expression
 - [ ] Slice
 - [ ] Map
