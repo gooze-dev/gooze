@@ -55,9 +55,9 @@ Or point `view` at an explicit directory:
 gooze view -o .gooze-reports
 ```
 
-### Incremental runs
+### Incremental runs (`--no-cache`)
 
-Gooze supports incremental mutation testing by caching results and skipping unchanged files.
+Gooze supports incremental mutation testing by caching results and skipping unchanged files (use `--no-cache` to ignore the cache and re-test everything).
 
 **How it works:**
 
@@ -85,6 +85,12 @@ Second run re-tests only affected sources and reuses cached results for everythi
 
 ```bash
 gooze run ./...
+```
+
+To ignore the cache and force re-testing everything:
+
+```bash
+gooze run --no-cache ./...
 ```
 
 **Cache invalidation triggers:**

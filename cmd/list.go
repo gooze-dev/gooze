@@ -18,11 +18,12 @@ func newListCmd() *cobra.Command {
 		Long:  listLongDescription,
 		RunE: func(_ *cobra.Command, args []string) error {
 			paths := parsePaths(args)
+			useCache := !noCacheFlag
 
 			return workflow.Estimate(domain.EstimateArgs{
 				Paths:    paths,
 				Exclude:  listExcludeFlags,
-				UseCache: true,
+				UseCache: useCache,
 				Reports:  m.Path(reportsOutputDirFlag),
 			})
 		},
