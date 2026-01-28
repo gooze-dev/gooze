@@ -25,6 +25,9 @@ var ui controller.UI
 // reportsOutputDirFlag is a root-level flag shared by commands that read/write reports.
 var reportsOutputDirFlag string
 
+// noCacheFlag disables incremental caching when set.
+var noCacheFlag bool
+
 func init() {
 	ui = controller.NewUI(rootCmd, controller.IsTTY(os.Stdout))
 	goFileAdapter = adapter.NewLocalGoFileAdapter()
@@ -76,6 +79,7 @@ func newRootCmd() *cobra.Command {
 	}
 
 	cmd.PersistentFlags().StringVarP(&reportsOutputDirFlag, "output", "o", ".gooze-reports", "output directory for mutation testing reports")
+	cmd.PersistentFlags().BoolVar(&noCacheFlag, "no-cache", false, "disable cached incremental runs (re-test everything)")
 
 	return cmd
 }

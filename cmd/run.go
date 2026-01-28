@@ -22,12 +22,13 @@ func newRunCmd() *cobra.Command {
 		RunE: func(_ *cobra.Command, args []string) error {
 			shardIndex, totalShards := parseShardFlag(runShardFlag)
 			paths := parsePaths(args)
+			useCache := !noCacheFlag
 
 			return workflow.Test(domain.TestArgs{
 				EstimateArgs: domain.EstimateArgs{
 					Paths:    paths,
 					Exclude:  runExcludeFlags,
-					UseCache: true,
+					UseCache: useCache,
 					Reports:  m.Path(reportsOutputDirFlag),
 				},
 				Reports:         m.Path(reportsOutputDirFlag),

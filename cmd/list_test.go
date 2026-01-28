@@ -34,6 +34,29 @@ func TestListCmd_UsesCache(t *testing.T) {
 	mockWorkflow.AssertExpectations(t)
 }
 
+func TestListCmd_NoCacheFlag_DisablesCache(t *testing.T) {
+	mockWorkflow := domainmocks.NewMockWorkflow(t)
+
+	cmd := newRootCmd()
+	cmd.AddCommand(newListCmd())
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+
+	originalWorkflow := workflow
+	workflow = mockWorkflow
+	defer func() { workflow = originalWorkflow }()
+
+	mockWorkflow.On("Estimate", mock.MatchedBy(func(args domain.EstimateArgs) bool {
+		return args.UseCache == false
+	})).Return(nil)
+
+	cmd.SetArgs([]string{"--no-cache", "list", "./..."})
+	err := cmd.Execute()
+	require.NoError(t, err)
+
+	mockWorkflow.AssertExpectations(t)
+}
+
 func TestListCmd_WithExcludePatterns(t *testing.T) {
 	mockWorkflow := domainmocks.NewMockWorkflow(t)
 

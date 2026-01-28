@@ -112,6 +112,29 @@ func TestRunCmd_WithExcludePatterns(t *testing.T) {
 	mockWorkflow.AssertExpectations(t)
 }
 
+func TestRunCmd_NoCacheFlag_DisablesCache(t *testing.T) {
+	mockWorkflow := domainmocks.NewMockWorkflow(t)
+
+	cmd := newRootCmd()
+	cmd.AddCommand(newRunCmd())
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+
+	originalWorkflow := workflow
+	workflow = mockWorkflow
+	defer func() { workflow = originalWorkflow }()
+
+	mockWorkflow.On("Test", mock.MatchedBy(func(args domain.TestArgs) bool {
+		return args.UseCache == false
+	})).Return(nil)
+
+	cmd.SetArgs([]string{"--no-cache", "run", "./..."})
+	err := cmd.Execute()
+	require.NoError(t, err)
+
+	mockWorkflow.AssertExpectations(t)
+}
+
 func TestNewRunCmd(t *testing.T) {
 	cmd := newRunCmd()
 
