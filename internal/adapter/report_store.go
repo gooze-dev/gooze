@@ -12,7 +12,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	m "github.com/mouse-blink/gooze/internal/model"
+	m "gooze.dev/pkg/gooze/internal/model"
 )
 
 const indexFileName = "_index.yaml"

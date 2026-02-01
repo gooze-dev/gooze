@@ -3,7 +3,7 @@
 package mocks
 
 import (
-	model "github.com/mouse-blink/gooze/internal/model"
+	model "gooze.dev/pkg/gooze/internal/model"
 	mock "github.com/stretchr/testify/mock"
 )
 

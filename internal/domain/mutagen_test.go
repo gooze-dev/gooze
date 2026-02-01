@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mouse-blink/gooze/internal/adapter"
-	m "github.com/mouse-blink/gooze/internal/model"
+	"gooze.dev/pkg/gooze/internal/adapter"
+	m "gooze.dev/pkg/gooze/internal/model"
 )
 
 func TestMutagen_GenerateMutation_ArithmeticBasic(t *testing.T) {

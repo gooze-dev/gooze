@@ -8,7 +8,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
-	m "github.com/mouse-blink/gooze/internal/model"
+	m "gooze.dev/pkg/gooze/internal/model"
 )
 
 // TestEstimateModelIntegration tests the full lifecycle of estimateModel with Bubble Tea

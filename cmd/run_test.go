@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/mouse-blink/gooze/internal/domain"
-	domainmocks "github.com/mouse-blink/gooze/internal/domain/mocks"
-	m "github.com/mouse-blink/gooze/internal/model"
+	"gooze.dev/pkg/gooze/internal/domain"
+	domainmocks "gooze.dev/pkg/gooze/internal/domain/mocks"
+	m "gooze.dev/pkg/gooze/internal/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"

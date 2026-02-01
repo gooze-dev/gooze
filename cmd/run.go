@@ -3,8 +3,8 @@ package cmd
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/mouse-blink/gooze/internal/domain"
-	m "github.com/mouse-blink/gooze/internal/model"
+	"gooze.dev/pkg/gooze/internal/domain"
+	m "gooze.dev/pkg/gooze/internal/model"
 )
 
 var runParallelFlag int

@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"github.com/mouse-blink/gooze/internal/domain"
-	m "github.com/mouse-blink/gooze/internal/model"
+	"gooze.dev/pkg/gooze/internal/domain"
+	m "gooze.dev/pkg/gooze/internal/model"
 	"github.com/spf13/cobra"
 )
 

@@ -6,7 +6,7 @@ import (
 	"go/token"
 	"testing"
 
-	m "github.com/mouse-blink/gooze/internal/model"
+	m "gooze.dev/pkg/gooze/internal/model"
 )
 
 func TestGenerateNumberMutations(t *testing.T) {

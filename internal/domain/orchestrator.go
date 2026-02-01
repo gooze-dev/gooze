@@ -3,8 +3,8 @@ package domain
 import (
 	"fmt"
 
-	"github.com/mouse-blink/gooze/internal/adapter"
-	m "github.com/mouse-blink/gooze/internal/model"
+	"gooze.dev/pkg/gooze/internal/adapter"
+	m "gooze.dev/pkg/gooze/internal/model"
 )
 
 // Orchestrator coordinates applying a mutation to a temporary copy of

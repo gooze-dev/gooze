@@ -11,9 +11,9 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/mouse-blink/gooze/internal/adapter"
-	"github.com/mouse-blink/gooze/internal/controller"
-	m "github.com/mouse-blink/gooze/internal/model"
+	"gooze.dev/pkg/gooze/internal/adapter"
+	"gooze.dev/pkg/gooze/internal/controller"
+	m "gooze.dev/pkg/gooze/internal/model"
 	"golang.org/x/sync/errgroup"
 )
 

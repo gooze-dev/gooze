@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"testing"
 
-	m "github.com/mouse-blink/gooze/internal/model"
+	m "gooze.dev/pkg/gooze/internal/model"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

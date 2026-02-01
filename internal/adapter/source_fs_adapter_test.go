@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	m "github.com/mouse-blink/gooze/internal/model"
+	m "gooze.dev/pkg/gooze/internal/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	m "github.com/mouse-blink/gooze/internal/model"
+	m "gooze.dev/pkg/gooze/internal/model"
 )
 
 type quitModel struct{}

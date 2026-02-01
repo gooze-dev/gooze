@@ -3,7 +3,7 @@
 package mocks
 
 import (
-	domain "github.com/mouse-blink/gooze/internal/domain"
+	domain "gooze.dev/pkg/gooze/internal/domain"
 	mock "github.com/stretchr/testify/mock"
 )
 

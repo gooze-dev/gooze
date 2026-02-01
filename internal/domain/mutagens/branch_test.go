@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	m "github.com/mouse-blink/gooze/internal/model"
+	m "gooze.dev/pkg/gooze/internal/model"
 )
 
 func TestGenerateBranchMutations_IfStatement(t *testing.T) {

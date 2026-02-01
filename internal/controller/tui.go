@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
-	m "github.com/mouse-blink/gooze/internal/model"
+	m "gooze.dev/pkg/gooze/internal/model"
 )
 
 // TUI implements UI using Bubble Tea for interactive display.

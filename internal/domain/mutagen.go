@@ -6,9 +6,9 @@ import (
 	"go/ast"
 	"go/token"
 
-	"github.com/mouse-blink/gooze/internal/adapter"
-	"github.com/mouse-blink/gooze/internal/domain/mutagens"
-	m "github.com/mouse-blink/gooze/internal/model"
+	"gooze.dev/pkg/gooze/internal/adapter"
+	"gooze.dev/pkg/gooze/internal/domain/mutagens"
+	m "gooze.dev/pkg/gooze/internal/model"
 )
 
 // Mutagen defines the interface for mutation generation.

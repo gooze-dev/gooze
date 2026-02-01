@@ -1,3 +1,3 @@
-module github.com/mouse-blink/gooze/examples/statement
+module gooze.dev/pkg/gooze/examples/statement
 
 go 1.22

@@ -3,7 +3,7 @@
 package mocks
 
 import (
-	controller "github.com/mouse-blink/gooze/internal/controller"
+	controller "gooze.dev/pkg/gooze/internal/controller"
 	mock "github.com/stretchr/testify/mock"
 )
 

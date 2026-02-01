@@ -3,7 +3,7 @@
 with-expecter: true
 disable-version-string: true
 packages:
-  github.com/mouse-blink/gooze/internal/domain:
+  gooze.dev/pkg/gooze/internal/domain:
     config:
       dir: internal/domain/mocks
       outpkg: mocks
@@ -11,7 +11,7 @@ packages:
       Workflow:
       Orchestrator:
       Mutagen:
-  github.com/mouse-blink/gooze/internal/adapter:
+  gooze.dev/pkg/gooze/internal/adapter:
     config:
       dir: internal/adapter/mocks
       outpkg: mocks
@@ -20,7 +20,7 @@ packages:
       SourceFSAdapter:
       TestRunnerAdapter:
       ReportStore:
-  github.com/mouse-blink/gooze/internal/controller:
+  gooze.dev/pkg/gooze/internal/controller:
     config:
       dir: internal/controller/mocks
       outpkg: mocks

@@ -1,3 +1,3 @@
-module github.com/mouse-blink/gooze/examples/loops
+module gooze.dev/pkg/gooze/examples/loops
 
 go 1.21
