@@ -6,7 +6,7 @@ import (
 	"go/ast"
 	"go/token"
 
-	m "github.com/mouse-blink/gooze/internal/model"
+	m "gooze.dev/pkg/gooze/internal/model"
 )
 
 // GenerateStatementMutations generates statement deletion mutations for the given AST node.

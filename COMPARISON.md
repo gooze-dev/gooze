@@ -2,7 +2,7 @@
 
 | Tool | Gooze | go-mutesting (Original) |
 |---|---|---|
-| **Repo** | `github.com/mouse-blink/gooze` | `github.com/zimmski/go-mutesting` |
+| **Repo** | `gooze.dev/pkg/gooze` | `github.com/zimmski/go-mutesting` |
 | **Philosophy** | **"Batteries Included"**: Modern, fast, incremental, distributed-ready. | **"Functionality First"**: Minimal, extensible framework relying on external scripting. |
 | **Integrations** | Built-in TUI, persistent storage, native sharding. | Relies on custom `--exec` scripts/hooks. |
 | **Status** | Active, focused on DX and performance. | Stable, mature, minimal feature set. |
@@ -25,7 +25,7 @@
 
 | Installation & CLI | Gooze | go-mutesting |
 |---|---|---|
-| **Install** | `go install github.com/mouse-blink/gooze@latest` | `go get -t -v github.com/zimmski/go-mutesting/...` |
+| **Install** | `go install gooze.dev/pkg/gooze@latest` | `go get -t -v github.com/zimmski/go-mutesting/...` |
 | **Binary** | `gooze` | `go-mutesting` |
 | **Discovery** | `gooze list ./...` (cached) | `go-mutesting --list-files ./...` |
 | **Execution** | `gooze run ./...` (cached) | `go-mutesting ./...` (always runs all) |

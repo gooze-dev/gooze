@@ -1,5 +1,5 @@
-module github.com/mouse-blink/gooze/examples/unary
+module gooze.dev/pkg/gooze/examples/unary
 
 go 1.23.4
 
-replace github.com/mouse-blink/gooze => ../..
+replace gooze.dev/pkg/gooze => ../..

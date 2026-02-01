@@ -1,4 +1,4 @@
-module github.com/mouse-blink/gooze
+module gooze.dev/pkg/gooze
 
 go 1.25.1
 

@@ -8,7 +8,7 @@ import (
 	"go/token"
 	"strings"
 
-	m "github.com/mouse-blink/gooze/internal/model"
+	m "gooze.dev/pkg/gooze/internal/model"
 	"github.com/pmezard/go-difflib/difflib"
 )
 

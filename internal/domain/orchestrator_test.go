@@ -5,8 +5,8 @@ import (
 	"os"
 	"testing"
 
-	adaptermocks "github.com/mouse-blink/gooze/internal/adapter/mocks"
-	m "github.com/mouse-blink/gooze/internal/model"
+	adaptermocks "gooze.dev/pkg/gooze/internal/adapter/mocks"
+	m "gooze.dev/pkg/gooze/internal/model"
 	"github.com/stretchr/testify/require"
 )
 

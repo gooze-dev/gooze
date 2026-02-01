@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	m "github.com/mouse-blink/gooze/internal/model"
+	m "gooze.dev/pkg/gooze/internal/model"
 )
 
 func TestGenerateStatementMutations_AssignmentDeletion(t *testing.T) {

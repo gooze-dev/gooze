@@ -16,8 +16,10 @@ to speed up larger projects.
 Install the latest `gooze` binary to your Go bin directory.
 
 ```bash
-go install github.com/mouse-blink/gooze@latest
+go install gooze.dev/pkg/gooze@latest
 ```
+
+`gooze.dev/pkg/gooze` is a vanity import path. For this to work, `https://gooze.dev/pkg/gooze?go-get=1` must serve a `go-import` meta tag pointing at this repo (template: `docs/pkg/gooze/index.html`).
 
 
 ### List files and mutation counts

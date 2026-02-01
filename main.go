@@ -2,7 +2,7 @@
 // Package main is the entry point for the Gooze CLI.
 package main
 
-import "github.com/mouse-blink/gooze/cmd"
+import "gooze.dev/pkg/gooze/cmd"
 
 func main() {
 	cmd.Execute()

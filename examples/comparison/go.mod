@@ -1,3 +1,3 @@
-module github.com/mouse-blink/gooze/examples/comparison
+module gooze.dev/pkg/gooze/examples/comparison
 
 go 1.23.4

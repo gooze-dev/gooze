@@ -5,7 +5,7 @@ import (
 	"go/ast"
 	"go/token"
 
-	m "github.com/mouse-blink/gooze/internal/model"
+	m "gooze.dev/pkg/gooze/internal/model"
 )
 
 // GenerateArithmeticMutations generates arithmetic mutations for the given AST node.

@@ -14,7 +14,7 @@ import (
 	"regexp"
 	"strings"
 
-	m "github.com/mouse-blink/gooze/internal/model"
+	m "gooze.dev/pkg/gooze/internal/model"
 )
 
 // SourceFSAdapter abstracts filesystem-specific operations that the domain layer

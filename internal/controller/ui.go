@@ -2,7 +2,7 @@
 package controller
 
 import (
-	m "github.com/mouse-blink/gooze/internal/model"
+	m "gooze.dev/pkg/gooze/internal/model"
 )
 
 // MutationEstimation holds estimation counts for different mutation types.

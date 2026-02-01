@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sort"
 
-	m "github.com/mouse-blink/gooze/internal/model"
+	m "gooze.dev/pkg/gooze/internal/model"
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
 )
