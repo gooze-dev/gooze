@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -85,18 +86,23 @@ func NewWorkflow(
 
 func (w *workflow) Estimate(args EstimateArgs) error {
 	if err := w.Start(controller.WithEstimateMode()); err != nil {
+		slog.Error("Failed to start workflow UI", "error", err)
 		return err
 	}
 
 	allMutations, err := w.GetMutations(args)
 	if err != nil {
 		w.Close()
+		slog.Error("Failed to generate mutations", "error", err)
+
 		return fmt.Errorf("generate mutations: %w", err)
 	}
 
 	err = w.DisplayEstimation(allMutations, nil)
 	if err != nil {
 		w.Close()
+		slog.Error("Failed to display estimation", "error", err)
+
 		return fmt.Errorf("display: %w", err)
 	}
 
@@ -109,34 +115,49 @@ func (w *workflow) Estimate(args EstimateArgs) error {
 
 func (w *workflow) Test(args TestArgs) error {
 	return w.withTestUI(func() error {
+		slog.Info("Starting mutation testing", "threads", args.Threads, "shardIndex", args.ShardIndex, "totalShardCount", args.TotalShardCount)
 		w.DisplayConcurrencyInfo(args.Threads, args.ShardIndex, args.TotalShardCount)
 
 		reportsDir := shardReportsDir(args.Reports, args.ShardIndex, args.TotalShardCount)
+		slog.Debug("Using reports directory", "path", reportsDir)
 
 		allMutations, err := w.GetMutations(args.EstimateArgs)
 		if err != nil {
+			slog.Error("Failed to generate mutations", "error", err)
 			return fmt.Errorf("generate mutations: %w", err)
 		}
 
+		slog.Debug("Generated mutations", "count", len(allMutations))
 		shardMutations := w.ShardMutations(allMutations, args.ShardIndex, args.TotalShardCount)
+		slog.Debug("Sharded mutations", "count", len(shardMutations))
 		w.DisplayUpcomingTestsInfo(len(shardMutations))
 
 		reports, err := w.TestReports(shardMutations, args.Threads)
 		if err != nil {
+			slog.Error("Failed to run mutation tests", "error", err)
 			return fmt.Errorf("run mutation tests: %w", err)
 		}
 
-		w.DisplayMutationScore(mutationScoreFromReports(reports))
+		slog.Info("Completed mutation tests", "reportsCount", len(reports))
+		score := mutationScoreFromReports(reports)
+		slog.Info("Calculated mutation score", "score", score)
+		w.DisplayMutationScore(score)
 
 		err = w.SaveReports(reportsDir, reports)
 		if err != nil {
+			slog.Error("Failed to save reports", "error", err, "path", reportsDir)
 			return fmt.Errorf("save reports: %w", err)
 		}
 
+		slog.Debug("Saved reports", "path", reportsDir)
+
 		err = w.RegenerateIndex(reportsDir)
 		if err != nil {
+			slog.Error("Failed to regenerate reports index", "error", err, "path", reportsDir)
 			return fmt.Errorf("regenerate index: %w", err)
 		}
+
+		slog.Debug("Regenerated reports index", "path", reportsDir)
 
 		return nil
 	})
@@ -144,23 +165,29 @@ func (w *workflow) Test(args TestArgs) error {
 
 func shardReportsDir(base m.Path, shardIndex int, totalShardCount int) m.Path {
 	if totalShardCount <= 1 {
+		slog.Debug("Using unsharded reports directory", "path", base)
 		return base
 	}
+
+	slog.Debug("Using sharded reports directory", "base", base, "shardIndex", shardIndex)
 
 	return m.Path(filepath.Join(string(base), fmt.Sprintf("%s%d", ShardDirPrefix, shardIndex)))
 }
 
 func (w *workflow) View(args ViewArgs) error {
 	return w.withTestUI(func() error {
+		slog.Info("Loading mutation test reports", "path", args.Reports)
+
 		reports, err := w.LoadReports(args.Reports)
 		if err != nil {
+			slog.Error("Failed to load reports", "error", err, "path", args.Reports)
 			return fmt.Errorf("load reports: %w", err)
 		}
 
 		mutations, results := viewItemsFromReports(reports)
-
+		slog.Debug("Loaded reports", "reportsCount", len(reports), "mutationsCount", len(mutations))
 		score := mutationScoreFromReports(reports)
-
+		slog.Info("Calculated mutation score", "score", score)
 		w.DisplayUpcomingTestsInfo(len(mutations))
 
 		for i, mutation := range mutations {
@@ -198,32 +225,44 @@ func mutationScoreFromReports(reports []m.Report) float64 {
 		return 0
 	}
 
+	slog.Debug("Calculated mutation score", "killed", killed, "total", total)
+
 	return float64(killed) / float64(total)
 }
 
 func (w *workflow) Merge(args MergeArgs) error {
 	base := args.Reports
+	slog.Info("Merging sharded mutation test reports", "basePath", base)
+
 	if string(base) == "" {
+		slog.Error("Reports directory path is required but not provided")
 		return fmt.Errorf("reports directory path is required")
 	}
 
 	shardDirs, err := w.findShardDirs(base)
 	if err != nil {
+		slog.Error("Failed to find shard directories", "error", err, "basePath", base)
 		return err
 	}
 
 	if len(shardDirs) == 0 {
+		slog.Debug("No shard directories found; regenerating index only", "basePath", base)
 		return w.regenerateIndex(base)
 	}
 
 	merged, err := w.mergeReports(base, shardDirs)
 	if err != nil {
+		slog.Error("Failed to merge shard reports", "error", err, "basePath", base)
 		return err
 	}
+
+	slog.Info("Merged shard reports", "basePath", base)
 
 	if err := w.saveMergedReports(base, merged); err != nil {
 		return err
 	}
+
+	slog.Debug("Saved merged reports and regenerated index", "basePath", base)
 
 	return w.removeShardDirs(shardDirs)
 }
@@ -231,6 +270,7 @@ func (w *workflow) Merge(args MergeArgs) error {
 func (w *workflow) findShardDirs(base m.Path) ([]string, error) {
 	shardDirs, err := findShardDirs(string(base))
 	if err != nil {
+		slog.Error("Failed to find shard directories", "error", err, "basePath", base)
 		return nil, fmt.Errorf("find shard directories: %w", err)
 	}
 
@@ -260,11 +300,14 @@ func (w *workflow) mergeReports(base m.Path, shardDirs []string) ([]m.Report, er
 	for _, shardDir := range shardDirs {
 		reports, err := w.LoadReports(m.Path(shardDir))
 		if err != nil {
+			slog.Error("Failed to load shard reports", "error", err, "shardDir", shardDir)
 			return nil, fmt.Errorf("load shard reports from %s: %w", shardDir, err)
 		}
 
 		merged = append(merged, reports...)
 	}
+
+	slog.Debug("Merged reports from shards", "totalReports", len(merged))
 
 	return merged, nil
 }
@@ -284,8 +327,11 @@ func (w *workflow) loadReportsIfExists(path m.Path) ([]m.Report, error) {
 
 func (w *workflow) saveMergedReports(base m.Path, reports []m.Report) error {
 	if err := w.SaveReports(base, reports); err != nil {
+		slog.Error("Failed to save merged reports", "error", err, "basePath", base)
 		return fmt.Errorf("save merged reports: %w", err)
 	}
+
+	slog.Debug("Saved merged reports and regenerated index", "basePath", base)
 
 	return w.regenerateIndex(base)
 }
@@ -330,10 +376,17 @@ func findShardDirs(baseDir string) ([]string, error) {
 }
 
 func (w *workflow) withTestUI(fn func() error) error {
+	slog.Info("Starting workflow in test mode")
+
 	if err := w.Start(controller.WithTestMode()); err != nil {
+		slog.Error("Failed to start workflow in test mode", "error", err)
 		return err
 	}
-	defer w.Close()
+
+	defer func() {
+		slog.Info("Closing workflow UI")
+		w.Close()
+	}()
 
 	err := fn()
 	if err != nil {
