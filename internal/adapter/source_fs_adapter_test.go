@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	m "gooze.dev/pkg/gooze/internal/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	m "gooze.dev/pkg/gooze/internal/model"
 )
 
 func TestLocalSourceFSAdapter_Walk(t *testing.T) {

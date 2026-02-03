@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"testing"
 
-	"gooze.dev/pkg/gooze/internal/domain"
-	domainmocks "gooze.dev/pkg/gooze/internal/domain/mocks"
-	m "gooze.dev/pkg/gooze/internal/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"gooze.dev/pkg/gooze/internal/domain"
+	domainmocks "gooze.dev/pkg/gooze/internal/domain/mocks"
+	m "gooze.dev/pkg/gooze/internal/model"
 )
 
 func TestRunCmd_TestMode(t *testing.T) {

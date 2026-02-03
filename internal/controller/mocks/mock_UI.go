@@ -3,8 +3,8 @@
 package mocks
 
 import (
-	controller "gooze.dev/pkg/gooze/internal/controller"
 	mock "github.com/stretchr/testify/mock"
+	controller "gooze.dev/pkg/gooze/internal/controller"
 
 	model "gooze.dev/pkg/gooze/internal/model"
 )

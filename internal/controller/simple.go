@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"sort"
 
-	m "gooze.dev/pkg/gooze/internal/model"
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
+	m "gooze.dev/pkg/gooze/internal/model"
 )
 
 // SimpleUI implements UI using cobra Command's Println.

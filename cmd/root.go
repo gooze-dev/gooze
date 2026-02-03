@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/spf13/cobra"
 	"gooze.dev/pkg/gooze/internal/adapter"
 	"gooze.dev/pkg/gooze/internal/controller"
 	"gooze.dev/pkg/gooze/internal/domain"
 	m "gooze.dev/pkg/gooze/internal/model"
-	"github.com/spf13/cobra"
 )
 
 var goFileAdapter adapter.GoFileAdapter
