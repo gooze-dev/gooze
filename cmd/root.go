@@ -6,6 +6,8 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 	"gooze.dev/pkg/gooze/internal/adapter"
 	"gooze.dev/pkg/gooze/internal/controller"
 	"gooze.dev/pkg/gooze/internal/domain"
@@ -28,7 +30,13 @@ var reportsOutputDirFlag string
 // noCacheFlag disables incremental caching when set.
 var noCacheFlag bool
 
+// excludePatterns is a root-level flag that filters files for applicable commands.
+var excludePatterns []string
+
 func init() {
+	configureRootFlags(rootCmd)
+
+	// Initialize shared dependencies.
 	ui = controller.NewUI(rootCmd, controller.IsTTY(os.Stdout))
 	goFileAdapter = adapter.NewLocalGoFileAdapter()
 	soirceFSAdapter = adapter.NewLocalSourceFSAdapter()
@@ -66,10 +74,10 @@ const listLongDescription = `List source files and the number of applicable muta
 ` + pathPatternsHelp
 
 // rootCmd represents the base command when called without any subcommands.
-var rootCmd = newRootCmd()
+var rootCmd = baseRootCmd()
 
-func newRootCmd() *cobra.Command {
-	cmd := &cobra.Command{
+func baseRootCmd() *cobra.Command {
+	return &cobra.Command{
 		Use:   "gooze",
 		Short: "Go mutation testing tool",
 		Long:  rootLongDescription,
@@ -77,11 +85,32 @@ func newRootCmd() *cobra.Command {
 			return cmd.Help()
 		},
 	}
+}
 
-	cmd.PersistentFlags().StringVarP(&reportsOutputDirFlag, "output", "o", ".gooze-reports", "output directory for mutation testing reports")
-	cmd.PersistentFlags().BoolVar(&noCacheFlag, "no-cache", false, "disable cached incremental runs (re-test everything)")
+func configureRootFlags(cmd *cobra.Command) {
+	cmd.PersistentFlags().
+		StringVarP(
+			&reportsOutputDirFlag, outputFlagName, "o",
+			viper.GetString(outputFlagName),
+			"output directory for mutation testing reports",
+		)
+	bindFlagToConfig(cmd.PersistentFlags().Lookup(outputFlagName), outputFlagName)
 
-	return cmd
+	cmd.PersistentFlags().BoolVar(&noCacheFlag, noCacheFlagName, viper.GetBool(noCacheFlagName), "disable cached incremental runs (re-test everything)")
+	bindFlagToConfig(cmd.PersistentFlags().Lookup(noCacheFlagName), noCacheFlagName)
+
+	cmd.PersistentFlags().StringArrayVarP(&excludePatterns, excludeFlagName, "x", viper.GetStringSlice(excludeConfigKey), "exclude files matching regex (can be repeated)")
+	bindFlagToConfig(cmd.PersistentFlags().Lookup(excludeFlagName), excludeConfigKey)
+}
+
+// bindFlagToConfig wires a Cobra flag to a Viper key so config/env values feed the flag.
+func bindFlagToConfig(flag *pflag.Flag, key string) {
+	if flag == nil {
+		cobra.CheckErr(fmt.Errorf("flag for config key %q not found", key))
+		return
+	}
+
+	cobra.CheckErr(viper.BindPFlag(key, flag))
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -91,21 +120,6 @@ func Execute() {
 	if err != nil {
 		os.Exit(1)
 	}
-}
-
-func parseShardFlag(shard string) (int, int) {
-	if shard == "" {
-		return 0, 1
-	}
-
-	var index, total int
-
-	_, err := fmt.Sscanf(shard, "%d/%d", &index, &total)
-	if err != nil || total <= 0 || index < 0 || index >= total {
-		return 0, 1
-	}
-
-	return index, total
 }
 
 func parsePaths(args []string) []m.Path {

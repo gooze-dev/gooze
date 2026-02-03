@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"gooze.dev/pkg/gooze/internal/domain"
 	m "gooze.dev/pkg/gooze/internal/model"
 )
@@ -16,7 +17,8 @@ func newViewCmd() *cobra.Command {
 		Long:  "View previously generated mutation reports from a reports directory.",
 		Args:  cobra.ExactArgs(0),
 		RunE: func(_ *cobra.Command, _ []string) error {
-			return workflow.View(domain.ViewArgs{Reports: m.Path(reportsOutputDirFlag)})
+			reportsPath := m.Path(viper.GetString(outputFlagName))
+			return workflow.View(domain.ViewArgs{Reports: reportsPath})
 		},
 	}
 

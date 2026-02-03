@@ -87,7 +87,4 @@ func TestNewListCmd(t *testing.T) {
 	assert.NotEmpty(t, cmd.Short)
 	assert.NotEmpty(t, cmd.Long)
 	assert.Equal(t, listLongDescription, cmd.Long)
-
-	excludeFlag := cmd.Flags().Lookup("exclude")
-	assert.NotNil(t, excludeFlag)
 }

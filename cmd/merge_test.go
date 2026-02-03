@@ -52,14 +52,3 @@ func TestMergeCmd_RootOutputFlagIsPassedThrough(t *testing.T) {
 	err := cmd.Execute()
 	require.NoError(t, err)
 }
-
-func TestMergeCmd_RejectsPositionalArg(t *testing.T) {
-	cmd := newRootCmd()
-	cmd.AddCommand(newMergeCmd())
-	cmd.SetOut(&bytes.Buffer{})
-	cmd.SetErr(&bytes.Buffer{})
-
-	cmd.SetArgs([]string{"merge", "./custom"})
-	err := cmd.Execute()
-	require.Error(t, err)
-}

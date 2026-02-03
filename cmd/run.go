@@ -1,7 +1,10 @@
 package cmd
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 
 	"gooze.dev/pkg/gooze/internal/domain"
 	m "gooze.dev/pkg/gooze/internal/model"
@@ -9,7 +12,6 @@ import (
 
 var runParallelFlag int
 var runShardFlag string
-var runExcludeFlags []string
 
 // runCmd represents the run command.
 var runCmd = newRunCmd()
@@ -22,29 +24,51 @@ func newRunCmd() *cobra.Command {
 		RunE: func(_ *cobra.Command, args []string) error {
 			shardIndex, totalShards := parseShardFlag(runShardFlag)
 			paths := parsePaths(args)
-			useCache := !noCacheFlag
+			useCache := !viper.GetBool(noCacheFlagName)
+			reportsPath := m.Path(viper.GetString(outputFlagName))
+			threads := viper.GetInt(runParallelConfigKey)
 
 			return workflow.Test(domain.TestArgs{
 				EstimateArgs: domain.EstimateArgs{
 					Paths:    paths,
-					Exclude:  runExcludeFlags,
+					Exclude:  viper.GetStringSlice(excludeConfigKey),
 					UseCache: useCache,
-					Reports:  m.Path(reportsOutputDirFlag),
+					Reports:  reportsPath,
 				},
-				Reports:         m.Path(reportsOutputDirFlag),
-				Threads:         runParallelFlag,
+				Reports:         reportsPath,
+				Threads:         threads,
 				ShardIndex:      shardIndex,
 				TotalShardCount: totalShards,
 			})
 		},
 	}
-	cmd.Flags().IntVarP(&runParallelFlag, "parallel", "p", 1, "number of parallel workers for mutation testing")
-	cmd.Flags().StringVarP(&runShardFlag, "shard", "s", "", "shard index and total shard count in the format INDEX/TOTAL (e.g., 0/3)")
-	cmd.Flags().StringArrayVarP(&runExcludeFlags, "exclude", "x", nil, "exclude files matching regex (can be repeated)")
+
+	configureRunFlags(cmd)
 
 	return cmd
 }
 
 func init() {
 	rootCmd.AddCommand(runCmd)
+}
+
+func configureRunFlags(cmd *cobra.Command) {
+	cmd.Flags().IntVarP(&runParallelFlag, runParallelFlagName, "p", viper.GetInt(runParallelConfigKey), "number of parallel workers for mutation testing")
+	bindFlagToConfig(cmd.Flags().Lookup(runParallelFlagName), runParallelConfigKey)
+	cmd.Flags().StringVarP(&runShardFlag, "shard", "s", "", "shard index and total shard count in the format INDEX/TOTAL (e.g., 0/3)")
+}
+
+func parseShardFlag(shard string) (int, int) {
+	if shard == "" {
+		return 0, 1
+	}
+
+	var index, total int
+
+	_, err := fmt.Sscanf(shard, "%d/%d", &index, &total)
+	if err != nil || total <= 0 || index < 0 || index >= total {
+		return 0, 1
+	}
+
+	return index, total
 }
