@@ -18,7 +18,6 @@ func TestViewCmd_UsesRootOutputFlagByDefault(t *testing.T) {
 	cmd.AddCommand(newViewCmd())
 	cmd.SetOut(&bytes.Buffer{})
 	cmd.SetErr(&bytes.Buffer{})
-
 	originalWorkflow := workflow
 	workflow = mockWorkflow
 	defer func() { workflow = originalWorkflow }()
@@ -55,7 +54,6 @@ func TestViewCmd_RootOutputFlagIsPassedThrough(t *testing.T) {
 
 func TestViewCmd_PositionalArgsAreRejected(t *testing.T) {
 	mockWorkflow := domainmocks.NewMockWorkflow(t)
-
 	cmd := newRootCmd()
 	cmd.AddCommand(newViewCmd())
 	cmd.SetOut(&bytes.Buffer{})

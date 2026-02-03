@@ -147,6 +147,4 @@ func TestNewRunCmd(t *testing.T) {
 	assert.NotNil(t, parallelFlag)
 	shardFlag := cmd.Flags().Lookup("shard")
 	assert.NotNil(t, shardFlag)
-	excludeFlag := cmd.Flags().Lookup("exclude")
-	assert.NotNil(t, excludeFlag)
 }

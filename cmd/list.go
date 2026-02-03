@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 
 	"gooze.dev/pkg/gooze/internal/domain"
 	m "gooze.dev/pkg/gooze/internal/model"
@@ -9,7 +10,6 @@ import (
 
 // listCmd represents the list command.
 var listCmd = newListCmd()
-var listExcludeFlags []string
 
 func newListCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -18,17 +18,17 @@ func newListCmd() *cobra.Command {
 		Long:  listLongDescription,
 		RunE: func(_ *cobra.Command, args []string) error {
 			paths := parsePaths(args)
-			useCache := !noCacheFlag
+			useCache := !viper.GetBool(noCacheFlagName)
+			reportsPath := m.Path(viper.GetString(outputFlagName))
 
 			return workflow.Estimate(domain.EstimateArgs{
 				Paths:    paths,
-				Exclude:  listExcludeFlags,
+				Exclude:  viper.GetStringSlice(excludeConfigKey),
 				UseCache: useCache,
-				Reports:  m.Path(reportsOutputDirFlag),
+				Reports:  reportsPath,
 			})
 		},
 	}
-	cmd.Flags().StringArrayVarP(&listExcludeFlags, "exclude", "x", nil, "exclude files matching regex (can be repeated)")
 
 	return cmd
 }

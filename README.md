@@ -37,6 +37,33 @@ Execute mutation testing across the target paths.
 ```bash
 gooze run ./...
 ```
+### Config File Support (`.gooze.yml`)
+
+Gooze supports a configuration file (`.gooze.yml`) for persistent settings, reducing the need to specify options repeatedly on the command line. Place the file in the root of your project or specify its location with the `--config` flag.
+
+**Example `.gooze.yml`:**
+
+```yaml
+output: .gooze-reports
+parallel: 4
+exclude:
+  - '^vendor/'
+  - '^mock_'
+shard: 0/3
+```
+
+**Supported Options:**
+- `output`: Directory for mutation reports (default: `.gooze-reports`).
+- `parallel`: Number of parallel workers for mutation testing.
+- `exclude`: List of regex patterns to exclude files.
+- `shard`: Shard index and total (e.g., `0/3` for shard 0 of 3).
+- `no_cache`: Boolean to disable caching (default: `false`).
+
+**Usage:**
+- Gooze automatically loads `.gooze.yml` if present in the current directory.
+- Override specific options via command-line flags (e.g., `gooze run --output custom-dir ./...`).
+
+> **Tip:** Use `.gooze.yml` to standardize settings across your team and CI pipelines.
 
 ### Reports
 
@@ -292,7 +319,7 @@ func main() {
 - [ ] **Custom Exec Hook**: Support custom test runner commands similar to `go-mutesting --exec` (High)
 - [ ] **Function Selection**: Allow mutating specific functions/methods via regex (High)
 - [ ] **Timeouts**: Per-mutation execution budgets to prevent infinite loops (Medium)
-- [ ] **Config File**: Support `.gooze.yml` for persistent configuration (Medium)
+- [x] **Config File**: Support `.gooze.yml` for persistent configuration (Medium)
 
 ### Smart Test Execution
 - [x] Run only matching `*_test.go` files for each mutated source file

@@ -7,11 +7,19 @@ import (
 	"os/exec"
 	"testing"
 
+	m "gooze.dev/pkg/gooze/internal/model"
+
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	m "gooze.dev/pkg/gooze/internal/model"
 )
+
+// newRootCmd creates a root command with flags configured for testing.
+func newRootCmd() *cobra.Command {
+	cmd := baseRootCmd()
+	configureRootFlags(cmd)
+	return cmd
+}
 
 func TestParseShardFlag(t *testing.T) {
 	tests := []struct {
@@ -71,6 +79,16 @@ func TestNewRootCmd(t *testing.T) {
 	assert.NotEmpty(t, cmd.Short)
 	assert.NotEmpty(t, cmd.Long)
 	assert.Equal(t, rootLongDescription, cmd.Long)
+}
+
+func TestRootCmd_PersistentFlags(t *testing.T) {
+	cmd := newRootCmd()
+	outputFlag := cmd.PersistentFlags().Lookup("output")
+	assert.NotNil(t, outputFlag)
+	noCache := cmd.PersistentFlags().Lookup("no-cache")
+	assert.NotNil(t, noCache)
+	exclude := cmd.PersistentFlags().Lookup("exclude")
+	assert.NotNil(t, exclude)
 }
 
 func TestRootCmd_HelpOutput(t *testing.T) {
