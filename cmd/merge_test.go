@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"gooze.dev/pkg/gooze/internal/domain"
 	domainmocks "gooze.dev/pkg/gooze/internal/domain/mocks"
 	m "gooze.dev/pkg/gooze/internal/model"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 )
 
 func TestMergeCmd_UsesRootOutputFlagByDefault(t *testing.T) {

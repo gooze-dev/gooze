@@ -1,9 +1,9 @@
 package cmd
 
 import (
+	"github.com/spf13/cobra"
 	"gooze.dev/pkg/gooze/internal/domain"
 	m "gooze.dev/pkg/gooze/internal/model"
-	"github.com/spf13/cobra"
 )
 
 // mergeCmd represents the merge command.

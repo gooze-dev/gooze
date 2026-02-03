@@ -11,10 +11,10 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"golang.org/x/sync/errgroup"
 	"gooze.dev/pkg/gooze/internal/adapter"
 	"gooze.dev/pkg/gooze/internal/controller"
 	m "gooze.dev/pkg/gooze/internal/model"
-	"golang.org/x/sync/errgroup"
 )
 
 // DefaultMutations defines the default set of mutation types to generate.

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	m "gooze.dev/pkg/gooze/internal/model"
 	"github.com/spf13/cobra"
+	m "gooze.dev/pkg/gooze/internal/model"
 )
 
 func TestSimpleUI_DisplayEstimation_PrintsTable(t *testing.T) {

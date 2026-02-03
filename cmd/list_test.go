@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"testing"
 
-	"gooze.dev/pkg/gooze/internal/domain"
-	domainmocks "gooze.dev/pkg/gooze/internal/domain/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"gooze.dev/pkg/gooze/internal/domain"
+	domainmocks "gooze.dev/pkg/gooze/internal/domain/mocks"
 )
 
 func TestListCmd_UsesCache(t *testing.T) {

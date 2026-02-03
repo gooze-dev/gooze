@@ -5,9 +5,9 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	adaptermocks "gooze.dev/pkg/gooze/internal/adapter/mocks"
 	m "gooze.dev/pkg/gooze/internal/model"
-	"github.com/stretchr/testify/require"
 )
 
 func TestOrchestrator_TestMutation_NoOrigin(t *testing.T) {

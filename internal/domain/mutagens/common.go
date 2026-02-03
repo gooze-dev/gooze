@@ -8,8 +8,8 @@ import (
 	"go/token"
 	"strings"
 
-	m "gooze.dev/pkg/gooze/internal/model"
 	"github.com/pmezard/go-difflib/difflib"
+	m "gooze.dev/pkg/gooze/internal/model"
 )
 
 func offsetForPos(fset *token.FileSet, pos token.Pos) (int, bool) {
