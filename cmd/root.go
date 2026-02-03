@@ -4,6 +4,9 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
+
+	"log/slog"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -23,6 +26,10 @@ var orchestrator domain.Orchestrator
 var mutagen domain.Mutagen
 var workflow domain.Workflow
 var ui controller.UI
+
+// Logging flags.
+var verboseFlag bool
+var logOutputFlag string
 
 // reportsOutputDirFlag is a root-level flag shared by commands that read/write reports.
 var reportsOutputDirFlag string
@@ -77,14 +84,36 @@ const listLongDescription = `List source files and the number of applicable muta
 var rootCmd = baseRootCmd()
 
 func baseRootCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "gooze",
 		Short: "Go mutation testing tool",
 		Long:  rootLongDescription,
+		PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
+			logPath := strings.TrimSpace(logOutputFlag)
+			if logPath == "" {
+				logPath = viper.GetString(logFilenameKey)
+			}
+
+			if strings.TrimSpace(logPath) == "" {
+				logPath = defaultLogFilename
+			}
+
+			verbose := verboseFlag
+			if !verbose {
+				verbose = viper.GetBool(logVerboseKey)
+			}
+
+			configureLogger(logPath, verbose)
+
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			slog.Info("No command specified. Use --help to see available commands.")
 			return cmd.Help()
 		},
 	}
+
+	return cmd
 }
 
 func configureRootFlags(cmd *cobra.Command) {
@@ -101,6 +130,10 @@ func configureRootFlags(cmd *cobra.Command) {
 
 	cmd.PersistentFlags().StringArrayVarP(&excludePatterns, excludeFlagName, "x", viper.GetStringSlice(excludeConfigKey), "exclude files matching regex (can be repeated)")
 	bindFlagToConfig(cmd.PersistentFlags().Lookup(excludeFlagName), excludeConfigKey)
+
+	// Add verbose and log output flags (handled directly; not bound to Viper).
+	cmd.PersistentFlags().BoolVarP(&verboseFlag, "verbose", "v", false, "enable verbose logging")
+	cmd.PersistentFlags().StringVar(&logOutputFlag, "log-output", "", "path to the log output file")
 }
 
 // bindFlagToConfig wires a Cobra flag to a Viper key so config/env values feed the flag.

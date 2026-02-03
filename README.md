@@ -59,6 +59,30 @@ shard: 0/3
 - `shard`: Shard index and total (e.g., `0/3` for shard 0 of 3).
 - `no_cache`: Boolean to disable caching (default: `false`).
 
+#### Environment variables
+
+Gooze also reads configuration from environment variables. Keys are mapped from config keys by:
+
+- Prefixing with `GOOZE_`
+- Uppercasing
+- Replacing `.` and `-` with `_`
+
+Flag precedence is generally: CLI flags → env vars → config file → defaults. For logging specifically, `--verbose` and `--log-output` override env/config.
+
+| Config key | Env var | Type | Default | Notes |
+|---|---|---:|---|---|
+| `output` | `GOOZE_OUTPUT` | string | `.gooze-reports` | Reports output directory |
+| `no-cache` | `GOOZE_NO_CACHE` | bool | `false` | When `true`, disables incremental cache |
+| `paths.exclude` | `GOOZE_PATHS_EXCLUDE` | string list | `[]` | Comma-separated (e.g. `^vendor/,^mock_`) |
+| `run.parallel` | `GOOZE_RUN_PARALLEL` | int | `1` | Worker count for `run` |
+| `log.filename` | `GOOZE_LOG_FILENAME` | string | `.gooze.log` | Log file path (also settable via `--log-output`) |
+| `log.verbose` | `GOOZE_LOG_VERBOSE` | bool | `false` | When `true`, forces debug logging (also `--verbose`) |
+| `log.level` | `GOOZE_LOG_LEVEL` | string/int | `info` | `debug`, `info`, `warn`, `error` (or numeric slog level) |
+| `log.max_size` | `GOOZE_LOG_MAX_SIZE` | int | `10` | MiB before rotation |
+| `log.max_backups` | `GOOZE_LOG_MAX_BACKUPS` | int | `3` | Number of rotated files to keep |
+| `log.max_age` | `GOOZE_LOG_MAX_AGE` | int | `28` | Days to keep old logs |
+| `log.compress` | `GOOZE_LOG_COMPRESS` | bool | `true` | Gzip rotated logs |
+
 **Usage:**
 - Gooze automatically loads `.gooze.yml` if present in the current directory.
 - Override specific options via command-line flags (e.g., `gooze run --output custom-dir ./...`).
