@@ -10,6 +10,8 @@ const (
 	Survived
 	// Skipped indicates the mutation was skipped.
 	Skipped
+	// Timeout indicates the mutation test timed out.
+	Timeout
 	// Error indicates an error occurred during testing.
 	Error
 )
@@ -24,6 +26,8 @@ func (t TestStatus) String() string {
 		return "skipped"
 	case Error:
 		return "error"
+	case Timeout:
+		return "timeout"
 	default:
 		return "unknown"
 	}
