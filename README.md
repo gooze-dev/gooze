@@ -75,6 +75,7 @@ Flag precedence is generally: CLI flags → env vars → config file → default
 | `no-cache` | `GOOZE_NO_CACHE` | bool | `false` | When `true`, disables incremental cache |
 | `paths.exclude` | `GOOZE_PATHS_EXCLUDE` | string list | `[]` | Comma-separated (e.g. `^vendor/,^mock_`) |
 | `run.parallel` | `GOOZE_RUN_PARALLEL` | int | `1` | Worker count for `run` |
+| `run.mutation_timeout` | `GOOZE_RUN_MUTATION_TIMEOUT` | int | `120` | Per-mutation timeout (seconds) (also `--mutation-timeout`) |
 | `log.filename` | `GOOZE_LOG_FILENAME` | string | `.gooze.log` | Log file path (also settable via `--log-output`) |
 | `log.verbose` | `GOOZE_LOG_VERBOSE` | bool | `false` | When `true`, forces debug logging (also `--verbose`) |
 | `log.level` | `GOOZE_LOG_LEVEL` | string/int | `info` | `debug`, `info`, `warn`, `error` (or numeric slog level) |

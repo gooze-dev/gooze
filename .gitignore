@@ -39,4 +39,5 @@ go.work.sum
 # Output directory for mutation testing reports
 .gooze-reports/
 gooze.yaml
-.gooze.log*
+*.log
+*.log.*

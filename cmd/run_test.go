@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -28,7 +29,8 @@ func TestRunCmd_TestMode(t *testing.T) {
 		return args.Threads == 2 &&
 			args.ShardIndex == 0 &&
 			args.TotalShardCount == 1 &&
-			args.Reports == m.Path(".gooze-reports")
+			args.Reports == m.Path(".gooze-reports") &&
+			args.MutationTimeout == 120*time.Second
 	})).Return(nil)
 
 	cmd.SetArgs([]string{"run", "--parallel", "2", "./..."})

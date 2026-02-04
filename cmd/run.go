@@ -29,6 +29,7 @@ func newRunCmd() *cobra.Command {
 			useCache := !viper.GetBool(noCacheFlagName)
 			reportsPath := m.Path(viper.GetString(outputFlagName))
 			threads := viper.GetInt(runParallelConfigKey)
+			timeoutSeconds := viper.GetInt64(mutationTimeoutKey)
 
 			return workflow.Test(domain.TestArgs{
 				EstimateArgs: domain.EstimateArgs{
@@ -41,7 +42,7 @@ func newRunCmd() *cobra.Command {
 				Threads:         threads,
 				ShardIndex:      shardIndex,
 				TotalShardCount: totalShards,
-				MutationTimeout: time.Duration(mutationTimeoutFlag) * time.Second,
+				MutationTimeout: time.Duration(timeoutSeconds) * time.Second,
 			})
 		},
 	}
