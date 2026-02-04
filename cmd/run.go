@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -9,6 +10,9 @@ import (
 	"gooze.dev/pkg/gooze/internal/domain"
 	m "gooze.dev/pkg/gooze/internal/model"
 )
+
+// DefaultMutationTimeout is the default timeout duration for testing a mutation.
+const DefaultMutationTimeout = time.Minute * 2
 
 var runParallelFlag int
 var runShardFlag string
@@ -39,6 +43,7 @@ func newRunCmd() *cobra.Command {
 				Threads:         threads,
 				ShardIndex:      shardIndex,
 				TotalShardCount: totalShards,
+				MutationTimeout: DefaultMutationTimeout,
 			})
 		},
 	}

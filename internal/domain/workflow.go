@@ -25,9 +25,6 @@ var DefaultMutations = []m.MutationType{m.MutationArithmetic, m.MutationBoolean,
 // ShardDirPrefix is the directory name prefix used when storing sharded reports.
 const ShardDirPrefix = "shard_"
 
-// DefaultMutationTimeout is the default timeout duration for testing a mutation.
-const DefaultMutationTimeout = time.Minute * 2
-
 // EstimateArgs contains the arguments for estimating mutations.
 type EstimateArgs struct {
 	Paths    []m.Path
@@ -43,6 +40,7 @@ type TestArgs struct {
 	Threads         int
 	ShardIndex      int
 	TotalShardCount int
+	MutationTimeout time.Duration
 }
 
 // ViewArgs contains the arguments for viewing mutation test reports.
@@ -136,7 +134,7 @@ func (w *workflow) Test(args TestArgs) error {
 		slog.Debug("Sharded mutations", "count", len(shardMutations))
 		w.DisplayUpcomingTestsInfo(len(shardMutations))
 
-		reports, err := w.TestReports(shardMutations, args.Threads)
+		reports, err := w.TestReports(shardMutations, args.Threads, args.MutationTimeout)
 		if err != nil {
 			slog.Error("Failed to run mutation tests", "error", err)
 			return fmt.Errorf("run mutation tests: %w", err)
@@ -577,7 +575,7 @@ func (w *workflow) ShardMutations(allMutations []m.Mutation, shardIndex int, tot
 	return shardMutations
 }
 
-func (w *workflow) TestReports(allMutations []m.Mutation, threads int) ([]m.Report, error) {
+func (w *workflow) TestReports(allMutations []m.Mutation, threads int, mutationTimeout time.Duration) ([]m.Report, error) {
 	reports := []m.Report{}
 	errors := []error{}
 
@@ -597,7 +595,12 @@ func (w *workflow) TestReports(allMutations []m.Mutation, threads int) ([]m.Repo
 
 	for _, mutation := range allMutations {
 		currentMutation := mutation
-		group.Go(w.processMutation(currentMutation, &threadIDCounter, effectiveThreads, &reportsMutex, &errorsMutex, &reports, &errors))
+		group.Go(w.processMutation(
+			currentMutation, &threadIDCounter,
+			effectiveThreads, &reportsMutex,
+			&errorsMutex, &reports,
+			&errors, mutationTimeout,
+		))
 	}
 
 	if err := group.Wait(); err != nil {
@@ -619,6 +622,7 @@ func (w *workflow) processMutation(
 	errorsMutex *sync.Mutex,
 	reports *[]m.Report,
 	errors *[]error,
+	mutationTimeout time.Duration,
 ) func() error {
 	return func() error {
 		// Assign a thread ID to this goroutine
@@ -626,7 +630,7 @@ func (w *workflow) processMutation(
 
 		w.DisplayStartingTestInfo(currentMutation, threadID)
 
-		mutationResult, err := w.TestMutationWithTimeout(currentMutation, DefaultMutationTimeout)
+		mutationResult, err := w.TestMutationWithTimeout(currentMutation, mutationTimeout)
 		if err != nil {
 			errorsMutex.Lock()
 
