@@ -149,18 +149,7 @@ func (s *SimpleUI) printf(format string, args ...interface{}) {
 }
 
 func formatTestStatus(status m.TestStatus) string {
-	switch status {
-	case m.Killed:
-		return "killed"
-	case m.Survived:
-		return "survived"
-	case m.Skipped:
-		return "skipped"
-	case m.Error:
-		return "error"
-	default:
-		return unknownStatusLabel
-	}
+	return status.String()
 }
 
 const unknownStatusLabel = "unknown"

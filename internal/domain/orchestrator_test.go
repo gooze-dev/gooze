@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	adaptermocks "gooze.dev/pkg/gooze/internal/adapter/mocks"
@@ -88,6 +89,61 @@ func TestOrchestrator_TestMutation_TestFailureMarksKilled(t *testing.T) {
 	require.True(t, ok)
 	require.Len(t, entries, 1)
 	require.Equal(t, m.Killed, entries[0].Status)
+}
+
+func TestOrchestrator_TestMutationWithTimeout_ReturnsTimeout(t *testing.T) {
+	fsAdapter := adaptermocks.NewMockSourceFSAdapter(t)
+	trAdapter := adaptermocks.NewMockTestRunnerAdapter(t)
+	orch := NewOrchestrator(fsAdapter, trAdapter)
+
+	mutation := makeTestMutation()
+	projectRoot := m.Path("/project")
+	tmpDir := m.Path("/tmp/mut")
+
+	fsAdapter.EXPECT().FindProjectRoot(mutation.Source.Origin.FullPath).Return(projectRoot, nil)
+	fsAdapter.EXPECT().CreateTempDir("gooze-mutation-*").Return(tmpDir, nil)
+	fsAdapter.EXPECT().CopyDir(projectRoot, tmpDir).Return(nil)
+	fsAdapter.EXPECT().RelPath(projectRoot, mutation.Source.Origin.FullPath).Return(m.Path("main.go"), nil)
+	fsAdapter.EXPECT().JoinPath(string(tmpDir), "main.go").Return(m.Path("/tmp/mut/main.go"))
+	fsAdapter.EXPECT().WriteFile(m.Path("/tmp/mut/main.go"), mutation.MutatedCode, os.FileMode(0o600)).Return(nil)
+	fsAdapter.EXPECT().RelPath(projectRoot, mutation.Source.Test.FullPath).Return(m.Path("main_test.go"), nil)
+	fsAdapter.EXPECT().JoinPath(string(tmpDir), "main_test.go").Return(m.Path("/tmp/mut/main_test.go"))
+	fsAdapter.EXPECT().RemoveAll(tmpDir).Return(nil)
+
+	started := make(chan struct{})
+	release := make(chan struct{})
+	done := make(chan struct{})
+
+	trAdapter.EXPECT().RunGoTest("/tmp/mut", "/tmp/mut/main_test.go").RunAndReturn(func(workDir, testFile string) (string, error) {
+		close(started)
+		<-release
+		close(done)
+		return "", errors.New("still running")
+	})
+
+	result, err := orch.TestMutationWithTimeout(mutation, 50*time.Millisecond)
+	require.NoError(t, err)
+
+	entries, ok := result[mutation.Type]
+	require.True(t, ok)
+	require.Len(t, entries, 1)
+	require.Equal(t, mutation.ID, entries[0].MutationID)
+	require.Equal(t, m.Timeout, entries[0].Status)
+
+	select {
+	case <-started:
+		// ok
+	case <-time.After(250 * time.Millisecond):
+		t.Fatal("expected RunGoTest to be called")
+	}
+
+	close(release)
+	select {
+	case <-done:
+		// ok
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("expected background TestMutation to finish")
+	}
 }
 
 func makeTestMutation() m.Mutation {

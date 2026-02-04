@@ -342,7 +342,7 @@ func main() {
 - [x] **Annotation Skipping**: Support `//gooze:ignore` to skip file/function/line, optionally per mutagen (Medium)
 - [ ] **Custom Exec Hook**: Support custom test runner commands similar to `go-mutesting --exec` (High)
 - [ ] **Function Selection**: Allow mutating specific functions/methods via regex (High)
-- [ ] **Timeouts**: Per-mutation execution budgets to prevent infinite loops (Medium)
+- [x] **Timeouts**: Per-mutation execution budgets to prevent infinite loops (Medium)
 - [x] **Config File**: Support `.gooze.yml` for persistent configuration (Medium)
 
 ### Smart Test Execution

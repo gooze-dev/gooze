@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"golang.org/x/sync/errgroup"
 	"gooze.dev/pkg/gooze/internal/adapter"
@@ -23,6 +24,9 @@ var DefaultMutations = []m.MutationType{m.MutationArithmetic, m.MutationBoolean,
 
 // ShardDirPrefix is the directory name prefix used when storing sharded reports.
 const ShardDirPrefix = "shard_"
+
+// DefaultMutationTimeout is the default timeout duration for testing a mutation.
+const DefaultMutationTimeout = time.Minute * 2
 
 // EstimateArgs contains the arguments for estimating mutations.
 type EstimateArgs struct {
@@ -212,7 +216,7 @@ func mutationScoreFromReports(reports []m.Report) float64 {
 				case m.Killed:
 					killed++
 					total++
-				case m.Survived:
+				case m.Survived, m.Timeout:
 					total++
 				case m.Skipped, m.Error:
 					// Skipped/error entries are excluded from the score denominator.
@@ -622,7 +626,7 @@ func (w *workflow) processMutation(
 
 		w.DisplayStartingTestInfo(currentMutation, threadID)
 
-		mutationResult, err := w.TestMutation(currentMutation)
+		mutationResult, err := w.TestMutationWithTimeout(currentMutation, DefaultMutationTimeout)
 		if err != nil {
 			errorsMutex.Lock()
 

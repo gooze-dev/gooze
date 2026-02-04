@@ -741,7 +741,7 @@ func (rs *LocalReportStore) incrementStatusCount(index *indexEntry, status m.Tes
 		index.KilledMutations++
 	case m.Survived:
 		index.SurvivedMutations++
-	case m.Error:
+	case m.Error, m.Timeout:
 		index.FailedMutations++
 	case m.Skipped:
 		index.IgnoredMutations++

@@ -1270,6 +1270,10 @@ func (o *blockingOrchestrator) TestMutation(mutation m.Mutation) (m.Result, erro
 	return result, nil
 }
 
+func (o *blockingOrchestrator) TestMutationWithTimeout(mutation m.Mutation, _ time.Duration) (m.Result, error) {
+	return o.TestMutation(mutation)
+}
+
 func TestWorkflow_TestThreadLimitIsRespected(t *testing.T) {
 	// Arrange
 	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)

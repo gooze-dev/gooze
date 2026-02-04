@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"time"
 
 	"gooze.dev/pkg/gooze/internal/adapter"
 	m "gooze.dev/pkg/gooze/internal/model"
@@ -12,6 +13,7 @@ import (
 // mutation is killed or survives.
 type Orchestrator interface {
 	TestMutation(mutation m.Mutation) (m.Result, error)
+	TestMutationWithTimeout(mutation m.Mutation, timeoutDuration time.Duration) (m.Result, error)
 }
 
 type orchestrator struct {
@@ -92,6 +94,27 @@ func (to *orchestrator) resultForStatus(mutation m.Mutation, status m.TestStatus
 	}
 
 	return result
+}
+
+func (to *orchestrator) TestMutationWithTimeout(mutation m.Mutation, timeoutDuration time.Duration) (m.Result, error) {
+	type resultWrapper struct {
+		result m.Result
+		err    error
+	}
+
+	resultCh := make(chan resultWrapper, 1)
+
+	go func() {
+		result, err := to.TestMutation(mutation)
+		resultCh <- resultWrapper{result: result, err: err}
+	}()
+
+	select {
+	case res := <-resultCh:
+		return res.result, res.err
+	case <-time.After(timeoutDuration):
+		return to.resultForStatus(mutation, m.Timeout), nil
+	}
 }
 
 func (to *orchestrator) prepareWorkspace(sourcePath m.Path) (m.Path, m.Path, error) {
