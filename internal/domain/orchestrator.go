@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"log/slog"
 	"time"
 
 	"gooze.dev/pkg/gooze/internal/adapter"
@@ -102,6 +103,8 @@ func (to *orchestrator) TestMutationWithTimeout(mutation m.Mutation, timeoutDura
 		err    error
 	}
 
+	slog.Info("Testing mutation with timeout", "mutationID", mutation.ID)
+
 	resultCh := make(chan resultWrapper, 1)
 
 	go func() {
@@ -111,8 +114,10 @@ func (to *orchestrator) TestMutationWithTimeout(mutation m.Mutation, timeoutDura
 
 	select {
 	case res := <-resultCh:
+		slog.Debug("Received test result for mutation", "mutationID", mutation.ID)
 		return res.result, res.err
 	case <-time.After(timeoutDuration):
+		slog.Warn("Mutation test timed out", "mutationID", mutation.ID, "timeoutDuration", timeoutDuration)
 		return to.resultForStatus(mutation, m.Timeout), nil
 	}
 }
@@ -120,15 +125,18 @@ func (to *orchestrator) TestMutationWithTimeout(mutation m.Mutation, timeoutDura
 func (to *orchestrator) prepareWorkspace(sourcePath m.Path) (m.Path, m.Path, error) {
 	projectRoot, err := to.fsAdapter.FindProjectRoot(sourcePath)
 	if err != nil {
+		slog.Error("Failed to find project root", "sourcePath", sourcePath, "error", err)
 		return "", "", fmt.Errorf("failed to find project root: %w", err)
 	}
 
 	tmpDir, err := to.fsAdapter.CreateTempDir("gooze-mutation-*")
 	if err != nil {
+		slog.Error("Failed to create temp dir", "error", err)
 		return "", "", fmt.Errorf("failed to create temp dir: %w", err)
 	}
 
 	if err := to.fsAdapter.CopyDir(projectRoot, tmpDir); err != nil {
+		slog.Error("Failed to copy project to temp dir", "projectRoot", projectRoot, "tmpDir", tmpDir, "error", err)
 		return projectRoot, tmpDir, fmt.Errorf("failed to copy project: %w", err)
 	}
 
@@ -138,6 +146,7 @@ func (to *orchestrator) prepareWorkspace(sourcePath m.Path) (m.Path, m.Path, err
 func (to *orchestrator) buildTempSourcePath(projectRoot, tmpDir, sourcePath m.Path) (m.Path, error) {
 	relSourcePath, err := to.fsAdapter.RelPath(projectRoot, sourcePath)
 	if err != nil {
+		slog.Error("Failed to get relative source path", "projectRoot", projectRoot, "sourcePath", sourcePath, "error", err)
 		return "", fmt.Errorf("failed to get relative source path: %w", err)
 	}
 
@@ -147,6 +156,7 @@ func (to *orchestrator) buildTempSourcePath(projectRoot, tmpDir, sourcePath m.Pa
 func (to *orchestrator) buildTempTestPath(projectRoot, tmpDir, testPath m.Path) (m.Path, error) {
 	relTestPath, err := to.fsAdapter.RelPath(projectRoot, testPath)
 	if err != nil {
+		slog.Error("Failed to get relative test path", "projectRoot", projectRoot, "testPath", testPath, "error", err)
 		return "", fmt.Errorf("failed to get relative test path: %w", err)
 	}
 
@@ -155,6 +165,7 @@ func (to *orchestrator) buildTempTestPath(projectRoot, tmpDir, testPath m.Path) 
 
 func (to *orchestrator) writeMutatedFile(path m.Path, content []byte) error {
 	if err := to.fsAdapter.WriteFile(path, content, 0o600); err != nil {
+		slog.Error("Failed to write mutated file", "path", path, "error", err)
 		return fmt.Errorf("failed to write mutated file: %w", err)
 	}
 
@@ -173,7 +184,6 @@ func (to *orchestrator) runTests(tmpDir, testPath m.Path) m.TestStatus {
 // cleanupTempDir removes the temporary directory, logging errors if cleanup fails.
 func (to *orchestrator) cleanupTempDir(tmpDir m.Path) {
 	if err := to.fsAdapter.RemoveAll(tmpDir); err != nil {
-		// Log but don't fail on cleanup errors
-		_ = err
+		slog.Error("Failed to cleanup temp dir", "tmpDir", tmpDir, "error", err)
 	}
 }

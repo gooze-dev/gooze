@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/spf13/viper"
 	"gopkg.in/natefinch/lumberjack.v2"
@@ -24,8 +25,13 @@ const (
 	excludeFlagName     = "exclude"
 	runParallelFlagName = "parallel"
 
+	mutationTimeoutFlagName = "mutation-timeout"
+
 	runParallelConfigKey = "run.parallel"
+	mutationTimeoutKey   = "run.mutation_timeout"
 	excludeConfigKey     = "paths.exclude"
+
+	defaultMutationTimeout = time.Minute * 2
 
 	defaultReportsDir  = ".gooze-reports"
 	defaultNoCache     = false
@@ -65,6 +71,7 @@ func init() {
 	viper.SetDefault(outputFlagName, defaultReportsDir)
 	viper.SetDefault(noCacheFlagName, defaultNoCache)
 	viper.SetDefault(runParallelConfigKey, defaultRunParallel)
+	viper.SetDefault(mutationTimeoutKey, int64(defaultMutationTimeout.Seconds()))
 	viper.SetDefault(excludeConfigKey, []string{})
 
 	// Logging defaults (used by config/env and as fallbacks for flags).
