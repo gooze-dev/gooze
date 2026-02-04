@@ -11,9 +11,7 @@ import (
 	m "gooze.dev/pkg/gooze/internal/model"
 )
 
-// DefaultMutationTimeout is the default timeout duration for testing a mutation.
-const DefaultMutationTimeout = time.Minute * 2
-
+var mutationTimeoutFlag int64
 var runParallelFlag int
 var runShardFlag string
 
@@ -43,7 +41,7 @@ func newRunCmd() *cobra.Command {
 				Threads:         threads,
 				ShardIndex:      shardIndex,
 				TotalShardCount: totalShards,
-				MutationTimeout: DefaultMutationTimeout,
+				MutationTimeout: time.Duration(mutationTimeoutFlag) * time.Second,
 			})
 		},
 	}
@@ -58,6 +56,9 @@ func init() {
 }
 
 func configureRunFlags(cmd *cobra.Command) {
+	cmd.Flags().Int64Var(&mutationTimeoutFlag, mutationTimeoutFlagName, viper.GetInt64(mutationTimeoutKey), "timeout duration for testing a mutation in seconds")
+	bindFlagToConfig(cmd.Flags().Lookup(mutationTimeoutFlagName), mutationTimeoutKey)
+
 	cmd.Flags().IntVarP(&runParallelFlag, runParallelFlagName, "p", viper.GetInt(runParallelConfigKey), "number of parallel workers for mutation testing")
 	bindFlagToConfig(cmd.Flags().Lookup(runParallelFlagName), runParallelConfigKey)
 	cmd.Flags().StringVarP(&runShardFlag, "shard", "s", "", "shard index and total shard count in the format INDEX/TOTAL (e.g., 0/3)")
