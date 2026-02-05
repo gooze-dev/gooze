@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -13,6 +14,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	m "gooze.dev/pkg/gooze/internal/model"
+	"gooze.dev/pkg/gooze/pkg"
 )
 
 const indexFileName = "_index.yaml"
@@ -20,8 +22,10 @@ const indexFileName = "_index.yaml"
 // ReportStore persists and retrieves mutation reports.
 type ReportStore interface {
 	SaveReports(path m.Path, reports []m.Report) error
+	SaveSpillReports(path m.Path, reports pkg.FileSpill[m.Report]) error
 	RegenerateIndex(path m.Path) error
 	LoadReports(path m.Path) ([]m.Report, error)
+	LoadSpillReports(path m.Path) (pkg.FileSpill[m.Report], error)
 	CheckUpdates(path m.Path, sources []m.Source) ([]m.Source, error)
 	CleanReports(path m.Path, sources []m.Source) error
 }
@@ -112,6 +116,39 @@ func (rs *LocalReportStore) SaveReports(path m.Path, reports []m.Report) error {
 	}
 
 	return nil
+}
+
+// SaveSpillReports writes one YAML file per report from the filespill into the provided directory.
+func (rs *LocalReportStore) SaveSpillReports(path m.Path, reports pkg.FileSpill[m.Report]) error {
+	dirPath := string(path)
+	if dirPath == "" {
+		return fmt.Errorf("reports directory path is required")
+	}
+
+	if err := os.MkdirAll(dirPath, 0o750); err != nil {
+		return fmt.Errorf("create reports directory: %w", err)
+	}
+
+	return reports.Range(func(_ uint64, report m.Report) error {
+		reportHash := rs.computeReportHash(report.Result)
+		if reportHash == "" {
+			return nil
+		}
+
+		data, err := rs.marshalReport(report)
+		if err != nil {
+			return fmt.Errorf("marshal report to YAML: %w", err)
+		}
+
+		name := reportHash + ".yaml"
+
+		fullPath := filepath.Join(dirPath, name)
+		if err := os.WriteFile(fullPath, data, 0o600); err != nil {
+			return fmt.Errorf("write report file %s: %w", fullPath, err)
+		}
+
+		return nil
+	})
 }
 
 // RegenerateIndex rebuilds and writes `_index.yaml` from the report files in `path`.
@@ -221,6 +258,42 @@ func (rs *LocalReportStore) LoadReports(path m.Path) ([]m.Report, error) {
 	}
 
 	return reports, nil
+}
+
+// LoadSpillReports loads reports from a FileSpill (stubbed for now - assuming index logic handles it).
+// In a real implementation this would likely return a FileSpill that reads directly from the persisted gob files.
+// For now, if we saved as spilled, we might want to just open it.
+func (rs *LocalReportStore) LoadSpillReports(path m.Path) (pkg.FileSpill[m.Report], error) {
+	dirPath := string(path)
+	if dirPath == "" {
+		return nil, fmt.Errorf("reports directory path is required")
+	}
+
+	if err := rs.validateReportsDir(dirPath); err != nil {
+		return nil, err
+	}
+
+	reports, err := rs.loadReportsFromDir(dirPath)
+	if err != nil {
+		return nil, err
+	}
+
+	spill, err := pkg.NewFileSpill[m.Report]()
+	if err != nil {
+		return nil, fmt.Errorf("create filespill: %w", err)
+	}
+
+	for _, report := range reports {
+		if err := spill.Append(report); err != nil {
+			if closeErr := spill.Close(); closeErr != nil {
+				slog.Error("failed to close spill after append error", "error", closeErr)
+			}
+
+			return nil, fmt.Errorf("append report to spill: %w", err)
+		}
+	}
+
+	return spill, nil
 }
 
 type storedSourceState struct {

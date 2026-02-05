@@ -12,6 +12,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	m "gooze.dev/pkg/gooze/internal/model"
+	"gooze.dev/pkg/gooze/pkg"
 )
 
 func TestLocalReportStore_SaveReports_WritesHashedYAMLPerReport(t *testing.T) {
@@ -242,6 +243,116 @@ func TestLocalReportStore_SaveReports_WritesIndexYAML(t *testing.T) {
 	}
 	if len(reB.Mutations[0].MutationReports) != 1 || reB.Mutations[0].MutationReports[0] != file2 {
 		t.Fatalf("unexpected sourceB mutation_reports: %v", reB.Mutations[0].MutationReports)
+	}
+}
+
+func TestLocalReportStore_SaveSpillReports_WritesHashedYAMLPerReport(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	rs := &LocalReportStore{}
+
+	// Create a spill and populate it
+	spill, err := pkg.NewFileSpill[m.Report]()
+	if err != nil {
+		t.Fatalf("failed to create filespill: %v", err)
+	}
+	defer spill.Close()
+
+	report := m.Report{
+		Source: m.Source{
+			Origin: &m.File{FullPath: m.Path("/abs/path/file.go"), Hash: "abc123"},
+			Test:   &m.File{FullPath: m.Path("/abs/path/file_test.go"), Hash: "def456"},
+		},
+		Result: m.Result{
+			m.MutationBoolean: {
+				{MutationID: "m1", Status: m.Killed, Err: nil},
+			},
+		},
+	}
+
+	err = spill.Append(report)
+	if err != nil {
+		t.Fatalf("failed to append to filespill: %v", err)
+	}
+
+	expectedHash := rs.computeReportHash(report.Result)
+
+	// Invoke method under test
+	if err := rs.SaveSpillReports(m.Path(dir), spill); err != nil {
+		t.Fatalf("SaveSpillReports returned error: %v", err)
+	}
+
+	// Verify file exists
+	expectedPath := filepath.Join(dir, expectedHash+".yaml")
+	if _, err := os.Stat(expectedPath); os.IsNotExist(err) {
+		t.Fatalf("expected report file to be written at %s", expectedPath)
+	}
+}
+
+func TestLocalReportStore_LoadSpillReports_LoadsReportsIntoSpill(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	rs := &LocalReportStore{}
+
+	// First, save some reports using SaveReports
+	report1 := m.Report{
+		Source: m.Source{
+			Origin: &m.File{FullPath: m.Path("/abs/path/file1.go"), Hash: "abc123"},
+			Test:   &m.File{FullPath: m.Path("/abs/path/file1_test.go"), Hash: "def456"},
+		},
+		Result: m.Result{
+			m.MutationBoolean: {
+				{MutationID: "m1", Status: m.Killed, Err: nil},
+			},
+		},
+	}
+	report2 := m.Report{
+		Source: m.Source{
+			Origin: &m.File{FullPath: m.Path("/abs/path/file2.go"), Hash: "ghi789"},
+			Test:   &m.File{FullPath: m.Path("/abs/path/file2_test.go"), Hash: "jkl012"},
+		},
+		Result: m.Result{
+			m.MutationArithmetic: {
+				{MutationID: "m2", Status: m.Survived, Err: nil},
+			},
+		},
+	}
+
+	if err := rs.SaveReports(m.Path(dir), []m.Report{report1, report2}); err != nil {
+		t.Fatalf("SaveReports returned error: %v", err)
+	}
+
+	// Now load them back into a spill
+	loadedSpill, err := rs.LoadSpillReports(m.Path(dir))
+	if err != nil {
+		t.Fatalf("LoadSpillReports returned error: %v", err)
+	}
+	defer loadedSpill.Close()
+
+	// Collect loaded reports
+	var loadedReports []m.Report
+	err = loadedSpill.Range(func(_ uint64, report m.Report) error {
+		loadedReports = append(loadedReports, report)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("Range on loaded spill returned error: %v", err)
+	}
+
+	// Verify we have the expected number of reports
+	if len(loadedReports) != 2 {
+		t.Fatalf("expected 2 reports, got %d", len(loadedReports))
+	}
+
+	// For simplicity, check that the sources are present (order may vary)
+	sources := make(map[string]bool)
+	for _, r := range loadedReports {
+		sources[string(r.Source.Origin.FullPath)] = true
+	}
+	if !sources["/abs/path/file1.go"] || !sources["/abs/path/file2.go"] {
+		t.Fatalf("loaded reports do not match expected sources")
 	}
 }
 

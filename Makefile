@@ -5,6 +5,9 @@ COBRA_CLI_VERSION := v1.3.0
 GOLANGCI_LINT_VERSION := v2.8.0
 MOCKERY_VERSION := v2.53.5
 
+# Default benchtime for benchmarks run via `make test`.
+BENCHTIME ?= 100ms
+
 # Whitelisted packages (exclude examples explicitly)
 PKG_WHITELIST :=  ./cmd/... ./internal/... ./pkg/...
 
@@ -48,7 +51,7 @@ lint:
 test:
 	@packages=$$(go list $(PKG_WHITELIST) | grep -v '/mocks$$' | grep -v '/examples/'); \
 	coverpkgs=$$(echo "$$packages" | paste -sd, -); \
-	go test -bench=. -coverpkg="$$coverpkgs" $$packages -coverprofile=coverage.out -cover; \
+	go test -bench=. -benchtime=$(BENCHTIME) -coverpkg="$$coverpkgs" $$packages -coverprofile=coverage.out -cover; \
 	go tool cover -html=coverage.out -o coverage.html
 
 clean: clean-mocks

@@ -151,9 +151,8 @@ func (f *fileSpillImpl[T]) Range(fn func(index uint64, item T) error) error {
 
 	decoder := gob.NewDecoder(file)
 
-	var item T
-
 	for i := range f.length {
+		var item T
 		if err := decoder.Decode(&item); err != nil {
 			slog.Error("failed to decode item during range", "path", f.path, "index", i, "error", err)
 			return fmt.Errorf("failed to decode item at index %d: %w", i, err)
