@@ -16,7 +16,21 @@ import (
 	domain "gooze.dev/pkg/gooze/internal/domain"
 	domainmocks "gooze.dev/pkg/gooze/internal/domain/mocks"
 	m "gooze.dev/pkg/gooze/internal/model"
+	pkg "gooze.dev/pkg/gooze/pkg"
 )
+
+func collectSpillReports(t *testing.T, reports pkg.FileSpill[m.Report]) []m.Report {
+	t.Helper()
+
+	collected := make([]m.Report, 0, int(reports.Len()))
+	err := reports.Range(func(_ uint64, report m.Report) error {
+		collected = append(collected, report)
+		return nil
+	})
+	require.NoError(t, err)
+
+	return collected
+}
 
 func TestWorkflow_Test_Success(t *testing.T) {
 	// Arrange
@@ -48,8 +62,8 @@ func TestWorkflow_Test_Success(t *testing.T) {
 	mockUI.EXPECT().DisplayCompletedTestInfo(mock.Anything, mock.Anything).Return().Once()
 	mockFSAdapter.EXPECT().Get(mock.Anything).Return(sources, nil)
 	mockMutagen.EXPECT().GenerateMutation(mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).Return(mutations, nil)
-	mockOrchestrator.EXPECT().TestMutationWithTimeout(mock.Anything, mock.Anything).Return(m.Result{}, nil)
-	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.Anything).Return(nil)
+	mockOrchestrator.EXPECT().TestMutation(mock.Anything).Return(m.Result{}, nil)
+	mockReportStore.EXPECT().SaveSpillReports(mock.Anything, mock.Anything).Return(nil)
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything).Return(nil)
 
 	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockUI, mockOrchestrator, mockMutagen)
@@ -219,7 +233,7 @@ func TestWorkflow_Test_SaveReportsError(t *testing.T) {
 	mockOrchestrator.EXPECT().TestMutationWithTimeout(mock.Anything, mock.Anything).Return(m.Result{}, nil)
 
 	saveErr := errors.New("failed to save reports")
-	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.Anything).Return(saveErr)
+	mockReportStore.EXPECT().SaveSpillReports(mock.Anything, mock.Anything).Return(saveErr)
 
 	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockUI, mockOrchestrator, mockMutagen)
 
@@ -262,8 +276,8 @@ func TestWorkflow_Test_NoMutations(t *testing.T) {
 	mockUI.EXPECT().DisplayUpcomingTestsInfo(mock.Anything).Return()
 	mockFSAdapter.EXPECT().Get(mock.Anything).Return(sources, nil)
 	mockMutagen.EXPECT().GenerateMutation(mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).Return([]m.Mutation{}, nil)
-	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.MatchedBy(func(reports []m.Report) bool {
-		return len(reports) == 0
+	mockReportStore.EXPECT().SaveSpillReports(mock.Anything, mock.MatchedBy(func(reports pkg.FileSpill[m.Report]) bool {
+		return reports.Len() == 0
 	})).Return(nil)
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything).Return(nil)
 
@@ -318,9 +332,9 @@ func TestWorkflow_Test_MultipleThreads(t *testing.T) {
 	mockUI.EXPECT().DisplayCompletedTestInfo(mock.Anything, mock.Anything).Return().Times(3)
 	mockFSAdapter.EXPECT().Get(mock.Anything).Return(sources, nil)
 	mockMutagen.EXPECT().GenerateMutation(mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).Return(mutations, nil)
-	mockOrchestrator.EXPECT().TestMutationWithTimeout(mock.Anything, mock.Anything).Return(m.Result{}, nil).Times(3)
-	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.MatchedBy(func(reports []m.Report) bool {
-		return len(reports) == 3
+	mockOrchestrator.EXPECT().TestMutation(mock.Anything).Return(m.Result{}, nil).Times(3)
+	mockReportStore.EXPECT().SaveSpillReports(mock.Anything, mock.MatchedBy(func(reports pkg.FileSpill[m.Report]) bool {
+		return reports.Len() == 3
 	})).Return(nil)
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything).Return(nil)
 
@@ -379,8 +393,8 @@ func TestWorkflow_Test_WithSharding(t *testing.T) {
 	mockFSAdapter.EXPECT().Get(mock.Anything).Return([]m.Source{source}, nil)
 	mockMutagen.EXPECT().GenerateMutation(mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).Return(mutations, nil)
 	// With hash-based sharding, the number of mutations in shard 0 may vary
-	mockOrchestrator.EXPECT().TestMutationWithTimeout(mock.Anything, mock.Anything).Return(m.Result{}, nil).Maybe()
-	mockReportStore.EXPECT().SaveReports(expectedShardDir, mock.MatchedBy(func(reports []m.Report) bool {
+	mockOrchestrator.EXPECT().TestMutation(mock.Anything).Return(m.Result{}, nil).Maybe()
+	mockReportStore.EXPECT().SaveSpillReports(expectedShardDir, mock.MatchedBy(func(reports pkg.FileSpill[m.Report]) bool {
 		// Accept any number of reports since hash-based sharding determines this
 		return true
 	})).Return(nil)
@@ -529,8 +543,8 @@ func TestWorkflow_TestThreadsZeroDoesNotPanic(t *testing.T) {
 	mockUI.EXPECT().DisplayCompletedTestInfo(mutations[0], mock.Anything).Return().Once()
 	mockFSAdapter.EXPECT().Get(mock.Anything).Return([]m.Source{source}, nil)
 	mockMutagen.EXPECT().GenerateMutation(mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).Return(mutations, nil)
-	mockOrchestrator.EXPECT().TestMutationWithTimeout(mutations[0], mock.Anything).Return(m.Result{}, nil)
-	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.Anything).Return(nil)
+	mockOrchestrator.EXPECT().TestMutation(mutations[0]).Return(m.Result{}, nil)
+	mockReportStore.EXPECT().SaveSpillReports(mock.Anything, mock.Anything).Return(nil)
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything).Return(nil)
 
 	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockUI, mockOrchestrator, mockMutagen)
@@ -578,9 +592,9 @@ func TestWorkflow_TestThreadIDWithinBounds(t *testing.T) {
 	mockUI.EXPECT().DisplayCompletedTestInfo(mock.Anything, mock.Anything).Return().Times(2)
 	mockFSAdapter.EXPECT().Get(mock.Anything).Return([]m.Source{source}, nil)
 	mockMutagen.EXPECT().GenerateMutation(mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).Return(mutations, nil)
-	mockOrchestrator.EXPECT().TestMutationWithTimeout(mock.Anything, mock.Anything).Return(m.Result{}, nil).Times(2)
-	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.MatchedBy(func(reports []m.Report) bool {
-		return len(reports) == 2
+	mockOrchestrator.EXPECT().TestMutation(mock.Anything).Return(m.Result{}, nil).Times(2)
+	mockReportStore.EXPECT().SaveSpillReports(mock.Anything, mock.MatchedBy(func(reports pkg.FileSpill[m.Report]) bool {
+		return reports.Len() == 2
 	})).Return(nil)
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything).Return(nil)
 
@@ -631,9 +645,9 @@ func TestWorkflow_TestThreadIDIsUniqueForThreadsTwo(t *testing.T) {
 	mockUI.EXPECT().DisplayCompletedTestInfo(mock.Anything, mock.Anything).Return().Times(2)
 	mockFSAdapter.EXPECT().Get(mock.Anything).Return([]m.Source{source}, nil)
 	mockMutagen.EXPECT().GenerateMutation(mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).Return(mutations, nil)
-	mockOrchestrator.EXPECT().TestMutationWithTimeout(mock.Anything, mock.Anything).Return(m.Result{}, nil).Times(2)
-	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.MatchedBy(func(reports []m.Report) bool {
-		return len(reports) == 2
+	mockOrchestrator.EXPECT().TestMutation(mock.Anything).Return(m.Result{}, nil).Times(2)
+	mockReportStore.EXPECT().SaveSpillReports(mock.Anything, mock.MatchedBy(func(reports pkg.FileSpill[m.Report]) bool {
+		return reports.Len() == 2
 	})).Return(nil)
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything).Return(nil)
 
@@ -703,11 +717,12 @@ func TestWorkflow_TestWithSkippedMutation(t *testing.T) {
 	mockMutagen.EXPECT().GenerateMutation(mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).Return(mutations, nil)
 	mockOrchestrator.EXPECT().TestMutationWithTimeout(mutations[0], mock.Anything).Return(skippedResult, nil)
 
-	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.MatchedBy(func(reports []m.Report) bool {
-		if len(reports) != 1 {
+	mockReportStore.EXPECT().SaveSpillReports(mock.Anything, mock.MatchedBy(func(reports pkg.FileSpill[m.Report]) bool {
+		collected := collectSpillReports(t, reports)
+		if len(collected) != 1 {
 			return false
 		}
-		report := reports[0]
+		report := collected[0]
 		return report.Diff == nil
 	})).Return(nil)
 
@@ -777,11 +792,12 @@ func TestWorkflow_TestMutationIDExactMatchDoesNotUseHigherID(t *testing.T) {
 	mockMutagen.EXPECT().GenerateMutation(mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).Return(mutations, nil)
 	mockOrchestrator.EXPECT().TestMutationWithTimeout(mutations[0], mock.Anything).Return(result, nil)
 
-	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.MatchedBy(func(reports []m.Report) bool {
-		if len(reports) != 1 {
+	mockReportStore.EXPECT().SaveSpillReports(mock.Anything, mock.MatchedBy(func(reports pkg.FileSpill[m.Report]) bool {
+		collected := collectSpillReports(t, reports)
+		if len(collected) != 1 {
 			return false
 		}
-		report := reports[0]
+		report := collected[0]
 		return report.Diff == nil
 	})).Return(nil)
 
@@ -848,11 +864,12 @@ func TestWorkflow_TestEmptyResultEntriesReturnsError(t *testing.T) {
 	mockMutagen.EXPECT().GenerateMutation(mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).Return(mutations, nil)
 	mockOrchestrator.EXPECT().TestMutationWithTimeout(mutations[0], mock.Anything).Return(result, nil)
 
-	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.MatchedBy(func(reports []m.Report) bool {
-		if len(reports) != 1 {
+	mockReportStore.EXPECT().SaveSpillReports(mock.Anything, mock.MatchedBy(func(reports pkg.FileSpill[m.Report]) bool {
+		collected := collectSpillReports(t, reports)
+		if len(collected) != 1 {
 			return false
 		}
-		report := reports[0]
+		report := collected[0]
 		return report.Diff == nil
 	})).Return(nil)
 
@@ -906,9 +923,9 @@ func TestWorkflow_Test_MultipleSources(t *testing.T) {
 	mockFSAdapter.EXPECT().Get(mock.Anything).Return([]m.Source{source1, source2}, nil)
 	mockMutagen.EXPECT().GenerateMutation(source1, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).Return(mutations1, nil)
 	mockMutagen.EXPECT().GenerateMutation(source2, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).Return(mutations2, nil)
-	mockOrchestrator.EXPECT().TestMutationWithTimeout(mock.Anything, mock.Anything).Return(m.Result{}, nil).Times(3)
-	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.MatchedBy(func(reports []m.Report) bool {
-		return len(reports) == 3
+	mockOrchestrator.EXPECT().TestMutation(mock.Anything).Return(m.Result{}, nil).Times(3)
+	mockReportStore.EXPECT().SaveSpillReports(mock.Anything, mock.MatchedBy(func(reports pkg.FileSpill[m.Report]) bool {
+		return reports.Len() == 3
 	})).Return(nil)
 
 	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockUI, mockOrchestrator, mockMutagen)
@@ -999,11 +1016,12 @@ func TestWorkflow_TestWithSurvivedMutation(t *testing.T) {
 	mockOrchestrator.EXPECT().TestMutationWithTimeout(mutations[0], mock.Anything).Return(survivedResult, nil)
 
 	// Verify that the report includes the diff for survived mutations
-	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.MatchedBy(func(reports []m.Report) bool {
-		if len(reports) != 1 {
+	mockReportStore.EXPECT().SaveSpillReports(mock.Anything, mock.MatchedBy(func(reports pkg.FileSpill[m.Report]) bool {
+		collected := collectSpillReports(t, reports)
+		if len(collected) != 1 {
 			return false
 		}
-		report := reports[0]
+		report := collected[0]
 		// Check that diff is included for survived mutation
 		return report.Diff != nil && string(*report.Diff) == string(diffCode)
 	})).Return(nil)
@@ -1078,11 +1096,12 @@ func TestWorkflow_TestWithKilledMutation(t *testing.T) {
 	mockOrchestrator.EXPECT().TestMutationWithTimeout(mutations[0], mock.Anything).Return(killedResult, nil)
 
 	// Verify that the report does NOT include diff for killed mutations
-	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.MatchedBy(func(reports []m.Report) bool {
-		if len(reports) != 1 {
+	mockReportStore.EXPECT().SaveSpillReports(mock.Anything, mock.MatchedBy(func(reports pkg.FileSpill[m.Report]) bool {
+		collected := collectSpillReports(t, reports)
+		if len(collected) != 1 {
 			return false
 		}
-		report := reports[0]
+		report := collected[0]
 		// Check that diff is NOT included for killed mutation
 		return report.Diff == nil
 	})).Return(nil)
@@ -1306,8 +1325,8 @@ func TestWorkflow_TestThreadLimitIsRespected(t *testing.T) {
 	mockUI.EXPECT().DisplayCompletedTestInfo(mock.Anything, mock.Anything).Return().Times(2)
 	mockFSAdapter.EXPECT().Get(mock.Anything).Return([]m.Source{source}, nil)
 	mockMutagen.EXPECT().GenerateMutation(mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).Return(mutations, nil)
-	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.MatchedBy(func(reports []m.Report) bool {
-		return len(reports) == 2
+	mockReportStore.EXPECT().SaveSpillReports(mock.Anything, mock.MatchedBy(func(reports pkg.FileSpill[m.Report]) bool {
+		return reports.Len() == 2
 	})).Return(nil)
 
 	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockUI, blocking, mockMutagen)
@@ -1373,8 +1392,8 @@ func TestWorkflow_TestThreadIDStartsAtZero(t *testing.T) {
 	mockUI.EXPECT().DisplayCompletedTestInfo(mutations[0], mock.Anything).Return().Once()
 	mockFSAdapter.EXPECT().Get(mock.Anything).Return([]m.Source{source}, nil)
 	mockMutagen.EXPECT().GenerateMutation(mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).Return(mutations, nil)
-	mockOrchestrator.EXPECT().TestMutationWithTimeout(mutations[0], mock.Anything).Return(m.Result{}, nil)
-	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.Anything).Return(nil)
+	mockOrchestrator.EXPECT().TestMutation(mutations[0]).Return(m.Result{}, nil)
+	mockReportStore.EXPECT().SaveSpillReports(mock.Anything, mock.Anything).Return(nil)
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything).Return(nil)
 
 	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockUI, mockOrchestrator, mockMutagen)
@@ -1443,11 +1462,12 @@ func TestWorkflow_TestExactMutationIDMatch(t *testing.T) {
 	mockMutagen.EXPECT().GenerateMutation(mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).Return(mutations, nil)
 	mockOrchestrator.EXPECT().TestMutationWithTimeout(mutations[0], mock.Anything).Return(result, nil)
 
-	mockReportStore.EXPECT().SaveReports(mock.Anything, mock.MatchedBy(func(reports []m.Report) bool {
-		if len(reports) != 1 {
+	mockReportStore.EXPECT().SaveSpillReports(mock.Anything, mock.MatchedBy(func(reports pkg.FileSpill[m.Report]) bool {
+		collected := collectSpillReports(t, reports)
+		if len(collected) != 1 {
 			return false
 		}
-		report := reports[0]
+		report := collected[0]
 		return report.Diff != nil && string(*report.Diff) == string(diffCode)
 	})).Return(nil)
 

@@ -17,6 +17,7 @@ import (
 	"gooze.dev/pkg/gooze/internal/adapter"
 	"gooze.dev/pkg/gooze/internal/controller"
 	m "gooze.dev/pkg/gooze/internal/model"
+	pkg "gooze.dev/pkg/gooze/pkg"
 )
 
 // DefaultMutations defines the default set of mutation types to generate.
@@ -140,15 +141,26 @@ func (w *workflow) Test(args TestArgs) error {
 			return fmt.Errorf("run mutation tests: %w", err)
 		}
 
-		slog.Info("Completed mutation tests", "reportsCount", len(reports))
-		score := mutationScoreFromReports(reports)
+		slog.Info("Completed mutation tests", "reportsCount", reports.Len())
+
+		score, err := mutationScoreFromReports(reports)
+		if err != nil {
+			return fmt.Errorf("calculate mutation score: %w", err)
+		}
+
 		slog.Info("Calculated mutation score", "score", score)
 		w.DisplayMutationScore(score)
 
-		err = w.SaveReports(reportsDir, reports)
+		err = w.SaveSpillReports(reportsDir, reports)
 		if err != nil {
 			slog.Error("Failed to save reports", "error", err, "path", reportsDir)
 			return fmt.Errorf("save reports: %w", err)
+		}
+
+		err = reports.Close()
+		if err != nil {
+			slog.Error("Failed to close reports spill", "error", err, "path", reportsDir)
+			return fmt.Errorf("close reports spill: %w", err)
 		}
 
 		slog.Debug("Saved reports", "path", reportsDir)
@@ -180,15 +192,24 @@ func (w *workflow) View(args ViewArgs) error {
 	return w.withTestUI(func() error {
 		slog.Info("Loading mutation test reports", "path", args.Reports)
 
-		reports, err := w.LoadReports(args.Reports)
+		reports, err := w.LoadSpillReports(args.Reports)
 		if err != nil {
 			slog.Error("Failed to load reports", "error", err, "path", args.Reports)
 			return fmt.Errorf("load reports: %w", err)
 		}
 
-		mutations, results := viewItemsFromReports(reports)
-		slog.Debug("Loaded reports", "reportsCount", len(reports), "mutationsCount", len(mutations))
-		score := mutationScoreFromReports(reports)
+		mutations, results, err := viewItemsFromReports(reports)
+		if err != nil {
+			return fmt.Errorf("extract view items from reports: %w", err)
+		}
+
+		slog.Debug("Loaded reports", "reportsCount", reports.Len(), "mutationsCount", len(mutations))
+
+		score, err := mutationScoreFromReports(reports)
+		if err != nil {
+			return fmt.Errorf("calculate mutation score: %w", err)
+		}
+
 		slog.Info("Calculated mutation score", "score", score)
 		w.DisplayUpcomingTestsInfo(len(mutations))
 
@@ -201,35 +222,6 @@ func (w *workflow) View(args ViewArgs) error {
 
 		return nil
 	})
-}
-
-func mutationScoreFromReports(reports []m.Report) float64 {
-	killed := 0
-	total := 0
-
-	for _, report := range reports {
-		for _, entries := range report.Result {
-			for _, entry := range entries {
-				switch entry.Status {
-				case m.Killed:
-					killed++
-					total++
-				case m.Survived, m.Timeout:
-					total++
-				case m.Skipped, m.Error:
-					// Skipped/error entries are excluded from the score denominator.
-				}
-			}
-		}
-	}
-
-	if total == 0 {
-		return 0
-	}
-
-	slog.Debug("Calculated mutation score", "killed", killed, "total", total)
-
-	return float64(killed) / float64(total)
 }
 
 func (w *workflow) Merge(args MergeArgs) error {
@@ -401,13 +393,13 @@ func (w *workflow) withTestUI(fn func() error) error {
 	return nil
 }
 
-func viewItemsFromReports(reports []m.Report) ([]m.Mutation, []m.Result) {
+func viewItemsFromReports(reports pkg.FileSpill[m.Report]) ([]m.Mutation, []m.Result, error) {
 	mutations := make([]m.Mutation, 0)
 	results := make([]m.Result, 0)
 
-	for _, report := range reports {
+	err := reports.Range(func(_ uint64, report m.Report) error {
 		if len(report.Result) == 0 {
-			continue
+			return nil
 		}
 
 		mutationTypes := make([]m.MutationType, 0, len(report.Result))
@@ -452,9 +444,15 @@ func viewItemsFromReports(reports []m.Report) ([]m.Mutation, []m.Result) {
 				results = append(results, result)
 			}
 		}
+
+		return nil
+	})
+	if err != nil {
+		slog.Error("Failed to extract view items from reports", "error", err)
+		return nil, nil, err
 	}
 
-	return mutations, results
+	return mutations, results, nil
 }
 
 func (w *workflow) GetMutations(args EstimateArgs) ([]m.Mutation, error) {
@@ -575,8 +573,18 @@ func (w *workflow) ShardMutations(allMutations []m.Mutation, shardIndex int, tot
 	return shardMutations
 }
 
+<<<<<<< HEAD
 func (w *workflow) TestReports(allMutations []m.Mutation, threads int, mutationTimeout time.Duration) ([]m.Report, error) {
 	reports := []m.Report{}
+=======
+func (w *workflow) TestReports(allMutations []m.Mutation, threads int) (pkg.FileSpill[m.Report], error) {
+	reports, err := pkg.NewFileSpill[m.Report]()
+	if err != nil {
+		slog.Error("failed to create reports filespill", "error", err)
+		return nil, fmt.Errorf("create reports filespill: %w", err)
+	}
+
+>>>>>>> 34f02a5 (use filespill in workflow)
 	errors := []error{}
 
 	effectiveThreads := threads
@@ -620,7 +628,7 @@ func (w *workflow) processMutation(
 	threads int,
 	reportsMutex *sync.Mutex,
 	errorsMutex *sync.Mutex,
-	reports *[]m.Report,
+	reports *pkg.FileSpill[m.Report],
 	errors *[]error,
 	mutationTimeout time.Duration,
 ) func() error {
@@ -652,7 +660,11 @@ func (w *workflow) processMutation(
 
 		reportsMutex.Lock()
 
-		*reports = append(*reports, report)
+		err = (*reports).Append(report)
+		if err != nil {
+			slog.Error("failed to append report to filespill", "error", err)
+			return fmt.Errorf("append report to filespill: %w", err)
+		}
 
 		reportsMutex.Unlock()
 
