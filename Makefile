@@ -6,7 +6,7 @@ GOLANGCI_LINT_VERSION := v2.8.0
 MOCKERY_VERSION := v2.53.5
 
 # Whitelisted packages (exclude examples explicitly)
-PKG_WHITELIST :=  ./cmd/... ./internal/...
+PKG_WHITELIST :=  ./cmd/... ./internal/... ./pkg/...
 
 .PHONY: all install-tools build lint test clean run fmt mocks clean-mocks install-precommit
 
@@ -48,11 +48,15 @@ lint:
 test:
 	@packages=$$(go list $(PKG_WHITELIST) | grep -v '/mocks$$' | grep -v '/examples/'); \
 	coverpkgs=$$(echo "$$packages" | paste -sd, -); \
-	go test -coverpkg="$$coverpkgs" $$packages -coverprofile=coverage.out -cover; \
+	go test -bench=. -coverpkg="$$coverpkgs" $$packages -coverprofile=coverage.out -cover; \
 	go tool cover -html=coverage.out -o coverage.html
 
-clean:
+clean: clean-mocks
 	@rm -rf $(bin)
+	@rm -f coverage.out coverage.html
+	@rm -f gooze.yaml
+	@rm -f .gooze.log .gooze-*.log.gz
+	@rm -rf .gooze-reports
 
 run: build
 	@$(bin)/$(name) $$(echo "$(filter-out $@,$(MAKECMDGOALS))" | sed 's/^-/-/')
