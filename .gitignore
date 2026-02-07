@@ -41,3 +41,4 @@ go.work.sum
 gooze.yaml
 *.log
 *.log.*
+gooze

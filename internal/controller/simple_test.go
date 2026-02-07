@@ -2,6 +2,7 @@ package controller
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -24,7 +25,7 @@ func TestSimpleUI_DisplayEstimation_PrintsTable(t *testing.T) {
 		{Source: m.Source{Origin: nil}},
 	}
 
-	if err := ui.DisplayEstimation(mutations, nil); err != nil {
+	if err := ui.DisplayEstimation(context.Background(), mutations, nil); err != nil {
 		t.Fatalf("DisplayEstimation() error = %v", err)
 	}
 
@@ -53,7 +54,7 @@ func TestSimpleUI_DisplayEstimation_Error(t *testing.T) {
 	ui := NewSimpleUI(cmd)
 	boom := errors.New("boom")
 
-	if err := ui.DisplayEstimation(nil, boom); err == nil {
+	if err := ui.DisplayEstimation(context.Background(), nil, boom); err == nil {
 		t.Fatalf("DisplayEstimation() expected error")
 	}
 
@@ -69,18 +70,19 @@ func TestSimpleUI_OtherDisplays(t *testing.T) {
 	cmd.SetOut(&buf)
 
 	ui := NewSimpleUI(cmd)
-	if err := ui.Start(); err != nil {
+	ctx := context.Background()
+	if err := ui.Start(ctx); err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
-	ui.Wait()
-	ui.Close()
-	ui.Wait()
-	ui.Close()
+	ui.Wait(ctx)
+	ui.Close(ctx)
+	ui.Wait(ctx)
+	ui.Close(ctx)
 
-	ui.DisplayConcurrencyInfo(3, 1, 2)
-	ui.DisplayUpcomingTestsInfo(7)
-	ui.DisplayStartingTestInfo(m.Mutation{ID: "abcd1234567890", Type: m.MutationArithmetic}, 0)
-	ui.DisplayStartingTestInfo(m.Mutation{ID: "efgh5678901234", Type: m.MutationBoolean, Source: m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "path/a.go"}}}, 0)
+	ui.DisplayConcurrencyInfo(ctx, 3, 1, 2)
+	ui.DisplayUpcomingTestsInfo(ctx, 7)
+	ui.DisplayStartingTestInfo(ctx, m.Mutation{ID: "abcd1234567890", Type: m.MutationArithmetic}, 0)
+	ui.DisplayStartingTestInfo(ctx, m.Mutation{ID: "efgh5678901234", Type: m.MutationBoolean, Source: m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "path/a.go"}}}, 0)
 
 	result := m.Result{
 		m.MutationArithmetic: []struct {
@@ -94,9 +96,9 @@ func TestSimpleUI_OtherDisplays(t *testing.T) {
 			Err        error
 		}{{MutationID: "efgh5678901234", Status: m.Survived}},
 	}
-	ui.DisplayCompletedTestInfo(m.Mutation{ID: "abcd1234567890", Type: m.MutationArithmetic}, result)
-	ui.DisplayCompletedTestInfo(m.Mutation{ID: "efgh5678901234", Type: m.MutationBoolean, Source: m.Source{Origin: &m.File{FullPath: "path/a.go"}}, DiffCode: []byte("--- original\n+++ mutated\n@@\n")}, result)
-	ui.DisplayMutationScore(0.75)
+	ui.DisplayCompletedTestInfo(ctx, m.Mutation{ID: "abcd1234567890", Type: m.MutationArithmetic}, result)
+	ui.DisplayCompletedTestInfo(ctx, m.Mutation{ID: "efgh5678901234", Type: m.MutationBoolean, Source: m.Source{Origin: &m.File{FullPath: "path/a.go"}}, DiffCode: []byte("--- original\n+++ mutated\n@@\n")}, result)
+	ui.DisplayMutationScore(ctx, 0.75)
 
 	output := buf.String()
 	for _, want := range []string{

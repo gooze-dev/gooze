@@ -2,6 +2,7 @@ package controller
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -31,7 +32,7 @@ func TestTUI_StartWithModel_WaitAndClose(t *testing.T) {
 
 	waitDone := make(chan struct{})
 	go func() {
-		tui.Wait()
+		tui.Wait(context.Background())
 		close(waitDone)
 	}()
 
@@ -43,7 +44,7 @@ func TestTUI_StartWithModel_WaitAndClose(t *testing.T) {
 
 	closeDone := make(chan struct{})
 	go func() {
-		tui.Close()
+		tui.Close(context.Background())
 		close(closeDone)
 	}()
 
@@ -63,7 +64,7 @@ func TestTUI_Send_And_EnsureStarted_NoPanic(t *testing.T) {
 
 	// ensureStarted should not re-start when already started
 	tui.started = true
-	tui.ensureStarted()
+	tui.ensureStarted(context.Background())
 }
 
 func TestTUI_DisplayCompletedTestInfo_WithDiff(t *testing.T) {
@@ -88,15 +89,16 @@ func TestTUI_DisplayCompletedTestInfo_WithDiff(t *testing.T) {
 	}
 
 	// Start TUI in test mode
-	if err := tui.Start(WithTestMode()); err != nil {
+	ctx := context.Background()
+	if err := tui.Start(ctx, WithTestMode()); err != nil {
 		t.Fatalf("Start error = %v", err)
 	}
 
 	// Test that DisplayCompletedTestInfo sends message with diff for survived mutation
-	tui.DisplayCompletedTestInfo(mutation, survivedResult)
+	tui.DisplayCompletedTestInfo(ctx, mutation, survivedResult)
 
 	// Verify it doesn't panic and the TUI is still functional
-	tui.Close()
+	tui.Close(ctx)
 }
 
 func TestTUI_DisplayCompletedTestInfo_WithoutDiff(t *testing.T) {
@@ -119,41 +121,44 @@ func TestTUI_DisplayCompletedTestInfo_WithoutDiff(t *testing.T) {
 	}
 
 	// Start TUI in test mode
-	if err := tui.Start(WithTestMode()); err != nil {
+	ctx := context.Background()
+	if err := tui.Start(ctx, WithTestMode()); err != nil {
 		t.Fatalf("Start error = %v", err)
 	}
 
 	// Test that DisplayCompletedTestInfo sends message without diff for killed mutation
-	tui.DisplayCompletedTestInfo(mutation, killedResult)
+	tui.DisplayCompletedTestInfo(ctx, mutation, killedResult)
 
 	// Verify it doesn't panic and the TUI is still functional
-	tui.Close()
+	tui.Close(ctx)
 }
 
 func TestTUI_StartWithMouseCellMotion(t *testing.T) {
 	var buf bytes.Buffer
 	tui := NewTUI(&buf)
 
+	ctx := context.Background()
 	// Test that TUI starts with mouse cell motion enabled (should not error)
-	if err := tui.Start(); err != nil {
+	if err := tui.Start(ctx); err != nil {
 		t.Fatalf("Start error = %v", err)
 	}
 
-	tui.Close()
+	tui.Close(ctx)
 }
 
 func TestTUI_MultipleClose(t *testing.T) {
 	var buf bytes.Buffer
 	tui := NewTUI(&buf)
 
-	tui.Close()
-	tui.Close() // Close again should be safe
+	ctx := context.Background()
+	tui.Close(ctx)
+	tui.Close(ctx) // Close again should be safe
 
 	tui2 := NewTUI(&buf)
-	tui2.Wait() // Wait without start should be no-op
+	tui2.Wait(ctx) // Wait without start should be no-op
 
 	tui3 := NewTUI(&buf)
-	tui3.Close() // Close without start should be no-op
+	tui3.Close(ctx) // Close without start should be no-op
 }
 
 func TestTUI_DisplayMethods_NoProgram(t *testing.T) {
@@ -163,11 +168,12 @@ func TestTUI_DisplayMethods_NoProgram(t *testing.T) {
 	// Avoid starting Bubble Tea program in tests
 	tui.started = true
 
-	if err := tui.DisplayEstimation(nil, nil); err != nil {
+	ctx := context.Background()
+	if err := tui.DisplayEstimation(ctx, nil, nil); err != nil {
 		t.Fatalf("DisplayEstimation unexpected error = %v", err)
 	}
 
-	if err := tui.DisplayEstimation(nil, errSentinel); err == nil {
+	if err := tui.DisplayEstimation(ctx, nil, errSentinel); err == nil {
 		t.Fatalf("DisplayEstimation expected error")
 	}
 
@@ -175,17 +181,17 @@ func TestTUI_DisplayMethods_NoProgram(t *testing.T) {
 		{Source: m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "path/a.go", Hash: "hash-a"}}},
 		{Source: m.Source{Origin: nil}},
 	}
-	if err := tui.DisplayEstimation(muts, nil); err != nil {
+	if err := tui.DisplayEstimation(ctx, muts, nil); err != nil {
 		t.Fatalf("DisplayEstimation with mutations error = %v", err)
 	}
 
-	tui.DisplayConcurrencyInfo(2, 1, 3)
-	tui.DisplayUpcomingTestsInfo(5)
-	tui.DisplayStartingTestInfo(mutationWithOrigin(), 7)
-	tui.DisplayStartingTestInfo(mutationWithoutOrigin(), 8)
-	tui.DisplayCompletedTestInfo(mutationWithOrigin(), completedResult())
-	tui.DisplayCompletedTestInfo(mutationWithoutOrigin(), mResultEmpty())
-	tui.DisplayMutationScore(0.5)
+	tui.DisplayConcurrencyInfo(ctx, 2, 1, 3)
+	tui.DisplayUpcomingTestsInfo(ctx, 5)
+	tui.DisplayStartingTestInfo(ctx, mutationWithOrigin(), 7)
+	tui.DisplayStartingTestInfo(ctx, mutationWithoutOrigin(), 8)
+	tui.DisplayCompletedTestInfo(ctx, mutationWithOrigin(), completedResult())
+	tui.DisplayCompletedTestInfo(ctx, mutationWithoutOrigin(), mResultEmpty())
+	tui.DisplayMutationScore(ctx, 0.5)
 }
 
 var errSentinel = errors.New("boom")

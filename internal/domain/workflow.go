@@ -89,38 +89,38 @@ func NewWorkflow(
 }
 
 func (w *workflow) Estimate(ctx context.Context, args EstimateArgs) error {
-	if err := w.Start(controller.WithEstimateMode()); err != nil {
+	if err := w.Start(ctx, controller.WithEstimateMode()); err != nil {
 		slog.Error("Failed to start workflow UI", "error", err)
 		return err
 	}
 
 	allMutations, err := w.GetMutations(ctx, args)
 	if err != nil {
-		w.Close()
+		w.Close(ctx)
 		slog.Error("Failed to generate mutations", "error", err)
 
 		return fmt.Errorf("generate mutations: %w", err)
 	}
 
-	err = w.DisplayEstimation(allMutations, nil)
+	err = w.DisplayEstimation(ctx, allMutations, nil)
 	if err != nil {
-		w.Close()
+		w.Close(ctx)
 		slog.Error("Failed to display estimation", "error", err)
 
 		return fmt.Errorf("display: %w", err)
 	}
 
 	// Wait for UI to be closed by user (press 'q')
-	w.Wait()
-	w.Close()
+	w.Wait(ctx)
+	w.Close(ctx)
 
 	return nil
 }
 
 func (w *workflow) Test(ctx context.Context, args TestArgs) error {
-	return w.withTestUI(func() error {
+	return w.withTestUI(ctx, func() error {
 		slog.Info("Starting mutation testing", "threads", args.Threads, "shardIndex", args.ShardIndex, "totalShardCount", args.TotalShardCount)
-		w.DisplayConcurrencyInfo(args.Threads, args.ShardIndex, args.TotalShardCount)
+		w.DisplayConcurrencyInfo(ctx, args.Threads, args.ShardIndex, args.TotalShardCount)
 
 		reportsDir := shardReportsDir(args.Reports, args.ShardIndex, args.TotalShardCount)
 		slog.Debug("Using reports directory", "path", reportsDir)
@@ -134,7 +134,7 @@ func (w *workflow) Test(ctx context.Context, args TestArgs) error {
 		slog.Debug("Generated mutations", "count", len(allMutations))
 		shardMutations := w.ShardMutations(allMutations, args.ShardIndex, args.TotalShardCount)
 		slog.Debug("Sharded mutations", "count", len(shardMutations))
-		w.DisplayUpcomingTestsInfo(len(shardMutations))
+		w.DisplayUpcomingTestsInfo(ctx, len(shardMutations))
 
 		reports, err := w.TestReports(ctx, shardMutations, args.Threads, args.MutationTimeout)
 		if err != nil {
@@ -150,7 +150,7 @@ func (w *workflow) Test(ctx context.Context, args TestArgs) error {
 		}
 
 		slog.Info("Calculated mutation score", "score", score)
-		w.DisplayMutationScore(score)
+		w.DisplayMutationScore(ctx, score)
 
 		err = w.SaveSpillReports(ctx, reportsDir, reports)
 		if err != nil {
@@ -190,7 +190,7 @@ func shardReportsDir(base m.Path, shardIndex int, totalShardCount int) m.Path {
 }
 
 func (w *workflow) View(ctx context.Context, args ViewArgs) error {
-	return w.withTestUI(func() error {
+	return w.withTestUI(ctx, func() error {
 		slog.Info("Loading mutation test reports", "path", args.Reports)
 
 		reports, err := w.LoadSpillReports(ctx, args.Reports)
@@ -212,14 +212,14 @@ func (w *workflow) View(ctx context.Context, args ViewArgs) error {
 		}
 
 		slog.Info("Calculated mutation score", "score", score)
-		w.DisplayUpcomingTestsInfo(len(mutations))
+		w.DisplayUpcomingTestsInfo(ctx, len(mutations))
 
 		for i, mutation := range mutations {
-			w.DisplayStartingTestInfo(mutation, 0)
-			w.DisplayCompletedTestInfo(mutation, results[i])
+			w.DisplayStartingTestInfo(ctx, mutation, 0)
+			w.DisplayCompletedTestInfo(ctx, mutation, results[i])
 		}
 
-		w.DisplayMutationScore(score)
+		w.DisplayMutationScore(ctx, score)
 
 		return nil
 	})
@@ -370,17 +370,17 @@ func findShardDirs(baseDir string) ([]string, error) {
 	return shardDirs, nil
 }
 
-func (w *workflow) withTestUI(fn func() error) error {
+func (w *workflow) withTestUI(ctx context.Context, fn func() error) error {
 	slog.Info("Starting workflow in test mode")
 
-	if err := w.Start(controller.WithTestMode()); err != nil {
+	if err := w.Start(ctx, controller.WithTestMode()); err != nil {
 		slog.Error("Failed to start workflow in test mode", "error", err)
 		return err
 	}
 
 	defer func() {
 		slog.Info("Closing workflow UI")
-		w.Close()
+		w.Close(ctx)
 	}()
 
 	err := fn()
@@ -389,7 +389,7 @@ func (w *workflow) withTestUI(fn func() error) error {
 	}
 
 	// Wait for UI to be closed by user (press 'q')
-	w.Wait()
+	w.Wait(ctx)
 
 	return nil
 }
@@ -604,6 +604,7 @@ func (w *workflow) TestReports(ctx context.Context, allMutations []m.Mutation, t
 		defer cancel()
 
 		group.Go(w.processMutation(
+			ctx,
 			ctxTimeout,
 			currentMutation, &threadIDCounter,
 			effectiveThreads, &reportsMutex,
@@ -625,6 +626,7 @@ func (w *workflow) TestReports(ctx context.Context, allMutations []m.Mutation, t
 
 func (w *workflow) processMutation(
 	ctx context.Context,
+	ctxTimeout context.Context,
 	currentMutation m.Mutation,
 	threadIDCounter *int32,
 	threads int,
@@ -637,9 +639,9 @@ func (w *workflow) processMutation(
 		// Assign a thread ID to this goroutine
 		threadID := int(atomic.AddInt32(threadIDCounter, 1)) % threads
 
-		w.DisplayStartingTestInfo(currentMutation, threadID)
+		w.DisplayStartingTestInfo(ctx, currentMutation, threadID)
 
-		mutationResult, err := w.TestMutation(ctx, currentMutation)
+		mutationResult, err := w.TestMutation(ctxTimeout, currentMutation)
 		if err != nil {
 			errorsMutex.Lock()
 
@@ -669,7 +671,7 @@ func (w *workflow) processMutation(
 
 		reportsMutex.Unlock()
 
-		w.DisplayCompletedTestInfo(currentMutation, mutationResult)
+		w.DisplayCompletedTestInfo(ctx, currentMutation, mutationResult)
 
 		return nil
 	}
