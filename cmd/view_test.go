@@ -22,7 +22,7 @@ func TestViewCmd_UsesRootOutputFlagByDefault(t *testing.T) {
 	workflow = mockWorkflow
 	defer func() { workflow = originalWorkflow }()
 
-	mockWorkflow.On("View", mock.MatchedBy(func(args domain.ViewArgs) bool {
+	mockWorkflow.On("View", mock.Anything, mock.MatchedBy(func(args domain.ViewArgs) bool {
 		return args.Reports == m.Path(".gooze-reports")
 	})).Return(nil)
 
@@ -43,11 +43,11 @@ func TestViewCmd_RootOutputFlagIsPassedThrough(t *testing.T) {
 	workflow = mockWorkflow
 	defer func() { workflow = originalWorkflow }()
 
-	mockWorkflow.On("View", mock.MatchedBy(func(args domain.ViewArgs) bool {
+	mockWorkflow.On("View", mock.Anything, mock.MatchedBy(func(args domain.ViewArgs) bool {
 		return args.Reports == m.Path("./reports-dir")
 	})).Return(nil)
 
-	cmd.SetArgs([]string{"--output", "./reports-dir", "view"})
+	cmd.SetArgs([]string{"view", "--output", "./reports-dir"})
 	err := cmd.Execute()
 	require.NoError(t, err)
 }

@@ -189,7 +189,7 @@ func (t *TUI) DisplayCompletedTestInfo(currentMutation m.Mutation, mutationResul
 		fileHash = currentMutation.Source.Origin.Hash
 	}
 
-	if status == formatTestStatus(m.Survived) && len(currentMutation.DiffCode) > 0 {
+	if status != formatTestStatus(m.Killed) && len(currentMutation.DiffCode) > 0 {
 		diff = currentMutation.DiffCode
 	}
 

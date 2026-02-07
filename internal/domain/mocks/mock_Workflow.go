@@ -3,6 +3,8 @@
 package mocks
 
 import (
+	context "context"
+
 	mock "github.com/stretchr/testify/mock"
 	domain "gooze.dev/pkg/gooze/internal/domain"
 )
@@ -20,17 +22,17 @@ func (_m *MockWorkflow) EXPECT() *MockWorkflow_Expecter {
 	return &MockWorkflow_Expecter{mock: &_m.Mock}
 }
 
-// Estimate provides a mock function with given fields: args
-func (_m *MockWorkflow) Estimate(args domain.EstimateArgs) error {
-	ret := _m.Called(args)
+// Estimate provides a mock function with given fields: ctx, args
+func (_m *MockWorkflow) Estimate(ctx context.Context, args domain.EstimateArgs) error {
+	ret := _m.Called(ctx, args)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Estimate")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(domain.EstimateArgs) error); ok {
-		r0 = rf(args)
+	if rf, ok := ret.Get(0).(func(context.Context, domain.EstimateArgs) error); ok {
+		r0 = rf(ctx, args)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -44,14 +46,15 @@ type MockWorkflow_Estimate_Call struct {
 }
 
 // Estimate is a helper method to define mock.On call
+//   - ctx context.Context
 //   - args domain.EstimateArgs
-func (_e *MockWorkflow_Expecter) Estimate(args interface{}) *MockWorkflow_Estimate_Call {
-	return &MockWorkflow_Estimate_Call{Call: _e.mock.On("Estimate", args)}
+func (_e *MockWorkflow_Expecter) Estimate(ctx interface{}, args interface{}) *MockWorkflow_Estimate_Call {
+	return &MockWorkflow_Estimate_Call{Call: _e.mock.On("Estimate", ctx, args)}
 }
 
-func (_c *MockWorkflow_Estimate_Call) Run(run func(args domain.EstimateArgs)) *MockWorkflow_Estimate_Call {
+func (_c *MockWorkflow_Estimate_Call) Run(run func(ctx context.Context, args domain.EstimateArgs)) *MockWorkflow_Estimate_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(domain.EstimateArgs))
+		run(args[0].(context.Context), args[1].(domain.EstimateArgs))
 	})
 	return _c
 }
@@ -61,22 +64,22 @@ func (_c *MockWorkflow_Estimate_Call) Return(_a0 error) *MockWorkflow_Estimate_C
 	return _c
 }
 
-func (_c *MockWorkflow_Estimate_Call) RunAndReturn(run func(domain.EstimateArgs) error) *MockWorkflow_Estimate_Call {
+func (_c *MockWorkflow_Estimate_Call) RunAndReturn(run func(context.Context, domain.EstimateArgs) error) *MockWorkflow_Estimate_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// Merge provides a mock function with given fields: args
-func (_m *MockWorkflow) Merge(args domain.MergeArgs) error {
-	ret := _m.Called(args)
+// Merge provides a mock function with given fields: ctx, args
+func (_m *MockWorkflow) Merge(ctx context.Context, args domain.MergeArgs) error {
+	ret := _m.Called(ctx, args)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Merge")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(domain.MergeArgs) error); ok {
-		r0 = rf(args)
+	if rf, ok := ret.Get(0).(func(context.Context, domain.MergeArgs) error); ok {
+		r0 = rf(ctx, args)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -90,14 +93,15 @@ type MockWorkflow_Merge_Call struct {
 }
 
 // Merge is a helper method to define mock.On call
+//   - ctx context.Context
 //   - args domain.MergeArgs
-func (_e *MockWorkflow_Expecter) Merge(args interface{}) *MockWorkflow_Merge_Call {
-	return &MockWorkflow_Merge_Call{Call: _e.mock.On("Merge", args)}
+func (_e *MockWorkflow_Expecter) Merge(ctx interface{}, args interface{}) *MockWorkflow_Merge_Call {
+	return &MockWorkflow_Merge_Call{Call: _e.mock.On("Merge", ctx, args)}
 }
 
-func (_c *MockWorkflow_Merge_Call) Run(run func(args domain.MergeArgs)) *MockWorkflow_Merge_Call {
+func (_c *MockWorkflow_Merge_Call) Run(run func(ctx context.Context, args domain.MergeArgs)) *MockWorkflow_Merge_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(domain.MergeArgs))
+		run(args[0].(context.Context), args[1].(domain.MergeArgs))
 	})
 	return _c
 }
@@ -107,22 +111,22 @@ func (_c *MockWorkflow_Merge_Call) Return(_a0 error) *MockWorkflow_Merge_Call {
 	return _c
 }
 
-func (_c *MockWorkflow_Merge_Call) RunAndReturn(run func(domain.MergeArgs) error) *MockWorkflow_Merge_Call {
+func (_c *MockWorkflow_Merge_Call) RunAndReturn(run func(context.Context, domain.MergeArgs) error) *MockWorkflow_Merge_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// Test provides a mock function with given fields: args
-func (_m *MockWorkflow) Test(args domain.TestArgs) error {
-	ret := _m.Called(args)
+// Test provides a mock function with given fields: ctx, args
+func (_m *MockWorkflow) Test(ctx context.Context, args domain.TestArgs) error {
+	ret := _m.Called(ctx, args)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Test")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(domain.TestArgs) error); ok {
-		r0 = rf(args)
+	if rf, ok := ret.Get(0).(func(context.Context, domain.TestArgs) error); ok {
+		r0 = rf(ctx, args)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -136,14 +140,15 @@ type MockWorkflow_Test_Call struct {
 }
 
 // Test is a helper method to define mock.On call
+//   - ctx context.Context
 //   - args domain.TestArgs
-func (_e *MockWorkflow_Expecter) Test(args interface{}) *MockWorkflow_Test_Call {
-	return &MockWorkflow_Test_Call{Call: _e.mock.On("Test", args)}
+func (_e *MockWorkflow_Expecter) Test(ctx interface{}, args interface{}) *MockWorkflow_Test_Call {
+	return &MockWorkflow_Test_Call{Call: _e.mock.On("Test", ctx, args)}
 }
 
-func (_c *MockWorkflow_Test_Call) Run(run func(args domain.TestArgs)) *MockWorkflow_Test_Call {
+func (_c *MockWorkflow_Test_Call) Run(run func(ctx context.Context, args domain.TestArgs)) *MockWorkflow_Test_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(domain.TestArgs))
+		run(args[0].(context.Context), args[1].(domain.TestArgs))
 	})
 	return _c
 }
@@ -153,22 +158,22 @@ func (_c *MockWorkflow_Test_Call) Return(_a0 error) *MockWorkflow_Test_Call {
 	return _c
 }
 
-func (_c *MockWorkflow_Test_Call) RunAndReturn(run func(domain.TestArgs) error) *MockWorkflow_Test_Call {
+func (_c *MockWorkflow_Test_Call) RunAndReturn(run func(context.Context, domain.TestArgs) error) *MockWorkflow_Test_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// View provides a mock function with given fields: args
-func (_m *MockWorkflow) View(args domain.ViewArgs) error {
-	ret := _m.Called(args)
+// View provides a mock function with given fields: ctx, args
+func (_m *MockWorkflow) View(ctx context.Context, args domain.ViewArgs) error {
+	ret := _m.Called(ctx, args)
 
 	if len(ret) == 0 {
 		panic("no return value specified for View")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(domain.ViewArgs) error); ok {
-		r0 = rf(args)
+	if rf, ok := ret.Get(0).(func(context.Context, domain.ViewArgs) error); ok {
+		r0 = rf(ctx, args)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -182,14 +187,15 @@ type MockWorkflow_View_Call struct {
 }
 
 // View is a helper method to define mock.On call
+//   - ctx context.Context
 //   - args domain.ViewArgs
-func (_e *MockWorkflow_Expecter) View(args interface{}) *MockWorkflow_View_Call {
-	return &MockWorkflow_View_Call{Call: _e.mock.On("View", args)}
+func (_e *MockWorkflow_Expecter) View(ctx interface{}, args interface{}) *MockWorkflow_View_Call {
+	return &MockWorkflow_View_Call{Call: _e.mock.On("View", ctx, args)}
 }
 
-func (_c *MockWorkflow_View_Call) Run(run func(args domain.ViewArgs)) *MockWorkflow_View_Call {
+func (_c *MockWorkflow_View_Call) Run(run func(ctx context.Context, args domain.ViewArgs)) *MockWorkflow_View_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(domain.ViewArgs))
+		run(args[0].(context.Context), args[1].(domain.ViewArgs))
 	})
 	return _c
 }
@@ -199,7 +205,7 @@ func (_c *MockWorkflow_View_Call) Return(_a0 error) *MockWorkflow_View_Call {
 	return _c
 }
 
-func (_c *MockWorkflow_View_Call) RunAndReturn(run func(domain.ViewArgs) error) *MockWorkflow_View_Call {
+func (_c *MockWorkflow_View_Call) RunAndReturn(run func(context.Context, domain.ViewArgs) error) *MockWorkflow_View_Call {
 	_c.Call.Return(run)
 	return _c
 }

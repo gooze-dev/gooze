@@ -1,6 +1,7 @@
 package adapter
 
 import (
+	"context"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -16,7 +17,7 @@ func TestLocalTestRunnerAdapter_RunGoTest_Success(t *testing.T) {
 	workDir := filepath.Join("..", "..", "examples", "basic")
 	testTarget := "./..."
 
-	out, err := adapter.RunGoTest(workDir, testTarget)
+	out, err := adapter.RunGoTest(context.Background(), workDir, testTarget)
 	if err != nil {
 		t.Fatalf("RunGoTest() error = %v, output = %s", err, out)
 	}
@@ -34,7 +35,7 @@ func TestLocalTestRunnerAdapter_RunGoTest_Failure(t *testing.T) {
 	workDir := filepath.Join("..", "..", "examples", "basic")
 	testTarget := "./does_not_exist"
 
-	out, err := adapter.RunGoTest(workDir, testTarget)
+	out, err := adapter.RunGoTest(context.Background(), workDir, testTarget)
 	if err == nil {
 		t.Fatalf("RunGoTest() expected error for missing test target, got nil (output=%s)", out)
 	}

@@ -1,10 +1,10 @@
 package domain
 
 import (
+	"context"
 	"errors"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 	adaptermocks "gooze.dev/pkg/gooze/internal/adapter/mocks"
@@ -13,7 +13,6 @@ import (
 
 func TestOrchestrator_TestMutation_NoOrigin(t *testing.T) {
 	orch := NewOrchestrator(nil, nil)
-
 	mutation := m.Mutation{
 		ID:   "hash-1",
 		Type: m.MutationArithmetic,
@@ -23,7 +22,7 @@ func TestOrchestrator_TestMutation_NoOrigin(t *testing.T) {
 		},
 	}
 
-	_, err := orch.TestMutation(mutation)
+	_, err := orch.TestMutation(context.Background(), mutation)
 	require.Error(t, err)
 }
 
@@ -39,7 +38,7 @@ func TestOrchestrator_TestMutation_NoTestFile(t *testing.T) {
 		},
 	}
 
-	result, err := orch.TestMutation(mutation)
+	result, err := orch.TestMutation(context.Background(), mutation)
 	require.NoError(t, err)
 
 	entries, ok := result[mutation.Type]
@@ -53,12 +52,12 @@ func TestOrchestrator_TestMutation_FindProjectRootError(t *testing.T) {
 	fsAdapter := adaptermocks.NewMockSourceFSAdapter(t)
 	trAdapter := adaptermocks.NewMockTestRunnerAdapter(t)
 	orch := NewOrchestrator(fsAdapter, trAdapter)
-
+	ctx := context.Background()
 	mutation := makeTestMutation()
 
-	fsAdapter.EXPECT().FindProjectRoot(mutation.Source.Origin.FullPath).Return(m.Path(""), errors.New("root err"))
+	fsAdapter.EXPECT().FindProjectRoot(ctx, mutation.Source.Origin.FullPath).Return(m.Path(""), errors.New("root err"))
 
-	_, err := orch.TestMutation(mutation)
+	_, err := orch.TestMutation(ctx, mutation)
 	require.Error(t, err)
 }
 
@@ -66,23 +65,23 @@ func TestOrchestrator_TestMutation_TestFailureMarksKilled(t *testing.T) {
 	fsAdapter := adaptermocks.NewMockSourceFSAdapter(t)
 	trAdapter := adaptermocks.NewMockTestRunnerAdapter(t)
 	orch := NewOrchestrator(fsAdapter, trAdapter)
-
+	ctx := context.Background()
 	mutation := makeTestMutation()
 	projectRoot := m.Path("/project")
 	tmpDir := m.Path("/tmp/mut")
 
-	fsAdapter.EXPECT().FindProjectRoot(mutation.Source.Origin.FullPath).Return(projectRoot, nil)
-	fsAdapter.EXPECT().CreateTempDir("gooze-mutation-*").Return(tmpDir, nil)
-	fsAdapter.EXPECT().CopyDir(projectRoot, tmpDir).Return(nil)
-	fsAdapter.EXPECT().RelPath(projectRoot, mutation.Source.Origin.FullPath).Return(m.Path("main.go"), nil)
-	fsAdapter.EXPECT().JoinPath(string(tmpDir), "main.go").Return(m.Path("/tmp/mut/main.go"))
-	fsAdapter.EXPECT().WriteFile(m.Path("/tmp/mut/main.go"), mutation.MutatedCode, os.FileMode(0o600)).Return(nil)
-	fsAdapter.EXPECT().RelPath(projectRoot, mutation.Source.Test.FullPath).Return(m.Path("main_test.go"), nil)
-	fsAdapter.EXPECT().JoinPath(string(tmpDir), "main_test.go").Return(m.Path("/tmp/mut/main_test.go"))
-	fsAdapter.EXPECT().RemoveAll(tmpDir).Return(nil)
-	trAdapter.EXPECT().RunGoTest("/tmp/mut", "/tmp/mut/main_test.go").Return("boom", errors.New("failed"))
+	fsAdapter.EXPECT().FindProjectRoot(ctx, mutation.Source.Origin.FullPath).Return(projectRoot, nil)
+	fsAdapter.EXPECT().CreateTempDir(ctx, "gooze-mutation-*").Return(tmpDir, nil)
+	fsAdapter.EXPECT().CopyDir(ctx, projectRoot, tmpDir).Return(nil)
+	fsAdapter.EXPECT().RelPath(ctx, projectRoot, mutation.Source.Origin.FullPath).Return(m.Path("main.go"), nil)
+	fsAdapter.EXPECT().JoinPath(ctx, string(tmpDir), "main.go").Return(m.Path("/tmp/mut/main.go"))
+	fsAdapter.EXPECT().WriteFile(ctx, m.Path("/tmp/mut/main.go"), mutation.MutatedCode, os.FileMode(0o600)).Return(nil)
+	fsAdapter.EXPECT().RelPath(ctx, projectRoot, mutation.Source.Test.FullPath).Return(m.Path("main_test.go"), nil)
+	fsAdapter.EXPECT().JoinPath(ctx, string(tmpDir), "main_test.go").Return(m.Path("/tmp/mut/main_test.go"))
+	fsAdapter.EXPECT().RemoveAll(ctx, tmpDir).Return(nil)
+	trAdapter.EXPECT().RunGoTest(ctx, "/tmp/mut", "/tmp/mut/main_test.go").Return("boom", errors.New("failed"))
 
-	result, err := orch.TestMutation(mutation)
+	result, err := orch.TestMutation(ctx, mutation)
 	require.NoError(t, err)
 
 	entries, ok := result[mutation.Type]
@@ -91,59 +90,20 @@ func TestOrchestrator_TestMutation_TestFailureMarksKilled(t *testing.T) {
 	require.Equal(t, m.Killed, entries[0].Status)
 }
 
-func TestOrchestrator_TestMutationWithTimeout_ReturnsTimeout(t *testing.T) {
-	fsAdapter := adaptermocks.NewMockSourceFSAdapter(t)
-	trAdapter := adaptermocks.NewMockTestRunnerAdapter(t)
-	orch := NewOrchestrator(fsAdapter, trAdapter)
-
+func TestOrchestrator_TestMutation_ContextCancelledReturnsTimeout(t *testing.T) {
+	orch := NewOrchestrator(nil, nil)
 	mutation := makeTestMutation()
-	projectRoot := m.Path("/project")
-	tmpDir := m.Path("/tmp/mut")
 
-	fsAdapter.EXPECT().FindProjectRoot(mutation.Source.Origin.FullPath).Return(projectRoot, nil)
-	fsAdapter.EXPECT().CreateTempDir("gooze-mutation-*").Return(tmpDir, nil)
-	fsAdapter.EXPECT().CopyDir(projectRoot, tmpDir).Return(nil)
-	fsAdapter.EXPECT().RelPath(projectRoot, mutation.Source.Origin.FullPath).Return(m.Path("main.go"), nil)
-	fsAdapter.EXPECT().JoinPath(string(tmpDir), "main.go").Return(m.Path("/tmp/mut/main.go"))
-	fsAdapter.EXPECT().WriteFile(m.Path("/tmp/mut/main.go"), mutation.MutatedCode, os.FileMode(0o600)).Return(nil)
-	fsAdapter.EXPECT().RelPath(projectRoot, mutation.Source.Test.FullPath).Return(m.Path("main_test.go"), nil)
-	fsAdapter.EXPECT().JoinPath(string(tmpDir), "main_test.go").Return(m.Path("/tmp/mut/main_test.go"))
-	fsAdapter.EXPECT().RemoveAll(tmpDir).Return(nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel the context immediately
 
-	started := make(chan struct{})
-	release := make(chan struct{})
-	done := make(chan struct{})
-
-	trAdapter.EXPECT().RunGoTest("/tmp/mut", "/tmp/mut/main_test.go").RunAndReturn(func(workDir, testFile string) (string, error) {
-		close(started)
-		<-release
-		close(done)
-		return "", errors.New("still running")
-	})
-
-	result, err := orch.TestMutationWithTimeout(mutation, 50*time.Millisecond)
+	result, err := orch.TestMutation(ctx, mutation)
 	require.NoError(t, err)
 
 	entries, ok := result[mutation.Type]
 	require.True(t, ok)
 	require.Len(t, entries, 1)
-	require.Equal(t, mutation.ID, entries[0].MutationID)
 	require.Equal(t, m.Timeout, entries[0].Status)
-
-	select {
-	case <-started:
-		// ok
-	case <-time.After(250 * time.Millisecond):
-		t.Fatal("expected RunGoTest to be called")
-	}
-
-	close(release)
-	select {
-	case <-done:
-		// ok
-	case <-time.After(500 * time.Millisecond):
-		t.Fatal("expected background TestMutation to finish")
-	}
 }
 
 func makeTestMutation() m.Mutation {

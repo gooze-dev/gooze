@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -31,7 +32,7 @@ func newRunCmd() *cobra.Command {
 			threads := viper.GetInt(runParallelConfigKey)
 			timeoutSeconds := viper.GetInt64(mutationTimeoutKey)
 
-			return workflow.Test(domain.TestArgs{
+			return workflow.Test(context.Background(), domain.TestArgs{
 				EstimateArgs: domain.EstimateArgs{
 					Paths:    paths,
 					Exclude:  viper.GetStringSlice(excludeConfigKey),

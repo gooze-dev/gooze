@@ -1,6 +1,7 @@
 package adapter
 
 import (
+	"context"
 	"crypto/sha256"
 	"fmt"
 	"os"
@@ -24,7 +25,7 @@ func TestLocalSourceFSAdapter_Walk(t *testing.T) {
 		writeTestFile(t, filepath.Join(nestedDir, "child.go"), "package nested\n")
 
 		var visited []string
-		err := adapter.Walk(m.Path(root), false, func(path string, info os.FileInfo, err error) error {
+		err := adapter.Walk(context.Background(), m.Path(root), false, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
@@ -52,7 +53,7 @@ func TestLocalSourceFSAdapter_Walk(t *testing.T) {
 		writeTestFile(t, child, "package nested\n")
 
 		var visited []string
-		err := adapter.Walk(m.Path(root), true, func(path string, info os.FileInfo, err error) error {
+		err := adapter.Walk(context.Background(), m.Path(root), true, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
@@ -73,7 +74,7 @@ func TestLocalSourceFSAdapter_ReadFile(t *testing.T) {
 	content := "package main\n" + "func main() {}\n"
 	writeTestFile(t, path, content)
 
-	got, err := adapter.ReadFile(m.Path(path))
+	got, err := adapter.ReadFile(context.Background(), m.Path(path))
 	require.NoError(t, err)
 
 	assert.Equal(t, content, string(got))
@@ -89,7 +90,7 @@ func TestLocalSourceFSAdapter_HashFile(t *testing.T) {
 
 	expected := fmt.Sprintf("%x", sha256.Sum256(content))
 
-	hash, err := adapter.HashFile(m.Path(path))
+	hash, err := adapter.HashFile(context.Background(), m.Path(path))
 	require.NoError(t, err)
 
 	assert.Equal(t, expected, hash)
@@ -104,7 +105,7 @@ func TestLocalSourceFSAdapter_DetectTestFile(t *testing.T) {
 	writeTestFile(t, source, "package calc\n")
 	writeTestFile(t, testFile, "package calc\n")
 
-	got, err := adapter.DetectTestFile(m.Path(source))
+	got, err := adapter.DetectTestFile(context.Background(), m.Path(source))
 	require.NoError(t, err)
 
 	assert.Equal(t, m.Path(testFile), got)
@@ -113,7 +114,7 @@ func TestLocalSourceFSAdapter_DetectTestFile(t *testing.T) {
 		missingSrc := filepath.Join(root, "other.go")
 		writeTestFile(t, missingSrc, "package main\n")
 
-		got, err := adapter.DetectTestFile(m.Path(missingSrc))
+		got, err := adapter.DetectTestFile(context.Background(), m.Path(missingSrc))
 		require.NoError(t, err)
 
 		assert.Empty(t, got)
@@ -127,12 +128,12 @@ func TestLocalSourceFSAdapter_FileInfo(t *testing.T) {
 	path := filepath.Join(root, "main.go")
 	writeTestFile(t, path, "package main\n")
 
-	info, err := adapter.FileInfo(m.Path(path))
+	info, err := adapter.FileInfo(context.Background(), m.Path(path))
 	require.NoError(t, err)
 
 	assert.False(t, info.IsDir(), "FileInfo() reported file as directory")
 
-	dirInfo, err := adapter.FileInfo(m.Path(root))
+	dirInfo, err := adapter.FileInfo(context.Background(), m.Path(root))
 	require.NoError(t, err)
 	assert.True(t, dirInfo.IsDir(), "FileInfo() reported directory as file")
 }
@@ -151,7 +152,7 @@ func TestLocalSourceFSAdapter_FindProjectRoot(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	got, err := adapter.FindProjectRoot(m.Path(filepath.Join(subDir, "file.go")))
+	got, err := adapter.FindProjectRoot(context.Background(), m.Path(filepath.Join(subDir, "file.go")))
 	require.NoError(t, err)
 
 	assert.Equal(t, m.Path(goModDir), got)
@@ -160,7 +161,7 @@ func TestLocalSourceFSAdapter_FindProjectRoot(t *testing.T) {
 func TestLocalSourceFSAdapter_CreateTempDirAndRemoveAll(t *testing.T) {
 	adapter := NewLocalSourceFSAdapter()
 
-	tmp, err := adapter.CreateTempDir("gooze-test-*")
+	tmp, err := adapter.CreateTempDir(context.Background(), "gooze-test-*")
 	require.NoError(t, err)
 
 	if fi, err := os.Stat(string(tmp)); err != nil || !fi.IsDir() {
@@ -171,7 +172,7 @@ func TestLocalSourceFSAdapter_CreateTempDirAndRemoveAll(t *testing.T) {
 	filePath := filepath.Join(string(tmp), "file.go")
 	writeTestFile(t, filePath, "package main\n")
 
-	if err := adapter.RemoveAll(tmp); err != nil {
+	if err := adapter.RemoveAll(context.Background(), tmp); err != nil {
 		require.NoError(t, err)
 	}
 
@@ -192,11 +193,11 @@ func TestLocalSourceFSAdapter_CopyDirAndWriteFile(t *testing.T) {
 
 	// Additional file written via adapter.WriteFile
 	extraFile := filepath.Join(src, "extra.go")
-	if err := adapter.WriteFile(m.Path(extraFile), []byte("package extra\n"), 0o644); err != nil {
+	if err := adapter.WriteFile(context.Background(), m.Path(extraFile), []byte("package extra\n"), 0o644); err != nil {
 		require.NoError(t, err)
 	}
 
-	if err := adapter.CopyDir(m.Path(src), m.Path(dst)); err != nil {
+	if err := adapter.CopyDir(context.Background(), m.Path(src), m.Path(dst)); err != nil {
 		require.NoError(t, err)
 	}
 
@@ -211,16 +212,17 @@ func TestLocalSourceFSAdapter_CopyDirAndWriteFile(t *testing.T) {
 
 func TestLocalSourceFSAdapter_PathHelpers(t *testing.T) {
 	adapter := NewLocalSourceFSAdapter()
-
+	ctx := context.Background()
 	base := m.Path("/tmp/project")
 	target := m.Path("/tmp/project/sub/dir/file.go")
 
-	rel, err := adapter.RelPath(base, target)
+	rel, err := adapter.RelPath(ctx, base, target)
 	require.NoError(t, err)
 
 	assert.Equal(t, filepath.Join("sub", "dir", "file.go"), string(rel))
 
-	joined := adapter.JoinPath("/tmp", "project", "sub", "file.go")
+	paths := []string{"/tmp", "project", "sub", "file.go"}
+	joined := adapter.JoinPath(ctx, paths...)
 	assert.Equal(t, filepath.Join("/tmp", "project", "sub", "file.go"), string(joined))
 }
 
@@ -248,7 +250,7 @@ func TestLocalSourceFSAdapter_Get(t *testing.T) {
 		require.NoError(t, os.Chdir(root))
 		t.Cleanup(func() { _ = os.Chdir(wd) })
 
-		sources, err := adapter.Get([]m.Path{"."})
+		sources, err := adapter.Get(context.Background(), []m.Path{"."})
 		require.NoError(t, err)
 
 		require.Len(t, sources, 1)
@@ -271,7 +273,7 @@ func TestLocalSourceFSAdapter_Get(t *testing.T) {
 		copyExampleFile(t, filepath.Join(examplePath(t, "basic"), "main.go"), mainPath)
 		mainContent := readFileBytes(t, mainPath)
 
-		sources, err := adapter.Get([]m.Path{"~"})
+		sources, err := adapter.Get(context.Background(), []m.Path{"~"})
 		require.NoError(t, err)
 
 		source := findSourceV2ByOrigin(sources, mainPath)
@@ -282,6 +284,7 @@ func TestLocalSourceFSAdapter_Get(t *testing.T) {
 
 	t.Run("parent directory path resolves", func(t *testing.T) {
 		root := t.TempDir()
+		ctx := context.Background()
 		parentPath := filepath.Join(root, "main.go")
 		copyExampleFile(t, filepath.Join(examplePath(t, "basic"), "main.go"), parentPath)
 		parentContent := readFileBytes(t, parentPath)
@@ -294,7 +297,7 @@ func TestLocalSourceFSAdapter_Get(t *testing.T) {
 		require.NoError(t, os.Chdir(childDir))
 		t.Cleanup(func() { _ = os.Chdir(wd) })
 
-		sources, err := adapter.Get([]m.Path{"./../"})
+		sources, err := adapter.Get(ctx, []m.Path{"./../"})
 		require.NoError(t, err)
 
 		source := findSourceV2ByOrigin(sources, parentPath)
@@ -320,7 +323,7 @@ func TestLocalSourceFSAdapter_Get(t *testing.T) {
 		require.NoError(t, os.Chdir(root))
 		t.Cleanup(func() { _ = os.Chdir(wd) })
 
-		sources, err := adapter.Get([]m.Path{"./..."})
+		sources, err := adapter.Get(context.Background(), []m.Path{"./..."})
 		require.NoError(t, err)
 		mainSource := findSourceV2ByOrigin(sources, mainPath)
 		require.NotNilf(t, mainSource, "Get() did not include %s", mainPath)
@@ -345,7 +348,7 @@ func TestLocalSourceFSAdapter_Get(t *testing.T) {
 		require.NoError(t, os.Chdir(root))
 		t.Cleanup(func() { _ = os.Chdir(wd) })
 
-		sources, err := adapter.Get([]m.Path{"./nested/..."})
+		sources, err := adapter.Get(context.Background(), []m.Path{"./nested/..."})
 		require.NoError(t, err)
 
 		childSource := findSourceV2ByOrigin(sources, childPath)
@@ -354,7 +357,7 @@ func TestLocalSourceFSAdapter_Get(t *testing.T) {
 	})
 
 	t.Run("returns error for missing root", func(t *testing.T) {
-		_, err := adapter.Get([]m.Path{"/path/does/not/exist"})
+		_, err := adapter.Get(context.Background(), []m.Path{"/path/does/not/exist"})
 		assert.Error(t, err)
 	})
 
@@ -367,7 +370,7 @@ func TestLocalSourceFSAdapter_Get(t *testing.T) {
 		mainContent := readFileBytes(t, mainPath)
 		testContent := readFileBytes(t, testPath)
 
-		sources, err := adapter.Get([]m.Path{m.Path(mainPath)})
+		sources, err := adapter.Get(context.Background(), []m.Path{m.Path(mainPath)})
 		require.NoError(t, err)
 		require.Len(t, sources, 1)
 
@@ -379,7 +382,7 @@ func TestLocalSourceFSAdapter_Get(t *testing.T) {
 		testPath := filepath.Join(root, "main_test.go")
 		copyExampleFile(t, filepath.Join(examplePath(t, "basic"), "main_test.go"), testPath)
 
-		sources, err := adapter.Get([]m.Path{m.Path(testPath)})
+		sources, err := adapter.Get(context.Background(), []m.Path{m.Path(testPath)})
 		require.NoError(t, err)
 		assert.Len(t, sources, 0)
 	})
@@ -389,7 +392,7 @@ func TestLocalSourceFSAdapter_Get(t *testing.T) {
 		modPath := filepath.Join(root, "go.mod")
 		copyExampleFile(t, filepath.Join(examplePath(t, "basic"), "go.mod"), modPath)
 
-		sources, err := adapter.Get([]m.Path{m.Path(root)})
+		sources, err := adapter.Get(context.Background(), []m.Path{m.Path(root)})
 		require.NoError(t, err)
 		assert.Len(t, sources, 0)
 	})
@@ -400,7 +403,7 @@ func TestLocalSourceFSAdapter_Get(t *testing.T) {
 		copyExampleFile(t, filepath.Join(examplePath(t, "basic"), "main.go"), mainPath)
 		mainContent := readFileBytes(t, mainPath)
 
-		sources, err := adapter.Get([]m.Path{m.Path(root), m.Path(root)})
+		sources, err := adapter.Get(context.Background(), []m.Path{m.Path(root), m.Path(root)})
 		require.NoError(t, err)
 		require.Len(t, sources, 1)
 
@@ -415,7 +418,7 @@ func TestLocalSourceFSAdapter_Get(t *testing.T) {
 		writeTestFile(t, ignoredPath, "package main\n")
 		writeTestFile(t, keptPath, "package main\n")
 
-		sources, err := adapter.Get([]m.Path{m.Path(root)}, "^mick_")
+		sources, err := adapter.Get(context.Background(), []m.Path{m.Path(root)}, "^mick_")
 		require.NoError(t, err)
 		require.Len(t, sources, 1)
 
@@ -427,7 +430,7 @@ func TestLocalSourceFSAdapter_Get(t *testing.T) {
 		brokenPath := filepath.Join(root, "broken.go")
 		writeTestFile(t, brokenPath, "package main\nfunc {\n")
 
-		sources, err := adapter.Get([]m.Path{m.Path(root)})
+		sources, err := adapter.Get(context.Background(), []m.Path{m.Path(root)})
 		require.NoError(t, err)
 		assert.Len(t, sources, 0)
 	})
@@ -439,7 +442,7 @@ func TestLocalSourceFSAdapter_Get(t *testing.T) {
 		writeTestFile(t, sourcePath, "package calc\nfunc Sum(a, b int) int { return a + b }\n")
 		writeTestFile(t, testPath, "package calc\nfunc {\n")
 
-		sources, err := adapter.Get([]m.Path{m.Path(root)})
+		sources, err := adapter.Get(context.Background(), []m.Path{m.Path(root)})
 		require.NoError(t, err)
 		require.Len(t, sources, 1)
 

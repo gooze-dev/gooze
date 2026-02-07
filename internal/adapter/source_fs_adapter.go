@@ -2,6 +2,7 @@
 package adapter
 
 import (
+	"context"
 	"crypto/sha256"
 	"errors"
 	"fmt"
@@ -23,46 +24,45 @@ import (
 //
 //nolint:interfacebloat // A richer interface keeps workflow logic decoupled from os/fs.
 type SourceFSAdapter interface {
-	Get(root []m.Path, ignore ...string) ([]m.Source, error)
+	Get(ctx context.Context, roots []m.Path, ignore ...string) ([]m.Source, error)
 
 	// Walk traverses the provided root path. When recursive is false the
 	// implementation should limit itself to the root directory (no sub-dirs).
-	Walk(root m.Path, recursive bool, fn FilepathWalkFunc) error
+	Walk(ctx context.Context, root m.Path, recursive bool, fn FilepathWalkFunc) error
 
 	// ReadFile loads a file from disk and returns its contents.
-	ReadFile(path m.Path) ([]byte, error)
+	ReadFile(ctx context.Context, path m.Path) ([]byte, error)
 
 	// HashFile returns a stable fingerprint (e.g. SHA-256) for the file at path.
-	HashFile(path m.Path) (string, error)
+	HashFile(ctx context.Context, path m.Path) (string, error)
 
 	// DetectTestFile attempts to find a Go test file that matches the provided
 	// source file. This allows the domain to auto-link source/test pairs.
-	DetectTestFile(sourcePath m.Path) (m.Path, error)
+	DetectTestFile(ctx context.Context, sourcePath m.Path) (m.Path, error)
 
 	// FileInfo returns metadata for a path so the domain can check existence or
 	// distinguish between files and directories when necessary.
-	FileInfo(path m.Path) (os.FileInfo, error)
+	FileInfo(ctx context.Context, path m.Path) (os.FileInfo, error)
 
 	// FindProjectRoot searches for go.mod file walking up the directory tree.
-	FindProjectRoot(startPath m.Path) (m.Path, error)
+	FindProjectRoot(ctx context.Context, startPath m.Path) (m.Path, error)
 
 	// CreateTempDir creates a temporary directory for mutation testing.
-	CreateTempDir(pattern string) (m.Path, error)
+	CreateTempDir(ctx context.Context, pattern string) (m.Path, error)
 
 	// RemoveAll removes a directory and all its contents.
-	RemoveAll(path m.Path) error
+	RemoveAll(ctx context.Context, path m.Path) error
 
 	// CopyDir recursively copies a directory tree.
-	CopyDir(src, dst m.Path) error
+	CopyDir(ctx context.Context, src, dst m.Path) error
 
 	// WriteFile writes content to a file with the given permissions.
-	WriteFile(path m.Path, content []byte, perm os.FileMode) error
-
+	WriteFile(ctx context.Context, path m.Path, content []byte, perm os.FileMode) error
 	// RelPath returns the relative path from base to target.
-	RelPath(base, target m.Path) (m.Path, error)
+	RelPath(ctx context.Context, base, target m.Path) (m.Path, error)
 
 	// JoinPath joins path elements into a single path.
-	JoinPath(elem ...string) m.Path
+	JoinPath(ctx context.Context, elem ...string) m.Path
 }
 
 // FilepathWalkFunc mirrors the callback shape used by filepath.WalkDir. It is
@@ -82,7 +82,11 @@ func NewLocalSourceFSAdapter() *LocalSourceFSAdapter {
 }
 
 // Get collects Go source files for the provided roots and returns SourceV2 entries.
-func (a *LocalSourceFSAdapter) Get(roots []m.Path, ignore ...string) ([]m.Source, error) {
+func (a *LocalSourceFSAdapter) Get(ctx context.Context, roots []m.Path, ignore ...string) ([]m.Source, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	if len(roots) == 0 {
 		return []m.Source{}, nil
 	}
@@ -96,7 +100,7 @@ func (a *LocalSourceFSAdapter) Get(roots []m.Path, ignore ...string) ([]m.Source
 	sources := make([]m.Source, 0, len(roots))
 
 	for _, root := range roots {
-		if err := a.collectSourcesFromRoot(root, ignoreRegexps, seen, &sources); err != nil {
+		if err := a.collectSourcesFromRoot(ctx, root, ignoreRegexps, seen, &sources); err != nil {
 			return nil, err
 		}
 	}
@@ -104,19 +108,19 @@ func (a *LocalSourceFSAdapter) Get(roots []m.Path, ignore ...string) ([]m.Source
 	return sources, nil
 }
 
-func (a *LocalSourceFSAdapter) collectSourcesFromRoot(root m.Path, ignoreRegexps []*regexp.Regexp, seen map[string]struct{}, sources *[]m.Source) error {
+func (a *LocalSourceFSAdapter) collectSourcesFromRoot(ctx context.Context, root m.Path, ignoreRegexps []*regexp.Regexp, seen map[string]struct{}, sources *[]m.Source) error {
 	rootPath, recursive, err := normalizeRootPath(string(root))
 	if err != nil {
 		return err
 	}
 
-	info, err := a.FileInfo(m.Path(rootPath))
+	info, err := a.FileInfo(ctx, m.Path(rootPath))
 	if err != nil {
 		return fmt.Errorf("root path error: %w", err)
 	}
 
 	if !info.IsDir() {
-		source, ok, err := a.processFilePath(rootPath, ignoreRegexps)
+		source, ok, err := a.processFilePath(ctx, rootPath, ignoreRegexps)
 		if err != nil {
 			if isInvalidSourceErr(err) {
 				return nil
@@ -132,11 +136,15 @@ func (a *LocalSourceFSAdapter) collectSourcesFromRoot(root m.Path, ignoreRegexps
 		return nil
 	}
 
-	return a.collectSourcesFromDir(rootPath, recursive, ignoreRegexps, seen, sources)
+	return a.collectSourcesFromDir(ctx, rootPath, recursive, ignoreRegexps, seen, sources)
 }
 
 // Walk iterates over files under root, optionally descending into subdirectories.
-func (a *LocalSourceFSAdapter) Walk(root m.Path, recursive bool, fn FilepathWalkFunc) error {
+func (a *LocalSourceFSAdapter) Walk(ctx context.Context, root m.Path, recursive bool, fn FilepathWalkFunc) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	rootStr := string(root)
 
 	return filepath.Walk(rootStr, func(path string, info os.FileInfo, err error) error {
@@ -153,12 +161,20 @@ func (a *LocalSourceFSAdapter) Walk(root m.Path, recursive bool, fn FilepathWalk
 }
 
 // ReadFile loads file contents from disk.
-func (a *LocalSourceFSAdapter) ReadFile(path m.Path) ([]byte, error) {
+func (a *LocalSourceFSAdapter) ReadFile(ctx context.Context, path m.Path) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	return os.ReadFile(string(path))
 }
 
 // HashFile returns the SHA-256 hash of the file at the provided path.
-func (a *LocalSourceFSAdapter) HashFile(path m.Path) (string, error) {
+func (a *LocalSourceFSAdapter) HashFile(ctx context.Context, path m.Path) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+
 	f, err := os.Open(string(path))
 	if err != nil {
 		return "", err
@@ -177,7 +193,11 @@ func (a *LocalSourceFSAdapter) HashFile(path m.Path) (string, error) {
 }
 
 // DetectTestFile finds the companion *_test.go file for the provided source path.
-func (a *LocalSourceFSAdapter) DetectTestFile(sourcePath m.Path) (m.Path, error) {
+func (a *LocalSourceFSAdapter) DetectTestFile(ctx context.Context, sourcePath m.Path) (m.Path, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+
 	source := string(sourcePath)
 	if filepath.Ext(source) != ".go" {
 		return "", nil
@@ -202,12 +222,20 @@ func (a *LocalSourceFSAdapter) DetectTestFile(sourcePath m.Path) (m.Path, error)
 }
 
 // FileInfo returns os.FileInfo metadata for the given path.
-func (a *LocalSourceFSAdapter) FileInfo(path m.Path) (os.FileInfo, error) {
+func (a *LocalSourceFSAdapter) FileInfo(ctx context.Context, path m.Path) (os.FileInfo, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	return os.Stat(string(path))
 }
 
 // FindProjectRoot searches for go.mod file walking up the directory tree.
-func (a *LocalSourceFSAdapter) FindProjectRoot(startPath m.Path) (m.Path, error) {
+func (a *LocalSourceFSAdapter) FindProjectRoot(ctx context.Context, startPath m.Path) (m.Path, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+
 	dir := filepath.Dir(string(startPath))
 
 	for {
@@ -226,7 +254,11 @@ func (a *LocalSourceFSAdapter) FindProjectRoot(startPath m.Path) (m.Path, error)
 }
 
 // CreateTempDir creates a temporary directory for mutation testing.
-func (a *LocalSourceFSAdapter) CreateTempDir(pattern string) (m.Path, error) {
+func (a *LocalSourceFSAdapter) CreateTempDir(ctx context.Context, pattern string) (m.Path, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+
 	tmpDir, err := os.MkdirTemp("", pattern)
 	if err != nil {
 		return "", err
@@ -236,12 +268,20 @@ func (a *LocalSourceFSAdapter) CreateTempDir(pattern string) (m.Path, error) {
 }
 
 // RemoveAll removes a directory and all its contents.
-func (a *LocalSourceFSAdapter) RemoveAll(path m.Path) error {
+func (a *LocalSourceFSAdapter) RemoveAll(ctx context.Context, path m.Path) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	return os.RemoveAll(string(path))
 }
 
 // CopyDir recursively copies a directory tree.
-func (a *LocalSourceFSAdapter) CopyDir(src, dst m.Path) error {
+func (a *LocalSourceFSAdapter) CopyDir(ctx context.Context, src, dst m.Path) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	return filepath.Walk(string(src), func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -300,12 +340,20 @@ func (a *LocalSourceFSAdapter) copyFile(src, dst string, mode os.FileMode) error
 }
 
 // WriteFile writes content to a file with the given permissions.
-func (a *LocalSourceFSAdapter) WriteFile(path m.Path, content []byte, perm os.FileMode) error {
+func (a *LocalSourceFSAdapter) WriteFile(ctx context.Context, path m.Path, content []byte, perm os.FileMode) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	return os.WriteFile(string(path), content, perm)
 }
 
 // RelPath returns the relative path from base to target.
-func (a *LocalSourceFSAdapter) RelPath(base, target m.Path) (m.Path, error) {
+func (a *LocalSourceFSAdapter) RelPath(ctx context.Context, base, target m.Path) (m.Path, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+
 	rel, err := filepath.Rel(string(base), string(target))
 	if err != nil {
 		return "", err
@@ -315,7 +363,11 @@ func (a *LocalSourceFSAdapter) RelPath(base, target m.Path) (m.Path, error) {
 }
 
 // JoinPath joins path elements into a single path.
-func (a *LocalSourceFSAdapter) JoinPath(elem ...string) m.Path {
+func (a *LocalSourceFSAdapter) JoinPath(ctx context.Context, elem ...string) m.Path {
+	if err := ctx.Err(); err != nil {
+		return ""
+	}
+
 	return m.Path(filepath.Join(elem...))
 }
 
@@ -332,8 +384,8 @@ func addSourceIfNew(sources *[]m.Source, seen map[string]struct{}, source m.Sour
 	*sources = append(*sources, source)
 }
 
-func (a *LocalSourceFSAdapter) collectSourcesFromDir(rootPath string, recursive bool, ignoreRegexps []*regexp.Regexp, seen map[string]struct{}, sources *[]m.Source) error {
-	return a.Walk(m.Path(rootPath), recursive, func(path string, info os.FileInfo, err error) error {
+func (a *LocalSourceFSAdapter) collectSourcesFromDir(ctx context.Context, rootPath string, recursive bool, ignoreRegexps []*regexp.Regexp, seen map[string]struct{}, sources *[]m.Source) error {
+	return a.Walk(ctx, m.Path(rootPath), recursive, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -342,7 +394,7 @@ func (a *LocalSourceFSAdapter) collectSourcesFromDir(rootPath string, recursive 
 			return nil
 		}
 
-		source, ok, err := a.processFilePath(path, ignoreRegexps)
+		source, ok, err := a.processFilePath(ctx, path, ignoreRegexps)
 		if err != nil {
 			if isInvalidSourceErr(err) {
 				return nil
@@ -395,12 +447,12 @@ func parseRootPath(rootStr string) (path string, recursive bool) {
 	return rootStr, false
 }
 
-func (a *LocalSourceFSAdapter) processFilePath(path string, ignoreRegexps []*regexp.Regexp) (m.Source, bool, error) {
+func (a *LocalSourceFSAdapter) processFilePath(ctx context.Context, path string, ignoreRegexps []*regexp.Regexp) (m.Source, bool, error) {
 	if !isCandidateSourcePath(path, ignoreRegexps) {
 		return m.Source{}, false, nil
 	}
 
-	return a.buildSourceFromPath(path, ignoreRegexps)
+	return a.buildSourceFromPath(ctx, path, ignoreRegexps)
 }
 
 func isCandidateSourcePath(path string, ignoreRegexps []*regexp.Regexp) bool {
@@ -415,25 +467,25 @@ func isCandidateSourcePath(path string, ignoreRegexps []*regexp.Regexp) bool {
 	return !shouldIgnorePath(path, ignoreRegexps)
 }
 
-func (a *LocalSourceFSAdapter) buildSourceFromPath(path string, ignoreRegexps []*regexp.Regexp) (m.Source, bool, error) {
+func (a *LocalSourceFSAdapter) buildSourceFromPath(ctx context.Context, path string, ignoreRegexps []*regexp.Regexp) (m.Source, bool, error) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return m.Source{}, false, err
 	}
 
-	projectRoot, rootErr := a.FindProjectRoot(m.Path(absPath))
+	projectRoot, rootErr := a.FindProjectRoot(ctx, m.Path(absPath))
 
-	file, err := a.readAndParseSource(absPath)
+	file, err := a.readAndParseSource(ctx, absPath)
 	if err != nil {
 		return m.Source{}, false, err
 	}
 
-	origin, err := a.buildOriginFile(absPath, projectRoot, rootErr)
+	origin, err := a.buildOriginFile(ctx, absPath, projectRoot, rootErr)
 	if err != nil {
 		return m.Source{}, false, err
 	}
 
-	testFile := a.detectTestFile(m.Path(absPath), projectRoot, ignoreRegexps)
+	testFile := a.detectTestFile(ctx, m.Path(absPath), projectRoot, ignoreRegexps)
 
 	packageName := file.Name.Name
 
@@ -444,8 +496,8 @@ func (a *LocalSourceFSAdapter) buildSourceFromPath(path string, ignoreRegexps []
 	}, true, nil
 }
 
-func (a *LocalSourceFSAdapter) readAndParseSource(absPath string) (*ast.File, error) {
-	src, err := a.ReadFile(m.Path(absPath))
+func (a *LocalSourceFSAdapter) readAndParseSource(ctx context.Context, absPath string) (*ast.File, error) {
+	src, err := a.ReadFile(ctx, m.Path(absPath))
 	if err != nil {
 		return nil, fmt.Errorf("%w: read source file: %w", errInvalidSource, err)
 	}
@@ -464,15 +516,15 @@ func (a *LocalSourceFSAdapter) readAndParseSource(absPath string) (*ast.File, er
 	return file, nil
 }
 
-func (a *LocalSourceFSAdapter) buildOriginFile(absPath string, projectRoot m.Path, rootErr error) (*m.File, error) {
-	originHash, err := a.HashFile(m.Path(absPath))
+func (a *LocalSourceFSAdapter) buildOriginFile(ctx context.Context, absPath string, projectRoot m.Path, rootErr error) (*m.File, error) {
+	originHash, err := a.HashFile(ctx, m.Path(absPath))
 	if err != nil {
 		return nil, err
 	}
 
 	origin := &m.File{FullPath: m.Path(absPath), Hash: originHash}
 	if rootErr == nil {
-		if relPath, err := a.RelPath(projectRoot, m.Path(absPath)); err == nil {
+		if relPath, err := a.RelPath(ctx, projectRoot, m.Path(absPath)); err == nil {
 			origin.ShortPath = relPath
 		}
 	}
@@ -480,13 +532,13 @@ func (a *LocalSourceFSAdapter) buildOriginFile(absPath string, projectRoot m.Pat
 	return origin, nil
 }
 
-func (a *LocalSourceFSAdapter) detectTestFile(sourcePath m.Path, projectRoot m.Path, ignoreRegexps []*regexp.Regexp) *m.File {
-	testPath := a.resolveTestPath(sourcePath, ignoreRegexps)
+func (a *LocalSourceFSAdapter) detectTestFile(ctx context.Context, sourcePath m.Path, projectRoot m.Path, ignoreRegexps []*regexp.Regexp) *m.File {
+	testPath := a.resolveTestPath(ctx, sourcePath, ignoreRegexps)
 	if testPath == "" {
 		return nil
 	}
 
-	file, err := a.buildTestFile(testPath, projectRoot)
+	file, err := a.buildTestFile(ctx, testPath, projectRoot)
 	if err != nil {
 		return nil
 	}
@@ -494,8 +546,8 @@ func (a *LocalSourceFSAdapter) detectTestFile(sourcePath m.Path, projectRoot m.P
 	return file
 }
 
-func (a *LocalSourceFSAdapter) resolveTestPath(sourcePath m.Path, ignoreRegexps []*regexp.Regexp) m.Path {
-	testPath, err := a.DetectTestFile(sourcePath)
+func (a *LocalSourceFSAdapter) resolveTestPath(ctx context.Context, sourcePath m.Path, ignoreRegexps []*regexp.Regexp) m.Path {
+	testPath, err := a.DetectTestFile(ctx, sourcePath)
 	if err != nil || testPath == "" {
 		return ""
 	}
@@ -507,19 +559,19 @@ func (a *LocalSourceFSAdapter) resolveTestPath(sourcePath m.Path, ignoreRegexps 
 	return testPath
 }
 
-func (a *LocalSourceFSAdapter) buildTestFile(testPath m.Path, projectRoot m.Path) (*m.File, error) {
-	if err := a.validateGoFile(testPath); err != nil {
+func (a *LocalSourceFSAdapter) buildTestFile(ctx context.Context, testPath m.Path, projectRoot m.Path) (*m.File, error) {
+	if err := a.validateGoFile(ctx, testPath); err != nil {
 		return nil, err
 	}
 
-	testHash, err := a.HashFile(testPath)
+	testHash, err := a.HashFile(ctx, testPath)
 	if err != nil {
 		return nil, err
 	}
 
 	file := &m.File{FullPath: testPath, Hash: testHash}
 	if projectRoot != "" {
-		if relPath, err := a.RelPath(projectRoot, testPath); err == nil {
+		if relPath, err := a.RelPath(ctx, projectRoot, testPath); err == nil {
 			file.ShortPath = relPath
 		}
 	}
@@ -527,8 +579,8 @@ func (a *LocalSourceFSAdapter) buildTestFile(testPath m.Path, projectRoot m.Path
 	return file, nil
 }
 
-func (a *LocalSourceFSAdapter) validateGoFile(path m.Path) error {
-	src, err := a.ReadFile(path)
+func (a *LocalSourceFSAdapter) validateGoFile(ctx context.Context, path m.Path) error {
+	src, err := a.ReadFile(ctx, path)
 	if err != nil {
 		return err
 	}

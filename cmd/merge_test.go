@@ -23,7 +23,7 @@ func TestMergeCmd_UsesRootOutputFlagByDefault(t *testing.T) {
 	workflow = mockWorkflow
 	defer func() { workflow = originalWorkflow }()
 
-	mockWorkflow.On("Merge", mock.MatchedBy(func(args domain.MergeArgs) bool {
+	mockWorkflow.On("Merge", mock.Anything, mock.MatchedBy(func(args domain.MergeArgs) bool {
 		return args.Reports == m.Path(".gooze-reports")
 	})).Return(nil)
 
@@ -44,7 +44,7 @@ func TestMergeCmd_RootOutputFlagIsPassedThrough(t *testing.T) {
 	workflow = mockWorkflow
 	defer func() { workflow = originalWorkflow }()
 
-	mockWorkflow.On("Merge", mock.MatchedBy(func(args domain.MergeArgs) bool {
+	mockWorkflow.On("Merge", mock.Anything, mock.MatchedBy(func(args domain.MergeArgs) bool {
 		return args.Reports == m.Path("./reports-dir")
 	})).Return(nil)
 

@@ -2,6 +2,7 @@ package domain
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,7 +18,7 @@ func TestMutagen_GenerateMutation_ArithmeticBasic(t *testing.T) {
 	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "basic", "main.go"))
 	original := readFileBytes(t, source.Origin.FullPath)
 
-	mutations, err := mg.GenerateMutation(source, m.MutationArithmetic)
+	mutations, err := mg.GenerateMutation(context.Background(), source, m.MutationArithmetic)
 	if err != nil {
 		t.Fatalf("GenerateMutation failed: %v", err)
 	}
@@ -60,7 +61,7 @@ func TestMutagen_GenerateMutation_BooleanLiterals(t *testing.T) {
 	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "boolean", "main.go"))
 	original := readFileBytes(t, source.Origin.FullPath)
 
-	mutations, err := mg.GenerateMutation(source, m.MutationBoolean)
+	mutations, err := mg.GenerateMutation(context.Background(), source, m.MutationBoolean)
 	if err != nil {
 		t.Fatalf("GenerateMutation failed: %v", err)
 	}
@@ -106,7 +107,7 @@ func TestMutagen_GenerateMutation_DefaultTypes(t *testing.T) {
 	mg := newTestMutagen()
 
 	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "basic", "main.go"))
-	mutations, err := mg.GenerateMutation(source)
+	mutations, err := mg.GenerateMutation(context.Background(), source)
 	if err != nil {
 		t.Fatalf("GenerateMutation failed: %v", err)
 	}
@@ -120,7 +121,7 @@ func TestMutagen_GenerateMutation_InvalidType(t *testing.T) {
 	mg := newTestMutagen()
 
 	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "basic", "main.go"))
-	_, err := mg.GenerateMutation(source, m.MutationType{Name: "invalid", Version: 1})
+	_, err := mg.GenerateMutation(context.Background(), source, m.MutationType{Name: "invalid", Version: 1})
 	if err == nil {
 		t.Fatalf("expected error for invalid mutation type")
 	}
@@ -129,7 +130,7 @@ func TestMutagen_GenerateMutation_InvalidType(t *testing.T) {
 func TestMutagen_GenerateMutation_InvalidSource(t *testing.T) {
 	mg := newTestMutagen()
 
-	_, err := mg.GenerateMutation(m.Source{}, m.MutationArithmetic)
+	_, err := mg.GenerateMutation(context.Background(), m.Source{}, m.MutationArithmetic)
 	if err == nil {
 		t.Fatalf("expected error for missing source origin")
 	}
@@ -140,7 +141,7 @@ func TestMutagen_GenerateMutation_Ignore_FileLevel_ByMutagenName(t *testing.T) {
 
 	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "ignore", "file_ignore.go"))
 
-	mutationsArithmetic, err := mg.GenerateMutation(source, m.MutationArithmetic)
+	mutationsArithmetic, err := mg.GenerateMutation(context.Background(), source, m.MutationArithmetic)
 	if err != nil {
 		t.Fatalf("GenerateMutation(arithmetic) failed: %v", err)
 	}
@@ -148,7 +149,7 @@ func TestMutagen_GenerateMutation_Ignore_FileLevel_ByMutagenName(t *testing.T) {
 		t.Fatalf("expected 0 arithmetic mutations due to file-level ignore, got %d", len(mutationsArithmetic))
 	}
 
-	mutationsNumbers, err := mg.GenerateMutation(source, m.MutationNumbers)
+	mutationsNumbers, err := mg.GenerateMutation(context.Background(), source, m.MutationNumbers)
 	if err != nil {
 		t.Fatalf("GenerateMutation(numbers) failed: %v", err)
 	}
@@ -162,7 +163,7 @@ func TestMutagen_GenerateMutation_Ignore_FunctionLevel_AllMutagens(t *testing.T)
 
 	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "ignore", "func_ignore.go"))
 
-	mutations, err := mg.GenerateMutation(source, m.MutationArithmetic)
+	mutations, err := mg.GenerateMutation(context.Background(), source, m.MutationArithmetic)
 	if err != nil {
 		t.Fatalf("GenerateMutation failed: %v", err)
 	}
@@ -179,7 +180,7 @@ func TestMutagen_GenerateMutation_Ignore_LineLevel_TrailingComment_ByMutagenName
 
 	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "ignore", "line_ignore.go"))
 
-	mutations, err := mg.GenerateMutation(source, m.MutationArithmetic)
+	mutations, err := mg.GenerateMutation(context.Background(), source, m.MutationArithmetic)
 	if err != nil {
 		t.Fatalf("GenerateMutation failed: %v", err)
 	}

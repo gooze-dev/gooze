@@ -3,9 +3,11 @@
 package mocks
 
 import (
-	fs "io/fs"
+	context "context"
 
 	adapter "gooze.dev/pkg/gooze/internal/adapter"
+
+	fs "io/fs"
 
 	mock "github.com/stretchr/testify/mock"
 
@@ -25,17 +27,17 @@ func (_m *MockSourceFSAdapter) EXPECT() *MockSourceFSAdapter_Expecter {
 	return &MockSourceFSAdapter_Expecter{mock: &_m.Mock}
 }
 
-// CopyDir provides a mock function with given fields: src, dst
-func (_m *MockSourceFSAdapter) CopyDir(src model.Path, dst model.Path) error {
-	ret := _m.Called(src, dst)
+// CopyDir provides a mock function with given fields: ctx, src, dst
+func (_m *MockSourceFSAdapter) CopyDir(ctx context.Context, src model.Path, dst model.Path) error {
+	ret := _m.Called(ctx, src, dst)
 
 	if len(ret) == 0 {
 		panic("no return value specified for CopyDir")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(model.Path, model.Path) error); ok {
-		r0 = rf(src, dst)
+	if rf, ok := ret.Get(0).(func(context.Context, model.Path, model.Path) error); ok {
+		r0 = rf(ctx, src, dst)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -49,15 +51,16 @@ type MockSourceFSAdapter_CopyDir_Call struct {
 }
 
 // CopyDir is a helper method to define mock.On call
+//   - ctx context.Context
 //   - src model.Path
 //   - dst model.Path
-func (_e *MockSourceFSAdapter_Expecter) CopyDir(src interface{}, dst interface{}) *MockSourceFSAdapter_CopyDir_Call {
-	return &MockSourceFSAdapter_CopyDir_Call{Call: _e.mock.On("CopyDir", src, dst)}
+func (_e *MockSourceFSAdapter_Expecter) CopyDir(ctx interface{}, src interface{}, dst interface{}) *MockSourceFSAdapter_CopyDir_Call {
+	return &MockSourceFSAdapter_CopyDir_Call{Call: _e.mock.On("CopyDir", ctx, src, dst)}
 }
 
-func (_c *MockSourceFSAdapter_CopyDir_Call) Run(run func(src model.Path, dst model.Path)) *MockSourceFSAdapter_CopyDir_Call {
+func (_c *MockSourceFSAdapter_CopyDir_Call) Run(run func(ctx context.Context, src model.Path, dst model.Path)) *MockSourceFSAdapter_CopyDir_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(model.Path), args[1].(model.Path))
+		run(args[0].(context.Context), args[1].(model.Path), args[2].(model.Path))
 	})
 	return _c
 }
@@ -67,14 +70,14 @@ func (_c *MockSourceFSAdapter_CopyDir_Call) Return(_a0 error) *MockSourceFSAdapt
 	return _c
 }
 
-func (_c *MockSourceFSAdapter_CopyDir_Call) RunAndReturn(run func(model.Path, model.Path) error) *MockSourceFSAdapter_CopyDir_Call {
+func (_c *MockSourceFSAdapter_CopyDir_Call) RunAndReturn(run func(context.Context, model.Path, model.Path) error) *MockSourceFSAdapter_CopyDir_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// CreateTempDir provides a mock function with given fields: pattern
-func (_m *MockSourceFSAdapter) CreateTempDir(pattern string) (model.Path, error) {
-	ret := _m.Called(pattern)
+// CreateTempDir provides a mock function with given fields: ctx, pattern
+func (_m *MockSourceFSAdapter) CreateTempDir(ctx context.Context, pattern string) (model.Path, error) {
+	ret := _m.Called(ctx, pattern)
 
 	if len(ret) == 0 {
 		panic("no return value specified for CreateTempDir")
@@ -82,17 +85,17 @@ func (_m *MockSourceFSAdapter) CreateTempDir(pattern string) (model.Path, error)
 
 	var r0 model.Path
 	var r1 error
-	if rf, ok := ret.Get(0).(func(string) (model.Path, error)); ok {
-		return rf(pattern)
+	if rf, ok := ret.Get(0).(func(context.Context, string) (model.Path, error)); ok {
+		return rf(ctx, pattern)
 	}
-	if rf, ok := ret.Get(0).(func(string) model.Path); ok {
-		r0 = rf(pattern)
+	if rf, ok := ret.Get(0).(func(context.Context, string) model.Path); ok {
+		r0 = rf(ctx, pattern)
 	} else {
 		r0 = ret.Get(0).(model.Path)
 	}
 
-	if rf, ok := ret.Get(1).(func(string) error); ok {
-		r1 = rf(pattern)
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, pattern)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -106,14 +109,15 @@ type MockSourceFSAdapter_CreateTempDir_Call struct {
 }
 
 // CreateTempDir is a helper method to define mock.On call
+//   - ctx context.Context
 //   - pattern string
-func (_e *MockSourceFSAdapter_Expecter) CreateTempDir(pattern interface{}) *MockSourceFSAdapter_CreateTempDir_Call {
-	return &MockSourceFSAdapter_CreateTempDir_Call{Call: _e.mock.On("CreateTempDir", pattern)}
+func (_e *MockSourceFSAdapter_Expecter) CreateTempDir(ctx interface{}, pattern interface{}) *MockSourceFSAdapter_CreateTempDir_Call {
+	return &MockSourceFSAdapter_CreateTempDir_Call{Call: _e.mock.On("CreateTempDir", ctx, pattern)}
 }
 
-func (_c *MockSourceFSAdapter_CreateTempDir_Call) Run(run func(pattern string)) *MockSourceFSAdapter_CreateTempDir_Call {
+func (_c *MockSourceFSAdapter_CreateTempDir_Call) Run(run func(ctx context.Context, pattern string)) *MockSourceFSAdapter_CreateTempDir_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string))
+		run(args[0].(context.Context), args[1].(string))
 	})
 	return _c
 }
@@ -123,14 +127,14 @@ func (_c *MockSourceFSAdapter_CreateTempDir_Call) Return(_a0 model.Path, _a1 err
 	return _c
 }
 
-func (_c *MockSourceFSAdapter_CreateTempDir_Call) RunAndReturn(run func(string) (model.Path, error)) *MockSourceFSAdapter_CreateTempDir_Call {
+func (_c *MockSourceFSAdapter_CreateTempDir_Call) RunAndReturn(run func(context.Context, string) (model.Path, error)) *MockSourceFSAdapter_CreateTempDir_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// DetectTestFile provides a mock function with given fields: sourcePath
-func (_m *MockSourceFSAdapter) DetectTestFile(sourcePath model.Path) (model.Path, error) {
-	ret := _m.Called(sourcePath)
+// DetectTestFile provides a mock function with given fields: ctx, sourcePath
+func (_m *MockSourceFSAdapter) DetectTestFile(ctx context.Context, sourcePath model.Path) (model.Path, error) {
+	ret := _m.Called(ctx, sourcePath)
 
 	if len(ret) == 0 {
 		panic("no return value specified for DetectTestFile")
@@ -138,17 +142,17 @@ func (_m *MockSourceFSAdapter) DetectTestFile(sourcePath model.Path) (model.Path
 
 	var r0 model.Path
 	var r1 error
-	if rf, ok := ret.Get(0).(func(model.Path) (model.Path, error)); ok {
-		return rf(sourcePath)
+	if rf, ok := ret.Get(0).(func(context.Context, model.Path) (model.Path, error)); ok {
+		return rf(ctx, sourcePath)
 	}
-	if rf, ok := ret.Get(0).(func(model.Path) model.Path); ok {
-		r0 = rf(sourcePath)
+	if rf, ok := ret.Get(0).(func(context.Context, model.Path) model.Path); ok {
+		r0 = rf(ctx, sourcePath)
 	} else {
 		r0 = ret.Get(0).(model.Path)
 	}
 
-	if rf, ok := ret.Get(1).(func(model.Path) error); ok {
-		r1 = rf(sourcePath)
+	if rf, ok := ret.Get(1).(func(context.Context, model.Path) error); ok {
+		r1 = rf(ctx, sourcePath)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -162,14 +166,15 @@ type MockSourceFSAdapter_DetectTestFile_Call struct {
 }
 
 // DetectTestFile is a helper method to define mock.On call
+//   - ctx context.Context
 //   - sourcePath model.Path
-func (_e *MockSourceFSAdapter_Expecter) DetectTestFile(sourcePath interface{}) *MockSourceFSAdapter_DetectTestFile_Call {
-	return &MockSourceFSAdapter_DetectTestFile_Call{Call: _e.mock.On("DetectTestFile", sourcePath)}
+func (_e *MockSourceFSAdapter_Expecter) DetectTestFile(ctx interface{}, sourcePath interface{}) *MockSourceFSAdapter_DetectTestFile_Call {
+	return &MockSourceFSAdapter_DetectTestFile_Call{Call: _e.mock.On("DetectTestFile", ctx, sourcePath)}
 }
 
-func (_c *MockSourceFSAdapter_DetectTestFile_Call) Run(run func(sourcePath model.Path)) *MockSourceFSAdapter_DetectTestFile_Call {
+func (_c *MockSourceFSAdapter_DetectTestFile_Call) Run(run func(ctx context.Context, sourcePath model.Path)) *MockSourceFSAdapter_DetectTestFile_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(model.Path))
+		run(args[0].(context.Context), args[1].(model.Path))
 	})
 	return _c
 }
@@ -179,14 +184,14 @@ func (_c *MockSourceFSAdapter_DetectTestFile_Call) Return(_a0 model.Path, _a1 er
 	return _c
 }
 
-func (_c *MockSourceFSAdapter_DetectTestFile_Call) RunAndReturn(run func(model.Path) (model.Path, error)) *MockSourceFSAdapter_DetectTestFile_Call {
+func (_c *MockSourceFSAdapter_DetectTestFile_Call) RunAndReturn(run func(context.Context, model.Path) (model.Path, error)) *MockSourceFSAdapter_DetectTestFile_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// FileInfo provides a mock function with given fields: path
-func (_m *MockSourceFSAdapter) FileInfo(path model.Path) (fs.FileInfo, error) {
-	ret := _m.Called(path)
+// FileInfo provides a mock function with given fields: ctx, path
+func (_m *MockSourceFSAdapter) FileInfo(ctx context.Context, path model.Path) (fs.FileInfo, error) {
+	ret := _m.Called(ctx, path)
 
 	if len(ret) == 0 {
 		panic("no return value specified for FileInfo")
@@ -194,19 +199,19 @@ func (_m *MockSourceFSAdapter) FileInfo(path model.Path) (fs.FileInfo, error) {
 
 	var r0 fs.FileInfo
 	var r1 error
-	if rf, ok := ret.Get(0).(func(model.Path) (fs.FileInfo, error)); ok {
-		return rf(path)
+	if rf, ok := ret.Get(0).(func(context.Context, model.Path) (fs.FileInfo, error)); ok {
+		return rf(ctx, path)
 	}
-	if rf, ok := ret.Get(0).(func(model.Path) fs.FileInfo); ok {
-		r0 = rf(path)
+	if rf, ok := ret.Get(0).(func(context.Context, model.Path) fs.FileInfo); ok {
+		r0 = rf(ctx, path)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(fs.FileInfo)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(model.Path) error); ok {
-		r1 = rf(path)
+	if rf, ok := ret.Get(1).(func(context.Context, model.Path) error); ok {
+		r1 = rf(ctx, path)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -220,14 +225,15 @@ type MockSourceFSAdapter_FileInfo_Call struct {
 }
 
 // FileInfo is a helper method to define mock.On call
+//   - ctx context.Context
 //   - path model.Path
-func (_e *MockSourceFSAdapter_Expecter) FileInfo(path interface{}) *MockSourceFSAdapter_FileInfo_Call {
-	return &MockSourceFSAdapter_FileInfo_Call{Call: _e.mock.On("FileInfo", path)}
+func (_e *MockSourceFSAdapter_Expecter) FileInfo(ctx interface{}, path interface{}) *MockSourceFSAdapter_FileInfo_Call {
+	return &MockSourceFSAdapter_FileInfo_Call{Call: _e.mock.On("FileInfo", ctx, path)}
 }
 
-func (_c *MockSourceFSAdapter_FileInfo_Call) Run(run func(path model.Path)) *MockSourceFSAdapter_FileInfo_Call {
+func (_c *MockSourceFSAdapter_FileInfo_Call) Run(run func(ctx context.Context, path model.Path)) *MockSourceFSAdapter_FileInfo_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(model.Path))
+		run(args[0].(context.Context), args[1].(model.Path))
 	})
 	return _c
 }
@@ -237,14 +243,14 @@ func (_c *MockSourceFSAdapter_FileInfo_Call) Return(_a0 fs.FileInfo, _a1 error) 
 	return _c
 }
 
-func (_c *MockSourceFSAdapter_FileInfo_Call) RunAndReturn(run func(model.Path) (fs.FileInfo, error)) *MockSourceFSAdapter_FileInfo_Call {
+func (_c *MockSourceFSAdapter_FileInfo_Call) RunAndReturn(run func(context.Context, model.Path) (fs.FileInfo, error)) *MockSourceFSAdapter_FileInfo_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// FindProjectRoot provides a mock function with given fields: startPath
-func (_m *MockSourceFSAdapter) FindProjectRoot(startPath model.Path) (model.Path, error) {
-	ret := _m.Called(startPath)
+// FindProjectRoot provides a mock function with given fields: ctx, startPath
+func (_m *MockSourceFSAdapter) FindProjectRoot(ctx context.Context, startPath model.Path) (model.Path, error) {
+	ret := _m.Called(ctx, startPath)
 
 	if len(ret) == 0 {
 		panic("no return value specified for FindProjectRoot")
@@ -252,17 +258,17 @@ func (_m *MockSourceFSAdapter) FindProjectRoot(startPath model.Path) (model.Path
 
 	var r0 model.Path
 	var r1 error
-	if rf, ok := ret.Get(0).(func(model.Path) (model.Path, error)); ok {
-		return rf(startPath)
+	if rf, ok := ret.Get(0).(func(context.Context, model.Path) (model.Path, error)); ok {
+		return rf(ctx, startPath)
 	}
-	if rf, ok := ret.Get(0).(func(model.Path) model.Path); ok {
-		r0 = rf(startPath)
+	if rf, ok := ret.Get(0).(func(context.Context, model.Path) model.Path); ok {
+		r0 = rf(ctx, startPath)
 	} else {
 		r0 = ret.Get(0).(model.Path)
 	}
 
-	if rf, ok := ret.Get(1).(func(model.Path) error); ok {
-		r1 = rf(startPath)
+	if rf, ok := ret.Get(1).(func(context.Context, model.Path) error); ok {
+		r1 = rf(ctx, startPath)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -276,14 +282,15 @@ type MockSourceFSAdapter_FindProjectRoot_Call struct {
 }
 
 // FindProjectRoot is a helper method to define mock.On call
+//   - ctx context.Context
 //   - startPath model.Path
-func (_e *MockSourceFSAdapter_Expecter) FindProjectRoot(startPath interface{}) *MockSourceFSAdapter_FindProjectRoot_Call {
-	return &MockSourceFSAdapter_FindProjectRoot_Call{Call: _e.mock.On("FindProjectRoot", startPath)}
+func (_e *MockSourceFSAdapter_Expecter) FindProjectRoot(ctx interface{}, startPath interface{}) *MockSourceFSAdapter_FindProjectRoot_Call {
+	return &MockSourceFSAdapter_FindProjectRoot_Call{Call: _e.mock.On("FindProjectRoot", ctx, startPath)}
 }
 
-func (_c *MockSourceFSAdapter_FindProjectRoot_Call) Run(run func(startPath model.Path)) *MockSourceFSAdapter_FindProjectRoot_Call {
+func (_c *MockSourceFSAdapter_FindProjectRoot_Call) Run(run func(ctx context.Context, startPath model.Path)) *MockSourceFSAdapter_FindProjectRoot_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(model.Path))
+		run(args[0].(context.Context), args[1].(model.Path))
 	})
 	return _c
 }
@@ -293,19 +300,19 @@ func (_c *MockSourceFSAdapter_FindProjectRoot_Call) Return(_a0 model.Path, _a1 e
 	return _c
 }
 
-func (_c *MockSourceFSAdapter_FindProjectRoot_Call) RunAndReturn(run func(model.Path) (model.Path, error)) *MockSourceFSAdapter_FindProjectRoot_Call {
+func (_c *MockSourceFSAdapter_FindProjectRoot_Call) RunAndReturn(run func(context.Context, model.Path) (model.Path, error)) *MockSourceFSAdapter_FindProjectRoot_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// Get provides a mock function with given fields: root, ignore
-func (_m *MockSourceFSAdapter) Get(root []model.Path, ignore ...string) ([]model.Source, error) {
+// Get provides a mock function with given fields: ctx, roots, ignore
+func (_m *MockSourceFSAdapter) Get(ctx context.Context, roots []model.Path, ignore ...string) ([]model.Source, error) {
 	_va := make([]interface{}, len(ignore))
 	for _i := range ignore {
 		_va[_i] = ignore[_i]
 	}
 	var _ca []interface{}
-	_ca = append(_ca, root)
+	_ca = append(_ca, ctx, roots)
 	_ca = append(_ca, _va...)
 	ret := _m.Called(_ca...)
 
@@ -315,19 +322,19 @@ func (_m *MockSourceFSAdapter) Get(root []model.Path, ignore ...string) ([]model
 
 	var r0 []model.Source
 	var r1 error
-	if rf, ok := ret.Get(0).(func([]model.Path, ...string) ([]model.Source, error)); ok {
-		return rf(root, ignore...)
+	if rf, ok := ret.Get(0).(func(context.Context, []model.Path, ...string) ([]model.Source, error)); ok {
+		return rf(ctx, roots, ignore...)
 	}
-	if rf, ok := ret.Get(0).(func([]model.Path, ...string) []model.Source); ok {
-		r0 = rf(root, ignore...)
+	if rf, ok := ret.Get(0).(func(context.Context, []model.Path, ...string) []model.Source); ok {
+		r0 = rf(ctx, roots, ignore...)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]model.Source)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func([]model.Path, ...string) error); ok {
-		r1 = rf(root, ignore...)
+	if rf, ok := ret.Get(1).(func(context.Context, []model.Path, ...string) error); ok {
+		r1 = rf(ctx, roots, ignore...)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -341,22 +348,23 @@ type MockSourceFSAdapter_Get_Call struct {
 }
 
 // Get is a helper method to define mock.On call
-//   - root []model.Path
+//   - ctx context.Context
+//   - roots []model.Path
 //   - ignore ...string
-func (_e *MockSourceFSAdapter_Expecter) Get(root interface{}, ignore ...interface{}) *MockSourceFSAdapter_Get_Call {
+func (_e *MockSourceFSAdapter_Expecter) Get(ctx interface{}, roots interface{}, ignore ...interface{}) *MockSourceFSAdapter_Get_Call {
 	return &MockSourceFSAdapter_Get_Call{Call: _e.mock.On("Get",
-		append([]interface{}{root}, ignore...)...)}
+		append([]interface{}{ctx, roots}, ignore...)...)}
 }
 
-func (_c *MockSourceFSAdapter_Get_Call) Run(run func(root []model.Path, ignore ...string)) *MockSourceFSAdapter_Get_Call {
+func (_c *MockSourceFSAdapter_Get_Call) Run(run func(ctx context.Context, roots []model.Path, ignore ...string)) *MockSourceFSAdapter_Get_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		variadicArgs := make([]string, len(args)-1)
-		for i, a := range args[1:] {
+		variadicArgs := make([]string, len(args)-2)
+		for i, a := range args[2:] {
 			if a != nil {
 				variadicArgs[i] = a.(string)
 			}
 		}
-		run(args[0].([]model.Path), variadicArgs...)
+		run(args[0].(context.Context), args[1].([]model.Path), variadicArgs...)
 	})
 	return _c
 }
@@ -366,14 +374,14 @@ func (_c *MockSourceFSAdapter_Get_Call) Return(_a0 []model.Source, _a1 error) *M
 	return _c
 }
 
-func (_c *MockSourceFSAdapter_Get_Call) RunAndReturn(run func([]model.Path, ...string) ([]model.Source, error)) *MockSourceFSAdapter_Get_Call {
+func (_c *MockSourceFSAdapter_Get_Call) RunAndReturn(run func(context.Context, []model.Path, ...string) ([]model.Source, error)) *MockSourceFSAdapter_Get_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// HashFile provides a mock function with given fields: path
-func (_m *MockSourceFSAdapter) HashFile(path model.Path) (string, error) {
-	ret := _m.Called(path)
+// HashFile provides a mock function with given fields: ctx, path
+func (_m *MockSourceFSAdapter) HashFile(ctx context.Context, path model.Path) (string, error) {
+	ret := _m.Called(ctx, path)
 
 	if len(ret) == 0 {
 		panic("no return value specified for HashFile")
@@ -381,17 +389,17 @@ func (_m *MockSourceFSAdapter) HashFile(path model.Path) (string, error) {
 
 	var r0 string
 	var r1 error
-	if rf, ok := ret.Get(0).(func(model.Path) (string, error)); ok {
-		return rf(path)
+	if rf, ok := ret.Get(0).(func(context.Context, model.Path) (string, error)); ok {
+		return rf(ctx, path)
 	}
-	if rf, ok := ret.Get(0).(func(model.Path) string); ok {
-		r0 = rf(path)
+	if rf, ok := ret.Get(0).(func(context.Context, model.Path) string); ok {
+		r0 = rf(ctx, path)
 	} else {
 		r0 = ret.Get(0).(string)
 	}
 
-	if rf, ok := ret.Get(1).(func(model.Path) error); ok {
-		r1 = rf(path)
+	if rf, ok := ret.Get(1).(func(context.Context, model.Path) error); ok {
+		r1 = rf(ctx, path)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -405,14 +413,15 @@ type MockSourceFSAdapter_HashFile_Call struct {
 }
 
 // HashFile is a helper method to define mock.On call
+//   - ctx context.Context
 //   - path model.Path
-func (_e *MockSourceFSAdapter_Expecter) HashFile(path interface{}) *MockSourceFSAdapter_HashFile_Call {
-	return &MockSourceFSAdapter_HashFile_Call{Call: _e.mock.On("HashFile", path)}
+func (_e *MockSourceFSAdapter_Expecter) HashFile(ctx interface{}, path interface{}) *MockSourceFSAdapter_HashFile_Call {
+	return &MockSourceFSAdapter_HashFile_Call{Call: _e.mock.On("HashFile", ctx, path)}
 }
 
-func (_c *MockSourceFSAdapter_HashFile_Call) Run(run func(path model.Path)) *MockSourceFSAdapter_HashFile_Call {
+func (_c *MockSourceFSAdapter_HashFile_Call) Run(run func(ctx context.Context, path model.Path)) *MockSourceFSAdapter_HashFile_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(model.Path))
+		run(args[0].(context.Context), args[1].(model.Path))
 	})
 	return _c
 }
@@ -422,18 +431,19 @@ func (_c *MockSourceFSAdapter_HashFile_Call) Return(_a0 string, _a1 error) *Mock
 	return _c
 }
 
-func (_c *MockSourceFSAdapter_HashFile_Call) RunAndReturn(run func(model.Path) (string, error)) *MockSourceFSAdapter_HashFile_Call {
+func (_c *MockSourceFSAdapter_HashFile_Call) RunAndReturn(run func(context.Context, model.Path) (string, error)) *MockSourceFSAdapter_HashFile_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// JoinPath provides a mock function with given fields: elem
-func (_m *MockSourceFSAdapter) JoinPath(elem ...string) model.Path {
+// JoinPath provides a mock function with given fields: ctx, elem
+func (_m *MockSourceFSAdapter) JoinPath(ctx context.Context, elem ...string) model.Path {
 	_va := make([]interface{}, len(elem))
 	for _i := range elem {
 		_va[_i] = elem[_i]
 	}
 	var _ca []interface{}
+	_ca = append(_ca, ctx)
 	_ca = append(_ca, _va...)
 	ret := _m.Called(_ca...)
 
@@ -442,8 +452,8 @@ func (_m *MockSourceFSAdapter) JoinPath(elem ...string) model.Path {
 	}
 
 	var r0 model.Path
-	if rf, ok := ret.Get(0).(func(...string) model.Path); ok {
-		r0 = rf(elem...)
+	if rf, ok := ret.Get(0).(func(context.Context, ...string) model.Path); ok {
+		r0 = rf(ctx, elem...)
 	} else {
 		r0 = ret.Get(0).(model.Path)
 	}
@@ -457,21 +467,22 @@ type MockSourceFSAdapter_JoinPath_Call struct {
 }
 
 // JoinPath is a helper method to define mock.On call
+//   - ctx context.Context
 //   - elem ...string
-func (_e *MockSourceFSAdapter_Expecter) JoinPath(elem ...interface{}) *MockSourceFSAdapter_JoinPath_Call {
+func (_e *MockSourceFSAdapter_Expecter) JoinPath(ctx interface{}, elem ...interface{}) *MockSourceFSAdapter_JoinPath_Call {
 	return &MockSourceFSAdapter_JoinPath_Call{Call: _e.mock.On("JoinPath",
-		append([]interface{}{}, elem...)...)}
+		append([]interface{}{ctx}, elem...)...)}
 }
 
-func (_c *MockSourceFSAdapter_JoinPath_Call) Run(run func(elem ...string)) *MockSourceFSAdapter_JoinPath_Call {
+func (_c *MockSourceFSAdapter_JoinPath_Call) Run(run func(ctx context.Context, elem ...string)) *MockSourceFSAdapter_JoinPath_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		variadicArgs := make([]string, len(args)-0)
-		for i, a := range args[0:] {
+		variadicArgs := make([]string, len(args)-1)
+		for i, a := range args[1:] {
 			if a != nil {
 				variadicArgs[i] = a.(string)
 			}
 		}
-		run(variadicArgs...)
+		run(args[0].(context.Context), variadicArgs...)
 	})
 	return _c
 }
@@ -481,14 +492,14 @@ func (_c *MockSourceFSAdapter_JoinPath_Call) Return(_a0 model.Path) *MockSourceF
 	return _c
 }
 
-func (_c *MockSourceFSAdapter_JoinPath_Call) RunAndReturn(run func(...string) model.Path) *MockSourceFSAdapter_JoinPath_Call {
+func (_c *MockSourceFSAdapter_JoinPath_Call) RunAndReturn(run func(context.Context, ...string) model.Path) *MockSourceFSAdapter_JoinPath_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// ReadFile provides a mock function with given fields: path
-func (_m *MockSourceFSAdapter) ReadFile(path model.Path) ([]byte, error) {
-	ret := _m.Called(path)
+// ReadFile provides a mock function with given fields: ctx, path
+func (_m *MockSourceFSAdapter) ReadFile(ctx context.Context, path model.Path) ([]byte, error) {
+	ret := _m.Called(ctx, path)
 
 	if len(ret) == 0 {
 		panic("no return value specified for ReadFile")
@@ -496,19 +507,19 @@ func (_m *MockSourceFSAdapter) ReadFile(path model.Path) ([]byte, error) {
 
 	var r0 []byte
 	var r1 error
-	if rf, ok := ret.Get(0).(func(model.Path) ([]byte, error)); ok {
-		return rf(path)
+	if rf, ok := ret.Get(0).(func(context.Context, model.Path) ([]byte, error)); ok {
+		return rf(ctx, path)
 	}
-	if rf, ok := ret.Get(0).(func(model.Path) []byte); ok {
-		r0 = rf(path)
+	if rf, ok := ret.Get(0).(func(context.Context, model.Path) []byte); ok {
+		r0 = rf(ctx, path)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]byte)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(model.Path) error); ok {
-		r1 = rf(path)
+	if rf, ok := ret.Get(1).(func(context.Context, model.Path) error); ok {
+		r1 = rf(ctx, path)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -522,14 +533,15 @@ type MockSourceFSAdapter_ReadFile_Call struct {
 }
 
 // ReadFile is a helper method to define mock.On call
+//   - ctx context.Context
 //   - path model.Path
-func (_e *MockSourceFSAdapter_Expecter) ReadFile(path interface{}) *MockSourceFSAdapter_ReadFile_Call {
-	return &MockSourceFSAdapter_ReadFile_Call{Call: _e.mock.On("ReadFile", path)}
+func (_e *MockSourceFSAdapter_Expecter) ReadFile(ctx interface{}, path interface{}) *MockSourceFSAdapter_ReadFile_Call {
+	return &MockSourceFSAdapter_ReadFile_Call{Call: _e.mock.On("ReadFile", ctx, path)}
 }
 
-func (_c *MockSourceFSAdapter_ReadFile_Call) Run(run func(path model.Path)) *MockSourceFSAdapter_ReadFile_Call {
+func (_c *MockSourceFSAdapter_ReadFile_Call) Run(run func(ctx context.Context, path model.Path)) *MockSourceFSAdapter_ReadFile_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(model.Path))
+		run(args[0].(context.Context), args[1].(model.Path))
 	})
 	return _c
 }
@@ -539,14 +551,14 @@ func (_c *MockSourceFSAdapter_ReadFile_Call) Return(_a0 []byte, _a1 error) *Mock
 	return _c
 }
 
-func (_c *MockSourceFSAdapter_ReadFile_Call) RunAndReturn(run func(model.Path) ([]byte, error)) *MockSourceFSAdapter_ReadFile_Call {
+func (_c *MockSourceFSAdapter_ReadFile_Call) RunAndReturn(run func(context.Context, model.Path) ([]byte, error)) *MockSourceFSAdapter_ReadFile_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// RelPath provides a mock function with given fields: base, target
-func (_m *MockSourceFSAdapter) RelPath(base model.Path, target model.Path) (model.Path, error) {
-	ret := _m.Called(base, target)
+// RelPath provides a mock function with given fields: ctx, base, target
+func (_m *MockSourceFSAdapter) RelPath(ctx context.Context, base model.Path, target model.Path) (model.Path, error) {
+	ret := _m.Called(ctx, base, target)
 
 	if len(ret) == 0 {
 		panic("no return value specified for RelPath")
@@ -554,17 +566,17 @@ func (_m *MockSourceFSAdapter) RelPath(base model.Path, target model.Path) (mode
 
 	var r0 model.Path
 	var r1 error
-	if rf, ok := ret.Get(0).(func(model.Path, model.Path) (model.Path, error)); ok {
-		return rf(base, target)
+	if rf, ok := ret.Get(0).(func(context.Context, model.Path, model.Path) (model.Path, error)); ok {
+		return rf(ctx, base, target)
 	}
-	if rf, ok := ret.Get(0).(func(model.Path, model.Path) model.Path); ok {
-		r0 = rf(base, target)
+	if rf, ok := ret.Get(0).(func(context.Context, model.Path, model.Path) model.Path); ok {
+		r0 = rf(ctx, base, target)
 	} else {
 		r0 = ret.Get(0).(model.Path)
 	}
 
-	if rf, ok := ret.Get(1).(func(model.Path, model.Path) error); ok {
-		r1 = rf(base, target)
+	if rf, ok := ret.Get(1).(func(context.Context, model.Path, model.Path) error); ok {
+		r1 = rf(ctx, base, target)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -578,15 +590,16 @@ type MockSourceFSAdapter_RelPath_Call struct {
 }
 
 // RelPath is a helper method to define mock.On call
+//   - ctx context.Context
 //   - base model.Path
 //   - target model.Path
-func (_e *MockSourceFSAdapter_Expecter) RelPath(base interface{}, target interface{}) *MockSourceFSAdapter_RelPath_Call {
-	return &MockSourceFSAdapter_RelPath_Call{Call: _e.mock.On("RelPath", base, target)}
+func (_e *MockSourceFSAdapter_Expecter) RelPath(ctx interface{}, base interface{}, target interface{}) *MockSourceFSAdapter_RelPath_Call {
+	return &MockSourceFSAdapter_RelPath_Call{Call: _e.mock.On("RelPath", ctx, base, target)}
 }
 
-func (_c *MockSourceFSAdapter_RelPath_Call) Run(run func(base model.Path, target model.Path)) *MockSourceFSAdapter_RelPath_Call {
+func (_c *MockSourceFSAdapter_RelPath_Call) Run(run func(ctx context.Context, base model.Path, target model.Path)) *MockSourceFSAdapter_RelPath_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(model.Path), args[1].(model.Path))
+		run(args[0].(context.Context), args[1].(model.Path), args[2].(model.Path))
 	})
 	return _c
 }
@@ -596,22 +609,22 @@ func (_c *MockSourceFSAdapter_RelPath_Call) Return(_a0 model.Path, _a1 error) *M
 	return _c
 }
 
-func (_c *MockSourceFSAdapter_RelPath_Call) RunAndReturn(run func(model.Path, model.Path) (model.Path, error)) *MockSourceFSAdapter_RelPath_Call {
+func (_c *MockSourceFSAdapter_RelPath_Call) RunAndReturn(run func(context.Context, model.Path, model.Path) (model.Path, error)) *MockSourceFSAdapter_RelPath_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// RemoveAll provides a mock function with given fields: path
-func (_m *MockSourceFSAdapter) RemoveAll(path model.Path) error {
-	ret := _m.Called(path)
+// RemoveAll provides a mock function with given fields: ctx, path
+func (_m *MockSourceFSAdapter) RemoveAll(ctx context.Context, path model.Path) error {
+	ret := _m.Called(ctx, path)
 
 	if len(ret) == 0 {
 		panic("no return value specified for RemoveAll")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(model.Path) error); ok {
-		r0 = rf(path)
+	if rf, ok := ret.Get(0).(func(context.Context, model.Path) error); ok {
+		r0 = rf(ctx, path)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -625,14 +638,15 @@ type MockSourceFSAdapter_RemoveAll_Call struct {
 }
 
 // RemoveAll is a helper method to define mock.On call
+//   - ctx context.Context
 //   - path model.Path
-func (_e *MockSourceFSAdapter_Expecter) RemoveAll(path interface{}) *MockSourceFSAdapter_RemoveAll_Call {
-	return &MockSourceFSAdapter_RemoveAll_Call{Call: _e.mock.On("RemoveAll", path)}
+func (_e *MockSourceFSAdapter_Expecter) RemoveAll(ctx interface{}, path interface{}) *MockSourceFSAdapter_RemoveAll_Call {
+	return &MockSourceFSAdapter_RemoveAll_Call{Call: _e.mock.On("RemoveAll", ctx, path)}
 }
 
-func (_c *MockSourceFSAdapter_RemoveAll_Call) Run(run func(path model.Path)) *MockSourceFSAdapter_RemoveAll_Call {
+func (_c *MockSourceFSAdapter_RemoveAll_Call) Run(run func(ctx context.Context, path model.Path)) *MockSourceFSAdapter_RemoveAll_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(model.Path))
+		run(args[0].(context.Context), args[1].(model.Path))
 	})
 	return _c
 }
@@ -642,22 +656,22 @@ func (_c *MockSourceFSAdapter_RemoveAll_Call) Return(_a0 error) *MockSourceFSAda
 	return _c
 }
 
-func (_c *MockSourceFSAdapter_RemoveAll_Call) RunAndReturn(run func(model.Path) error) *MockSourceFSAdapter_RemoveAll_Call {
+func (_c *MockSourceFSAdapter_RemoveAll_Call) RunAndReturn(run func(context.Context, model.Path) error) *MockSourceFSAdapter_RemoveAll_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// Walk provides a mock function with given fields: root, recursive, fn
-func (_m *MockSourceFSAdapter) Walk(root model.Path, recursive bool, fn adapter.FilepathWalkFunc) error {
-	ret := _m.Called(root, recursive, fn)
+// Walk provides a mock function with given fields: ctx, root, recursive, fn
+func (_m *MockSourceFSAdapter) Walk(ctx context.Context, root model.Path, recursive bool, fn adapter.FilepathWalkFunc) error {
+	ret := _m.Called(ctx, root, recursive, fn)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Walk")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(model.Path, bool, adapter.FilepathWalkFunc) error); ok {
-		r0 = rf(root, recursive, fn)
+	if rf, ok := ret.Get(0).(func(context.Context, model.Path, bool, adapter.FilepathWalkFunc) error); ok {
+		r0 = rf(ctx, root, recursive, fn)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -671,16 +685,17 @@ type MockSourceFSAdapter_Walk_Call struct {
 }
 
 // Walk is a helper method to define mock.On call
+//   - ctx context.Context
 //   - root model.Path
 //   - recursive bool
 //   - fn adapter.FilepathWalkFunc
-func (_e *MockSourceFSAdapter_Expecter) Walk(root interface{}, recursive interface{}, fn interface{}) *MockSourceFSAdapter_Walk_Call {
-	return &MockSourceFSAdapter_Walk_Call{Call: _e.mock.On("Walk", root, recursive, fn)}
+func (_e *MockSourceFSAdapter_Expecter) Walk(ctx interface{}, root interface{}, recursive interface{}, fn interface{}) *MockSourceFSAdapter_Walk_Call {
+	return &MockSourceFSAdapter_Walk_Call{Call: _e.mock.On("Walk", ctx, root, recursive, fn)}
 }
 
-func (_c *MockSourceFSAdapter_Walk_Call) Run(run func(root model.Path, recursive bool, fn adapter.FilepathWalkFunc)) *MockSourceFSAdapter_Walk_Call {
+func (_c *MockSourceFSAdapter_Walk_Call) Run(run func(ctx context.Context, root model.Path, recursive bool, fn adapter.FilepathWalkFunc)) *MockSourceFSAdapter_Walk_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(model.Path), args[1].(bool), args[2].(adapter.FilepathWalkFunc))
+		run(args[0].(context.Context), args[1].(model.Path), args[2].(bool), args[3].(adapter.FilepathWalkFunc))
 	})
 	return _c
 }
@@ -690,22 +705,22 @@ func (_c *MockSourceFSAdapter_Walk_Call) Return(_a0 error) *MockSourceFSAdapter_
 	return _c
 }
 
-func (_c *MockSourceFSAdapter_Walk_Call) RunAndReturn(run func(model.Path, bool, adapter.FilepathWalkFunc) error) *MockSourceFSAdapter_Walk_Call {
+func (_c *MockSourceFSAdapter_Walk_Call) RunAndReturn(run func(context.Context, model.Path, bool, adapter.FilepathWalkFunc) error) *MockSourceFSAdapter_Walk_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// WriteFile provides a mock function with given fields: path, content, perm
-func (_m *MockSourceFSAdapter) WriteFile(path model.Path, content []byte, perm fs.FileMode) error {
-	ret := _m.Called(path, content, perm)
+// WriteFile provides a mock function with given fields: ctx, path, content, perm
+func (_m *MockSourceFSAdapter) WriteFile(ctx context.Context, path model.Path, content []byte, perm fs.FileMode) error {
+	ret := _m.Called(ctx, path, content, perm)
 
 	if len(ret) == 0 {
 		panic("no return value specified for WriteFile")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(model.Path, []byte, fs.FileMode) error); ok {
-		r0 = rf(path, content, perm)
+	if rf, ok := ret.Get(0).(func(context.Context, model.Path, []byte, fs.FileMode) error); ok {
+		r0 = rf(ctx, path, content, perm)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -719,16 +734,17 @@ type MockSourceFSAdapter_WriteFile_Call struct {
 }
 
 // WriteFile is a helper method to define mock.On call
+//   - ctx context.Context
 //   - path model.Path
 //   - content []byte
 //   - perm fs.FileMode
-func (_e *MockSourceFSAdapter_Expecter) WriteFile(path interface{}, content interface{}, perm interface{}) *MockSourceFSAdapter_WriteFile_Call {
-	return &MockSourceFSAdapter_WriteFile_Call{Call: _e.mock.On("WriteFile", path, content, perm)}
+func (_e *MockSourceFSAdapter_Expecter) WriteFile(ctx interface{}, path interface{}, content interface{}, perm interface{}) *MockSourceFSAdapter_WriteFile_Call {
+	return &MockSourceFSAdapter_WriteFile_Call{Call: _e.mock.On("WriteFile", ctx, path, content, perm)}
 }
 
-func (_c *MockSourceFSAdapter_WriteFile_Call) Run(run func(path model.Path, content []byte, perm fs.FileMode)) *MockSourceFSAdapter_WriteFile_Call {
+func (_c *MockSourceFSAdapter_WriteFile_Call) Run(run func(ctx context.Context, path model.Path, content []byte, perm fs.FileMode)) *MockSourceFSAdapter_WriteFile_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(model.Path), args[1].([]byte), args[2].(fs.FileMode))
+		run(args[0].(context.Context), args[1].(model.Path), args[2].([]byte), args[3].(fs.FileMode))
 	})
 	return _c
 }
@@ -738,7 +754,7 @@ func (_c *MockSourceFSAdapter_WriteFile_Call) Return(_a0 error) *MockSourceFSAda
 	return _c
 }
 
-func (_c *MockSourceFSAdapter_WriteFile_Call) RunAndReturn(run func(model.Path, []byte, fs.FileMode) error) *MockSourceFSAdapter_WriteFile_Call {
+func (_c *MockSourceFSAdapter_WriteFile_Call) RunAndReturn(run func(context.Context, model.Path, []byte, fs.FileMode) error) *MockSourceFSAdapter_WriteFile_Call {
 	_c.Call.Return(run)
 	return _c
 }
