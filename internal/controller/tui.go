@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"io"
 	"sync"
 
@@ -24,7 +25,11 @@ func NewTUI(output io.Writer) *TUI {
 }
 
 // Start initializes the UI with the specified mode.
-func (t *TUI) Start(options ...StartOption) error {
+func (t *TUI) Start(ctx context.Context, options ...StartOption) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	config := &StartConfig{mode: ModeEstimate}
 	for _, opt := range options {
 		opt(config)
@@ -68,10 +73,15 @@ func (t *TUI) startWithModel(model tea.Model) error {
 }
 
 // Close finalizes the UI.
-func (t *TUI) Close() {
+func (t *TUI) Close(ctx context.Context) {
 	t.mu.Lock()
 
 	if !t.started || t.program == nil || t.closed {
+		t.mu.Unlock()
+		return
+	}
+
+	if err := ctx.Err(); err != nil {
 		t.mu.Unlock()
 		return
 	}
@@ -86,7 +96,7 @@ func (t *TUI) Close() {
 }
 
 // Wait blocks until the UI is closed by the user.
-func (t *TUI) Wait() {
+func (t *TUI) Wait(ctx context.Context) {
 	t.mu.Lock()
 
 	if !t.started || t.program == nil {
@@ -97,12 +107,21 @@ func (t *TUI) Wait() {
 	done := t.done
 	t.mu.Unlock()
 
+	select {
+	case <-done:
+	case <-ctx.Done():
+	}
+
 	<-done
 }
 
 // DisplayEstimation prints the estimation results or error.
-func (t *TUI) DisplayEstimation(mutations []m.Mutation, err error) error {
-	t.ensureStarted()
+func (t *TUI) DisplayEstimation(ctx context.Context, mutations []m.Mutation, err error) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	t.ensureStarted(ctx)
 
 	if err != nil {
 		t.send(estimationMsg{err: err})
@@ -139,20 +158,32 @@ func (t *TUI) DisplayEstimation(mutations []m.Mutation, err error) error {
 }
 
 // DisplayConcurrencyInfo shows concurrency settings.
-func (t *TUI) DisplayConcurrencyInfo(threads int, shardIndex int, count int) {
-	t.ensureStarted()
+func (t *TUI) DisplayConcurrencyInfo(ctx context.Context, threads int, shardIndex int, count int) {
+	if err := ctx.Err(); err != nil {
+		return
+	}
+
+	t.ensureStarted(ctx)
 	t.send(concurrencyMsg{threads: threads, shardIndex: shardIndex, shards: count})
 }
 
 // DisplayUpcomingTestsInfo shows the number of upcoming mutations to be tested.
-func (t *TUI) DisplayUpcomingTestsInfo(i int) {
-	t.ensureStarted()
+func (t *TUI) DisplayUpcomingTestsInfo(ctx context.Context, i int) {
+	if err := ctx.Err(); err != nil {
+		return
+	}
+
+	t.ensureStarted(ctx)
 	t.send(upcomingMsg{count: i})
 }
 
 // DisplayStartingTestInfo shows info about the mutation test starting.
-func (t *TUI) DisplayStartingTestInfo(currentMutation m.Mutation, threadID int) {
-	t.ensureStarted()
+func (t *TUI) DisplayStartingTestInfo(ctx context.Context, currentMutation m.Mutation, threadID int) {
+	if err := ctx.Err(); err != nil {
+		return
+	}
+
+	t.ensureStarted(ctx)
 
 	path := ""
 	fileHash := ""
@@ -172,8 +203,12 @@ func (t *TUI) DisplayStartingTestInfo(currentMutation m.Mutation, threadID int) 
 }
 
 // DisplayCompletedTestInfo shows info about the completed mutation test.
-func (t *TUI) DisplayCompletedTestInfo(currentMutation m.Mutation, mutationResult m.Result) {
-	t.ensureStarted()
+func (t *TUI) DisplayCompletedTestInfo(ctx context.Context, currentMutation m.Mutation, mutationResult m.Result) {
+	if err := ctx.Err(); err != nil {
+		return
+	}
+
+	t.ensureStarted(ctx)
 
 	status := "unknown"
 	if results, ok := mutationResult[currentMutation.Type]; ok && len(results) > 0 {
@@ -204,13 +239,17 @@ func (t *TUI) DisplayCompletedTestInfo(currentMutation m.Mutation, mutationResul
 }
 
 // DisplayMutationScore shows the final mutation score.
-func (t *TUI) DisplayMutationScore(score float64) {
-	t.ensureStarted()
+func (t *TUI) DisplayMutationScore(ctx context.Context, score float64) {
+	if err := ctx.Err(); err != nil {
+		return
+	}
+
+	t.ensureStarted(ctx)
 	t.send(mutationScoreMsg{score: score})
 }
 
-func (t *TUI) ensureStarted() {
-	_ = t.Start()
+func (t *TUI) ensureStarted(ctx context.Context) {
+	_ = t.Start(ctx)
 }
 
 func (t *TUI) send(msg tea.Msg) {

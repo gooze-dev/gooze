@@ -3,6 +3,8 @@
 package mocks
 
 import (
+	context "context"
+
 	mock "github.com/stretchr/testify/mock"
 	controller "gooze.dev/pkg/gooze/internal/controller"
 
@@ -22,9 +24,9 @@ func (_m *MockUI) EXPECT() *MockUI_Expecter {
 	return &MockUI_Expecter{mock: &_m.Mock}
 }
 
-// Close provides a mock function with no fields
-func (_m *MockUI) Close() {
-	_m.Called()
+// Close provides a mock function with given fields: ctx
+func (_m *MockUI) Close(ctx context.Context) {
+	_m.Called(ctx)
 }
 
 // MockUI_Close_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Close'
@@ -33,13 +35,14 @@ type MockUI_Close_Call struct {
 }
 
 // Close is a helper method to define mock.On call
-func (_e *MockUI_Expecter) Close() *MockUI_Close_Call {
-	return &MockUI_Close_Call{Call: _e.mock.On("Close")}
+//   - ctx context.Context
+func (_e *MockUI_Expecter) Close(ctx interface{}) *MockUI_Close_Call {
+	return &MockUI_Close_Call{Call: _e.mock.On("Close", ctx)}
 }
 
-func (_c *MockUI_Close_Call) Run(run func()) *MockUI_Close_Call {
+func (_c *MockUI_Close_Call) Run(run func(ctx context.Context)) *MockUI_Close_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run()
+		run(args[0].(context.Context))
 	})
 	return _c
 }
@@ -49,14 +52,14 @@ func (_c *MockUI_Close_Call) Return() *MockUI_Close_Call {
 	return _c
 }
 
-func (_c *MockUI_Close_Call) RunAndReturn(run func()) *MockUI_Close_Call {
+func (_c *MockUI_Close_Call) RunAndReturn(run func(context.Context)) *MockUI_Close_Call {
 	_c.Run(run)
 	return _c
 }
 
-// DisplayCompletedTestInfo provides a mock function with given fields: currentMutation, mutationResult
-func (_m *MockUI) DisplayCompletedTestInfo(currentMutation model.Mutation, mutationResult model.Result) {
-	_m.Called(currentMutation, mutationResult)
+// DisplayCompletedTestInfo provides a mock function with given fields: ctx, currentMutation, mutationResult
+func (_m *MockUI) DisplayCompletedTestInfo(ctx context.Context, currentMutation model.Mutation, mutationResult model.Result) {
+	_m.Called(ctx, currentMutation, mutationResult)
 }
 
 // MockUI_DisplayCompletedTestInfo_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DisplayCompletedTestInfo'
@@ -65,15 +68,16 @@ type MockUI_DisplayCompletedTestInfo_Call struct {
 }
 
 // DisplayCompletedTestInfo is a helper method to define mock.On call
+//   - ctx context.Context
 //   - currentMutation model.Mutation
 //   - mutationResult model.Result
-func (_e *MockUI_Expecter) DisplayCompletedTestInfo(currentMutation interface{}, mutationResult interface{}) *MockUI_DisplayCompletedTestInfo_Call {
-	return &MockUI_DisplayCompletedTestInfo_Call{Call: _e.mock.On("DisplayCompletedTestInfo", currentMutation, mutationResult)}
+func (_e *MockUI_Expecter) DisplayCompletedTestInfo(ctx interface{}, currentMutation interface{}, mutationResult interface{}) *MockUI_DisplayCompletedTestInfo_Call {
+	return &MockUI_DisplayCompletedTestInfo_Call{Call: _e.mock.On("DisplayCompletedTestInfo", ctx, currentMutation, mutationResult)}
 }
 
-func (_c *MockUI_DisplayCompletedTestInfo_Call) Run(run func(currentMutation model.Mutation, mutationResult model.Result)) *MockUI_DisplayCompletedTestInfo_Call {
+func (_c *MockUI_DisplayCompletedTestInfo_Call) Run(run func(ctx context.Context, currentMutation model.Mutation, mutationResult model.Result)) *MockUI_DisplayCompletedTestInfo_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(model.Mutation), args[1].(model.Result))
+		run(args[0].(context.Context), args[1].(model.Mutation), args[2].(model.Result))
 	})
 	return _c
 }
@@ -83,14 +87,14 @@ func (_c *MockUI_DisplayCompletedTestInfo_Call) Return() *MockUI_DisplayComplete
 	return _c
 }
 
-func (_c *MockUI_DisplayCompletedTestInfo_Call) RunAndReturn(run func(model.Mutation, model.Result)) *MockUI_DisplayCompletedTestInfo_Call {
+func (_c *MockUI_DisplayCompletedTestInfo_Call) RunAndReturn(run func(context.Context, model.Mutation, model.Result)) *MockUI_DisplayCompletedTestInfo_Call {
 	_c.Run(run)
 	return _c
 }
 
-// DisplayConcurrencyInfo provides a mock function with given fields: threads, shardIndex, shardCount
-func (_m *MockUI) DisplayConcurrencyInfo(threads int, shardIndex int, shardCount int) {
-	_m.Called(threads, shardIndex, shardCount)
+// DisplayConcurrencyInfo provides a mock function with given fields: ctx, threads, shardIndex, shardCount
+func (_m *MockUI) DisplayConcurrencyInfo(ctx context.Context, threads int, shardIndex int, shardCount int) {
+	_m.Called(ctx, threads, shardIndex, shardCount)
 }
 
 // MockUI_DisplayConcurrencyInfo_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DisplayConcurrencyInfo'
@@ -99,16 +103,17 @@ type MockUI_DisplayConcurrencyInfo_Call struct {
 }
 
 // DisplayConcurrencyInfo is a helper method to define mock.On call
+//   - ctx context.Context
 //   - threads int
 //   - shardIndex int
 //   - shardCount int
-func (_e *MockUI_Expecter) DisplayConcurrencyInfo(threads interface{}, shardIndex interface{}, shardCount interface{}) *MockUI_DisplayConcurrencyInfo_Call {
-	return &MockUI_DisplayConcurrencyInfo_Call{Call: _e.mock.On("DisplayConcurrencyInfo", threads, shardIndex, shardCount)}
+func (_e *MockUI_Expecter) DisplayConcurrencyInfo(ctx interface{}, threads interface{}, shardIndex interface{}, shardCount interface{}) *MockUI_DisplayConcurrencyInfo_Call {
+	return &MockUI_DisplayConcurrencyInfo_Call{Call: _e.mock.On("DisplayConcurrencyInfo", ctx, threads, shardIndex, shardCount)}
 }
 
-func (_c *MockUI_DisplayConcurrencyInfo_Call) Run(run func(threads int, shardIndex int, shardCount int)) *MockUI_DisplayConcurrencyInfo_Call {
+func (_c *MockUI_DisplayConcurrencyInfo_Call) Run(run func(ctx context.Context, threads int, shardIndex int, shardCount int)) *MockUI_DisplayConcurrencyInfo_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(int), args[1].(int), args[2].(int))
+		run(args[0].(context.Context), args[1].(int), args[2].(int), args[3].(int))
 	})
 	return _c
 }
@@ -118,22 +123,22 @@ func (_c *MockUI_DisplayConcurrencyInfo_Call) Return() *MockUI_DisplayConcurrenc
 	return _c
 }
 
-func (_c *MockUI_DisplayConcurrencyInfo_Call) RunAndReturn(run func(int, int, int)) *MockUI_DisplayConcurrencyInfo_Call {
+func (_c *MockUI_DisplayConcurrencyInfo_Call) RunAndReturn(run func(context.Context, int, int, int)) *MockUI_DisplayConcurrencyInfo_Call {
 	_c.Run(run)
 	return _c
 }
 
-// DisplayEstimation provides a mock function with given fields: mutations, err
-func (_m *MockUI) DisplayEstimation(mutations []model.Mutation, err error) error {
-	ret := _m.Called(mutations, err)
+// DisplayEstimation provides a mock function with given fields: ctx, mutations, err
+func (_m *MockUI) DisplayEstimation(ctx context.Context, mutations []model.Mutation, err error) error {
+	ret := _m.Called(ctx, mutations, err)
 
 	if len(ret) == 0 {
 		panic("no return value specified for DisplayEstimation")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func([]model.Mutation, error) error); ok {
-		r0 = rf(mutations, err)
+	if rf, ok := ret.Get(0).(func(context.Context, []model.Mutation, error) error); ok {
+		r0 = rf(ctx, mutations, err)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -147,15 +152,16 @@ type MockUI_DisplayEstimation_Call struct {
 }
 
 // DisplayEstimation is a helper method to define mock.On call
+//   - ctx context.Context
 //   - mutations []model.Mutation
 //   - err error
-func (_e *MockUI_Expecter) DisplayEstimation(mutations interface{}, err interface{}) *MockUI_DisplayEstimation_Call {
-	return &MockUI_DisplayEstimation_Call{Call: _e.mock.On("DisplayEstimation", mutations, err)}
+func (_e *MockUI_Expecter) DisplayEstimation(ctx interface{}, mutations interface{}, err interface{}) *MockUI_DisplayEstimation_Call {
+	return &MockUI_DisplayEstimation_Call{Call: _e.mock.On("DisplayEstimation", ctx, mutations, err)}
 }
 
-func (_c *MockUI_DisplayEstimation_Call) Run(run func(mutations []model.Mutation, err error)) *MockUI_DisplayEstimation_Call {
+func (_c *MockUI_DisplayEstimation_Call) Run(run func(ctx context.Context, mutations []model.Mutation, err error)) *MockUI_DisplayEstimation_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].([]model.Mutation), args[1].(error))
+		run(args[0].(context.Context), args[1].([]model.Mutation), args[2].(error))
 	})
 	return _c
 }
@@ -165,14 +171,14 @@ func (_c *MockUI_DisplayEstimation_Call) Return(_a0 error) *MockUI_DisplayEstima
 	return _c
 }
 
-func (_c *MockUI_DisplayEstimation_Call) RunAndReturn(run func([]model.Mutation, error) error) *MockUI_DisplayEstimation_Call {
+func (_c *MockUI_DisplayEstimation_Call) RunAndReturn(run func(context.Context, []model.Mutation, error) error) *MockUI_DisplayEstimation_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// DisplayMutationScore provides a mock function with given fields: score
-func (_m *MockUI) DisplayMutationScore(score float64) {
-	_m.Called(score)
+// DisplayMutationScore provides a mock function with given fields: ctx, score
+func (_m *MockUI) DisplayMutationScore(ctx context.Context, score float64) {
+	_m.Called(ctx, score)
 }
 
 // MockUI_DisplayMutationScore_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DisplayMutationScore'
@@ -181,14 +187,15 @@ type MockUI_DisplayMutationScore_Call struct {
 }
 
 // DisplayMutationScore is a helper method to define mock.On call
+//   - ctx context.Context
 //   - score float64
-func (_e *MockUI_Expecter) DisplayMutationScore(score interface{}) *MockUI_DisplayMutationScore_Call {
-	return &MockUI_DisplayMutationScore_Call{Call: _e.mock.On("DisplayMutationScore", score)}
+func (_e *MockUI_Expecter) DisplayMutationScore(ctx interface{}, score interface{}) *MockUI_DisplayMutationScore_Call {
+	return &MockUI_DisplayMutationScore_Call{Call: _e.mock.On("DisplayMutationScore", ctx, score)}
 }
 
-func (_c *MockUI_DisplayMutationScore_Call) Run(run func(score float64)) *MockUI_DisplayMutationScore_Call {
+func (_c *MockUI_DisplayMutationScore_Call) Run(run func(ctx context.Context, score float64)) *MockUI_DisplayMutationScore_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(float64))
+		run(args[0].(context.Context), args[1].(float64))
 	})
 	return _c
 }
@@ -198,14 +205,14 @@ func (_c *MockUI_DisplayMutationScore_Call) Return() *MockUI_DisplayMutationScor
 	return _c
 }
 
-func (_c *MockUI_DisplayMutationScore_Call) RunAndReturn(run func(float64)) *MockUI_DisplayMutationScore_Call {
+func (_c *MockUI_DisplayMutationScore_Call) RunAndReturn(run func(context.Context, float64)) *MockUI_DisplayMutationScore_Call {
 	_c.Run(run)
 	return _c
 }
 
-// DisplayStartingTestInfo provides a mock function with given fields: currentMutation, threadID
-func (_m *MockUI) DisplayStartingTestInfo(currentMutation model.Mutation, threadID int) {
-	_m.Called(currentMutation, threadID)
+// DisplayStartingTestInfo provides a mock function with given fields: ctx, currentMutation, threadID
+func (_m *MockUI) DisplayStartingTestInfo(ctx context.Context, currentMutation model.Mutation, threadID int) {
+	_m.Called(ctx, currentMutation, threadID)
 }
 
 // MockUI_DisplayStartingTestInfo_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DisplayStartingTestInfo'
@@ -214,15 +221,16 @@ type MockUI_DisplayStartingTestInfo_Call struct {
 }
 
 // DisplayStartingTestInfo is a helper method to define mock.On call
+//   - ctx context.Context
 //   - currentMutation model.Mutation
 //   - threadID int
-func (_e *MockUI_Expecter) DisplayStartingTestInfo(currentMutation interface{}, threadID interface{}) *MockUI_DisplayStartingTestInfo_Call {
-	return &MockUI_DisplayStartingTestInfo_Call{Call: _e.mock.On("DisplayStartingTestInfo", currentMutation, threadID)}
+func (_e *MockUI_Expecter) DisplayStartingTestInfo(ctx interface{}, currentMutation interface{}, threadID interface{}) *MockUI_DisplayStartingTestInfo_Call {
+	return &MockUI_DisplayStartingTestInfo_Call{Call: _e.mock.On("DisplayStartingTestInfo", ctx, currentMutation, threadID)}
 }
 
-func (_c *MockUI_DisplayStartingTestInfo_Call) Run(run func(currentMutation model.Mutation, threadID int)) *MockUI_DisplayStartingTestInfo_Call {
+func (_c *MockUI_DisplayStartingTestInfo_Call) Run(run func(ctx context.Context, currentMutation model.Mutation, threadID int)) *MockUI_DisplayStartingTestInfo_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(model.Mutation), args[1].(int))
+		run(args[0].(context.Context), args[1].(model.Mutation), args[2].(int))
 	})
 	return _c
 }
@@ -232,14 +240,14 @@ func (_c *MockUI_DisplayStartingTestInfo_Call) Return() *MockUI_DisplayStartingT
 	return _c
 }
 
-func (_c *MockUI_DisplayStartingTestInfo_Call) RunAndReturn(run func(model.Mutation, int)) *MockUI_DisplayStartingTestInfo_Call {
+func (_c *MockUI_DisplayStartingTestInfo_Call) RunAndReturn(run func(context.Context, model.Mutation, int)) *MockUI_DisplayStartingTestInfo_Call {
 	_c.Run(run)
 	return _c
 }
 
-// DisplayUpcomingTestsInfo provides a mock function with given fields: i
-func (_m *MockUI) DisplayUpcomingTestsInfo(i int) {
-	_m.Called(i)
+// DisplayUpcomingTestsInfo provides a mock function with given fields: ctx, i
+func (_m *MockUI) DisplayUpcomingTestsInfo(ctx context.Context, i int) {
+	_m.Called(ctx, i)
 }
 
 // MockUI_DisplayUpcomingTestsInfo_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DisplayUpcomingTestsInfo'
@@ -248,14 +256,15 @@ type MockUI_DisplayUpcomingTestsInfo_Call struct {
 }
 
 // DisplayUpcomingTestsInfo is a helper method to define mock.On call
+//   - ctx context.Context
 //   - i int
-func (_e *MockUI_Expecter) DisplayUpcomingTestsInfo(i interface{}) *MockUI_DisplayUpcomingTestsInfo_Call {
-	return &MockUI_DisplayUpcomingTestsInfo_Call{Call: _e.mock.On("DisplayUpcomingTestsInfo", i)}
+func (_e *MockUI_Expecter) DisplayUpcomingTestsInfo(ctx interface{}, i interface{}) *MockUI_DisplayUpcomingTestsInfo_Call {
+	return &MockUI_DisplayUpcomingTestsInfo_Call{Call: _e.mock.On("DisplayUpcomingTestsInfo", ctx, i)}
 }
 
-func (_c *MockUI_DisplayUpcomingTestsInfo_Call) Run(run func(i int)) *MockUI_DisplayUpcomingTestsInfo_Call {
+func (_c *MockUI_DisplayUpcomingTestsInfo_Call) Run(run func(ctx context.Context, i int)) *MockUI_DisplayUpcomingTestsInfo_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(int))
+		run(args[0].(context.Context), args[1].(int))
 	})
 	return _c
 }
@@ -265,18 +274,19 @@ func (_c *MockUI_DisplayUpcomingTestsInfo_Call) Return() *MockUI_DisplayUpcoming
 	return _c
 }
 
-func (_c *MockUI_DisplayUpcomingTestsInfo_Call) RunAndReturn(run func(int)) *MockUI_DisplayUpcomingTestsInfo_Call {
+func (_c *MockUI_DisplayUpcomingTestsInfo_Call) RunAndReturn(run func(context.Context, int)) *MockUI_DisplayUpcomingTestsInfo_Call {
 	_c.Run(run)
 	return _c
 }
 
-// Start provides a mock function with given fields: options
-func (_m *MockUI) Start(options ...controller.StartOption) error {
+// Start provides a mock function with given fields: ctx, options
+func (_m *MockUI) Start(ctx context.Context, options ...controller.StartOption) error {
 	_va := make([]interface{}, len(options))
 	for _i := range options {
 		_va[_i] = options[_i]
 	}
 	var _ca []interface{}
+	_ca = append(_ca, ctx)
 	_ca = append(_ca, _va...)
 	ret := _m.Called(_ca...)
 
@@ -285,8 +295,8 @@ func (_m *MockUI) Start(options ...controller.StartOption) error {
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(...controller.StartOption) error); ok {
-		r0 = rf(options...)
+	if rf, ok := ret.Get(0).(func(context.Context, ...controller.StartOption) error); ok {
+		r0 = rf(ctx, options...)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -300,21 +310,22 @@ type MockUI_Start_Call struct {
 }
 
 // Start is a helper method to define mock.On call
+//   - ctx context.Context
 //   - options ...controller.StartOption
-func (_e *MockUI_Expecter) Start(options ...interface{}) *MockUI_Start_Call {
+func (_e *MockUI_Expecter) Start(ctx interface{}, options ...interface{}) *MockUI_Start_Call {
 	return &MockUI_Start_Call{Call: _e.mock.On("Start",
-		append([]interface{}{}, options...)...)}
+		append([]interface{}{ctx}, options...)...)}
 }
 
-func (_c *MockUI_Start_Call) Run(run func(options ...controller.StartOption)) *MockUI_Start_Call {
+func (_c *MockUI_Start_Call) Run(run func(ctx context.Context, options ...controller.StartOption)) *MockUI_Start_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		variadicArgs := make([]controller.StartOption, len(args)-0)
-		for i, a := range args[0:] {
+		variadicArgs := make([]controller.StartOption, len(args)-1)
+		for i, a := range args[1:] {
 			if a != nil {
 				variadicArgs[i] = a.(controller.StartOption)
 			}
 		}
-		run(variadicArgs...)
+		run(args[0].(context.Context), variadicArgs...)
 	})
 	return _c
 }
@@ -324,14 +335,14 @@ func (_c *MockUI_Start_Call) Return(_a0 error) *MockUI_Start_Call {
 	return _c
 }
 
-func (_c *MockUI_Start_Call) RunAndReturn(run func(...controller.StartOption) error) *MockUI_Start_Call {
+func (_c *MockUI_Start_Call) RunAndReturn(run func(context.Context, ...controller.StartOption) error) *MockUI_Start_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// Wait provides a mock function with no fields
-func (_m *MockUI) Wait() {
-	_m.Called()
+// Wait provides a mock function with given fields: ctx
+func (_m *MockUI) Wait(ctx context.Context) {
+	_m.Called(ctx)
 }
 
 // MockUI_Wait_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Wait'
@@ -340,13 +351,14 @@ type MockUI_Wait_Call struct {
 }
 
 // Wait is a helper method to define mock.On call
-func (_e *MockUI_Expecter) Wait() *MockUI_Wait_Call {
-	return &MockUI_Wait_Call{Call: _e.mock.On("Wait")}
+//   - ctx context.Context
+func (_e *MockUI_Expecter) Wait(ctx interface{}) *MockUI_Wait_Call {
+	return &MockUI_Wait_Call{Call: _e.mock.On("Wait", ctx)}
 }
 
-func (_c *MockUI_Wait_Call) Run(run func()) *MockUI_Wait_Call {
+func (_c *MockUI_Wait_Call) Run(run func(ctx context.Context)) *MockUI_Wait_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run()
+		run(args[0].(context.Context))
 	})
 	return _c
 }
@@ -356,7 +368,7 @@ func (_c *MockUI_Wait_Call) Return() *MockUI_Wait_Call {
 	return _c
 }
 
-func (_c *MockUI_Wait_Call) RunAndReturn(run func()) *MockUI_Wait_Call {
+func (_c *MockUI_Wait_Call) RunAndReturn(run func(context.Context)) *MockUI_Wait_Call {
 	_c.Run(run)
 	return _c
 }

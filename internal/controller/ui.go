@@ -2,6 +2,8 @@
 package controller
 
 import (
+	"context"
+
 	m "gooze.dev/pkg/gooze/internal/model"
 )
 
@@ -45,13 +47,13 @@ func WithTestMode() StartOption {
 // UI defines the interface for displaying source file lists.
 // Implementations can use different output methods (simple text, TUI, etc).
 type UI interface {
-	Start(options ...StartOption) error
-	Close()
-	Wait() // Wait for UI to finish (user closes it)
-	DisplayEstimation(mutations []m.Mutation, err error) error
-	DisplayConcurrencyInfo(threads int, shardIndex int, shardCount int)
-	DisplayUpcomingTestsInfo(i int)
-	DisplayStartingTestInfo(currentMutation m.Mutation, threadID int)
-	DisplayCompletedTestInfo(currentMutation m.Mutation, mutationResult m.Result)
-	DisplayMutationScore(score float64)
+	Start(ctx context.Context, options ...StartOption) error
+	Close(ctx context.Context)
+	Wait(ctx context.Context) // Wait for UI to finish (user closes it)
+	DisplayEstimation(ctx context.Context, mutations []m.Mutation, err error) error
+	DisplayConcurrencyInfo(ctx context.Context, threads int, shardIndex int, shardCount int)
+	DisplayUpcomingTestsInfo(ctx context.Context, i int)
+	DisplayStartingTestInfo(ctx context.Context, currentMutation m.Mutation, threadID int)
+	DisplayCompletedTestInfo(ctx context.Context, currentMutation m.Mutation, mutationResult m.Result)
+	DisplayMutationScore(ctx context.Context, score float64)
 }

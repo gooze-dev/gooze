@@ -2,6 +2,7 @@ package controller
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"sort"
 
@@ -21,27 +22,48 @@ func NewSimpleUI(cmd *cobra.Command) *SimpleUI {
 }
 
 // Start initializes the UI.
-func (s *SimpleUI) Start(_ ...StartOption) error {
+func (s *SimpleUI) Start(ctx context.Context, _ ...StartOption) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
 // Close finalizes the UI.
-func (s *SimpleUI) Close() {
-
+func (s *SimpleUI) Close(ctx context.Context) {
+	if err := ctx.Err(); err != nil {
+		return
+	}
 }
 
 // Wait blocks until the UI is closed (no-op for SimpleUI).
-func (s *SimpleUI) Wait() {
+func (s *SimpleUI) Wait(ctx context.Context) {
+	if err := ctx.Err(); err != nil {
+		return
+	}
 	// SimpleUI doesn't block - it just prints and continues
 }
 
 // DisplayEstimation prints the estimation results or error.
-func (s *SimpleUI) DisplayEstimation(mutations []m.Mutation, err error) error {
+func (s *SimpleUI) DisplayEstimation(ctx context.Context, mutations []m.Mutation, err error) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	if err != nil {
 		s.printf("estimation error: %v\n", err)
 		return err
 	}
 
+	statsList := buildFileStats(mutations)
+	tableStr := renderEstimationTable(statsList, len(mutations))
+	s.printf("\n%s", tableStr)
+
+	return nil
+}
+
+func buildFileStats(mutations []m.Mutation) []fileStat {
 	info := make(map[string]fileStat)
 
 	for _, mutation := range mutations {
@@ -69,6 +91,10 @@ func (s *SimpleUI) DisplayEstimation(mutations []m.Mutation, err error) error {
 		return statsList[i].path < statsList[j].path
 	})
 
+	return statsList
+}
+
+func renderEstimationTable(statsList []fileStat, totalMutations int) string {
 	var tableBuffer bytes.Buffer
 
 	table := tablewriter.NewWriter(&tableBuffer)
@@ -87,27 +113,38 @@ func (s *SimpleUI) DisplayEstimation(mutations []m.Mutation, err error) error {
 
 	table.SetFooter([]string{
 		fmt.Sprintf("Total Files %d", pathsCount),
-		fmt.Sprintf("%d", len(mutations)),
+		fmt.Sprintf("%d", totalMutations),
 	})
 
 	table.Render()
-	s.printf("\n%s", tableBuffer.String())
 
-	return nil
+	return tableBuffer.String()
 }
 
 // DisplayConcurrencyInfo shows concurrency settings.
-func (s *SimpleUI) DisplayConcurrencyInfo(threads int, shardIndex int, count int) {
+func (s *SimpleUI) DisplayConcurrencyInfo(ctx context.Context, threads int, shardIndex int, count int) {
+	if err := ctx.Err(); err != nil {
+		return
+	}
+
 	s.printf("Running %d mutations with %d worker(s) (Shard %d/%d)\n", count, threads, shardIndex, count)
 }
 
 // DisplayUpcomingTestsInfo shows the number of upcoming mutations to be tested.
-func (s *SimpleUI) DisplayUpcomingTestsInfo(i int) {
+func (s *SimpleUI) DisplayUpcomingTestsInfo(ctx context.Context, i int) {
+	if err := ctx.Err(); err != nil {
+		return
+	}
+
 	s.printf("Upcoming mutations: %d\n", i)
 }
 
 // DisplayStartingTestInfo shows info about the mutation test starting.
-func (s *SimpleUI) DisplayStartingTestInfo(currentMutation m.Mutation, _ int) {
+func (s *SimpleUI) DisplayStartingTestInfo(ctx context.Context, currentMutation m.Mutation, _ int) {
+	if err := ctx.Err(); err != nil {
+		return
+	}
+
 	path := ""
 	if currentMutation.Source.Origin != nil {
 		path = string(currentMutation.Source.Origin.ShortPath)
@@ -117,7 +154,11 @@ func (s *SimpleUI) DisplayStartingTestInfo(currentMutation m.Mutation, _ int) {
 }
 
 // DisplayCompletedTestInfo shows info about the mutation test completion.
-func (s *SimpleUI) DisplayCompletedTestInfo(currentMutation m.Mutation, mutationResult m.Result) {
+func (s *SimpleUI) DisplayCompletedTestInfo(ctx context.Context, currentMutation m.Mutation, mutationResult m.Result) {
+	if err := ctx.Err(); err != nil {
+		return
+	}
+
 	status := unknownStatusLabel
 	if results, ok := mutationResult[currentMutation.Type]; ok && len(results) > 0 {
 		status = formatTestStatus(results[0].Status)
@@ -140,7 +181,11 @@ func (s *SimpleUI) DisplayCompletedTestInfo(currentMutation m.Mutation, mutation
 }
 
 // DisplayMutationScore prints the final mutation score.
-func (s *SimpleUI) DisplayMutationScore(score float64) {
+func (s *SimpleUI) DisplayMutationScore(ctx context.Context, score float64) {
+	if err := ctx.Err(); err != nil {
+		return
+	}
+
 	s.printf("Mutation score: %.2f%%\n", score*100)
 }
 
