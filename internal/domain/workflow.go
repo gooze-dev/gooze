@@ -573,18 +573,13 @@ func (w *workflow) ShardMutations(allMutations []m.Mutation, shardIndex int, tot
 	return shardMutations
 }
 
-<<<<<<< HEAD
-func (w *workflow) TestReports(allMutations []m.Mutation, threads int, mutationTimeout time.Duration) ([]m.Report, error) {
-	reports := []m.Report{}
-=======
-func (w *workflow) TestReports(allMutations []m.Mutation, threads int) (pkg.FileSpill[m.Report], error) {
+func (w *workflow) TestReports(allMutations []m.Mutation, threads int, mutationTimeout time.Duration) (pkg.FileSpill[m.Report], error) {
 	reports, err := pkg.NewFileSpill[m.Report]()
 	if err != nil {
 		slog.Error("failed to create reports filespill", "error", err)
 		return nil, fmt.Errorf("create reports filespill: %w", err)
 	}
 
->>>>>>> 34f02a5 (use filespill in workflow)
 	errors := []error{}
 
 	effectiveThreads := threads
