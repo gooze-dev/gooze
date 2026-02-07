@@ -12,14 +12,10 @@ func mutationScoreFromReports(reports pkg.FileSpill[m.Report]) (float64, error) 
 	err := reports.Range(func(_ uint64, report m.Report) error {
 		for _, entries := range report.Result {
 			for _, entry := range entries {
-				switch entry.Status {
-				case m.Killed:
+				total++
+
+				if entry.Status == m.Killed {
 					killed++
-					total++
-				case m.Survived:
-					total++
-				case m.Skipped, m.Error:
-					// Skipped/error entries are excluded from the score denominator.
 				}
 			}
 		}
