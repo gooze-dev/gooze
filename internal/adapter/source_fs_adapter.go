@@ -2,6 +2,7 @@
 package adapter
 
 import (
+	"context"
 	"crypto/sha256"
 	"errors"
 	"fmt"
@@ -23,7 +24,11 @@ import (
 //
 //nolint:interfacebloat // A richer interface keeps workflow logic decoupled from os/fs.
 type SourceFSAdapter interface {
+	// Get collects Go source files for the provided roots and returns Source entries.
+	// Deprecated: Use GetChannel for better performance and responsiveness, especially with large projects.
 	Get(root []m.Path, ignore ...string) ([]m.Source, error)
+
+	GetChannel(ctx context.Context, root []m.Path, threads int, ignore ...string) (<-chan m.Source, <-chan error)
 
 	// Walk traverses the provided root path. When recursive is false the
 	// implementation should limit itself to the root directory (no sub-dirs).
@@ -96,7 +101,12 @@ func (a *LocalSourceFSAdapter) Get(roots []m.Path, ignore ...string) ([]m.Source
 	sources := make([]m.Source, 0, len(roots))
 
 	for _, root := range roots {
-		if err := a.collectSourcesFromRoot(root, ignoreRegexps, seen, &sources); err != nil {
+		if err := a.collectSourcesFromRoot(root, ignoreRegexps, func(source m.Source) {
+			if _, exists := seen[string(source.Origin.FullPath)]; !exists {
+				seen[string(source.Origin.FullPath)] = struct{}{}
+				sources = append(sources, source)
+			}
+		}); err != nil {
 			return nil, err
 		}
 	}
@@ -104,7 +114,62 @@ func (a *LocalSourceFSAdapter) Get(roots []m.Path, ignore ...string) ([]m.Source
 	return sources, nil
 }
 
-func (a *LocalSourceFSAdapter) collectSourcesFromRoot(root m.Path, ignoreRegexps []*regexp.Regexp, seen map[string]struct{}, sources *[]m.Source) error {
+// GetChannel collects Go source files for the provided roots and streams Source entries and errors.
+func (a *LocalSourceFSAdapter) GetChannel(ctx context.Context, root []m.Path, threads int, ignore ...string) (<-chan m.Source, <-chan error) {
+	// Create channels for sources and errors
+	sourceChan := make(chan m.Source, threads)
+	errorChan := make(chan error)
+
+	go func() {
+		defer close(sourceChan)
+		defer close(errorChan)
+
+		if len(root) == 0 {
+			return
+		}
+
+		ignoreRegexps, err := compileIgnoreRegexps(ignore)
+		if err != nil {
+			errorChan <- err
+			return
+		}
+
+		seen := make(map[string]struct{})
+
+		for _, r := range root {
+			select {
+			case <-ctx.Done():
+				errorChan <- ctx.Err()
+				return
+			default:
+			}
+
+			err := a.collectSourcesFromRoot(r, ignoreRegexps, func(source m.Source) {
+				if _, exists := seen[string(source.Origin.FullPath)]; !exists {
+					seen[string(source.Origin.FullPath)] = struct{}{}
+					select {
+					case <-ctx.Done():
+						errorChan <- ctx.Err()
+					case sourceChan <- source:
+					}
+				}
+			})
+			if err != nil {
+				select {
+				case <-ctx.Done():
+					errorChan <- ctx.Err()
+				case errorChan <- err:
+				}
+
+				return
+			}
+		}
+	}()
+
+	return sourceChan, errorChan
+}
+
+func (a *LocalSourceFSAdapter) collectSourcesFromRoot(root m.Path, ignoreRegexps []*regexp.Regexp, callback func(m.Source)) error {
 	rootPath, recursive, err := normalizeRootPath(string(root))
 	if err != nil {
 		return err
@@ -126,13 +191,13 @@ func (a *LocalSourceFSAdapter) collectSourcesFromRoot(root m.Path, ignoreRegexps
 		}
 
 		if ok {
-			addSourceIfNew(sources, seen, source)
+			callback(source)
 		}
 
 		return nil
 	}
 
-	return a.collectSourcesFromDir(rootPath, recursive, ignoreRegexps, seen, sources)
+	return a.collectSourcesFromDir(rootPath, recursive, ignoreRegexps, callback)
 }
 
 // Walk iterates over files under root, optionally descending into subdirectories.
@@ -319,20 +384,7 @@ func (a *LocalSourceFSAdapter) JoinPath(elem ...string) m.Path {
 	return m.Path(filepath.Join(elem...))
 }
 
-func addSourceIfNew(sources *[]m.Source, seen map[string]struct{}, source m.Source) {
-	if source.Origin == nil {
-		return
-	}
-
-	if _, exists := seen[string(source.Origin.FullPath)]; exists {
-		return
-	}
-
-	seen[string(source.Origin.FullPath)] = struct{}{}
-	*sources = append(*sources, source)
-}
-
-func (a *LocalSourceFSAdapter) collectSourcesFromDir(rootPath string, recursive bool, ignoreRegexps []*regexp.Regexp, seen map[string]struct{}, sources *[]m.Source) error {
+func (a *LocalSourceFSAdapter) collectSourcesFromDir(rootPath string, recursive bool, ignoreRegexps []*regexp.Regexp, callback func(m.Source)) error {
 	return a.Walk(m.Path(rootPath), recursive, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -355,7 +407,7 @@ func (a *LocalSourceFSAdapter) collectSourcesFromDir(rootPath string, recursive 
 			return nil
 		}
 
-		addSourceIfNew(sources, seen, source)
+		callback(source)
 
 		return nil
 	})

@@ -25,6 +25,7 @@ var testAdapter adapter.TestRunnerAdapter
 var orchestrator domain.Orchestrator
 var mutagen domain.Mutagen
 var workflow domain.Workflow
+var pipelineWorkflow domain.Workflow
 var ui controller.UI
 
 // Logging flags.
@@ -53,6 +54,13 @@ func init() {
 	orchestrator = domain.NewOrchestrator(fsAdapter, testAdapter)
 	mutagen = domain.NewMutagen(goFileAdapter, soirceFSAdapter)
 	workflow = domain.NewWorkflow(
+		soirceFSAdapter,
+		reportStore,
+		ui,
+		orchestrator,
+		mutagen,
+	)
+	pipelineWorkflow = domain.NewWorkflowPipeline(
 		soirceFSAdapter,
 		reportStore,
 		ui,

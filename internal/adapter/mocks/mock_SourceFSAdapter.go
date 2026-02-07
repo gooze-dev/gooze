@@ -3,9 +3,11 @@
 package mocks
 
 import (
-	fs "io/fs"
+	context "context"
 
 	adapter "gooze.dev/pkg/gooze/internal/adapter"
+
+	fs "io/fs"
 
 	mock "github.com/stretchr/testify/mock"
 
@@ -367,6 +369,83 @@ func (_c *MockSourceFSAdapter_Get_Call) Return(_a0 []model.Source, _a1 error) *M
 }
 
 func (_c *MockSourceFSAdapter_Get_Call) RunAndReturn(run func([]model.Path, ...string) ([]model.Source, error)) *MockSourceFSAdapter_Get_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetChannel provides a mock function with given fields: ctx, root, threads, ignore
+func (_m *MockSourceFSAdapter) GetChannel(ctx context.Context, root []model.Path, threads int, ignore ...string) (<-chan model.Source, <-chan error) {
+	_va := make([]interface{}, len(ignore))
+	for _i := range ignore {
+		_va[_i] = ignore[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx, root, threads)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetChannel")
+	}
+
+	var r0 <-chan model.Source
+	var r1 <-chan error
+	if rf, ok := ret.Get(0).(func(context.Context, []model.Path, int, ...string) (<-chan model.Source, <-chan error)); ok {
+		return rf(ctx, root, threads, ignore...)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, []model.Path, int, ...string) <-chan model.Source); ok {
+		r0 = rf(ctx, root, threads, ignore...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(<-chan model.Source)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, []model.Path, int, ...string) <-chan error); ok {
+		r1 = rf(ctx, root, threads, ignore...)
+	} else {
+		if ret.Get(1) != nil {
+			r1 = ret.Get(1).(<-chan error)
+		}
+	}
+
+	return r0, r1
+}
+
+// MockSourceFSAdapter_GetChannel_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetChannel'
+type MockSourceFSAdapter_GetChannel_Call struct {
+	*mock.Call
+}
+
+// GetChannel is a helper method to define mock.On call
+//   - ctx context.Context
+//   - root []model.Path
+//   - threads int
+//   - ignore ...string
+func (_e *MockSourceFSAdapter_Expecter) GetChannel(ctx interface{}, root interface{}, threads interface{}, ignore ...interface{}) *MockSourceFSAdapter_GetChannel_Call {
+	return &MockSourceFSAdapter_GetChannel_Call{Call: _e.mock.On("GetChannel",
+		append([]interface{}{ctx, root, threads}, ignore...)...)}
+}
+
+func (_c *MockSourceFSAdapter_GetChannel_Call) Run(run func(ctx context.Context, root []model.Path, threads int, ignore ...string)) *MockSourceFSAdapter_GetChannel_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]string, len(args)-3)
+		for i, a := range args[3:] {
+			if a != nil {
+				variadicArgs[i] = a.(string)
+			}
+		}
+		run(args[0].(context.Context), args[1].([]model.Path), args[2].(int), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *MockSourceFSAdapter_GetChannel_Call) Return(_a0 <-chan model.Source, _a1 <-chan error) *MockSourceFSAdapter_GetChannel_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockSourceFSAdapter_GetChannel_Call) RunAndReturn(run func(context.Context, []model.Path, int, ...string) (<-chan model.Source, <-chan error)) *MockSourceFSAdapter_GetChannel_Call {
 	_c.Call.Return(run)
 	return _c
 }

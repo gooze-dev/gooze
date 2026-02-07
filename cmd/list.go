@@ -21,7 +21,7 @@ func newListCmd() *cobra.Command {
 			useCache := !viper.GetBool(noCacheFlagName)
 			reportsPath := m.Path(viper.GetString(outputFlagName))
 
-			return workflow.Estimate(domain.EstimateArgs{
+			return pipelineWorkflow.Estimate(domain.EstimateArgs{
 				Paths:    paths,
 				Exclude:  viper.GetStringSlice(excludeConfigKey),
 				UseCache: useCache,

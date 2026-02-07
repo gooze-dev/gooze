@@ -1,6 +1,7 @@
 package adapter
 
 import (
+	"context"
 	"crypto/sha256"
 	"fmt"
 	"os"
@@ -448,6 +449,282 @@ func TestLocalSourceFSAdapter_Get(t *testing.T) {
 		}
 		assert.Nil(t, sources[0].Test)
 	})
+}
+
+func TestLocalSourceFSAdapter_GetChannel(t *testing.T) {
+	adapter := NewLocalSourceFSAdapter()
+
+	t.Run("dot selects current directory non-recursive", func(t *testing.T) {
+		root := t.TempDir()
+		basicDir := examplePath(t, "basic")
+		mainPath := filepath.Join(root, "main.go")
+		testPath := filepath.Join(root, "main_test.go")
+		copyExampleFile(t, filepath.Join(basicDir, "main.go"), mainPath)
+		copyExampleFile(t, filepath.Join(basicDir, "main_test.go"), testPath)
+		mainContent := readFileBytes(t, mainPath)
+		testContent := readFileBytes(t, testPath)
+
+		nestedDir := filepath.Join(root, "nested")
+		mustMkdir(t, nestedDir)
+		nestedPath := filepath.Join(nestedDir, "child.go")
+		copyExampleFile(t, filepath.Join(examplePath(t, "nested", "sub"), "child.go"), nestedPath)
+		writeTestFile(t, filepath.Join(root, "go.mod"), "module example.com/project\n")
+
+		wd, err := os.Getwd()
+		require.NoError(t, err)
+		require.NoError(t, os.Chdir(root))
+		t.Cleanup(func() { _ = os.Chdir(wd) })
+
+		ctx := context.Background()
+		sourceChan, errorChan := adapter.GetChannel(ctx, []m.Path{"."}, 1)
+		sources, errs := consumeChannels(sourceChan, errorChan)
+		require.Empty(t, errs)
+
+		require.Len(t, sources, 1)
+
+		source := findSourceV2ByOrigin(sources, mainPath)
+		require.NotNilf(t, source, "GetChannel() did not include %s", mainPath)
+
+		assertSourceV2(t, source, mainPath, "main.go", mainContent, "main", testPath, "main_test.go", testContent)
+
+		assert.Nil(t, findSourceV2ByOrigin(sources, nestedPath), "GetChannel() unexpectedly included nested file for '.'")
+
+		assert.Nil(t, findSourceV2ByOrigin(sources, testPath), "GetChannel() should not include test files as origins")
+	})
+
+	t.Run("tilde expands home directory", func(t *testing.T) {
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+
+		mainPath := filepath.Join(home, "home.go")
+		copyExampleFile(t, filepath.Join(examplePath(t, "basic"), "main.go"), mainPath)
+		mainContent := readFileBytes(t, mainPath)
+
+		ctx := context.Background()
+		sourceChan, errorChan := adapter.GetChannel(ctx, []m.Path{"~"}, 1)
+		sources, errs := consumeChannels(sourceChan, errorChan)
+		require.Empty(t, errs)
+
+		source := findSourceV2ByOrigin(sources, mainPath)
+		require.NotNilf(t, source, "GetChannel() did not include %s", mainPath)
+
+		assertSourceV2(t, source, mainPath, "", mainContent, "main", "", "", nil)
+	})
+
+	t.Run("parent directory path resolves", func(t *testing.T) {
+		root := t.TempDir()
+		parentPath := filepath.Join(root, "main.go")
+		copyExampleFile(t, filepath.Join(examplePath(t, "basic"), "main.go"), parentPath)
+		parentContent := readFileBytes(t, parentPath)
+
+		childDir := filepath.Join(root, "child")
+		mustMkdir(t, childDir)
+
+		wd, err := os.Getwd()
+		require.NoError(t, err)
+		require.NoError(t, os.Chdir(childDir))
+		t.Cleanup(func() { _ = os.Chdir(wd) })
+
+		ctx := context.Background()
+		sourceChan, errorChan := adapter.GetChannel(ctx, []m.Path{"./../"}, 1)
+		sources, errs := consumeChannels(sourceChan, errorChan)
+		require.Empty(t, errs)
+
+		source := findSourceV2ByOrigin(sources, parentPath)
+		require.NotNilf(t, source, "GetChannel() did not include %s", parentPath)
+
+		assertSourceV2(t, source, parentPath, "", parentContent, "main", "", "", nil)
+	})
+
+	t.Run("go style recursive path includes nested", func(t *testing.T) {
+		root := t.TempDir()
+		mainPath := filepath.Join(root, "main.go")
+		copyExampleFile(t, filepath.Join(examplePath(t, "basic"), "main.go"), mainPath)
+		mainContent := readFileBytes(t, mainPath)
+
+		nestedDir := filepath.Join(root, "nested")
+		mustMkdir(t, nestedDir)
+		nestedPath := filepath.Join(nestedDir, "child.go")
+		copyExampleFile(t, filepath.Join(examplePath(t, "nested", "sub"), "child.go"), nestedPath)
+		nestedContent := readFileBytes(t, nestedPath)
+
+		wd, err := os.Getwd()
+		require.NoError(t, err)
+		require.NoError(t, os.Chdir(root))
+		t.Cleanup(func() { _ = os.Chdir(wd) })
+
+		ctx := context.Background()
+		sourceChan, errorChan := adapter.GetChannel(ctx, []m.Path{"./..."}, 1)
+		sources, errs := consumeChannels(sourceChan, errorChan)
+		require.Empty(t, errs)
+
+		mainSource := findSourceV2ByOrigin(sources, mainPath)
+		require.NotNilf(t, mainSource, "GetChannel() did not include %s", mainPath)
+		assertSourceV2(t, mainSource, mainPath, "", mainContent, "main", "", "", nil)
+
+		nestedSource := findSourceV2ByOrigin(sources, nestedPath)
+		require.NotNil(t, nestedSource, "GetChannel() did not include nested file for ./...")
+
+		assertSourceV2(t, nestedSource, nestedPath, "", nestedContent, "sub", "", "", nil)
+	})
+
+	t.Run("explicit nested path includes child file", func(t *testing.T) {
+		root := t.TempDir()
+		nestedDir := filepath.Join(root, "nested")
+		mustMkdir(t, nestedDir)
+		childPath := filepath.Join(nestedDir, "child.go")
+		copyExampleFile(t, filepath.Join(examplePath(t, "nested", "sub"), "child.go"), childPath)
+		childContent := readFileBytes(t, childPath)
+
+		wd, err := os.Getwd()
+		require.NoError(t, err)
+		require.NoError(t, os.Chdir(root))
+		t.Cleanup(func() { _ = os.Chdir(wd) })
+
+		ctx := context.Background()
+		sourceChan, errorChan := adapter.GetChannel(ctx, []m.Path{"./nested/..."}, 1)
+		sources, errs := consumeChannels(sourceChan, errorChan)
+		require.Empty(t, errs)
+
+		childSource := findSourceV2ByOrigin(sources, childPath)
+		require.NotNil(t, childSource, "GetChannel() did not include nested child for ./nested/...")
+		assertSourceV2(t, childSource, childPath, "", childContent, "sub", "", "", nil)
+	})
+
+	t.Run("returns error for missing root", func(t *testing.T) {
+		ctx := context.Background()
+		sourceChan, errorChan := adapter.GetChannel(ctx, []m.Path{"/path/does/not/exist"}, 1)
+		sources, errs := consumeChannels(sourceChan, errorChan)
+		assert.Empty(t, sources)
+		assert.NotEmpty(t, errs)
+	})
+
+	t.Run("file path returns single source", func(t *testing.T) {
+		root := t.TempDir()
+		mainPath := filepath.Join(root, "main.go")
+		testPath := filepath.Join(root, "main_test.go")
+		copyExampleFile(t, filepath.Join(examplePath(t, "basic"), "main.go"), mainPath)
+		copyExampleFile(t, filepath.Join(examplePath(t, "basic"), "main_test.go"), testPath)
+		mainContent := readFileBytes(t, mainPath)
+		testContent := readFileBytes(t, testPath)
+
+		ctx := context.Background()
+		sourceChan, errorChan := adapter.GetChannel(ctx, []m.Path{m.Path(mainPath)}, 1)
+		sources, errs := consumeChannels(sourceChan, errorChan)
+		require.Empty(t, errs)
+		require.Len(t, sources, 1)
+
+		assertSourceV2(t, &sources[0], mainPath, "", mainContent, "main", testPath, "", testContent)
+	})
+
+	t.Run("test file input yields no sources", func(t *testing.T) {
+		root := t.TempDir()
+		testPath := filepath.Join(root, "main_test.go")
+		copyExampleFile(t, filepath.Join(examplePath(t, "basic"), "main_test.go"), testPath)
+
+		ctx := context.Background()
+		sourceChan, errorChan := adapter.GetChannel(ctx, []m.Path{m.Path(testPath)}, 1)
+		sources, errs := consumeChannels(sourceChan, errorChan)
+		require.Empty(t, errs)
+		assert.Len(t, sources, 0)
+	})
+
+	t.Run("non-go files are ignored", func(t *testing.T) {
+		root := t.TempDir()
+		modPath := filepath.Join(root, "go.mod")
+		copyExampleFile(t, filepath.Join(examplePath(t, "basic"), "go.mod"), modPath)
+
+		ctx := context.Background()
+		sourceChan, errorChan := adapter.GetChannel(ctx, []m.Path{m.Path(root)}, 1)
+		sources, errs := consumeChannels(sourceChan, errorChan)
+		require.Empty(t, errs)
+		assert.Len(t, sources, 0)
+	})
+
+	t.Run("duplicate roots are de-duplicated", func(t *testing.T) {
+		root := t.TempDir()
+		mainPath := filepath.Join(root, "main.go")
+		copyExampleFile(t, filepath.Join(examplePath(t, "basic"), "main.go"), mainPath)
+		mainContent := readFileBytes(t, mainPath)
+
+		ctx := context.Background()
+		sourceChan, errorChan := adapter.GetChannel(ctx, []m.Path{m.Path(root), m.Path(root)}, 1)
+		sources, errs := consumeChannels(sourceChan, errorChan)
+		require.Empty(t, errs)
+		require.Len(t, sources, 1)
+
+		assertSourceV2(t, &sources[0], mainPath, "", mainContent, "main", "", "", nil)
+	})
+
+	t.Run("ignore regex excludes matching files", func(t *testing.T) {
+		root := t.TempDir()
+		writeTestFile(t, filepath.Join(root, "go.mod"), "module example.com/project\n")
+		ignoredPath := filepath.Join(root, "mick_skip.go")
+		keptPath := filepath.Join(root, "keep.go")
+		writeTestFile(t, ignoredPath, "package main\n")
+		writeTestFile(t, keptPath, "package main\n")
+
+		ctx := context.Background()
+		sourceChan, errorChan := adapter.GetChannel(ctx, []m.Path{m.Path(root)}, 1, "^mick_")
+		sources, errs := consumeChannels(sourceChan, errorChan)
+		require.Empty(t, errs)
+		require.Len(t, sources, 1)
+
+		assert.Equal(t, m.Path(keptPath), sources[0].Origin.FullPath)
+	})
+
+	t.Run("broken source files are skipped", func(t *testing.T) {
+		root := t.TempDir()
+		brokenPath := filepath.Join(root, "broken.go")
+		writeTestFile(t, brokenPath, "package main\nfunc {\n")
+
+		ctx := context.Background()
+		sourceChan, errorChan := adapter.GetChannel(ctx, []m.Path{m.Path(root)}, 1)
+		sources, errs := consumeChannels(sourceChan, errorChan)
+		require.Empty(t, errs)
+		assert.Len(t, sources, 0)
+	})
+
+	t.Run("broken test files are ignored", func(t *testing.T) {
+		root := t.TempDir()
+		sourcePath := filepath.Join(root, "calc.go")
+		testPath := filepath.Join(root, "calc_test.go")
+		writeTestFile(t, sourcePath, "package calc\nfunc Sum(a, b int) int { return a + b }\n")
+		writeTestFile(t, testPath, "package calc\nfunc {\n")
+
+		ctx := context.Background()
+		sourceChan, errorChan := adapter.GetChannel(ctx, []m.Path{m.Path(root)}, 1)
+		sources, errs := consumeChannels(sourceChan, errorChan)
+		require.Empty(t, errs)
+		require.Len(t, sources, 1)
+
+		if assert.NotNil(t, sources[0].Origin) {
+			assert.Equal(t, m.Path(sourcePath), sources[0].Origin.FullPath)
+		}
+		assert.Nil(t, sources[0].Test)
+	})
+}
+
+func consumeChannels(sourceChan <-chan m.Source, errorChan <-chan error) ([]m.Source, []error) {
+	var sources []m.Source
+	var errs []error
+	for sourceChan != nil || errorChan != nil {
+		select {
+		case source, ok := <-sourceChan:
+			if !ok {
+				sourceChan = nil
+			} else {
+				sources = append(sources, source)
+			}
+		case err, ok := <-errorChan:
+			if !ok {
+				errorChan = nil
+			} else {
+				errs = append(errs, err)
+			}
+		}
+	}
+	return sources, errs
 }
 
 func writeTestFile(t *testing.T, path, contents string) {
