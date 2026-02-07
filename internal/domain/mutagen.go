@@ -2,6 +2,7 @@
 package domain
 
 import (
+	"context"
 	"fmt"
 	"go/ast"
 	"go/token"
@@ -13,7 +14,7 @@ import (
 
 // Mutagen defines the interface for mutation generation.
 type Mutagen interface {
-	GenerateMutation(source m.Source, mutationTypes ...m.MutationType) ([]m.Mutation, error)
+	GenerateMutation(ctx context.Context, source m.Source, mutationTypes ...m.MutationType) ([]m.Mutation, error)
 }
 
 // mutagen handles pure mutation generation logic.
@@ -30,7 +31,7 @@ func NewMutagen(goFileAdapter adapter.GoFileAdapter, sourceFSAdapter adapter.Sou
 	}
 }
 
-func (mg *mutagen) GenerateMutation(source m.Source, mutationTypes ...m.MutationType) ([]m.Mutation, error) {
+func (mg *mutagen) GenerateMutation(ctx context.Context, source m.Source, mutationTypes ...m.MutationType) ([]m.Mutation, error) {
 	if err := validateSource(source); err != nil {
 		return nil, err
 	}
@@ -44,7 +45,7 @@ func (mg *mutagen) GenerateMutation(source m.Source, mutationTypes ...m.Mutation
 		return nil, err
 	}
 
-	content, fset, file, err := mg.loadSourceAST(source)
+	content, fset, file, err := mg.loadSourceAST(ctx, source)
 	if err != nil {
 		return nil, err
 	}
@@ -88,15 +89,15 @@ func resolveMutationTypes(mutationTypes []m.MutationType) ([]m.MutationType, err
 	return mutationTypes, nil
 }
 
-func (mg *mutagen) loadSourceAST(source m.Source) ([]byte, *token.FileSet, *ast.File, error) {
-	content, err := mg.ReadFile(source.Origin.FullPath)
+func (mg *mutagen) loadSourceAST(ctx context.Context, source m.Source) ([]byte, *token.FileSet, *ast.File, error) {
+	content, err := mg.ReadFile(ctx, source.Origin.FullPath)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to read %s: %w", source.Origin.FullPath, err)
 	}
 
 	fset := token.NewFileSet()
 
-	file, err := mg.Parse(fset, string(source.Origin.FullPath), content)
+	file, err := mg.Parse(ctx, fset, string(source.Origin.FullPath), content)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to parse %s: %w", source.Origin.FullPath, err)
 	}

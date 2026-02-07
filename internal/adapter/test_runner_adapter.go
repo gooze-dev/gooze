@@ -4,33 +4,26 @@ import (
 	"bytes"
 	"context"
 	"os/exec"
-	"time"
 )
 
 // TestRunnerAdapter abstracts test execution operations for mutation testing.
 type TestRunnerAdapter interface {
 	// RunGoTest runs 'go test' on a specific test file in the given directory.
 	// Returns the combined stdout/stderr output and any error.
-	RunGoTest(workDir, testFile string) (output string, err error)
+	RunGoTest(ctx context.Context, workDir, testFile string) (output string, err error)
 }
 
 // LocalTestRunnerAdapter provides a concrete implementation using os/exec.
 type LocalTestRunnerAdapter struct {
-	timeout time.Duration
 }
 
 // NewLocalTestRunnerAdapter constructs a LocalTestRunnerAdapter with default 30s timeout.
 func NewLocalTestRunnerAdapter() *LocalTestRunnerAdapter {
-	return &LocalTestRunnerAdapter{
-		timeout: 30 * time.Second,
-	}
+	return &LocalTestRunnerAdapter{}
 }
 
 // RunGoTest runs 'go test' on a specific test file in the given directory.
-func (a *LocalTestRunnerAdapter) RunGoTest(workDir, testFile string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), a.timeout)
-	defer cancel()
-
+func (a *LocalTestRunnerAdapter) RunGoTest(ctx context.Context, workDir, testFile string) (string, error) {
 	cmd := exec.CommandContext(ctx, "go", "test", "-v", testFile)
 	cmd.Dir = workDir
 

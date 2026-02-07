@@ -23,7 +23,7 @@ func TestListCmd_UsesCache(t *testing.T) {
 	workflow = mockWorkflow
 	defer func() { workflow = originalWorkflow }()
 
-	mockWorkflow.On("Estimate", mock.MatchedBy(func(args domain.EstimateArgs) bool {
+	mockWorkflow.On("Estimate", mock.Anything, mock.MatchedBy(func(args domain.EstimateArgs) bool {
 		return args.UseCache == true
 	})).Return(nil)
 
@@ -46,7 +46,7 @@ func TestListCmd_NoCacheFlag_DisablesCache(t *testing.T) {
 	workflow = mockWorkflow
 	defer func() { workflow = originalWorkflow }()
 
-	mockWorkflow.On("Estimate", mock.MatchedBy(func(args domain.EstimateArgs) bool {
+	mockWorkflow.On("Estimate", mock.Anything, mock.MatchedBy(func(args domain.EstimateArgs) bool {
 		return args.UseCache == false
 	})).Return(nil)
 
@@ -69,7 +69,7 @@ func TestListCmd_WithExcludePatterns(t *testing.T) {
 	workflow = mockWorkflow
 	defer func() { workflow = originalWorkflow }()
 
-	mockWorkflow.On("Estimate", mock.MatchedBy(func(args domain.EstimateArgs) bool {
+	mockWorkflow.On("Estimate", mock.Anything, mock.MatchedBy(func(args domain.EstimateArgs) bool {
 		return len(args.Exclude) == 1 && args.Exclude[0] == "^vendor/"
 	})).Return(nil)
 

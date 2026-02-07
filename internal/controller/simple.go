@@ -125,7 +125,7 @@ func (s *SimpleUI) DisplayCompletedTestInfo(currentMutation m.Mutation, mutation
 
 	s.printf("Completed mutation %s (%s) -> %s\n", currentMutation.ID[:4], currentMutation.Type.Name, status)
 
-	if status == formatTestStatus(m.Survived) && len(currentMutation.DiffCode) > 0 {
+	if status != formatTestStatus(m.Killed) && len(currentMutation.DiffCode) > 0 {
 		path := ""
 		if currentMutation.Source.Origin != nil {
 			path = string(currentMutation.Source.Origin.FullPath)

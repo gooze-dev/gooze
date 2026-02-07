@@ -2,6 +2,7 @@
 package adapter
 
 import (
+	"context"
 	"crypto/sha256"
 	"errors"
 	"fmt"
@@ -21,13 +22,13 @@ const indexFileName = "_index.yaml"
 
 // ReportStore persists and retrieves mutation reports.
 type ReportStore interface {
-	SaveReports(path m.Path, reports []m.Report) error
-	SaveSpillReports(path m.Path, reports pkg.FileSpill[m.Report]) error
-	RegenerateIndex(path m.Path) error
-	LoadReports(path m.Path) ([]m.Report, error)
-	LoadSpillReports(path m.Path) (pkg.FileSpill[m.Report], error)
-	CheckUpdates(path m.Path, sources []m.Source) ([]m.Source, error)
-	CleanReports(path m.Path, sources []m.Source) error
+	SaveReports(ctx context.Context, path m.Path, reports []m.Report) error
+	SaveSpillReports(ctx context.Context, path m.Path, reports pkg.FileSpill[m.Report]) error
+	RegenerateIndex(ctx context.Context, path m.Path) error
+	LoadReports(ctx context.Context, path m.Path) ([]m.Report, error)
+	LoadSpillReports(ctx context.Context, path m.Path) (pkg.FileSpill[m.Report], error)
+	CheckUpdates(ctx context.Context, path m.Path, sources []m.Source) ([]m.Source, error)
+	CleanReports(ctx context.Context, path m.Path, sources []m.Source) error
 }
 
 // LocalReportStore is the concrete implementation that will back the
@@ -79,7 +80,11 @@ type indexEntry struct {
 }
 
 // SaveReports writes one YAML file per report into the provided directory.
-func (rs *LocalReportStore) SaveReports(path m.Path, reports []m.Report) error {
+func (rs *LocalReportStore) SaveReports(ctx context.Context, path m.Path, reports []m.Report) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	dirPath := string(path)
 	if dirPath == "" {
 		return fmt.Errorf("reports directory path is required")
@@ -119,7 +124,11 @@ func (rs *LocalReportStore) SaveReports(path m.Path, reports []m.Report) error {
 }
 
 // SaveSpillReports writes one YAML file per report from the filespill into the provided directory.
-func (rs *LocalReportStore) SaveSpillReports(path m.Path, reports pkg.FileSpill[m.Report]) error {
+func (rs *LocalReportStore) SaveSpillReports(ctx context.Context, path m.Path, reports pkg.FileSpill[m.Report]) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	dirPath := string(path)
 	if dirPath == "" {
 		return fmt.Errorf("reports directory path is required")
@@ -152,7 +161,11 @@ func (rs *LocalReportStore) SaveSpillReports(path m.Path, reports pkg.FileSpill[
 }
 
 // RegenerateIndex rebuilds and writes `_index.yaml` from the report files in `path`.
-func (rs *LocalReportStore) RegenerateIndex(path m.Path) error {
+func (rs *LocalReportStore) RegenerateIndex(ctx context.Context, path m.Path) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	dirPath := string(path)
 	if dirPath == "" {
 		return fmt.Errorf("reports directory path is required")
@@ -242,7 +255,11 @@ func (rs *LocalReportStore) writeIndexForReports(dirPath string, reports []m.Rep
 // LoadReports retrieves previously saved reports from disk.
 //
 // Note: This is currently a stub; report loading will be implemented later.
-func (rs *LocalReportStore) LoadReports(path m.Path) ([]m.Report, error) {
+func (rs *LocalReportStore) LoadReports(ctx context.Context, path m.Path) ([]m.Report, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	dirPath := string(path)
 	if dirPath == "" {
 		return nil, fmt.Errorf("reports directory path is required")
@@ -263,7 +280,11 @@ func (rs *LocalReportStore) LoadReports(path m.Path) ([]m.Report, error) {
 // LoadSpillReports loads reports from a FileSpill (stubbed for now - assuming index logic handles it).
 // In a real implementation this would likely return a FileSpill that reads directly from the persisted gob files.
 // For now, if we saved as spilled, we might want to just open it.
-func (rs *LocalReportStore) LoadSpillReports(path m.Path) (pkg.FileSpill[m.Report], error) {
+func (rs *LocalReportStore) LoadSpillReports(ctx context.Context, path m.Path) (pkg.FileSpill[m.Report], error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	dirPath := string(path)
 	if dirPath == "" {
 		return nil, fmt.Errorf("reports directory path is required")
@@ -303,7 +324,11 @@ type storedSourceState struct {
 
 // CleanReports deletes stored report files that belong to the provided sources.
 // It is safe to call when the reports directory does not exist.
-func (rs *LocalReportStore) CleanReports(path m.Path, sources []m.Source) error {
+func (rs *LocalReportStore) CleanReports(ctx context.Context, path m.Path, sources []m.Source) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	dirPath := string(path)
 	if dirPath == "" {
 		return fmt.Errorf("reports directory path is required")
@@ -334,7 +359,7 @@ func (rs *LocalReportStore) CleanReports(path m.Path, sources []m.Source) error 
 		}
 	}
 
-	return rs.RegenerateIndex(path)
+	return rs.RegenerateIndex(ctx, path)
 }
 
 func (rs *LocalReportStore) cleanReportFile(dirPath string, entry os.DirEntry, toCleanPaths map[string]bool, toCleanHashes map[string]bool) error {
@@ -410,7 +435,11 @@ func (rs *LocalReportStore) shouldCleanReport(source m.Source, toCleanPaths map[
 // - the source file is deleted (present in stored reports but not in current `sources`)
 // - source/test content hash changed
 // - the current mutator set or versions differ from what was used to generate stored reports.
-func (rs *LocalReportStore) CheckUpdates(path m.Path, sources []m.Source) ([]m.Source, error) {
+func (rs *LocalReportStore) CheckUpdates(ctx context.Context, path m.Path, sources []m.Source) ([]m.Source, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	dirPath := string(path)
 	if dirPath == "" {
 		return nil, fmt.Errorf("reports directory path is required")

@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"context"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"gooze.dev/pkg/gooze/internal/domain"
@@ -18,7 +20,7 @@ func newViewCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(0),
 		RunE: func(_ *cobra.Command, _ []string) error {
 			reportsPath := m.Path(viper.GetString(outputFlagName))
-			return workflow.View(domain.ViewArgs{Reports: reportsPath})
+			return workflow.View(context.Background(), domain.ViewArgs{Reports: reportsPath})
 		},
 	}
 

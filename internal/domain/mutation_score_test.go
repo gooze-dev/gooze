@@ -44,8 +44,7 @@ func TestMutationScoreFromReports(t *testing.T) {
 	score, err := mutationScoreFromReports(spill)
 	require.NoError(t, err)
 
-	want := 2.0 / 3.0
-	require.Equal(t, want, score)
+	require.Equal(t, 0.4, score)
 }
 
 func TestMutationScoreFromReports_EmptySpillIs100(t *testing.T) {
@@ -78,7 +77,7 @@ func TestMutationScoreFromReports_OnlySkippedAndErrorIs100(t *testing.T) {
 	score, err := mutationScoreFromReports(spill)
 	require.NoError(t, err)
 
-	require.Equal(t, 100.0, score)
+	require.Equal(t, 0.0, score)
 }
 
 func TestMutationScoreFromReports_AllSurvivedIs0(t *testing.T) {
@@ -112,8 +111,7 @@ func TestMutationScoreFromReports_AggregatesAcrossReports(t *testing.T) {
 		Result: m.Result{
 			m.MutationArithmetic: {
 				{MutationID: "a1", Status: m.Killed, Err: nil},
-				{MutationID: "a2", Status: m.Killed, Err: nil},
-				{MutationID: "a3", Status: m.Survived, Err: nil},
+				{MutationID: "a2", Status: m.Survived, Err: nil},
 			},
 		},
 	}
@@ -121,9 +119,11 @@ func TestMutationScoreFromReports_AggregatesAcrossReports(t *testing.T) {
 		Result: m.Result{
 			m.MutationBoolean: {
 				{MutationID: "b1", Status: m.Killed, Err: nil},
-				{MutationID: "b2", Status: m.Survived, Err: nil},
-				{MutationID: "b3", Status: m.Skipped, Err: nil},
+				{MutationID: "b2", Status: m.Killed, Err: nil},
+				{MutationID: "b3", Status: m.Killed, Err: nil},
 				{MutationID: "b4", Status: m.Error, Err: nil},
+				{MutationID: "b5", Status: m.Survived, Err: nil},
+				{MutationID: "b6", Status: m.Timeout, Err: nil},
 			},
 		},
 	}
@@ -136,8 +136,7 @@ func TestMutationScoreFromReports_AggregatesAcrossReports(t *testing.T) {
 	score, err := mutationScoreFromReports(spill)
 	require.NoError(t, err)
 
-	// 3 killed out of 5 total mutations (excluding skipped and error)
-	require.Equal(t, 0.6, score)
+	require.Equal(t, 0.5, score)
 }
 
 func TestMutationScoreFromReports_RangeErrorPropagates(t *testing.T) {

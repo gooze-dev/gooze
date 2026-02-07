@@ -3,6 +3,8 @@
 package mocks
 
 import (
+	context "context"
+
 	mock "github.com/stretchr/testify/mock"
 	model "gooze.dev/pkg/gooze/internal/model"
 
@@ -22,9 +24,9 @@ func (_m *MockReportStore) EXPECT() *MockReportStore_Expecter {
 	return &MockReportStore_Expecter{mock: &_m.Mock}
 }
 
-// CheckUpdates provides a mock function with given fields: path, sources
-func (_m *MockReportStore) CheckUpdates(path model.Path, sources []model.Source) ([]model.Source, error) {
-	ret := _m.Called(path, sources)
+// CheckUpdates provides a mock function with given fields: ctx, path, sources
+func (_m *MockReportStore) CheckUpdates(ctx context.Context, path model.Path, sources []model.Source) ([]model.Source, error) {
+	ret := _m.Called(ctx, path, sources)
 
 	if len(ret) == 0 {
 		panic("no return value specified for CheckUpdates")
@@ -32,19 +34,19 @@ func (_m *MockReportStore) CheckUpdates(path model.Path, sources []model.Source)
 
 	var r0 []model.Source
 	var r1 error
-	if rf, ok := ret.Get(0).(func(model.Path, []model.Source) ([]model.Source, error)); ok {
-		return rf(path, sources)
+	if rf, ok := ret.Get(0).(func(context.Context, model.Path, []model.Source) ([]model.Source, error)); ok {
+		return rf(ctx, path, sources)
 	}
-	if rf, ok := ret.Get(0).(func(model.Path, []model.Source) []model.Source); ok {
-		r0 = rf(path, sources)
+	if rf, ok := ret.Get(0).(func(context.Context, model.Path, []model.Source) []model.Source); ok {
+		r0 = rf(ctx, path, sources)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]model.Source)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(model.Path, []model.Source) error); ok {
-		r1 = rf(path, sources)
+	if rf, ok := ret.Get(1).(func(context.Context, model.Path, []model.Source) error); ok {
+		r1 = rf(ctx, path, sources)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -58,15 +60,16 @@ type MockReportStore_CheckUpdates_Call struct {
 }
 
 // CheckUpdates is a helper method to define mock.On call
+//   - ctx context.Context
 //   - path model.Path
 //   - sources []model.Source
-func (_e *MockReportStore_Expecter) CheckUpdates(path interface{}, sources interface{}) *MockReportStore_CheckUpdates_Call {
-	return &MockReportStore_CheckUpdates_Call{Call: _e.mock.On("CheckUpdates", path, sources)}
+func (_e *MockReportStore_Expecter) CheckUpdates(ctx interface{}, path interface{}, sources interface{}) *MockReportStore_CheckUpdates_Call {
+	return &MockReportStore_CheckUpdates_Call{Call: _e.mock.On("CheckUpdates", ctx, path, sources)}
 }
 
-func (_c *MockReportStore_CheckUpdates_Call) Run(run func(path model.Path, sources []model.Source)) *MockReportStore_CheckUpdates_Call {
+func (_c *MockReportStore_CheckUpdates_Call) Run(run func(ctx context.Context, path model.Path, sources []model.Source)) *MockReportStore_CheckUpdates_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(model.Path), args[1].([]model.Source))
+		run(args[0].(context.Context), args[1].(model.Path), args[2].([]model.Source))
 	})
 	return _c
 }
@@ -76,22 +79,22 @@ func (_c *MockReportStore_CheckUpdates_Call) Return(_a0 []model.Source, _a1 erro
 	return _c
 }
 
-func (_c *MockReportStore_CheckUpdates_Call) RunAndReturn(run func(model.Path, []model.Source) ([]model.Source, error)) *MockReportStore_CheckUpdates_Call {
+func (_c *MockReportStore_CheckUpdates_Call) RunAndReturn(run func(context.Context, model.Path, []model.Source) ([]model.Source, error)) *MockReportStore_CheckUpdates_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// CleanReports provides a mock function with given fields: path, sources
-func (_m *MockReportStore) CleanReports(path model.Path, sources []model.Source) error {
-	ret := _m.Called(path, sources)
+// CleanReports provides a mock function with given fields: ctx, path, sources
+func (_m *MockReportStore) CleanReports(ctx context.Context, path model.Path, sources []model.Source) error {
+	ret := _m.Called(ctx, path, sources)
 
 	if len(ret) == 0 {
 		panic("no return value specified for CleanReports")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(model.Path, []model.Source) error); ok {
-		r0 = rf(path, sources)
+	if rf, ok := ret.Get(0).(func(context.Context, model.Path, []model.Source) error); ok {
+		r0 = rf(ctx, path, sources)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -105,15 +108,16 @@ type MockReportStore_CleanReports_Call struct {
 }
 
 // CleanReports is a helper method to define mock.On call
+//   - ctx context.Context
 //   - path model.Path
 //   - sources []model.Source
-func (_e *MockReportStore_Expecter) CleanReports(path interface{}, sources interface{}) *MockReportStore_CleanReports_Call {
-	return &MockReportStore_CleanReports_Call{Call: _e.mock.On("CleanReports", path, sources)}
+func (_e *MockReportStore_Expecter) CleanReports(ctx interface{}, path interface{}, sources interface{}) *MockReportStore_CleanReports_Call {
+	return &MockReportStore_CleanReports_Call{Call: _e.mock.On("CleanReports", ctx, path, sources)}
 }
 
-func (_c *MockReportStore_CleanReports_Call) Run(run func(path model.Path, sources []model.Source)) *MockReportStore_CleanReports_Call {
+func (_c *MockReportStore_CleanReports_Call) Run(run func(ctx context.Context, path model.Path, sources []model.Source)) *MockReportStore_CleanReports_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(model.Path), args[1].([]model.Source))
+		run(args[0].(context.Context), args[1].(model.Path), args[2].([]model.Source))
 	})
 	return _c
 }
@@ -123,14 +127,14 @@ func (_c *MockReportStore_CleanReports_Call) Return(_a0 error) *MockReportStore_
 	return _c
 }
 
-func (_c *MockReportStore_CleanReports_Call) RunAndReturn(run func(model.Path, []model.Source) error) *MockReportStore_CleanReports_Call {
+func (_c *MockReportStore_CleanReports_Call) RunAndReturn(run func(context.Context, model.Path, []model.Source) error) *MockReportStore_CleanReports_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// LoadReports provides a mock function with given fields: path
-func (_m *MockReportStore) LoadReports(path model.Path) ([]model.Report, error) {
-	ret := _m.Called(path)
+// LoadReports provides a mock function with given fields: ctx, path
+func (_m *MockReportStore) LoadReports(ctx context.Context, path model.Path) ([]model.Report, error) {
+	ret := _m.Called(ctx, path)
 
 	if len(ret) == 0 {
 		panic("no return value specified for LoadReports")
@@ -138,19 +142,19 @@ func (_m *MockReportStore) LoadReports(path model.Path) ([]model.Report, error) 
 
 	var r0 []model.Report
 	var r1 error
-	if rf, ok := ret.Get(0).(func(model.Path) ([]model.Report, error)); ok {
-		return rf(path)
+	if rf, ok := ret.Get(0).(func(context.Context, model.Path) ([]model.Report, error)); ok {
+		return rf(ctx, path)
 	}
-	if rf, ok := ret.Get(0).(func(model.Path) []model.Report); ok {
-		r0 = rf(path)
+	if rf, ok := ret.Get(0).(func(context.Context, model.Path) []model.Report); ok {
+		r0 = rf(ctx, path)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]model.Report)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(model.Path) error); ok {
-		r1 = rf(path)
+	if rf, ok := ret.Get(1).(func(context.Context, model.Path) error); ok {
+		r1 = rf(ctx, path)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -164,14 +168,15 @@ type MockReportStore_LoadReports_Call struct {
 }
 
 // LoadReports is a helper method to define mock.On call
+//   - ctx context.Context
 //   - path model.Path
-func (_e *MockReportStore_Expecter) LoadReports(path interface{}) *MockReportStore_LoadReports_Call {
-	return &MockReportStore_LoadReports_Call{Call: _e.mock.On("LoadReports", path)}
+func (_e *MockReportStore_Expecter) LoadReports(ctx interface{}, path interface{}) *MockReportStore_LoadReports_Call {
+	return &MockReportStore_LoadReports_Call{Call: _e.mock.On("LoadReports", ctx, path)}
 }
 
-func (_c *MockReportStore_LoadReports_Call) Run(run func(path model.Path)) *MockReportStore_LoadReports_Call {
+func (_c *MockReportStore_LoadReports_Call) Run(run func(ctx context.Context, path model.Path)) *MockReportStore_LoadReports_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(model.Path))
+		run(args[0].(context.Context), args[1].(model.Path))
 	})
 	return _c
 }
@@ -181,14 +186,14 @@ func (_c *MockReportStore_LoadReports_Call) Return(_a0 []model.Report, _a1 error
 	return _c
 }
 
-func (_c *MockReportStore_LoadReports_Call) RunAndReturn(run func(model.Path) ([]model.Report, error)) *MockReportStore_LoadReports_Call {
+func (_c *MockReportStore_LoadReports_Call) RunAndReturn(run func(context.Context, model.Path) ([]model.Report, error)) *MockReportStore_LoadReports_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// LoadSpillReports provides a mock function with given fields: path
-func (_m *MockReportStore) LoadSpillReports(path model.Path) (pkg.FileSpill[model.Report], error) {
-	ret := _m.Called(path)
+// LoadSpillReports provides a mock function with given fields: ctx, path
+func (_m *MockReportStore) LoadSpillReports(ctx context.Context, path model.Path) (pkg.FileSpill[model.Report], error) {
+	ret := _m.Called(ctx, path)
 
 	if len(ret) == 0 {
 		panic("no return value specified for LoadSpillReports")
@@ -196,19 +201,19 @@ func (_m *MockReportStore) LoadSpillReports(path model.Path) (pkg.FileSpill[mode
 
 	var r0 pkg.FileSpill[model.Report]
 	var r1 error
-	if rf, ok := ret.Get(0).(func(model.Path) (pkg.FileSpill[model.Report], error)); ok {
-		return rf(path)
+	if rf, ok := ret.Get(0).(func(context.Context, model.Path) (pkg.FileSpill[model.Report], error)); ok {
+		return rf(ctx, path)
 	}
-	if rf, ok := ret.Get(0).(func(model.Path) pkg.FileSpill[model.Report]); ok {
-		r0 = rf(path)
+	if rf, ok := ret.Get(0).(func(context.Context, model.Path) pkg.FileSpill[model.Report]); ok {
+		r0 = rf(ctx, path)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(pkg.FileSpill[model.Report])
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(model.Path) error); ok {
-		r1 = rf(path)
+	if rf, ok := ret.Get(1).(func(context.Context, model.Path) error); ok {
+		r1 = rf(ctx, path)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -222,14 +227,15 @@ type MockReportStore_LoadSpillReports_Call struct {
 }
 
 // LoadSpillReports is a helper method to define mock.On call
+//   - ctx context.Context
 //   - path model.Path
-func (_e *MockReportStore_Expecter) LoadSpillReports(path interface{}) *MockReportStore_LoadSpillReports_Call {
-	return &MockReportStore_LoadSpillReports_Call{Call: _e.mock.On("LoadSpillReports", path)}
+func (_e *MockReportStore_Expecter) LoadSpillReports(ctx interface{}, path interface{}) *MockReportStore_LoadSpillReports_Call {
+	return &MockReportStore_LoadSpillReports_Call{Call: _e.mock.On("LoadSpillReports", ctx, path)}
 }
 
-func (_c *MockReportStore_LoadSpillReports_Call) Run(run func(path model.Path)) *MockReportStore_LoadSpillReports_Call {
+func (_c *MockReportStore_LoadSpillReports_Call) Run(run func(ctx context.Context, path model.Path)) *MockReportStore_LoadSpillReports_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(model.Path))
+		run(args[0].(context.Context), args[1].(model.Path))
 	})
 	return _c
 }
@@ -239,22 +245,22 @@ func (_c *MockReportStore_LoadSpillReports_Call) Return(_a0 pkg.FileSpill[model.
 	return _c
 }
 
-func (_c *MockReportStore_LoadSpillReports_Call) RunAndReturn(run func(model.Path) (pkg.FileSpill[model.Report], error)) *MockReportStore_LoadSpillReports_Call {
+func (_c *MockReportStore_LoadSpillReports_Call) RunAndReturn(run func(context.Context, model.Path) (pkg.FileSpill[model.Report], error)) *MockReportStore_LoadSpillReports_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// RegenerateIndex provides a mock function with given fields: path
-func (_m *MockReportStore) RegenerateIndex(path model.Path) error {
-	ret := _m.Called(path)
+// RegenerateIndex provides a mock function with given fields: ctx, path
+func (_m *MockReportStore) RegenerateIndex(ctx context.Context, path model.Path) error {
+	ret := _m.Called(ctx, path)
 
 	if len(ret) == 0 {
 		panic("no return value specified for RegenerateIndex")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(model.Path) error); ok {
-		r0 = rf(path)
+	if rf, ok := ret.Get(0).(func(context.Context, model.Path) error); ok {
+		r0 = rf(ctx, path)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -268,14 +274,15 @@ type MockReportStore_RegenerateIndex_Call struct {
 }
 
 // RegenerateIndex is a helper method to define mock.On call
+//   - ctx context.Context
 //   - path model.Path
-func (_e *MockReportStore_Expecter) RegenerateIndex(path interface{}) *MockReportStore_RegenerateIndex_Call {
-	return &MockReportStore_RegenerateIndex_Call{Call: _e.mock.On("RegenerateIndex", path)}
+func (_e *MockReportStore_Expecter) RegenerateIndex(ctx interface{}, path interface{}) *MockReportStore_RegenerateIndex_Call {
+	return &MockReportStore_RegenerateIndex_Call{Call: _e.mock.On("RegenerateIndex", ctx, path)}
 }
 
-func (_c *MockReportStore_RegenerateIndex_Call) Run(run func(path model.Path)) *MockReportStore_RegenerateIndex_Call {
+func (_c *MockReportStore_RegenerateIndex_Call) Run(run func(ctx context.Context, path model.Path)) *MockReportStore_RegenerateIndex_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(model.Path))
+		run(args[0].(context.Context), args[1].(model.Path))
 	})
 	return _c
 }
@@ -285,22 +292,22 @@ func (_c *MockReportStore_RegenerateIndex_Call) Return(_a0 error) *MockReportSto
 	return _c
 }
 
-func (_c *MockReportStore_RegenerateIndex_Call) RunAndReturn(run func(model.Path) error) *MockReportStore_RegenerateIndex_Call {
+func (_c *MockReportStore_RegenerateIndex_Call) RunAndReturn(run func(context.Context, model.Path) error) *MockReportStore_RegenerateIndex_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// SaveReports provides a mock function with given fields: path, reports
-func (_m *MockReportStore) SaveReports(path model.Path, reports []model.Report) error {
-	ret := _m.Called(path, reports)
+// SaveReports provides a mock function with given fields: ctx, path, reports
+func (_m *MockReportStore) SaveReports(ctx context.Context, path model.Path, reports []model.Report) error {
+	ret := _m.Called(ctx, path, reports)
 
 	if len(ret) == 0 {
 		panic("no return value specified for SaveReports")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(model.Path, []model.Report) error); ok {
-		r0 = rf(path, reports)
+	if rf, ok := ret.Get(0).(func(context.Context, model.Path, []model.Report) error); ok {
+		r0 = rf(ctx, path, reports)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -314,15 +321,16 @@ type MockReportStore_SaveReports_Call struct {
 }
 
 // SaveReports is a helper method to define mock.On call
+//   - ctx context.Context
 //   - path model.Path
 //   - reports []model.Report
-func (_e *MockReportStore_Expecter) SaveReports(path interface{}, reports interface{}) *MockReportStore_SaveReports_Call {
-	return &MockReportStore_SaveReports_Call{Call: _e.mock.On("SaveReports", path, reports)}
+func (_e *MockReportStore_Expecter) SaveReports(ctx interface{}, path interface{}, reports interface{}) *MockReportStore_SaveReports_Call {
+	return &MockReportStore_SaveReports_Call{Call: _e.mock.On("SaveReports", ctx, path, reports)}
 }
 
-func (_c *MockReportStore_SaveReports_Call) Run(run func(path model.Path, reports []model.Report)) *MockReportStore_SaveReports_Call {
+func (_c *MockReportStore_SaveReports_Call) Run(run func(ctx context.Context, path model.Path, reports []model.Report)) *MockReportStore_SaveReports_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(model.Path), args[1].([]model.Report))
+		run(args[0].(context.Context), args[1].(model.Path), args[2].([]model.Report))
 	})
 	return _c
 }
@@ -332,22 +340,22 @@ func (_c *MockReportStore_SaveReports_Call) Return(_a0 error) *MockReportStore_S
 	return _c
 }
 
-func (_c *MockReportStore_SaveReports_Call) RunAndReturn(run func(model.Path, []model.Report) error) *MockReportStore_SaveReports_Call {
+func (_c *MockReportStore_SaveReports_Call) RunAndReturn(run func(context.Context, model.Path, []model.Report) error) *MockReportStore_SaveReports_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// SaveSpillReports provides a mock function with given fields: path, reports
-func (_m *MockReportStore) SaveSpillReports(path model.Path, reports pkg.FileSpill[model.Report]) error {
-	ret := _m.Called(path, reports)
+// SaveSpillReports provides a mock function with given fields: ctx, path, reports
+func (_m *MockReportStore) SaveSpillReports(ctx context.Context, path model.Path, reports pkg.FileSpill[model.Report]) error {
+	ret := _m.Called(ctx, path, reports)
 
 	if len(ret) == 0 {
 		panic("no return value specified for SaveSpillReports")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(model.Path, pkg.FileSpill[model.Report]) error); ok {
-		r0 = rf(path, reports)
+	if rf, ok := ret.Get(0).(func(context.Context, model.Path, pkg.FileSpill[model.Report]) error); ok {
+		r0 = rf(ctx, path, reports)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -361,15 +369,16 @@ type MockReportStore_SaveSpillReports_Call struct {
 }
 
 // SaveSpillReports is a helper method to define mock.On call
+//   - ctx context.Context
 //   - path model.Path
 //   - reports pkg.FileSpill[model.Report]
-func (_e *MockReportStore_Expecter) SaveSpillReports(path interface{}, reports interface{}) *MockReportStore_SaveSpillReports_Call {
-	return &MockReportStore_SaveSpillReports_Call{Call: _e.mock.On("SaveSpillReports", path, reports)}
+func (_e *MockReportStore_Expecter) SaveSpillReports(ctx interface{}, path interface{}, reports interface{}) *MockReportStore_SaveSpillReports_Call {
+	return &MockReportStore_SaveSpillReports_Call{Call: _e.mock.On("SaveSpillReports", ctx, path, reports)}
 }
 
-func (_c *MockReportStore_SaveSpillReports_Call) Run(run func(path model.Path, reports pkg.FileSpill[model.Report])) *MockReportStore_SaveSpillReports_Call {
+func (_c *MockReportStore_SaveSpillReports_Call) Run(run func(ctx context.Context, path model.Path, reports pkg.FileSpill[model.Report])) *MockReportStore_SaveSpillReports_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(model.Path), args[1].(pkg.FileSpill[model.Report]))
+		run(args[0].(context.Context), args[1].(model.Path), args[2].(pkg.FileSpill[model.Report]))
 	})
 	return _c
 }
@@ -379,7 +388,7 @@ func (_c *MockReportStore_SaveSpillReports_Call) Return(_a0 error) *MockReportSt
 	return _c
 }
 
-func (_c *MockReportStore_SaveSpillReports_Call) RunAndReturn(run func(model.Path, pkg.FileSpill[model.Report]) error) *MockReportStore_SaveSpillReports_Call {
+func (_c *MockReportStore_SaveSpillReports_Call) RunAndReturn(run func(context.Context, model.Path, pkg.FileSpill[model.Report]) error) *MockReportStore_SaveSpillReports_Call {
 	_c.Call.Return(run)
 	return _c
 }

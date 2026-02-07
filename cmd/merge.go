@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"context"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"gooze.dev/pkg/gooze/internal/domain"
@@ -18,7 +20,7 @@ func newMergeCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(0),
 		RunE: func(_ *cobra.Command, _ []string) error {
 			reportsPath := m.Path(viper.GetString(outputFlagName))
-			return workflow.Merge(domain.MergeArgs{Reports: reportsPath})
+			return workflow.Merge(context.Background(), domain.MergeArgs{Reports: reportsPath})
 		},
 	}
 
