@@ -453,6 +453,226 @@ func TestLocalSourceFSAdapter_Get(t *testing.T) {
 	})
 }
 
+func TestLocalSourceFSAdapter_GetStream(t *testing.T) {
+	adapter := NewLocalSourceFSAdapter()
+
+	t.Run("streams sources from current directory", func(t *testing.T) {
+		root := t.TempDir()
+		mainPath := filepath.Join(root, "main.go")
+		copyExampleFile(t, filepath.Join(examplePath(t, "basic"), "main.go"), mainPath)
+		mainContent := readFileBytes(t, mainPath)
+
+		ch, err := adapter.GetStream(context.Background(), []m.Path{m.Path(root)})
+		require.NoError(t, err)
+		require.NotNil(t, ch)
+
+		sources := collectFromChannel(t, ch)
+		require.Len(t, sources, 1)
+
+		assertSourceV2(t, &sources[0], mainPath, "", mainContent, "main", "", "", nil)
+	})
+
+	t.Run("streams multiple sources", func(t *testing.T) {
+		root := t.TempDir()
+		file1Path := filepath.Join(root, "file1.go")
+		file2Path := filepath.Join(root, "file2.go")
+		writeTestFile(t, file1Path, "package main\nfunc Foo() {}\n")
+		writeTestFile(t, file2Path, "package main\nfunc Bar() {}\n")
+
+		ch, err := adapter.GetStream(context.Background(), []m.Path{m.Path(root)})
+		require.NoError(t, err)
+
+		sources := collectFromChannel(t, ch)
+		require.Len(t, sources, 2)
+
+		// Verify both files are present
+		source1 := findSourceV2ByOrigin(sources, file1Path)
+		source2 := findSourceV2ByOrigin(sources, file2Path)
+		assert.NotNil(t, source1)
+		assert.NotNil(t, source2)
+	})
+
+	t.Run("handles empty roots", func(t *testing.T) {
+		ch, err := adapter.GetStream(context.Background(), []m.Path{})
+		require.NoError(t, err)
+
+		sources := collectFromChannel(t, ch)
+		assert.Len(t, sources, 0)
+	})
+
+	t.Run("streams recursive paths", func(t *testing.T) {
+		root := t.TempDir()
+		mainPath := filepath.Join(root, "main.go")
+		copyExampleFile(t, filepath.Join(examplePath(t, "basic"), "main.go"), mainPath)
+
+		nestedDir := filepath.Join(root, "nested")
+		mustMkdir(t, nestedDir)
+		nestedPath := filepath.Join(nestedDir, "child.go")
+		copyExampleFile(t, filepath.Join(examplePath(t, "nested", "sub"), "child.go"), nestedPath)
+
+		ch, err := adapter.GetStream(context.Background(), []m.Path{m.Path(root + "/...")})
+		require.NoError(t, err)
+
+		sources := collectFromChannel(t, ch)
+		require.Len(t, sources, 2)
+
+		mainSource := findSourceV2ByOrigin(sources, mainPath)
+		nestedSource := findSourceV2ByOrigin(sources, nestedPath)
+		assert.NotNil(t, mainSource)
+		assert.NotNil(t, nestedSource)
+	})
+
+	t.Run("applies ignore patterns", func(t *testing.T) {
+		root := t.TempDir()
+		ignoredPath := filepath.Join(root, "ignored_file.go")
+		keptPath := filepath.Join(root, "kept_file.go")
+		writeTestFile(t, ignoredPath, "package main\n")
+		writeTestFile(t, keptPath, "package main\n")
+
+		ch, err := adapter.GetStream(context.Background(), []m.Path{m.Path(root)}, "^ignored_")
+		require.NoError(t, err)
+
+		sources := collectFromChannel(t, ch)
+		require.Len(t, sources, 1)
+		assert.Equal(t, m.Path(keptPath), sources[0].Origin.FullPath)
+	})
+
+	t.Run("handles context cancellation", func(t *testing.T) {
+		root := t.TempDir()
+		for i := 0; i < 10; i++ {
+			writeTestFile(t, filepath.Join(root, fmt.Sprintf("file%d.go", i)), "package main\n")
+		}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		ch, err := adapter.GetStream(ctx, []m.Path{m.Path(root)})
+		require.NoError(t, err)
+
+		// Cancel immediately
+		cancel()
+
+		sources := collectFromChannel(t, ch)
+		// Should get partial results or none, depending on timing
+		assert.True(t, len(sources) <= 10)
+	})
+
+	t.Run("closes channel when done", func(t *testing.T) {
+		root := t.TempDir()
+		mainPath := filepath.Join(root, "main.go")
+		copyExampleFile(t, filepath.Join(examplePath(t, "basic"), "main.go"), mainPath)
+
+		ch, err := adapter.GetStream(context.Background(), []m.Path{m.Path(root)})
+		require.NoError(t, err)
+
+		// Drain channel
+		for range ch {
+		}
+
+		// Channel should be closed, so receiving should return immediately with zero value
+		source, ok := <-ch
+		assert.False(t, ok, "channel should be closed")
+		assert.Equal(t, m.Source{}, source)
+	})
+
+	t.Run("returns error for invalid root", func(t *testing.T) {
+		_, err := adapter.GetStream(context.Background(), []m.Path{"/path/does/not/exist"})
+		assert.Error(t, err)
+	})
+
+	t.Run("de-duplicates sources across multiple roots", func(t *testing.T) {
+		root := t.TempDir()
+		mainPath := filepath.Join(root, "main.go")
+		copyExampleFile(t, filepath.Join(examplePath(t, "basic"), "main.go"), mainPath)
+
+		ch, err := adapter.GetStream(context.Background(), []m.Path{m.Path(root), m.Path(root)})
+		require.NoError(t, err)
+
+		sources := collectFromChannel(t, ch)
+		require.Len(t, sources, 1)
+	})
+
+	t.Run("skips broken source files", func(t *testing.T) {
+		root := t.TempDir()
+		brokenPath := filepath.Join(root, "broken.go")
+		validPath := filepath.Join(root, "valid.go")
+		writeTestFile(t, brokenPath, "package main\nfunc {\n")
+		writeTestFile(t, validPath, "package main\nfunc Valid() {}\n")
+
+		ch, err := adapter.GetStream(context.Background(), []m.Path{m.Path(root)})
+		require.NoError(t, err)
+
+		sources := collectFromChannel(t, ch)
+		require.Len(t, sources, 1)
+		assert.Equal(t, m.Path(validPath), sources[0].Origin.FullPath)
+	})
+
+	t.Run("skips test files as origins", func(t *testing.T) {
+		root := t.TempDir()
+		testPath := filepath.Join(root, "main_test.go")
+		copyExampleFile(t, filepath.Join(examplePath(t, "basic"), "main_test.go"), testPath)
+
+		ch, err := adapter.GetStream(context.Background(), []m.Path{m.Path(root)})
+		require.NoError(t, err)
+
+		sources := collectFromChannel(t, ch)
+		assert.Len(t, sources, 0)
+	})
+
+	t.Run("streams single file path", func(t *testing.T) {
+		root := t.TempDir()
+		mainPath := filepath.Join(root, "main.go")
+		testPath := filepath.Join(root, "main_test.go")
+		copyExampleFile(t, filepath.Join(examplePath(t, "basic"), "main.go"), mainPath)
+		copyExampleFile(t, filepath.Join(examplePath(t, "basic"), "main_test.go"), testPath)
+		mainContent := readFileBytes(t, mainPath)
+		testContent := readFileBytes(t, testPath)
+
+		ch, err := adapter.GetStream(context.Background(), []m.Path{m.Path(mainPath)})
+		require.NoError(t, err)
+
+		sources := collectFromChannel(t, ch)
+		require.Len(t, sources, 1)
+
+		assertSourceV2(t, &sources[0], mainPath, "", mainContent, "main", testPath, "", testContent)
+	})
+
+	t.Run("deterministic ordering across multiple runs", func(t *testing.T) {
+		root := t.TempDir()
+		file1Path := filepath.Join(root, "aaa.go")
+		file2Path := filepath.Join(root, "zzz.go")
+		file3Path := filepath.Join(root, "mmm.go")
+		writeTestFile(t, file1Path, "package main\nfunc Aaa() {}\n")
+		writeTestFile(t, file2Path, "package main\nfunc Zzz() {}\n")
+		writeTestFile(t, file3Path, "package main\nfunc Mmm() {}\n")
+
+		// Run twice and verify same order
+		ch1, err := adapter.GetStream(context.Background(), []m.Path{m.Path(root)})
+		require.NoError(t, err)
+		sources1 := collectFromChannel(t, ch1)
+
+		ch2, err := adapter.GetStream(context.Background(), []m.Path{m.Path(root)})
+		require.NoError(t, err)
+		sources2 := collectFromChannel(t, ch2)
+
+		require.Len(t, sources1, 3)
+		require.Len(t, sources2, 3)
+
+		// Verify same order based on hash sorting
+		for i := range sources1 {
+			assert.Equal(t, sources1[i].Origin.FullPath, sources2[i].Origin.FullPath, "Order should be deterministic")
+			assert.Equal(t, sources1[i].Origin.Hash, sources2[i].Origin.Hash, "Hashes should match")
+		}
+	})
+}
+
+func collectFromChannel(t *testing.T, ch <-chan m.Source) []m.Source {
+	t.Helper()
+	sources := make([]m.Source, 0)
+	for source := range ch {
+		sources = append(sources, source)
+	}
+	return sources
+}
+
 func writeTestFile(t *testing.T, path, contents string) {
 	t.Helper()
 	writeTestBytes(t, path, []byte(contents))

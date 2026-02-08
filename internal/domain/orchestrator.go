@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
+	"golang.org/x/sync/errgroup"
 	"gooze.dev/pkg/gooze/internal/adapter"
 	m "gooze.dev/pkg/gooze/internal/model"
 )
@@ -14,6 +16,7 @@ import (
 // mutation is killed or survives.
 type Orchestrator interface {
 	TestMutation(ctx context.Context, mutation m.Mutation) (m.Result, error)
+	TestMutationStream(ctx context.Context, mutations <-chan m.Mutation, timeout time.Duration) <-chan m.Report
 }
 
 type orchestrator struct {
@@ -69,6 +72,49 @@ func (to *orchestrator) TestMutation(ctx context.Context, mutation m.Mutation) (
 	status := to.runTests(ctx, tmpDir, tmpTestPath)
 
 	return to.resultForStatus(mutation, status), nil
+}
+
+func (to *orchestrator) TestMutationStream(ctx context.Context, mutations <-chan m.Mutation, timeout time.Duration) <-chan m.Report {
+	reportCh := make(chan m.Report)
+
+	g, ctx := errgroup.WithContext(ctx)
+
+	g.Go(func() error {
+		defer close(reportCh)
+		for mutation := range mutations {
+			if ctx.Err() != nil {
+				slog.Debug("TestMutationStream cancelled")
+				return ctx.Err()
+			}
+
+			result, err := to.TestMutation(ctx, mutation)
+			if err != nil {
+				slog.Error("Failed to test mutation", "mutation", mutation.ID, "error", err)
+				return err
+			}
+
+			report := m.Report{
+				Source: mutation.Source,
+				Result: result,
+			}
+
+			select {
+			case <-ctx.Done():
+				slog.Debug("TestMutationStream cancelled while sending result")
+				return ctx.Err()
+			case reportCh <- report:
+			}
+		}
+		return nil
+	})
+
+	go func() {
+		if err := g.Wait(); err != nil {
+			slog.Error("TestMutationStream failed", "error", err)
+		}
+	}()
+
+	return reportCh
 }
 
 func (to *orchestrator) validateMutation(mutation m.Mutation) error {

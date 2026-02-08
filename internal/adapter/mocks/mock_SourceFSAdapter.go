@@ -379,6 +379,80 @@ func (_c *MockSourceFSAdapter_Get_Call) RunAndReturn(run func(context.Context, [
 	return _c
 }
 
+// GetStream provides a mock function with given fields: ctx, roots, ignore
+func (_m *MockSourceFSAdapter) GetStream(ctx context.Context, roots []model.Path, ignore ...string) (<-chan model.Source, error) {
+	_va := make([]interface{}, len(ignore))
+	for _i := range ignore {
+		_va[_i] = ignore[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx, roots)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetStream")
+	}
+
+	var r0 <-chan model.Source
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, []model.Path, ...string) (<-chan model.Source, error)); ok {
+		return rf(ctx, roots, ignore...)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, []model.Path, ...string) <-chan model.Source); ok {
+		r0 = rf(ctx, roots, ignore...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(<-chan model.Source)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, []model.Path, ...string) error); ok {
+		r1 = rf(ctx, roots, ignore...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockSourceFSAdapter_GetStream_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetStream'
+type MockSourceFSAdapter_GetStream_Call struct {
+	*mock.Call
+}
+
+// GetStream is a helper method to define mock.On call
+//   - ctx context.Context
+//   - roots []model.Path
+//   - ignore ...string
+func (_e *MockSourceFSAdapter_Expecter) GetStream(ctx interface{}, roots interface{}, ignore ...interface{}) *MockSourceFSAdapter_GetStream_Call {
+	return &MockSourceFSAdapter_GetStream_Call{Call: _e.mock.On("GetStream",
+		append([]interface{}{ctx, roots}, ignore...)...)}
+}
+
+func (_c *MockSourceFSAdapter_GetStream_Call) Run(run func(ctx context.Context, roots []model.Path, ignore ...string)) *MockSourceFSAdapter_GetStream_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]string, len(args)-2)
+		for i, a := range args[2:] {
+			if a != nil {
+				variadicArgs[i] = a.(string)
+			}
+		}
+		run(args[0].(context.Context), args[1].([]model.Path), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *MockSourceFSAdapter_GetStream_Call) Return(_a0 <-chan model.Source, _a1 error) *MockSourceFSAdapter_GetStream_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockSourceFSAdapter_GetStream_Call) RunAndReturn(run func(context.Context, []model.Path, ...string) (<-chan model.Source, error)) *MockSourceFSAdapter_GetStream_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // HashFile provides a mock function with given fields: ctx, path
 func (_m *MockSourceFSAdapter) HashFile(ctx context.Context, path model.Path) (string, error) {
 	ret := _m.Called(ctx, path)

@@ -28,24 +28,32 @@ func TestMutationStreamer_Get_Success(t *testing.T) {
 		{ID: "hash-2", Source: sources[0], Type: m.MutationBoolean},
 	}
 
-	mockFSAdapter.EXPECT().Get(ctx, mock.Anything, mock.Anything).Return(sources, nil)
+	sourceCh := make(chan m.Source, 1)
+	sourceCh <- sources[0]
+	close(sourceCh)
+
+	mockFSAdapter.EXPECT().GetStream(ctx, mock.Anything, mock.Anything).Return(sourceCh, nil)
 	mockMutagen.EXPECT().GenerateMutation(ctx, sources[0], domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).Return(mutations, nil)
 
 	streamer := domain.NewMutationStreamer(mockFSAdapter, mockMutagen)
 
 	// Act
-	ch := streamer.Get(ctx, []m.Path{"test.go"}, nil, 4)
+	ch, err := streamer.Get(ctx, []m.Path{"test.go"}, nil, 4)
+	assert.NoError(t, err)
+
+	// Assert
+	assert.NoError(t, err)
 
 	var result []m.Mutation
 	for mutation := range ch {
 		result = append(result, mutation)
 	}
 
-	// Assert
-	assert.NoError(t, ctx.Err())
 	assert.Len(t, result, 2)
 	assert.Equal(t, mutations[0].ID, result[0].ID)
 	assert.Equal(t, mutations[1].ID, result[1].ID)
+	assert.Equal(t, uint64(0), result[0].Index)
+	assert.Equal(t, uint64(1), result[1].Index)
 	mockFSAdapter.AssertExpectations(t)
 	mockMutagen.AssertExpectations(t)
 }
@@ -57,19 +65,23 @@ func TestMutationStreamer_Get_DiscoverSourcesError(t *testing.T) {
 	mockMutagen := new(domainmocks.MockMutagen)
 
 	testErr := errors.New("failed to get sources")
-	mockFSAdapter.EXPECT().Get(ctx, mock.Anything, mock.Anything).Return(nil, testErr)
+	mockFSAdapter.EXPECT().GetStream(ctx, mock.Anything, mock.Anything).Return(nil, testErr)
 
 	streamer := domain.NewMutationStreamer(mockFSAdapter, mockMutagen)
 
 	// Act
-	ch := streamer.Get(ctx, []m.Path{"test.go"}, nil, 4)
+	ch, err := streamer.Get(ctx, []m.Path{"test.go"}, nil, 4)
+	assert.NoError(t, err)
+
+	// Assert
+	assert.Error(t, err)
+	assert.Equal(t, testErr, err)
 
 	var result []m.Mutation
 	for mutation := range ch {
 		result = append(result, mutation)
 	}
 
-	// Assert
 	assert.Empty(t, result)
 	mockFSAdapter.AssertExpectations(t)
 }
@@ -84,22 +96,29 @@ func TestMutationStreamer_Get_GenerateMutationError(t *testing.T) {
 		{Origin: &m.File{FullPath: "test.go", Hash: "hash1"}},
 	}
 
+	sourceCh := make(chan m.Source, 1)
+	sourceCh <- sources[0]
+	close(sourceCh)
+
 	testErr := errors.New("failed to generate mutations")
-	mockFSAdapter.EXPECT().Get(ctx, mock.Anything, mock.Anything).Return(sources, nil)
+	mockFSAdapter.EXPECT().GetStream(ctx, mock.Anything, mock.Anything).Return(sourceCh, nil)
 	mockMutagen.EXPECT().GenerateMutation(ctx, sources[0], domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).Return(nil, testErr)
 
 	streamer := domain.NewMutationStreamer(mockFSAdapter, mockMutagen)
 
 	// Act
-	ch := streamer.Get(ctx, []m.Path{"test.go"}, nil, 4)
+	ch, err := streamer.Get(ctx, []m.Path{"test.go"}, nil, 4)
+	assert.NoError(t, err)
+
+	// Assert
+	assert.NoError(t, err) // GetStream succeeds, error is in background goroutine
 
 	var result []m.Mutation
 	for mutation := range ch {
 		result = append(result, mutation)
 	}
 
-	// Assert
-	assert.Empty(t, result)
+	assert.Empty(t, result) // Channel closes on error
 	mockFSAdapter.AssertExpectations(t)
 	mockMutagen.AssertExpectations(t)
 }
@@ -122,14 +141,20 @@ func TestMutationStreamer_Get_MultipleSources(t *testing.T) {
 		{ID: "hash-2", Source: sources[1], Type: m.MutationBoolean},
 	}
 
-	mockFSAdapter.EXPECT().Get(ctx, mock.Anything, mock.Anything).Return(sources, nil)
+	sourceCh := make(chan m.Source, 2)
+	sourceCh <- sources[0]
+	sourceCh <- sources[1]
+	close(sourceCh)
+
+	mockFSAdapter.EXPECT().GetStream(ctx, mock.Anything, mock.Anything).Return(sourceCh, nil)
 	mockMutagen.EXPECT().GenerateMutation(ctx, sources[0], domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).Return(mutations1, nil)
 	mockMutagen.EXPECT().GenerateMutation(ctx, sources[1], domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).Return(mutations2, nil)
 
 	streamer := domain.NewMutationStreamer(mockFSAdapter, mockMutagen)
 
 	// Act
-	ch := streamer.Get(ctx, []m.Path{"."}, nil, 4)
+	ch, err := streamer.Get(ctx, []m.Path{"."}, nil, 4)
+	assert.NoError(t, err)
 
 	var result []m.Mutation
 	for mutation := range ch {
@@ -152,7 +177,11 @@ func TestMutationStreamer_Get_ContextCancelled(t *testing.T) {
 		{Origin: &m.File{FullPath: "test.go", Hash: "hash1"}},
 	}
 
-	mockFSAdapter.EXPECT().Get(ctx, mock.Anything, mock.Anything).Return(sources, nil)
+	sourceCh := make(chan m.Source, 1)
+	sourceCh <- sources[0]
+	close(sourceCh)
+
+	mockFSAdapter.EXPECT().GetStream(ctx, mock.Anything, mock.Anything).Return(sourceCh, nil)
 	mockMutagen.EXPECT().GenerateMutation(ctx, sources[0], domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).Run(func(_ context.Context, _ m.Source, _ ...m.MutationType) {
 		cancel() // Cancel context during mutation generation
 	}).Return([]m.Mutation{}, nil)
@@ -160,7 +189,8 @@ func TestMutationStreamer_Get_ContextCancelled(t *testing.T) {
 	streamer := domain.NewMutationStreamer(mockFSAdapter, mockMutagen)
 
 	// Act
-	ch := streamer.Get(ctx, []m.Path{"test.go"}, nil, 4)
+	ch, err := streamer.Get(ctx, []m.Path{"test.go"}, nil, 4)
+	assert.NoError(t, err)
 
 	var result []m.Mutation
 	for mutation := range ch {
@@ -178,12 +208,16 @@ func TestMutationStreamer_Get_NoSources(t *testing.T) {
 	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
 	mockMutagen := new(domainmocks.MockMutagen)
 
-	mockFSAdapter.EXPECT().Get(ctx, mock.Anything, mock.Anything).Return([]m.Source{}, nil)
+	sourceCh := make(chan m.Source)
+	close(sourceCh)
+
+	mockFSAdapter.EXPECT().GetStream(ctx, mock.Anything, mock.Anything).Return(sourceCh, nil)
 
 	streamer := domain.NewMutationStreamer(mockFSAdapter, mockMutagen)
 
 	// Act
-	ch := streamer.Get(ctx, []m.Path{"test.go"}, nil, 4)
+	ch, err := streamer.Get(ctx, []m.Path{"test.go"}, nil, 4)
+	assert.NoError(t, err)
 
 	var result []m.Mutation
 	for mutation := range ch {
@@ -205,13 +239,18 @@ func TestMutationStreamer_Get_NoMutations(t *testing.T) {
 		{Origin: &m.File{FullPath: "test.go", Hash: "hash1"}},
 	}
 
-	mockFSAdapter.EXPECT().Get(ctx, mock.Anything, mock.Anything).Return(sources, nil)
+	sourceCh := make(chan m.Source, 1)
+	sourceCh <- sources[0]
+	close(sourceCh)
+
+	mockFSAdapter.EXPECT().GetStream(ctx, mock.Anything, mock.Anything).Return(sourceCh, nil)
 	mockMutagen.EXPECT().GenerateMutation(ctx, sources[0], domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).Return([]m.Mutation{}, nil)
 
 	streamer := domain.NewMutationStreamer(mockFSAdapter, mockMutagen)
 
 	// Act
-	ch := streamer.Get(ctx, []m.Path{"test.go"}, nil, 4)
+	ch, err := streamer.Get(ctx, []m.Path{"test.go"}, nil, 4)
+	assert.NoError(t, err)
 
 	var result []m.Mutation
 	for mutation := range ch {
@@ -238,13 +277,18 @@ func TestMutationStreamer_Get_ThreadsZeroNormalizesToOne(t *testing.T) {
 		{ID: "hash-1", Source: sources[0], Type: m.MutationArithmetic},
 	}
 
-	mockFSAdapter.EXPECT().Get(ctx, mock.Anything, mock.Anything).Return(sources, nil)
+	sourceCh := make(chan m.Source, 1)
+	sourceCh <- sources[0]
+	close(sourceCh)
+
+	mockFSAdapter.EXPECT().GetStream(ctx, mock.Anything, mock.Anything).Return(sourceCh, nil)
 	mockMutagen.EXPECT().GenerateMutation(ctx, sources[0], domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).Return(mutations, nil)
 
 	streamer := domain.NewMutationStreamer(mockFSAdapter, mockMutagen)
 
 	// Act - Pass threads=0, should not panic
-	ch := streamer.Get(ctx, []m.Path{"test.go"}, nil, 0)
+	ch, err := streamer.Get(ctx, []m.Path{"test.go"}, nil, 0)
+	assert.NoError(t, err)
 
 	var result []m.Mutation
 	for mutation := range ch {
@@ -273,13 +317,18 @@ func TestMutationStreamer_Get_WithExcludePatterns(t *testing.T) {
 		{ID: "hash-1", Source: sources[0], Type: m.MutationArithmetic},
 	}
 
-	mockFSAdapter.EXPECT().Get(ctx, []m.Path{"."}, exclude[0], exclude[1]).Return(sources, nil)
+	sourceCh := make(chan m.Source, 1)
+	sourceCh <- sources[0]
+	close(sourceCh)
+
+	mockFSAdapter.EXPECT().GetStream(ctx, []m.Path{"."}, exclude[0], exclude[1]).Return(sourceCh, nil)
 	mockMutagen.EXPECT().GenerateMutation(ctx, sources[0], domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).Return(mutations, nil)
 
 	streamer := domain.NewMutationStreamer(mockFSAdapter, mockMutagen)
 
 	// Act
-	ch := streamer.Get(ctx, []m.Path{"."}, exclude, 4)
+	ch, err := streamer.Get(ctx, []m.Path{"."}, exclude, 4)
+	assert.NoError(t, err)
 
 	var result []m.Mutation
 	for mutation := range ch {
@@ -308,7 +357,11 @@ func BenchmarkMutationStreamer_Get_SmallSet(b *testing.B) {
 		mutations[i] = m.Mutation{ID: "hash-" + string(rune('0'+i)), Source: sources[0], Type: m.MutationArithmetic}
 	}
 
-	mockFSAdapter.EXPECT().Get(ctx, mock.Anything, mock.Anything).Return(sources, nil)
+	sourceCh := make(chan m.Source, 1)
+	sourceCh <- sources[0]
+	close(sourceCh)
+
+	mockFSAdapter.EXPECT().GetStream(ctx, mock.Anything, mock.Anything).Return(sourceCh, nil)
 	mockMutagen.EXPECT().GenerateMutation(ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mutations, nil)
 
 	streamer := domain.NewMutationStreamer(mockFSAdapter, mockMutagen)
@@ -317,7 +370,8 @@ func BenchmarkMutationStreamer_Get_SmallSet(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		ch := streamer.Get(ctx, []m.Path{"test.go"}, nil, 4)
+		ch, err := streamer.Get(ctx, []m.Path{"test.go"}, nil, 4)
+		assert.NoError(t, err)
 		for range ch {
 		}
 	}
@@ -338,7 +392,13 @@ func BenchmarkMutationStreamer_Get_MediumSet(b *testing.B) {
 		mutations[i] = m.Mutation{ID: "hash-" + string(rune(i)), Source: sources[0], Type: m.MutationArithmetic}
 	}
 
-	mockFSAdapter.EXPECT().Get(ctx, mock.Anything, mock.Anything).Return(sources, nil)
+	sourceCh := make(chan m.Source, len(sources))
+	for _, src := range sources {
+		sourceCh <- src
+	}
+	close(sourceCh)
+
+	mockFSAdapter.EXPECT().GetStream(ctx, mock.Anything, mock.Anything).Return(sourceCh, nil)
 	mockMutagen.EXPECT().GenerateMutation(ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mutations, nil)
 
 	streamer := domain.NewMutationStreamer(mockFSAdapter, mockMutagen)
@@ -347,7 +407,8 @@ func BenchmarkMutationStreamer_Get_MediumSet(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		ch := streamer.Get(ctx, []m.Path{"."}, nil, 8)
+		ch, err := streamer.Get(ctx, []m.Path{"."}, nil, 8)
+		assert.NoError(t, err)
 		for range ch {
 		}
 	}
@@ -368,7 +429,13 @@ func BenchmarkMutationStreamer_Get_LargeSet(b *testing.B) {
 		mutations[i] = m.Mutation{ID: "hash-" + string(rune(i)), Source: sources[0], Type: m.MutationArithmetic}
 	}
 
-	mockFSAdapter.EXPECT().Get(ctx, mock.Anything, mock.Anything).Return(sources, nil)
+	sourceCh := make(chan m.Source, len(sources))
+	for _, src := range sources {
+		sourceCh <- src
+	}
+	close(sourceCh)
+
+	mockFSAdapter.EXPECT().GetStream(ctx, mock.Anything, mock.Anything).Return(sourceCh, nil)
 	mockMutagen.EXPECT().GenerateMutation(ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mutations, nil)
 
 	streamer := domain.NewMutationStreamer(mockFSAdapter, mockMutagen)
@@ -377,7 +444,8 @@ func BenchmarkMutationStreamer_Get_LargeSet(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		ch := streamer.Get(ctx, []m.Path{"."}, nil, 16)
+		ch, err := streamer.Get(ctx, []m.Path{"."}, nil, 16)
+		assert.NoError(t, err)
 		for range ch {
 		}
 	}
@@ -402,7 +470,11 @@ func BenchmarkMutationStreamer_Get_BufferSizes(b *testing.B) {
 			mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
 			mockMutagen := new(domainmocks.MockMutagen)
 
-			mockFSAdapter.EXPECT().Get(ctx, mock.Anything, mock.Anything).Return(sources, nil)
+			sourceCh := make(chan m.Source, 1)
+			sourceCh <- sources[0]
+			close(sourceCh)
+
+			mockFSAdapter.EXPECT().GetStream(ctx, mock.Anything, mock.Anything).Return(sourceCh, nil)
 			mockMutagen.EXPECT().GenerateMutation(ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mutations, nil)
 
 			streamer := domain.NewMutationStreamer(mockFSAdapter, mockMutagen)
@@ -411,7 +483,8 @@ func BenchmarkMutationStreamer_Get_BufferSizes(b *testing.B) {
 			b.ResetTimer()
 
 			for i := 0; i < b.N; i++ {
-				ch := streamer.Get(ctx, []m.Path{"test.go"}, nil, bufSize)
+				ch, err := streamer.Get(ctx, []m.Path{"test.go"}, nil, bufSize)
+				assert.NoError(t, err)
 				for range ch {
 				}
 			}

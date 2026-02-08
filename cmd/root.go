@@ -41,6 +41,9 @@ var noCacheFlag bool
 // excludePatterns is a root-level flag that filters files for applicable commands.
 var excludePatterns []string
 
+var runParallelFlag int
+var runShardFlag string
+
 func init() {
 	configureRootFlags(rootCmd)
 
@@ -53,7 +56,7 @@ func init() {
 	testAdapter = adapter.NewLocalTestRunnerAdapter()
 	orchestrator = domain.NewOrchestrator(fsAdapter, testAdapter)
 	mutagen = domain.NewMutagen(goFileAdapter, soirceFSAdapter)
-	mutationStreamer = domain.NewMutationStreamer(fsAdapter, mutagen)
+	mutationStreamer = domain.NewMutationStreamer(fsAdapter, reportStore, mutagen)
 	workflow = domain.NewWorkflow(
 		soirceFSAdapter,
 		reportStore,
@@ -133,6 +136,8 @@ func configureRootFlags(cmd *cobra.Command) {
 
 	cmd.PersistentFlags().StringArrayVarP(&excludePatterns, excludeFlagName, "x", viper.GetStringSlice(excludeConfigKey), "exclude files matching regex (can be repeated)")
 	bindFlagToConfig(cmd.PersistentFlags().Lookup(excludeFlagName), excludeConfigKey)
+
+	cmd.PersistentFlags().StringVarP(&runShardFlag, "shard", "s", "", "shard index and total shard count in the format INDEX/TOTAL (e.g., 0/3)")
 
 	// Add verbose and log output flags (handled directly; not bound to Viper).
 	cmd.PersistentFlags().BoolVarP(&verboseFlag, "verbose", "v", false, "enable verbose logging")

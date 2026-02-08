@@ -32,3 +32,27 @@ func mutationScoreFromReports(reports pkg.FileSpill[m.Report]) (float64, error) 
 
 	return float64(killed) / float64(total), nil
 }
+
+func mutationScoreFromReportsStream(reports <-chan m.Report) (float64, error) {
+	killed := 0
+	total := 0
+
+	for report := range reports {
+		for _, entries := range report.Result {
+			for _, entry := range entries {
+				total++
+
+				if entry.Status == m.Killed {
+					killed++
+				}
+			}
+		}
+	}
+
+	if total == 0 {
+		return 100.0, nil
+	}
+
+	score := float64(killed) / float64(total)
+	return score, nil
+}

@@ -38,6 +38,7 @@ var (
 type Mutation struct {
 	// ID is the unique identifier for a mutation within a test run.
 	ID          string
+	Index       uint64
 	Source      Source
 	Type        MutationType
 	MutatedCode []byte

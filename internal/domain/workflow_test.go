@@ -32,6 +32,15 @@ func collectSpillReports(t *testing.T, reports pkg.FileSpill[m.Report]) []m.Repo
 	return collected
 }
 
+func sendMutationsToChannel(mutations []m.Mutation) <-chan m.Mutation {
+	ch := make(chan m.Mutation, len(mutations))
+	for _, mutation := range mutations {
+		ch <- mutation
+	}
+	close(ch)
+	return ch
+}
+
 func TestWorkflow_Test_Success(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
@@ -59,11 +68,15 @@ func TestWorkflow_Test_Success(t *testing.T) {
 	mockUI.EXPECT().Wait(ctx).Return().Once()
 	mockUI.EXPECT().Close(ctx).Return().Once()
 	mockUI.EXPECT().DisplayConcurrencyInfo(ctx, mock.Anything, mock.Anything, mock.Anything).Return()
-	mockUI.EXPECT().DisplayUpcomingTestsInfo(ctx, mock.Anything).Return()
 	mockUI.EXPECT().DisplayStartingTestInfo(ctx, mock.Anything, mock.Anything).Return().Once()
 	mockUI.EXPECT().DisplayCompletedTestInfo(ctx, mock.Anything, mock.Anything).Return().Once()
-	mockFSAdapter.EXPECT().Get(ctx, mock.Anything).Return(sources, nil)
-	mockMutagen.EXPECT().GenerateMutation(ctx, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).Return(mutations, nil)
+
+	// Mock streaming methods
+	mutationsCh := sendMutationsToChannel(mutations)
+	shardedCh := sendMutationsToChannel(mutations)
+	mockMutationStreamer.EXPECT().Get(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mutationsCh).Once()
+	mockMutationStreamer.EXPECT().ShardMutations(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(shardedCh).Once()
+
 	mockOrchestrator.EXPECT().TestMutation(mock.Anything, mock.Anything).Return(m.Result{}, nil)
 	mockReportStore.EXPECT().SaveSpillReports(ctx, mock.Anything, mock.Anything).Return(nil)
 	mockReportStore.EXPECT().RegenerateIndex(ctx, mock.Anything).Return(nil)
@@ -84,8 +97,7 @@ func TestWorkflow_Test_Success(t *testing.T) {
 
 	// Assert
 	assert.NoError(t, err)
-	mockFSAdapter.AssertExpectations(t)
-	mockMutagen.AssertExpectations(t)
+	mockMutationStreamer.AssertExpectations(t)
 	mockReportStore.AssertExpectations(t)
 	mockOrchestrator.AssertExpectations(t)
 }
