@@ -22,12 +22,16 @@ const indexFileName = "_index.yaml"
 
 // ReportStore persists and retrieves mutation reports.
 type ReportStore interface {
+	// Deprecated: Use SaveReportsStream for better performance and lower memory usage on large mutation sets.
 	SaveReports(ctx context.Context, path m.Path, reports []m.Report) error
+	// Deprecated: Use SaveReportsStream or better performance and lower memory usage on large mutation sets.
 	SaveSpillReports(ctx context.Context, path m.Path, reports pkg.FileSpill[m.Report]) error
+	SaveReportsStream(ctx context.Context, path m.Path, reports <-chan m.Report) error
 	RegenerateIndex(ctx context.Context, path m.Path) error
 	LoadReports(ctx context.Context, path m.Path) ([]m.Report, error)
 	LoadSpillReports(ctx context.Context, path m.Path) (pkg.FileSpill[m.Report], error)
 	CheckUpdates(ctx context.Context, path m.Path, sources []m.Source) ([]m.Source, error)
+	CheckUpdate(ctx context.Context, path m.Path, source m.Source) (bool, error)
 	CleanReports(ctx context.Context, path m.Path, sources []m.Source) error
 }
 
@@ -158,6 +162,39 @@ func (rs *LocalReportStore) SaveSpillReports(ctx context.Context, path m.Path, r
 
 		return nil
 	})
+}
+
+// SaveReportsStream writes reports from the provided channel into the specified directory until the channel is closed.
+func (rs *LocalReportStore) SaveReportsStream(ctx context.Context, path m.Path, reports <-chan m.Report) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	dirPath := string(path)
+	if dirPath == "" {
+		return fmt.Errorf("reports directory path is required")
+	}
+	if err := os.MkdirAll(string(path), 0o750); err != nil {
+		return fmt.Errorf("create reports directory: %w", err)
+	}
+	for report := range reports {
+		reportHash := rs.computeReportHash(report.Result)
+		if reportHash == "" {
+			return nil
+		}
+
+		data, err := rs.marshalReport(report)
+		if err != nil {
+			return fmt.Errorf("marshal report to YAML: %w", err)
+		}
+
+		name := reportHash + ".yaml"
+
+		fullPath := filepath.Join(dirPath, name)
+		if err := os.WriteFile(fullPath, data, 0o600); err != nil {
+			return fmt.Errorf("write report file %s: %w", fullPath, err)
+		}
+	}
+	return nil
 }
 
 // RegenerateIndex rebuilds and writes `_index.yaml` from the report files in `path`.
@@ -465,6 +502,54 @@ func (rs *LocalReportStore) CheckUpdates(ctx context.Context, path m.Path, sourc
 	changed := rs.findChangedSources(stored, currentByPath)
 
 	return changed, nil
+}
+
+func (rs *LocalReportStore) CheckUpdate(ctx context.Context, path m.Path, source m.Source) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	dirPath := string(path)
+	if dirPath == "" {
+		return false, fmt.Errorf("reports directory path is required")
+	}
+
+	exists, err := rs.reportsDirExists(dirPath)
+	if err != nil {
+		return false, err
+	}
+
+	if !exists {
+		// No prior reports: source needs to be tested
+		return true, nil
+	}
+
+	if source.Origin == nil || source.Origin.FullPath == "" {
+		return false, fmt.Errorf("source missing origin information")
+	}
+
+	reports, err := rs.loadReportsFromDir(dirPath)
+	if err != nil {
+		return false, err
+	}
+
+	stored := rs.buildStoredSourceState(reports)
+	pathStr := string(source.Origin.FullPath)
+
+	st, ok := stored[pathStr]
+	if !ok {
+		// No stored report for this source: needs testing
+		return true, nil
+	}
+
+	if rs.sourceHashChanged(st.source, source) {
+		return true, nil
+	}
+
+	if rs.mutatorsChanged(st.mutator) {
+		return true, nil
+	}
+
+	return false, nil
 }
 
 func (rs *LocalReportStore) buildCurrentSourceMap(sources []m.Source) map[string]m.Source {

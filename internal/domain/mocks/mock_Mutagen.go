@@ -97,6 +97,83 @@ func (_c *MockMutagen_GenerateMutation_Call) RunAndReturn(run func(context.Conte
 	return _c
 }
 
+// StreamMutations provides a mock function with given fields: ctx, source, threads, mutationTypes
+func (_m *MockMutagen) StreamMutations(ctx context.Context, source <-chan model.Source, threads int, mutationTypes ...model.MutationType) (<-chan model.Mutation, <-chan error) {
+	_va := make([]interface{}, len(mutationTypes))
+	for _i := range mutationTypes {
+		_va[_i] = mutationTypes[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx, source, threads)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	if len(ret) == 0 {
+		panic("no return value specified for StreamMutations")
+	}
+
+	var r0 <-chan model.Mutation
+	var r1 <-chan error
+	if rf, ok := ret.Get(0).(func(context.Context, <-chan model.Source, int, ...model.MutationType) (<-chan model.Mutation, <-chan error)); ok {
+		return rf(ctx, source, threads, mutationTypes...)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, <-chan model.Source, int, ...model.MutationType) <-chan model.Mutation); ok {
+		r0 = rf(ctx, source, threads, mutationTypes...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(<-chan model.Mutation)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, <-chan model.Source, int, ...model.MutationType) <-chan error); ok {
+		r1 = rf(ctx, source, threads, mutationTypes...)
+	} else {
+		if ret.Get(1) != nil {
+			r1 = ret.Get(1).(<-chan error)
+		}
+	}
+
+	return r0, r1
+}
+
+// MockMutagen_StreamMutations_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'StreamMutations'
+type MockMutagen_StreamMutations_Call struct {
+	*mock.Call
+}
+
+// StreamMutations is a helper method to define mock.On call
+//   - ctx context.Context
+//   - source <-chan model.Source
+//   - threads int
+//   - mutationTypes ...model.MutationType
+func (_e *MockMutagen_Expecter) StreamMutations(ctx interface{}, source interface{}, threads interface{}, mutationTypes ...interface{}) *MockMutagen_StreamMutations_Call {
+	return &MockMutagen_StreamMutations_Call{Call: _e.mock.On("StreamMutations",
+		append([]interface{}{ctx, source, threads}, mutationTypes...)...)}
+}
+
+func (_c *MockMutagen_StreamMutations_Call) Run(run func(ctx context.Context, source <-chan model.Source, threads int, mutationTypes ...model.MutationType)) *MockMutagen_StreamMutations_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]model.MutationType, len(args)-3)
+		for i, a := range args[3:] {
+			if a != nil {
+				variadicArgs[i] = a.(model.MutationType)
+			}
+		}
+		run(args[0].(context.Context), args[1].(<-chan model.Source), args[2].(int), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *MockMutagen_StreamMutations_Call) Return(_a0 <-chan model.Mutation, _a1 <-chan error) *MockMutagen_StreamMutations_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockMutagen_StreamMutations_Call) RunAndReturn(run func(context.Context, <-chan model.Source, int, ...model.MutationType) (<-chan model.Mutation, <-chan error)) *MockMutagen_StreamMutations_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // NewMockMutagen creates a new instance of MockMutagen. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewMockMutagen(t interface {

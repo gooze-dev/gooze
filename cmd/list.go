@@ -22,12 +22,15 @@ func newListCmd() *cobra.Command {
 			paths := parsePaths(args)
 			useCache := !viper.GetBool(noCacheFlagName)
 			reportsPath := m.Path(viper.GetString(outputFlagName))
+			shardIndex, totalShards := parseShardFlag(runShardFlag)
 
 			return workflow.Estimate(context.Background(), domain.EstimateArgs{
-				Paths:    paths,
-				Exclude:  viper.GetStringSlice(excludeConfigKey),
-				UseCache: useCache,
-				Reports:  reportsPath,
+				Paths:           paths,
+				Exclude:         viper.GetStringSlice(excludeConfigKey),
+				UseCache:        useCache,
+				Reports:         reportsPath,
+				ShardIndex:      shardIndex,
+				TotalShardCount: totalShards,
 			})
 		},
 	}

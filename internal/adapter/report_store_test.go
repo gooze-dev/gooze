@@ -357,6 +357,141 @@ func TestLocalReportStore_LoadSpillReports_LoadsReportsIntoSpill(t *testing.T) {
 	}
 }
 
+func TestLocalReportStore_SaveReportsStream_WritesHashedYAMLPerReport(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	rs := &LocalReportStore{}
+
+	report1 := m.Report{
+		Source: m.Source{
+			Origin: &m.File{FullPath: m.Path("/abs/path/file1.go"), Hash: "abc123"},
+			Test:   &m.File{FullPath: m.Path("/abs/path/file1_test.go"), Hash: "def456"},
+		},
+		Result: m.Result{
+			m.MutationBoolean: {
+				{MutationID: "m1", Status: m.Killed, Err: nil},
+			},
+		},
+	}
+
+	report2 := m.Report{
+		Source: m.Source{
+			Origin: &m.File{FullPath: m.Path("/abs/path/file2.go"), Hash: "ghi789"},
+			Test:   &m.File{FullPath: m.Path("/abs/path/file2_test.go"), Hash: "jkl012"},
+		},
+		Result: m.Result{
+			m.MutationArithmetic: {
+				{MutationID: "m2", Status: m.Survived, Err: nil},
+			},
+		},
+	}
+
+	// Create channel and send reports
+	reportsCh := make(chan m.Report, 2)
+	reportsCh <- report1
+	reportsCh <- report2
+	close(reportsCh)
+
+	// Invoke method under test
+	if err := rs.SaveReportsStream(context.Background(), m.Path(dir), reportsCh); err != nil {
+		t.Fatalf("SaveReportsStream returned error: %v", err)
+	}
+
+	// Verify both files were written
+	expectedHash1 := rs.computeReportHash(report1.Result)
+	expectedHash2 := rs.computeReportHash(report2.Result)
+
+	expectedPath1 := filepath.Join(dir, expectedHash1+".yaml")
+	if _, err := os.Stat(expectedPath1); os.IsNotExist(err) {
+		t.Fatalf("expected report file to be written at %s", expectedPath1)
+	}
+
+	expectedPath2 := filepath.Join(dir, expectedHash2+".yaml")
+	if _, err := os.Stat(expectedPath2); os.IsNotExist(err) {
+		t.Fatalf("expected report file to be written at %s", expectedPath2)
+	}
+}
+
+func TestLocalReportStore_SaveReportsStream_ClosedChannelEndsWriting(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	rs := &LocalReportStore{}
+
+	report := m.Report{
+		Source: m.Source{
+			Origin: &m.File{FullPath: m.Path("/abs/path/file.go"), Hash: "abc123"},
+		},
+		Result: m.Result{
+			m.MutationBoolean: {
+				{MutationID: "m1", Status: m.Killed, Err: nil},
+			},
+		},
+	}
+
+	// Create channel, send one report, then close
+	reportsCh := make(chan m.Report, 1)
+	reportsCh <- report
+	close(reportsCh)
+
+	// Invoke method under test
+	if err := rs.SaveReportsStream(context.Background(), m.Path(dir), reportsCh); err != nil {
+		t.Fatalf("SaveReportsStream returned error: %v", err)
+	}
+
+	// Verify file was written
+	expectedHash := rs.computeReportHash(report.Result)
+	expectedPath := filepath.Join(dir, expectedHash+".yaml")
+	if _, err := os.Stat(expectedPath); os.IsNotExist(err) {
+		t.Fatalf("expected report file to be written at %s", expectedPath)
+	}
+}
+
+func TestLocalReportStore_SaveReportsStream_EmptyChannel(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	rs := &LocalReportStore{}
+
+	reportsCh := make(chan m.Report)
+	close(reportsCh)
+
+	// Invoke method under test with empty channel
+	if err := rs.SaveReportsStream(context.Background(), m.Path(dir), reportsCh); err != nil {
+		t.Fatalf("SaveReportsStream returned error: %v", err)
+	}
+
+	// Verify no files were written
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("ReadDir returned error: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("expected no files to be written, found %d", len(entries))
+	}
+}
+
+func TestLocalReportStore_SaveReportsStream_ContextCancellation(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	rs := &LocalReportStore{}
+
+	// Create a channel that will never close (so we can test cancellation)
+	reportsCh := make(chan m.Report)
+
+	// Create a cancelled context
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	// Invoke method under test
+	err := rs.SaveReportsStream(ctx, m.Path(dir), reportsCh)
+	if err != context.Canceled {
+		t.Fatalf("expected context.Canceled error, got %v", err)
+	}
+}
+
 func TestLocalReportStore_CheckUpdates_NoReportsDir_ReturnsAllSources(t *testing.T) {
 	t.Parallel()
 

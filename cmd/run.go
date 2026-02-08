@@ -13,8 +13,6 @@ import (
 )
 
 var mutationTimeoutFlag int64
-var runParallelFlag int
-var runShardFlag string
 
 // runCmd represents the run command.
 var runCmd = newRunCmd()
@@ -34,15 +32,14 @@ func newRunCmd() *cobra.Command {
 
 			return workflow.Test(context.Background(), domain.TestArgs{
 				EstimateArgs: domain.EstimateArgs{
-					Paths:    paths,
-					Exclude:  viper.GetStringSlice(excludeConfigKey),
-					UseCache: useCache,
-					Reports:  reportsPath,
+					Paths:           paths,
+					Exclude:         viper.GetStringSlice(excludeConfigKey),
+					UseCache:        useCache,
+					Reports:         reportsPath,
+					ShardIndex:      shardIndex,
+					TotalShardCount: totalShards,
 				},
-				Reports:         reportsPath,
 				Threads:         threads,
-				ShardIndex:      shardIndex,
-				TotalShardCount: totalShards,
 				MutationTimeout: time.Duration(timeoutSeconds) * time.Second,
 			})
 		},
@@ -63,7 +60,6 @@ func configureRunFlags(cmd *cobra.Command) {
 
 	cmd.Flags().IntVarP(&runParallelFlag, runParallelFlagName, "p", viper.GetInt(runParallelConfigKey), "number of parallel workers for mutation testing")
 	bindFlagToConfig(cmd.Flags().Lookup(runParallelFlagName), runParallelConfigKey)
-	cmd.Flags().StringVarP(&runShardFlag, "shard", "s", "", "shard index and total shard count in the format INDEX/TOTAL (e.g., 0/3)")
 }
 
 func parseShardFlag(shard string) (int, int) {

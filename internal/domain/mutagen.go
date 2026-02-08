@@ -15,6 +15,7 @@ import (
 // Mutagen defines the interface for mutation generation.
 type Mutagen interface {
 	GenerateMutation(ctx context.Context, source m.Source, mutationTypes ...m.MutationType) ([]m.Mutation, error)
+	StreamMutations(ctx context.Context, source <-chan m.Source, threads int, mutationTypes ...m.MutationType) (<-chan m.Mutation, <-chan error)
 }
 
 // mutagen handles pure mutation generation logic.
@@ -166,4 +167,107 @@ func generateMutationsForNode(
 	}
 
 	return gen(n, fset, content, source)
+}
+
+// StreamMutations streams mutations for sources received from a channel.
+// It returns a channel of mutations and a channel for errors.
+func (mg *mutagen) StreamMutations(ctx context.Context, sources <-chan m.Source, threads int, mutationTypes ...m.MutationType) (<-chan m.Mutation, <-chan error) {
+	bufferSize := threads
+	if bufferSize <= 0 {
+		bufferSize = 1
+	}
+
+	mutationCh := make(chan m.Mutation, bufferSize)
+	errCh := make(chan error, 1)
+
+	go func() {
+		defer close(mutationCh)
+		defer close(errCh)
+
+		// Stage 1: Validate configuration
+		resolvedTypes, err := mg.validateConfig(mutationTypes)
+		if err != nil {
+			errCh <- err
+			return
+		}
+
+		// Stage 2: Process sources and stream mutations
+		mg.processSourcesStream(ctx, sources, resolvedTypes, mutationCh, errCh)
+	}()
+
+	return mutationCh, errCh
+}
+
+// validateConfig validates adapters and resolves mutation types.
+func (mg *mutagen) validateConfig(mutationTypes []m.MutationType) ([]m.MutationType, error) {
+	resolvedTypes, err := resolveMutationTypes(mutationTypes)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := validateAdapters(mg); err != nil {
+		return nil, err
+	}
+
+	return resolvedTypes, nil
+}
+
+// processSourcesStream processes sources from channel and sends mutations to output channel.
+func (mg *mutagen) processSourcesStream(ctx context.Context, sources <-chan m.Source, mutationTypes []m.MutationType, mutationCh chan<- m.Mutation, errCh chan<- error) {
+	for source := range sources {
+		if ctx.Err() != nil {
+			errCh <- ctx.Err()
+			return
+		}
+
+		if !mg.processSourceStream(ctx, source, mutationTypes, mutationCh, errCh) {
+			return
+		}
+	}
+}
+
+// processSourceStream processes a single source and sends its mutations to the channel.
+// Returns false if processing should stop.
+func (mg *mutagen) processSourceStream(ctx context.Context, source m.Source, mutationTypes []m.MutationType, mutationCh chan<- m.Mutation, errCh chan<- error) bool {
+	if err := validateSource(source); err != nil {
+		errCh <- err
+		return false
+	}
+
+	content, fset, file, err := mg.loadSourceAST(ctx, source)
+	if err != nil {
+		errCh <- err
+		return false
+	}
+
+	return mg.streamMutationsForSource(ctx, source, content, fset, file, mutationTypes, mutationCh, errCh)
+}
+
+// streamMutationsForSource generates and streams mutations for a parsed source.
+// Returns false if context was cancelled.
+func (mg *mutagen) streamMutationsForSource(ctx context.Context, source m.Source, content []byte, fset *token.FileSet, file *ast.File, mutationTypes []m.MutationType, mutationCh chan<- m.Mutation, errCh chan<- error) bool {
+	for _, mutationType := range mutationTypes {
+		mutations := collectMutations(mutationType, file, fset, content, source)
+
+		if !mg.sendMutations(ctx, mutations, mutationCh, errCh) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// sendMutations sends mutations to the channel, respecting context cancellation.
+// Returns false if context was cancelled.
+func (mg *mutagen) sendMutations(ctx context.Context, mutations []m.Mutation, mutationCh chan<- m.Mutation, errCh chan<- error) bool {
+	for _, mutation := range mutations {
+		select {
+		case <-ctx.Done():
+			errCh <- ctx.Err()
+			return false
+		case mutationCh <- mutation:
+		}
+	}
+
+	return true
 }

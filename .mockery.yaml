@@ -11,6 +11,7 @@ packages:
       Workflow:
       Orchestrator:
       Mutagen:
+      MutationStreamer:
   gooze.dev/pkg/gooze/internal/adapter:
     config:
       dir: internal/adapter/mocks

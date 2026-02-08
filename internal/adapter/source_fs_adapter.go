@@ -10,9 +10,11 @@ import (
 	"go/parser"
 	"go/token"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	m "gooze.dev/pkg/gooze/internal/model"
@@ -24,8 +26,10 @@ import (
 //
 //nolint:interfacebloat // A richer interface keeps workflow logic decoupled from os/fs.
 type SourceFSAdapter interface {
+	// Deprecated: Use GetStream for better performance and lower memory usage on large codebases.
 	Get(ctx context.Context, roots []m.Path, ignore ...string) ([]m.Source, error)
 
+	GetStream(ctx context.Context, roots []m.Path, ignore ...string) (<-chan m.Source, error)
 	// Walk traverses the provided root path. When recursive is false the
 	// implementation should limit itself to the root directory (no sub-dirs).
 	Walk(ctx context.Context, root m.Path, recursive bool, fn FilepathWalkFunc) error
@@ -106,6 +110,126 @@ func (a *LocalSourceFSAdapter) Get(ctx context.Context, roots []m.Path, ignore .
 	}
 
 	return sources, nil
+}
+
+// GetStream collects Go source files for the provided roots and returns them via a channel.
+// The channel is closed when all sources have been sent or an error occurs.
+// This method is useful for processing large codebases without loading everything into memory.
+func (a *LocalSourceFSAdapter) GetStream(ctx context.Context, roots []m.Path, ignore ...string) (<-chan m.Source, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	ch := make(chan m.Source)
+
+	if len(roots) == 0 {
+		slog.Debug("GetStream called with empty roots")
+		close(ch)
+		return ch, nil
+	}
+
+	slog.Debug("Starting GetStream", "roots", len(roots), "ignore_patterns", len(ignore))
+
+	ignoreRegexps, err := compileIgnoreRegexps(ignore)
+	if err != nil {
+		slog.Error("Failed to compile ignore regexps", "error", err)
+		return nil, err
+	}
+
+	// Validate roots before starting goroutine
+	for _, root := range roots {
+		rootPath, _, err := normalizeRootPath(string(root))
+		if err != nil {
+			slog.Error("Failed to normalize root path", "root", root, "error", err)
+			return nil, err
+		}
+
+		_, err = a.FileInfo(ctx, m.Path(rootPath))
+		if err != nil {
+			slog.Error("Root path validation failed", "root", rootPath, "error", err)
+			return nil, fmt.Errorf("root path error: %w", err)
+		}
+	}
+
+	go func() {
+		defer close(ch)
+		defer slog.Debug("GetStream goroutine completed")
+
+		seen := make(map[string]struct{})
+		sources := make([]m.Source, 0)
+
+		// Collect all sources first
+		for _, root := range roots {
+			if err := ctx.Err(); err != nil {
+				slog.Debug("GetStream context cancelled", "error", err)
+				return
+			}
+
+			if err := a.collectSourcesForStream(ctx, root, ignoreRegexps, seen, &sources); err != nil {
+				slog.Error("Failed to collect sources from root", "root", root, "error", err)
+				return
+			}
+		}
+
+		// Sort sources by hash for deterministic ordering
+		sort.Slice(sources, func(i, j int) bool {
+			if sources[i].Origin == nil || sources[j].Origin == nil {
+				return false
+			}
+			return sources[i].Origin.Hash < sources[j].Origin.Hash
+		})
+
+		slog.Debug("Sorted sources for streaming", "total_sources", len(sources))
+
+		// Stream sources in sorted order
+		for _, source := range sources {
+			select {
+			case <-ctx.Done():
+				slog.Debug("GetStream cancelled while sending", "error", ctx.Err())
+				return
+			case ch <- source:
+			}
+		}
+
+		slog.Debug("Successfully streamed all sources", "total_sources", len(sources))
+	}()
+
+	return ch, nil
+}
+
+func (a *LocalSourceFSAdapter) collectSourcesForStream(ctx context.Context, root m.Path, ignoreRegexps []*regexp.Regexp, seen map[string]struct{}, sources *[]m.Source) error {
+	rootPath, recursive, err := normalizeRootPath(string(root))
+	if err != nil {
+		return err
+	}
+
+	slog.Debug("Collecting sources from root for streaming", "root", rootPath, "recursive", recursive)
+
+	info, err := a.FileInfo(ctx, m.Path(rootPath))
+	if err != nil {
+		return fmt.Errorf("root path error: %w", err)
+	}
+
+	if !info.IsDir() {
+		source, ok, err := a.processFilePath(ctx, rootPath, ignoreRegexps)
+		if err != nil {
+			if isInvalidSourceErr(err) {
+				return nil
+			}
+
+			return err
+		}
+
+		if ok {
+			addSourceIfNew(sources, seen, source)
+			slog.Debug("Collected single file source", "path", rootPath)
+		}
+
+		return nil
+	}
+
+	slog.Debug("Collecting sources from directory", "path", rootPath, "recursive", recursive)
+	return a.collectSourcesFromDir(ctx, rootPath, recursive, ignoreRegexps, seen, sources)
 }
 
 func (a *LocalSourceFSAdapter) collectSourcesFromRoot(ctx context.Context, root m.Path, ignoreRegexps []*regexp.Regexp, seen map[string]struct{}, sources *[]m.Source) error {

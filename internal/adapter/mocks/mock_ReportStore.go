@@ -345,6 +345,54 @@ func (_c *MockReportStore_SaveReports_Call) RunAndReturn(run func(context.Contex
 	return _c
 }
 
+// SaveReportsStream provides a mock function with given fields: ctx, path, reports
+func (_m *MockReportStore) SaveReportsStream(ctx context.Context, path model.Path, reports <-chan model.Report) error {
+	ret := _m.Called(ctx, path, reports)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SaveReportsStream")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, model.Path, <-chan model.Report) error); ok {
+		r0 = rf(ctx, path, reports)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockReportStore_SaveReportsStream_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SaveReportsStream'
+type MockReportStore_SaveReportsStream_Call struct {
+	*mock.Call
+}
+
+// SaveReportsStream is a helper method to define mock.On call
+//   - ctx context.Context
+//   - path model.Path
+//   - reports <-chan model.Report
+func (_e *MockReportStore_Expecter) SaveReportsStream(ctx interface{}, path interface{}, reports interface{}) *MockReportStore_SaveReportsStream_Call {
+	return &MockReportStore_SaveReportsStream_Call{Call: _e.mock.On("SaveReportsStream", ctx, path, reports)}
+}
+
+func (_c *MockReportStore_SaveReportsStream_Call) Run(run func(ctx context.Context, path model.Path, reports <-chan model.Report)) *MockReportStore_SaveReportsStream_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(model.Path), args[2].(<-chan model.Report))
+	})
+	return _c
+}
+
+func (_c *MockReportStore_SaveReportsStream_Call) Return(_a0 error) *MockReportStore_SaveReportsStream_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockReportStore_SaveReportsStream_Call) RunAndReturn(run func(context.Context, model.Path, <-chan model.Report) error) *MockReportStore_SaveReportsStream_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // SaveSpillReports provides a mock function with given fields: ctx, path, reports
 func (_m *MockReportStore) SaveSpillReports(ctx context.Context, path model.Path, reports pkg.FileSpill[model.Report]) error {
 	ret := _m.Called(ctx, path, reports)
