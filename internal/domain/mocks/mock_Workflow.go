@@ -163,6 +163,53 @@ func (_c *MockWorkflow_Test_Call) RunAndReturn(run func(context.Context, domain.
 	return _c
 }
 
+// TestStream provides a mock function with given fields: ctx, args
+func (_m *MockWorkflow) TestStream(ctx context.Context, args domain.TestArgs) error {
+	ret := _m.Called(ctx, args)
+
+	if len(ret) == 0 {
+		panic("no return value specified for TestStream")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, domain.TestArgs) error); ok {
+		r0 = rf(ctx, args)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockWorkflow_TestStream_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'TestStream'
+type MockWorkflow_TestStream_Call struct {
+	*mock.Call
+}
+
+// TestStream is a helper method to define mock.On call
+//   - ctx context.Context
+//   - args domain.TestArgs
+func (_e *MockWorkflow_Expecter) TestStream(ctx interface{}, args interface{}) *MockWorkflow_TestStream_Call {
+	return &MockWorkflow_TestStream_Call{Call: _e.mock.On("TestStream", ctx, args)}
+}
+
+func (_c *MockWorkflow_TestStream_Call) Run(run func(ctx context.Context, args domain.TestArgs)) *MockWorkflow_TestStream_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(domain.TestArgs))
+	})
+	return _c
+}
+
+func (_c *MockWorkflow_TestStream_Call) Return(_a0 error) *MockWorkflow_TestStream_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockWorkflow_TestStream_Call) RunAndReturn(run func(context.Context, domain.TestArgs) error) *MockWorkflow_TestStream_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // View provides a mock function with given fields: ctx, args
 func (_m *MockWorkflow) View(ctx context.Context, args domain.ViewArgs) error {
 	ret := _m.Called(ctx, args)

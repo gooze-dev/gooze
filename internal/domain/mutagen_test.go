@@ -218,3 +218,250 @@ func readFileBytes(t *testing.T, path m.Path) []byte {
 func newTestMutagen() Mutagen {
 	return NewMutagen(adapter.NewLocalGoFileAdapter(), adapter.NewLocalSourceFSAdapter())
 }
+
+func TestMutagen_StreamMutations_Success(t *testing.T) {
+	mg := newTestMutagen()
+
+	sources := make(chan m.Source, 1)
+	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "basic", "main.go"))
+	sources <- source
+	close(sources)
+
+	mutationCh, errCh := mg.StreamMutations(context.Background(), sources, 4, m.MutationArithmetic)
+
+	var mutations []m.Mutation
+	for mutation := range mutationCh {
+		mutations = append(mutations, mutation)
+	}
+
+	// Check for errors
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("StreamMutations failed: %v", err)
+		}
+	default:
+	}
+
+	if len(mutations) != 4 {
+		t.Fatalf("expected 4 arithmetic mutations, got %d", len(mutations))
+	}
+
+	for _, mutation := range mutations {
+		if mutation.Type != m.MutationArithmetic {
+			t.Fatalf("expected arithmetic mutation, got %v", mutation.Type)
+		}
+	}
+}
+
+func TestMutagen_StreamMutations_MultipleSources(t *testing.T) {
+	mg := newTestMutagen()
+
+	sources := make(chan m.Source, 2)
+	source1 := makeSourceV2(t, filepath.Join("..", "..", "examples", "basic", "main.go"))
+	source2 := makeSourceV2(t, filepath.Join("..", "..", "examples", "boolean", "main.go"))
+	sources <- source1
+	sources <- source2
+	close(sources)
+
+	mutationCh, errCh := mg.StreamMutations(context.Background(), sources, 4, m.MutationArithmetic, m.MutationBoolean)
+
+	var mutations []m.Mutation
+	for mutation := range mutationCh {
+		mutations = append(mutations, mutation)
+	}
+
+	// Check for errors
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("StreamMutations failed: %v", err)
+		}
+	default:
+	}
+
+	if len(mutations) == 0 {
+		t.Fatal("expected mutations from multiple sources")
+	}
+}
+
+func TestMutagen_StreamMutations_ContextCancelled(t *testing.T) {
+	mg := newTestMutagen()
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	sources := make(chan m.Source, 1)
+	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "basic", "main.go"))
+	sources <- source
+	close(sources)
+
+	// Cancel context immediately
+	cancel()
+
+	mutationCh, errCh := mg.StreamMutations(ctx, sources, 4, m.MutationArithmetic)
+
+	var mutations []m.Mutation
+	for mutation := range mutationCh {
+		mutations = append(mutations, mutation)
+	}
+
+	// Context was cancelled, so we might have fewer mutations or an error
+	select {
+	case err := <-errCh:
+		if err != nil && err != context.Canceled {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	default:
+	}
+}
+
+func TestMutagen_StreamMutations_InvalidSource(t *testing.T) {
+	mg := newTestMutagen()
+
+	sources := make(chan m.Source, 1)
+	sources <- m.Source{} // Invalid source - no origin
+	close(sources)
+
+	mutationCh, errCh := mg.StreamMutations(context.Background(), sources, 4, m.MutationArithmetic)
+
+	var mutations []m.Mutation
+	for mutation := range mutationCh {
+		mutations = append(mutations, mutation)
+	}
+
+	// Should receive an error
+	var receivedErr error
+	select {
+	case err := <-errCh:
+		receivedErr = err
+	default:
+	}
+
+	if receivedErr == nil {
+		t.Fatal("expected error for invalid source")
+	}
+
+	if len(mutations) != 0 {
+		t.Fatalf("expected no mutations for invalid source, got %d", len(mutations))
+	}
+}
+
+func TestMutagen_StreamMutations_InvalidMutationType(t *testing.T) {
+	mg := newTestMutagen()
+
+	sources := make(chan m.Source, 1)
+	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "basic", "main.go"))
+	sources <- source
+	close(sources)
+
+	invalidType := m.MutationType{Name: "invalid", Version: 1}
+	mutationCh, errCh := mg.StreamMutations(context.Background(), sources, 4, invalidType)
+
+	var mutations []m.Mutation
+	for mutation := range mutationCh {
+		mutations = append(mutations, mutation)
+	}
+
+	// Should receive an error
+	var receivedErr error
+	select {
+	case err := <-errCh:
+		receivedErr = err
+	default:
+	}
+
+	if receivedErr == nil {
+		t.Fatal("expected error for invalid mutation type")
+	}
+
+	if len(mutations) != 0 {
+		t.Fatalf("expected no mutations for invalid type, got %d", len(mutations))
+	}
+}
+
+func TestMutagen_StreamMutations_EmptySources(t *testing.T) {
+	mg := newTestMutagen()
+
+	sources := make(chan m.Source)
+	close(sources) // Close immediately - no sources
+
+	mutationCh, errCh := mg.StreamMutations(context.Background(), sources, 4, m.MutationArithmetic)
+
+	var mutations []m.Mutation
+	for mutation := range mutationCh {
+		mutations = append(mutations, mutation)
+	}
+
+	// Check for errors
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	default:
+	}
+
+	if len(mutations) != 0 {
+		t.Fatalf("expected no mutations for empty sources, got %d", len(mutations))
+	}
+}
+
+func TestMutagen_StreamMutations_DefaultMutationTypes(t *testing.T) {
+	mg := newTestMutagen()
+
+	sources := make(chan m.Source, 1)
+	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "basic", "main.go"))
+	sources <- source
+	close(sources)
+
+	// No mutation types specified - should use defaults
+	mutationCh, errCh := mg.StreamMutations(context.Background(), sources, 4)
+
+	var mutations []m.Mutation
+	for mutation := range mutationCh {
+		mutations = append(mutations, mutation)
+	}
+
+	// Check for errors
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("StreamMutations failed: %v", err)
+		}
+	default:
+	}
+
+	if len(mutations) == 0 {
+		t.Fatal("expected mutations with default types")
+	}
+}
+
+func TestMutagen_StreamMutations_ThreadsZero(t *testing.T) {
+	mg := newTestMutagen()
+
+	sources := make(chan m.Source, 1)
+	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "basic", "main.go"))
+	sources <- source
+	close(sources)
+
+	// threads=0 should normalize to 1
+	mutationCh, errCh := mg.StreamMutations(context.Background(), sources, 0, m.MutationArithmetic)
+
+	var mutations []m.Mutation
+	for mutation := range mutationCh {
+		mutations = append(mutations, mutation)
+	}
+
+	// Check for errors
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("StreamMutations failed: %v", err)
+		}
+	default:
+	}
+
+	if len(mutations) != 4 {
+		t.Fatalf("expected 4 arithmetic mutations, got %d", len(mutations))
+	}
+}

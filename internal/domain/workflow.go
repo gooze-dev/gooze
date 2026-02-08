@@ -59,6 +59,7 @@ type MergeArgs struct {
 type Workflow interface {
 	Estimate(ctx context.Context, args EstimateArgs) error
 	Test(ctx context.Context, args TestArgs) error
+	TestStream(ctx context.Context, args TestArgs) error
 	View(ctx context.Context, args ViewArgs) error
 	Merge(ctx context.Context, args MergeArgs) error
 }
@@ -69,6 +70,7 @@ type workflow struct {
 	controller.UI
 	Orchestrator
 	Mutagen
+	MutationStreamer
 }
 
 // NewWorkflow creates a new WorkflowV2 instance with the provided dependencies.
@@ -78,13 +80,15 @@ func NewWorkflow(
 	ui controller.UI,
 	orchestrator Orchestrator,
 	mutagen Mutagen,
+	mutationStreamer MutationStreamer,
 ) Workflow {
 	return &workflow{
-		SourceFSAdapter: fsAdapter,
-		ReportStore:     reportStore,
-		UI:              ui,
-		Orchestrator:    orchestrator,
-		Mutagen:         mutagen,
+		SourceFSAdapter:  fsAdapter,
+		ReportStore:      reportStore,
+		UI:               ui,
+		Orchestrator:     orchestrator,
+		Mutagen:          mutagen,
+		MutationStreamer: mutationStreamer,
 	}
 }
 
@@ -187,6 +191,111 @@ func shardReportsDir(base m.Path, shardIndex int, totalShardCount int) m.Path {
 	slog.Debug("Using sharded reports directory", "base", base, "shardIndex", shardIndex)
 
 	return m.Path(filepath.Join(string(base), fmt.Sprintf("%s%d", ShardDirPrefix, shardIndex)))
+}
+
+func (w *workflow) TestStream(ctx context.Context, args TestArgs) error {
+	return w.withTestUI(ctx, func() error {
+		slog.Info("Starting streaming mutation testing", "threads", args.Threads, "shardIndex", args.ShardIndex, "totalShardCount", args.TotalShardCount)
+		w.DisplayConcurrencyInfo(ctx, args.Threads, args.ShardIndex, args.TotalShardCount)
+
+		reportsDir := shardReportsDir(args.Reports, args.ShardIndex, args.TotalShardCount)
+		slog.Debug("Using reports directory", "path", reportsDir)
+
+		// Stream mutations instead of collecting all upfront
+		mutationsCh := w.MutationStreamer.Get(ctx, args.Paths, args.Exclude, args.Threads)
+		shardedCh := w.MutationStreamer.ShardMutations(ctx, mutationsCh, args.Threads, args.ShardIndex, args.TotalShardCount)
+
+		reports, err := w.TestReportsStream(ctx, shardedCh, args.Threads, args.MutationTimeout)
+		if err != nil {
+			slog.Error("Failed to run streaming mutation tests", "error", err)
+			return fmt.Errorf("run streaming mutation tests: %w", err)
+		}
+
+		slog.Info("Completed streaming mutation tests", "reportsCount", reports.Len())
+
+		score, err := mutationScoreFromReports(reports)
+		if err != nil {
+			return fmt.Errorf("calculate mutation score: %w", err)
+		}
+
+		slog.Info("Calculated mutation score", "score", score)
+		w.DisplayMutationScore(ctx, score)
+
+		err = w.SaveSpillReports(ctx, reportsDir, reports)
+		if err != nil {
+			slog.Error("Failed to save reports", "error", err, "path", reportsDir)
+			return fmt.Errorf("save reports: %w", err)
+		}
+
+		err = reports.Close()
+		if err != nil {
+			slog.Error("Failed to close reports spill", "error", err, "path", reportsDir)
+			return fmt.Errorf("close reports spill: %w", err)
+		}
+
+		slog.Debug("Saved reports", "path", reportsDir)
+
+		err = w.RegenerateIndex(ctx, reportsDir)
+		if err != nil {
+			slog.Error("Failed to regenerate reports index", "error", err, "path", reportsDir)
+			return fmt.Errorf("regenerate index: %w", err)
+		}
+
+		slog.Debug("Regenerated reports index", "path", reportsDir)
+
+		return nil
+	})
+}
+
+// TestReportsStream processes mutations from a channel and runs tests concurrently.
+func (w *workflow) TestReportsStream(ctx context.Context, mutations <-chan m.Mutation, threads int, mutationTimeout time.Duration) (pkg.FileSpill[m.Report], error) {
+	reports, err := pkg.NewFileSpill[m.Report]()
+	if err != nil {
+		slog.Error("failed to create reports filespill", "error", err)
+		return nil, fmt.Errorf("create reports filespill: %w", err)
+	}
+
+	errors := []error{}
+
+	effectiveThreads := threads
+	if effectiveThreads <= 0 {
+		effectiveThreads = 1
+	}
+
+	var (
+		reportsMutex    sync.Mutex
+		errorsMutex     sync.Mutex
+		threadIDCounter int32 = -1
+	)
+
+	var group errgroup.Group
+	group.SetLimit(effectiveThreads)
+
+	for mutation := range mutations {
+		currentMutation := mutation
+
+		ctxTimeout, cancel := context.WithTimeout(ctx, mutationTimeout)
+
+		group.Go(w.processMutation(
+			ctx,
+			ctxTimeout,
+			currentMutation, &threadIDCounter,
+			effectiveThreads, &reportsMutex,
+			&errorsMutex, &reports,
+			&errors,
+			cancel,
+		))
+	}
+
+	if err := group.Wait(); err != nil {
+		return reports, err
+	}
+
+	if len(errors) == 0 {
+		return reports, nil
+	}
+
+	return reports, fmt.Errorf("errors occurred during streaming mutation testing: %v", errors)
 }
 
 func (w *workflow) View(ctx context.Context, args ViewArgs) error {
@@ -457,7 +566,7 @@ func viewItemsFromReports(reports pkg.FileSpill[m.Report]) ([]m.Mutation, []m.Re
 }
 
 func (w *workflow) GetMutations(ctx context.Context, args EstimateArgs) ([]m.Mutation, error) {
-	sources, err := w.Get(ctx, args.Paths, args.Exclude...)
+	sources, err := w.SourceFSAdapter.Get(ctx, args.Paths, args.Exclude...)
 	if err != nil {
 		return nil, fmt.Errorf("get sources: %w", err)
 	}
@@ -601,7 +710,6 @@ func (w *workflow) TestReports(ctx context.Context, allMutations []m.Mutation, t
 		currentMutation := mutation
 
 		ctxTimeout, cancel := context.WithTimeout(ctx, mutationTimeout)
-		defer cancel()
 
 		group.Go(w.processMutation(
 			ctx,
@@ -610,6 +718,7 @@ func (w *workflow) TestReports(ctx context.Context, allMutations []m.Mutation, t
 			effectiveThreads, &reportsMutex,
 			&errorsMutex, &reports,
 			&errors,
+			cancel,
 		))
 	}
 
@@ -634,8 +743,12 @@ func (w *workflow) processMutation(
 	errorsMutex *sync.Mutex,
 	reports *pkg.FileSpill[m.Report],
 	errors *[]error,
+	cancel context.CancelFunc,
 ) func() error {
 	return func() error {
+		// ensure the timeout context is cancelled when this goroutine finishes
+		defer cancel()
+
 		// Assign a thread ID to this goroutine
 		threadID := int(atomic.AddInt32(threadIDCounter, 1)) % threads
 

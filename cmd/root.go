@@ -24,6 +24,7 @@ var fsAdapter adapter.SourceFSAdapter
 var testAdapter adapter.TestRunnerAdapter
 var orchestrator domain.Orchestrator
 var mutagen domain.Mutagen
+var mutationStreamer domain.MutationStreamer
 var workflow domain.Workflow
 var ui controller.UI
 
@@ -52,12 +53,14 @@ func init() {
 	testAdapter = adapter.NewLocalTestRunnerAdapter()
 	orchestrator = domain.NewOrchestrator(fsAdapter, testAdapter)
 	mutagen = domain.NewMutagen(goFileAdapter, soirceFSAdapter)
+	mutationStreamer = domain.NewMutationStreamer(fsAdapter, mutagen)
 	workflow = domain.NewWorkflow(
 		soirceFSAdapter,
 		reportStore,
 		ui,
 		orchestrator,
 		mutagen,
+		mutationStreamer,
 	)
 }
 

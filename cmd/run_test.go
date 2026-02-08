@@ -25,7 +25,7 @@ func TestRunCmd_TestMode(t *testing.T) {
 	workflow = mockWorkflow
 	defer func() { workflow = originalWorkflow }()
 
-	mockWorkflow.On("Test", mock.Anything, mock.MatchedBy(func(args domain.TestArgs) bool {
+	mockWorkflow.On("TestStream", mock.Anything, mock.MatchedBy(func(args domain.TestArgs) bool {
 		return args.Threads == 2 &&
 			args.ShardIndex == 0 &&
 			args.TotalShardCount == 1 &&
@@ -52,7 +52,7 @@ func TestRunCmd_WithSharding(t *testing.T) {
 	workflow = mockWorkflow
 	defer func() { workflow = originalWorkflow }()
 
-	mockWorkflow.On("Test", mock.Anything, mock.MatchedBy(func(args domain.TestArgs) bool {
+	mockWorkflow.On("TestStream", mock.Anything, mock.MatchedBy(func(args domain.TestArgs) bool {
 		return args.ShardIndex == 1 && args.TotalShardCount == 3
 	})).Return(nil)
 
@@ -75,7 +75,7 @@ func TestRunCmd_MultiplePaths(t *testing.T) {
 	workflow = mockWorkflow
 	defer func() { workflow = originalWorkflow }()
 
-	mockWorkflow.On("Test", mock.Anything, mock.MatchedBy(func(args domain.TestArgs) bool {
+	mockWorkflow.On("TestStream", mock.Anything, mock.MatchedBy(func(args domain.TestArgs) bool {
 		return len(args.Paths) == 3 &&
 			args.Paths[0] == m.Path("./cmd") &&
 			args.Paths[1] == m.Path("./pkg") &&
@@ -101,7 +101,7 @@ func TestRunCmd_WithExcludePatterns(t *testing.T) {
 	workflow = mockWorkflow
 	defer func() { workflow = originalWorkflow }()
 
-	mockWorkflow.On("Test", mock.Anything, mock.MatchedBy(func(args domain.TestArgs) bool {
+	mockWorkflow.On("TestStream", mock.Anything, mock.MatchedBy(func(args domain.TestArgs) bool {
 		return len(args.Exclude) == 2 &&
 			args.Exclude[0] == "^generated_" &&
 			args.Exclude[1] == "_gen\\.go$"
@@ -126,7 +126,7 @@ func TestRunCmd_NoCacheFlag_DisablesCache(t *testing.T) {
 	workflow = mockWorkflow
 	defer func() { workflow = originalWorkflow }()
 
-	mockWorkflow.On("Test", mock.Anything, mock.MatchedBy(func(args domain.TestArgs) bool {
+	mockWorkflow.On("TestStream", mock.Anything, mock.MatchedBy(func(args domain.TestArgs) bool {
 		return args.UseCache == false
 	})).Return(nil)
 
