@@ -3,6 +3,12 @@
 with-expecter: true
 disable-version-string: true
 packages:
+  gooze.dev/pkg/gooze/internal/model:
+    config:
+      dir: internal/model/mocks
+      outpkg: mocks
+    interfaces:
+      Events:
   gooze.dev/pkg/gooze/internal/domain:
     config:
       dir: internal/domain/mocks

@@ -23,6 +23,7 @@ import (
 // access so the workflow logic can be tested without touching the disk.
 //
 //nolint:interfacebloat // A richer interface keeps workflow logic decoupled from os/fs.
+// Deprecated: The SourceFSAdapter is being replaced by a more focused FilesAdapter and a separate TestFileDetector. This interface is now too broad and mixes concerns, making it harder to maintain and test. The new design will have clearer boundaries and single-responsibility interfaces.
 type SourceFSAdapter interface {
 	Get(ctx context.Context, roots []m.Path, ignore ...string) ([]m.Source, error)
 

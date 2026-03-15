@@ -97,6 +97,81 @@ func (_c *MockMutagen_GenerateMutation_Call) RunAndReturn(run func(context.Conte
 	return _c
 }
 
+// GenerateMutationChannel provides a mock function with given fields: ctx, sourceChan, parallel, mutationTypes
+func (_m *MockMutagen) GenerateMutationChannel(ctx context.Context, sourceChan <-chan model.Source, parallel int, mutationTypes ...model.MutationType) (<-chan model.Mutation, error) {
+	_va := make([]interface{}, len(mutationTypes))
+	for _i := range mutationTypes {
+		_va[_i] = mutationTypes[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx, sourceChan, parallel)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GenerateMutationChannel")
+	}
+
+	var r0 <-chan model.Mutation
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, <-chan model.Source, int, ...model.MutationType) (<-chan model.Mutation, error)); ok {
+		return rf(ctx, sourceChan, parallel, mutationTypes...)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, <-chan model.Source, int, ...model.MutationType) <-chan model.Mutation); ok {
+		r0 = rf(ctx, sourceChan, parallel, mutationTypes...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(<-chan model.Mutation)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, <-chan model.Source, int, ...model.MutationType) error); ok {
+		r1 = rf(ctx, sourceChan, parallel, mutationTypes...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockMutagen_GenerateMutationChannel_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GenerateMutationChannel'
+type MockMutagen_GenerateMutationChannel_Call struct {
+	*mock.Call
+}
+
+// GenerateMutationChannel is a helper method to define mock.On call
+//   - ctx context.Context
+//   - sourceChan <-chan model.Source
+//   - parallel int
+//   - mutationTypes ...model.MutationType
+func (_e *MockMutagen_Expecter) GenerateMutationChannel(ctx interface{}, sourceChan interface{}, parallel interface{}, mutationTypes ...interface{}) *MockMutagen_GenerateMutationChannel_Call {
+	return &MockMutagen_GenerateMutationChannel_Call{Call: _e.mock.On("GenerateMutationChannel",
+		append([]interface{}{ctx, sourceChan, parallel}, mutationTypes...)...)}
+}
+
+func (_c *MockMutagen_GenerateMutationChannel_Call) Run(run func(ctx context.Context, sourceChan <-chan model.Source, parallel int, mutationTypes ...model.MutationType)) *MockMutagen_GenerateMutationChannel_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]model.MutationType, len(args)-3)
+		for i, a := range args[3:] {
+			if a != nil {
+				variadicArgs[i] = a.(model.MutationType)
+			}
+		}
+		run(args[0].(context.Context), args[1].(<-chan model.Source), args[2].(int), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *MockMutagen_GenerateMutationChannel_Call) Return(_a0 <-chan model.Mutation, _a1 error) *MockMutagen_GenerateMutationChannel_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockMutagen_GenerateMutationChannel_Call) RunAndReturn(run func(context.Context, <-chan model.Source, int, ...model.MutationType) (<-chan model.Mutation, error)) *MockMutagen_GenerateMutationChannel_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // NewMockMutagen creates a new instance of MockMutagen. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewMockMutagen(t interface {

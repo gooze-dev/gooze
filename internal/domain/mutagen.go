@@ -14,34 +14,63 @@ import (
 
 // Mutagen defines the interface for mutation generation.
 type Mutagen interface {
+	GenerateMutationChannel(ctx context.Context, sourceChan  <-chan m.Source, parallel int,mutationTypes ...m.MutationType) (<-chan m.Mutation, error)
 	GenerateMutation(ctx context.Context, source m.Source, mutationTypes ...m.MutationType) ([]m.Mutation, error)
 }
 
 // mutagen handles pure mutation generation logic.
 type mutagen struct {
 	adapter.GoFileAdapter
-	adapter.SourceFSAdapter
+	adapter.FilesAdapter
+	// adapter.SourceFSAdapter
+	m.Events
 }
 
 // NewMutagen creates a new Mutagen instance.
-func NewMutagen(goFileAdapter adapter.GoFileAdapter, sourceFSAdapter adapter.SourceFSAdapter) Mutagen {
+func NewMutagen(goFileAdapter adapter.GoFileAdapter, filesAdapter adapter.FilesAdapter, events m.Events) Mutagen {
 	return &mutagen{
 		GoFileAdapter:   goFileAdapter,
-		SourceFSAdapter: sourceFSAdapter,
+		FilesAdapter:    filesAdapter,
+		Events:          events,
 	}
 }
 
+func (mg *mutagen) GenerateMutationChannel(ctx context.Context, sourceChan <-chan m.Source, parallel int, mutationTypes ...m.MutationType) (<-chan m.Mutation, error) {
+	mutationChan := make(chan m.Mutation, parallel)
+	mg.Events.StartGeneratingMutations()
+	go func() {
+		defer close(mutationChan)
+
+		for source := range sourceChan {
+			mg.Events.GeneratingMutationsFor(source)
+			content, fset, file, err := mg.loadSourceAST(ctx, source)
+			if err != nil {
+				mg.Events.Error(fmt.Errorf("failed to load AST for %s: %w", source.Origin.FullPath, err))
+				return 
+			}
+			for _, mutationType := range mutationTypes {
+				mg.Events.GeneratingMutationsFor(source)
+				mutations := collectMutations(mutationType, file, fset, content, source)
+				for _, mutation := range mutations {
+					select {
+					case mutationChan <- mutation:
+					case <-ctx.Done():
+						return
+					}
+				}
+			}
+
+		}
+		mg.Events.FinishGeneratingMutations()
+	}()
+
+	return mutationChan, nil
+}
+
 func (mg *mutagen) GenerateMutation(ctx context.Context, source m.Source, mutationTypes ...m.MutationType) ([]m.Mutation, error) {
-	if err := validateSource(source); err != nil {
-		return nil, err
-	}
 
 	mutationTypes, err := resolveMutationTypes(mutationTypes)
 	if err != nil {
-		return nil, err
-	}
-
-	if err := validateAdapters(mg); err != nil {
 		return nil, err
 	}
 
@@ -57,22 +86,6 @@ func (mg *mutagen) GenerateMutation(ctx context.Context, source m.Source, mutati
 	}
 
 	return mutations, nil
-}
-
-func validateSource(source m.Source) error {
-	if source.Origin == nil || source.Origin.FullPath == "" {
-		return fmt.Errorf("missing source origin")
-	}
-
-	return nil
-}
-
-func validateAdapters(mg *mutagen) error {
-	if mg.SourceFSAdapter == nil || mg.GoFileAdapter == nil {
-		return fmt.Errorf("missing adapters")
-	}
-
-	return nil
 }
 
 func resolveMutationTypes(mutationTypes []m.MutationType) ([]m.MutationType, error) {
