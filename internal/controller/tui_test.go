@@ -8,6 +8,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"gooze.dev/pkg/gooze/internal/domain"
 	m "gooze.dev/pkg/gooze/internal/model"
 )
 
@@ -169,19 +170,19 @@ func TestTUI_DisplayMethods_NoProgram(t *testing.T) {
 	tui.started = true
 
 	ctx := context.Background()
-	if err := tui.DisplayEstimation(ctx, nil, nil); err != nil {
+	if err := tui.DisplayEstimation(ctx, domain.Estimation{}, nil); err != nil {
 		t.Fatalf("DisplayEstimation unexpected error = %v", err)
 	}
 
-	if err := tui.DisplayEstimation(ctx, nil, errSentinel); err == nil {
+	if err := tui.DisplayEstimation(ctx, domain.Estimation{}, errSentinel); err == nil {
 		t.Fatalf("DisplayEstimation expected error")
 	}
 
-	muts := []m.Mutation{
-		{Source: m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "path/a.go", Hash: "hash-a"}}},
-		{Source: m.Source{Origin: nil}},
+	estimation := domain.Estimation{
+		Total: 1,
+		Files: []domain.FileEstimate{{Path: "a.go", Count: 1}},
 	}
-	if err := tui.DisplayEstimation(ctx, muts, nil); err != nil {
+	if err := tui.DisplayEstimation(ctx, estimation, nil); err != nil {
 		t.Fatalf("DisplayEstimation with mutations error = %v", err)
 	}
 

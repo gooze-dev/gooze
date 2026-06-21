@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
+	"gooze.dev/pkg/gooze/internal/domain"
 	m "gooze.dev/pkg/gooze/internal/model"
 )
 
@@ -18,14 +19,15 @@ func TestSimpleUI_DisplayEstimation_PrintsTable(t *testing.T) {
 
 	ui := NewSimpleUI(cmd)
 
-	mutations := []m.Mutation{
-		{Source: m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "path/a.go"}}},
-		{Source: m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "path/a.go"}}},
-		{Source: m.Source{Origin: &m.File{ShortPath: "b.go", FullPath: "path/b.go"}}},
-		{Source: m.Source{Origin: nil}},
+	estimation := domain.Estimation{
+		Total: 4,
+		Files: []domain.FileEstimate{
+			{Path: "a.go", Count: 2},
+			{Path: "b.go", Count: 1},
+		},
 	}
 
-	if err := ui.DisplayEstimation(context.Background(), mutations, nil); err != nil {
+	if err := ui.DisplayEstimation(context.Background(), estimation, nil); err != nil {
 		t.Fatalf("DisplayEstimation() error = %v", err)
 	}
 
@@ -54,7 +56,7 @@ func TestSimpleUI_DisplayEstimation_Error(t *testing.T) {
 	ui := NewSimpleUI(cmd)
 	boom := errors.New("boom")
 
-	if err := ui.DisplayEstimation(context.Background(), nil, boom); err == nil {
+	if err := ui.DisplayEstimation(context.Background(), domain.Estimation{}, boom); err == nil {
 		t.Fatalf("DisplayEstimation() expected error")
 	}
 

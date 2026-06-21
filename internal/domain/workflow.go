@@ -11,12 +11,10 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"golang.org/x/sync/errgroup"
 	"gooze.dev/pkg/gooze/internal/adapter"
-	"gooze.dev/pkg/gooze/internal/controller"
 	m "gooze.dev/pkg/gooze/internal/model"
 	pkg "gooze.dev/pkg/gooze/pkg"
 )
@@ -64,55 +62,54 @@ type Workflow interface {
 }
 
 type workflow struct {
-	adapter.ReportStore
-	adapter.SourceFSAdapter
-	controller.UI
-	Orchestrator
-	Mutagen
+	reports      adapter.ReportStore
+	sources      adapter.SourceFSAdapter
+	progress     Reporter
+	orchestrator Orchestrator
+	mutagen      Mutagen
 }
 
-// NewWorkflow creates a new WorkflowV2 instance with the provided dependencies.
+// NewWorkflow creates a new Workflow instance with the provided dependencies.
 func NewWorkflow(
 	fsAdapter adapter.SourceFSAdapter,
 	reportStore adapter.ReportStore,
-	ui controller.UI,
+	reporter Reporter,
 	orchestrator Orchestrator,
 	mutagen Mutagen,
 ) Workflow {
 	return &workflow{
-		SourceFSAdapter: fsAdapter,
-		ReportStore:     reportStore,
-		UI:              ui,
-		Orchestrator:    orchestrator,
-		Mutagen:         mutagen,
+		sources:      fsAdapter,
+		reports:      reportStore,
+		progress:     reporter,
+		orchestrator: orchestrator,
+		mutagen:      mutagen,
 	}
 }
 
 func (w *workflow) Estimate(ctx context.Context, args EstimateArgs) error {
-	if err := w.Start(ctx, controller.WithEstimateMode()); err != nil {
+	if err := w.progress.StartEstimate(ctx); err != nil {
 		slog.Error("Failed to start workflow UI", "error", err)
 		return err
 	}
 
-	allMutations, err := w.GetMutations(ctx, args)
+	estimation, err := w.estimateMutations(ctx, args)
 	if err != nil {
-		w.Close(ctx)
-		slog.Error("Failed to generate mutations", "error", err)
+		w.progress.Close(ctx)
+		slog.Error("Failed to estimate mutations", "error", err)
 
-		return fmt.Errorf("generate mutations: %w", err)
+		return fmt.Errorf("estimate mutations: %w", err)
 	}
 
-	err = w.DisplayEstimation(ctx, allMutations, nil)
-	if err != nil {
-		w.Close(ctx)
+	if err := w.progress.DisplayEstimation(ctx, estimation, nil); err != nil {
+		w.progress.Close(ctx)
 		slog.Error("Failed to display estimation", "error", err)
 
 		return fmt.Errorf("display: %w", err)
 	}
 
 	// Wait for UI to be closed by user (press 'q')
-	w.Wait(ctx)
-	w.Close(ctx)
+	w.progress.Wait(ctx)
+	w.progress.Close(ctx)
 
 	return nil
 }
@@ -120,23 +117,33 @@ func (w *workflow) Estimate(ctx context.Context, args EstimateArgs) error {
 func (w *workflow) Test(ctx context.Context, args TestArgs) error {
 	return w.withTestUI(ctx, func() error {
 		slog.Info("Starting mutation testing", "threads", args.Threads, "shardIndex", args.ShardIndex, "totalShardCount", args.TotalShardCount)
-		w.DisplayConcurrencyInfo(ctx, args.Threads, args.ShardIndex, args.TotalShardCount)
+		w.progress.DisplayConcurrencyInfo(ctx, args.Threads, args.ShardIndex, args.TotalShardCount)
 
 		reportsDir := shardReportsDir(args.Reports, args.ShardIndex, args.TotalShardCount)
 		slog.Debug("Using reports directory", "path", reportsDir)
 
-		allMutations, err := w.GetMutations(ctx, args.EstimateArgs)
+		sources, err := w.changedSources(ctx, args.EstimateArgs)
 		if err != nil {
-			slog.Error("Failed to generate mutations", "error", err)
+			slog.Error("Failed to resolve sources", "error", err)
 			return fmt.Errorf("generate mutations: %w", err)
 		}
 
-		slog.Debug("Generated mutations", "count", len(allMutations))
-		shardMutations := w.ShardMutations(allMutations, args.ShardIndex, args.TotalShardCount)
-		slog.Debug("Sharded mutations", "count", len(shardMutations))
-		w.DisplayUpcomingTestsInfo(ctx, len(shardMutations))
+		inThisShard := func(mutation m.Mutation) bool {
+			return inShard(mutation.ID, args.ShardIndex, args.TotalShardCount)
+		}
 
-		reports, err := w.TestReports(ctx, shardMutations, args.Threads, args.MutationTimeout)
+		// Count-only streaming pass to size the progress display without
+		// retaining any mutations in memory.
+		estimation, err := w.countMutations(ctx, sources, inThisShard)
+		if err != nil {
+			slog.Error("Failed to count mutations", "error", err)
+			return fmt.Errorf("generate mutations: %w", err)
+		}
+
+		slog.Debug("Counted mutations", "count", estimation.Total)
+		w.progress.DisplayUpcomingTestsInfo(ctx, estimation.Total)
+
+		reports, err := w.testReports(ctx, sources, inThisShard, args.Threads, args.MutationTimeout)
 		if err != nil {
 			slog.Error("Failed to run mutation tests", "error", err)
 			return fmt.Errorf("run mutation tests: %w", err)
@@ -144,38 +151,41 @@ func (w *workflow) Test(ctx context.Context, args TestArgs) error {
 
 		slog.Info("Completed mutation tests", "reportsCount", reports.Len())
 
-		score, err := mutationScoreFromReports(reports)
-		if err != nil {
-			return fmt.Errorf("calculate mutation score: %w", err)
-		}
-
-		slog.Info("Calculated mutation score", "score", score)
-		w.DisplayMutationScore(ctx, score)
-
-		err = w.SaveSpillReports(ctx, reportsDir, reports)
-		if err != nil {
-			slog.Error("Failed to save reports", "error", err, "path", reportsDir)
-			return fmt.Errorf("save reports: %w", err)
-		}
-
-		err = reports.Close()
-		if err != nil {
-			slog.Error("Failed to close reports spill", "error", err, "path", reportsDir)
-			return fmt.Errorf("close reports spill: %w", err)
-		}
-
-		slog.Debug("Saved reports", "path", reportsDir)
-
-		err = w.RegenerateIndex(ctx, reportsDir)
-		if err != nil {
-			slog.Error("Failed to regenerate reports index", "error", err, "path", reportsDir)
-			return fmt.Errorf("regenerate index: %w", err)
-		}
-
-		slog.Debug("Regenerated reports index", "path", reportsDir)
-
-		return nil
+		return w.finalizeReports(ctx, reportsDir, reports)
 	})
+}
+
+// finalizeReports computes the mutation score, persists the spilled reports, and
+// regenerates the reports index.
+func (w *workflow) finalizeReports(ctx context.Context, reportsDir m.Path, reports pkg.FileSpill[m.Report]) error {
+	score, err := mutationScoreFromReports(reports)
+	if err != nil {
+		return fmt.Errorf("calculate mutation score: %w", err)
+	}
+
+	slog.Info("Calculated mutation score", "score", score)
+	w.progress.DisplayMutationScore(ctx, score)
+
+	if err := w.reports.SaveSpillReports(ctx, reportsDir, reports); err != nil {
+		slog.Error("Failed to save reports", "error", err, "path", reportsDir)
+		return fmt.Errorf("save reports: %w", err)
+	}
+
+	if err := reports.Close(); err != nil {
+		slog.Error("Failed to close reports spill", "error", err, "path", reportsDir)
+		return fmt.Errorf("close reports spill: %w", err)
+	}
+
+	slog.Debug("Saved reports", "path", reportsDir)
+
+	if err := w.reports.RegenerateIndex(ctx, reportsDir); err != nil {
+		slog.Error("Failed to regenerate reports index", "error", err, "path", reportsDir)
+		return fmt.Errorf("regenerate index: %w", err)
+	}
+
+	slog.Debug("Regenerated reports index", "path", reportsDir)
+
+	return nil
 }
 
 func shardReportsDir(base m.Path, shardIndex int, totalShardCount int) m.Path {
@@ -193,7 +203,7 @@ func (w *workflow) View(ctx context.Context, args ViewArgs) error {
 	return w.withTestUI(ctx, func() error {
 		slog.Info("Loading mutation test reports", "path", args.Reports)
 
-		reports, err := w.LoadSpillReports(ctx, args.Reports)
+		reports, err := w.reports.LoadSpillReports(ctx, args.Reports)
 		if err != nil {
 			slog.Error("Failed to load reports", "error", err, "path", args.Reports)
 			return fmt.Errorf("load reports: %w", err)
@@ -212,14 +222,14 @@ func (w *workflow) View(ctx context.Context, args ViewArgs) error {
 		}
 
 		slog.Info("Calculated mutation score", "score", score)
-		w.DisplayUpcomingTestsInfo(ctx, len(mutations))
+		w.progress.DisplayUpcomingTestsInfo(ctx, len(mutations))
 
 		for i, mutation := range mutations {
-			w.DisplayStartingTestInfo(ctx, mutation, 0)
-			w.DisplayCompletedTestInfo(ctx, mutation, results[i])
+			w.progress.DisplayStartingTestInfo(ctx, mutation, 0)
+			w.progress.DisplayCompletedTestInfo(ctx, mutation, results[i])
 		}
 
-		w.DisplayMutationScore(ctx, score)
+		w.progress.DisplayMutationScore(ctx, score)
 
 		return nil
 	})
@@ -273,7 +283,7 @@ func (w *workflow) findShardDirs(base m.Path) ([]string, error) {
 }
 
 func (w *workflow) regenerateIndex(ctx context.Context, base m.Path) error {
-	if err := w.RegenerateIndex(ctx, base); err != nil {
+	if err := w.reports.RegenerateIndex(ctx, base); err != nil {
 		return fmt.Errorf("regenerate index: %w", err)
 	}
 
@@ -293,7 +303,7 @@ func (w *workflow) mergeReports(ctx context.Context, base m.Path, shardDirs []st
 
 	// Then load and merge reports from all shards.
 	for _, shardDir := range shardDirs {
-		reports, err := w.LoadReports(ctx, m.Path(shardDir))
+		reports, err := w.reports.LoadReports(ctx, m.Path(shardDir))
 		if err != nil {
 			slog.Error("Failed to load shard reports", "error", err, "shardDir", shardDir)
 			return nil, fmt.Errorf("load shard reports from %s: %w", shardDir, err)
@@ -308,7 +318,7 @@ func (w *workflow) mergeReports(ctx context.Context, base m.Path, shardDirs []st
 }
 
 func (w *workflow) loadReportsIfExists(ctx context.Context, path m.Path) ([]m.Report, error) {
-	reports, err := w.LoadReports(ctx, path)
+	reports, err := w.reports.LoadReports(ctx, path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, nil
@@ -321,7 +331,7 @@ func (w *workflow) loadReportsIfExists(ctx context.Context, path m.Path) ([]m.Re
 }
 
 func (w *workflow) saveMergedReports(ctx context.Context, base m.Path, reports []m.Report) error {
-	if err := w.SaveReports(ctx, base, reports); err != nil {
+	if err := w.reports.SaveReports(ctx, base, reports); err != nil {
 		slog.Error("Failed to save merged reports", "error", err, "basePath", base)
 		return fmt.Errorf("save merged reports: %w", err)
 	}
@@ -373,14 +383,14 @@ func findShardDirs(baseDir string) ([]string, error) {
 func (w *workflow) withTestUI(ctx context.Context, fn func() error) error {
 	slog.Info("Starting workflow in test mode")
 
-	if err := w.Start(ctx, controller.WithTestMode()); err != nil {
+	if err := w.progress.StartTest(ctx); err != nil {
 		slog.Error("Failed to start workflow in test mode", "error", err)
 		return err
 	}
 
 	defer func() {
 		slog.Info("Closing workflow UI")
-		w.Close(ctx)
+		w.progress.Close(ctx)
 	}()
 
 	err := fn()
@@ -389,7 +399,7 @@ func (w *workflow) withTestUI(ctx context.Context, fn func() error) error {
 	}
 
 	// Wait for UI to be closed by user (press 'q')
-	w.Wait(ctx)
+	w.progress.Wait(ctx)
 
 	return nil
 }
@@ -456,45 +466,30 @@ func viewItemsFromReports(reports pkg.FileSpill[m.Report]) ([]m.Mutation, []m.Re
 	return mutations, results, nil
 }
 
-func (w *workflow) GetMutations(ctx context.Context, args EstimateArgs) ([]m.Mutation, error) {
-	sources, err := w.Get(ctx, args.Paths, args.Exclude...)
+// changedSources resolves the source files to operate on, applying incremental
+// caching (skipping unchanged files and cleaning reports for deleted ones) when
+// enabled.
+func (w *workflow) changedSources(ctx context.Context, args EstimateArgs) ([]m.Source, error) {
+	sources, err := w.sources.Get(ctx, args.Paths, args.Exclude...)
 	if err != nil {
 		return nil, fmt.Errorf("get sources: %w", err)
 	}
 
-	changedSSources, err := w.GetChangedSources(ctx, args, sources)
-	if err != nil {
-		return nil, fmt.Errorf("get changed sources: %w", err)
-	}
-
-	allMutations, err := w.GenerateAllMutations(ctx, changedSSources)
-	if err != nil {
-		return nil, fmt.Errorf("generate mutations: %w", err)
-	}
-
-	return allMutations, nil
-}
-
-func (w *workflow) GetChangedSources(ctx context.Context, args EstimateArgs, sources []m.Source) ([]m.Source, error) {
-	if !args.UseCache {
+	if !args.UseCache || args.Reports == "" {
 		return sources, nil
 	}
 
-	if args.Reports == "" {
-		return sources, nil
-	}
-
-	changed, err := w.CheckUpdates(ctx, args.Reports, sources)
+	changed, err := w.reports.CheckUpdates(ctx, args.Reports, sources)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("check updates: %w", err)
 	}
 
 	currentByPath := w.buildSourcePathMap(sources)
 	deleted, changedExisting := w.separateDeletedAndChanged(changed, currentByPath)
 
 	if len(deleted) > 0 {
-		if err := w.CleanReports(ctx, args.Reports, deleted); err != nil {
-			return nil, err
+		if err := w.reports.CleanReports(ctx, args.Reports, deleted); err != nil {
+			return nil, fmt.Errorf("clean reports: %w", err)
 		}
 	}
 
@@ -532,24 +527,84 @@ func (w *workflow) separateDeletedAndChanged(changed []m.Source, currentByPath m
 	return deleted, changedExisting
 }
 
-func (w *workflow) GenerateAllMutations(ctx context.Context, sources []m.Source) ([]m.Mutation, error) {
-	mutationsIndex := 0
-
-	var allMutations []m.Mutation
-
-	for _, source := range sources {
-		mutations, err := w.GenerateMutation(ctx, source, DefaultMutations...)
-		if err != nil {
-			return nil, err
-		}
-
-		mutationsIndex += len(mutations)
-		allMutations = append(allMutations, mutations...)
+// estimateMutations streams mutations for the given args and returns per-file
+// counts, without ever holding the mutations themselves in memory.
+func (w *workflow) estimateMutations(ctx context.Context, args EstimateArgs) (Estimation, error) {
+	sources, err := w.changedSources(ctx, args)
+	if err != nil {
+		return Estimation{}, err
 	}
 
-	return allMutations, nil
+	return w.countMutations(ctx, sources, nil)
 }
 
+// countMutations streams mutations for the given sources and aggregates per-file
+// counts. include, when non-nil, filters which mutations are counted. Mutations
+// are processed one at a time and never retained.
+func (w *workflow) countMutations(ctx context.Context, sources []m.Source, include func(m.Mutation) bool) (Estimation, error) {
+	byKey := map[string]*FileEstimate{}
+	order := make([]string, 0)
+	total := 0
+
+	for _, source := range sources {
+		err := w.mutagen.StreamMutations(ctx, source, func(mutation m.Mutation) error {
+			if include != nil && !include(mutation) {
+				return nil
+			}
+
+			total++
+
+			key, path := fileKey(mutation)
+
+			estimate, ok := byKey[key]
+			if !ok {
+				estimate = &FileEstimate{Path: path}
+				byKey[key] = estimate
+				order = append(order, key)
+			}
+
+			estimate.Count++
+
+			return nil
+		}, DefaultMutations...)
+		if err != nil {
+			return Estimation{}, err
+		}
+	}
+
+	files := make([]FileEstimate, 0, len(order))
+	for _, key := range order {
+		files = append(files, *byKey[key])
+	}
+
+	sort.Slice(files, func(i, j int) bool {
+		if files[i].Path != files[j].Path {
+			return files[i].Path < files[j].Path
+		}
+
+		return files[i].Count < files[j].Count
+	})
+
+	return Estimation{Total: total, Files: files}, nil
+}
+
+func fileKey(mutation m.Mutation) (string, string) {
+	if mutation.Source.Origin == nil {
+		return "", ""
+	}
+
+	path := string(mutation.Source.Origin.ShortPath)
+
+	key := mutation.Source.Origin.Hash
+	if key == "" {
+		key = path
+	}
+
+	return key, path
+}
+
+// ShardMutations filters mutations down to those that belong to the given shard.
+// It is retained as a pure helper; the test pipeline shards inline via inShard.
 func (w *workflow) ShardMutations(allMutations []m.Mutation, shardIndex int, totalShardCount int) []m.Mutation {
 	if totalShardCount <= 0 {
 		return allMutations
@@ -558,15 +613,7 @@ func (w *workflow) ShardMutations(allMutations []m.Mutation, shardIndex int, tot
 	var shardMutations []m.Mutation
 
 	for _, mutation := range allMutations {
-		// Use hash of the mutation ID to determine shard
-		h := sha256.Sum256([]byte(mutation.ID))
-
-		hashValue := int(h[0])<<24 + int(h[1])<<16 + int(h[2])<<8 + int(h[3])
-		if hashValue < 0 {
-			hashValue = -hashValue
-		}
-
-		if hashValue%totalShardCount == shardIndex {
+		if inShard(mutation.ID, shardIndex, totalShardCount) {
 			shardMutations = append(shardMutations, mutation)
 		}
 	}
@@ -574,14 +621,40 @@ func (w *workflow) ShardMutations(allMutations []m.Mutation, shardIndex int, tot
 	return shardMutations
 }
 
-func (w *workflow) TestReports(ctx context.Context, allMutations []m.Mutation, threads int, mutationTimeout time.Duration) (pkg.FileSpill[m.Report], error) {
+// inShard reports whether a mutation ID is assigned to the given shard. A
+// non-positive total means sharding is disabled and everything is included.
+func inShard(id string, shardIndex int, totalShardCount int) bool {
+	if totalShardCount <= 0 {
+		return true
+	}
+
+	h := sha256.Sum256([]byte(id))
+
+	hashValue := int(h[0])<<24 + int(h[1])<<16 + int(h[2])<<8 + int(h[3])
+	if hashValue < 0 {
+		hashValue = -hashValue
+	}
+
+	return hashValue%totalShardCount == shardIndex
+}
+
+// testReports runs mutation testing as a producer/worker pipeline. A single
+// producer streams mutations source-by-source into a bounded channel; a pool of
+// workers consumes them, runs the test, and spills each report to disk. Peak
+// memory is bounded by one file's mutations plus the channel buffer, rather than
+// the whole project's mutations.
+func (w *workflow) testReports(
+	ctx context.Context,
+	sources []m.Source,
+	include func(m.Mutation) bool,
+	threads int,
+	mutationTimeout time.Duration,
+) (pkg.FileSpill[m.Report], error) {
 	reports, err := pkg.NewFileSpill[m.Report]()
 	if err != nil {
 		slog.Error("failed to create reports filespill", "error", err)
 		return nil, fmt.Errorf("create reports filespill: %w", err)
 	}
-
-	errors := []error{}
 
 	effectiveThreads := threads
 	if effectiveThreads <= 0 {
@@ -589,92 +662,140 @@ func (w *workflow) TestReports(ctx context.Context, allMutations []m.Mutation, t
 	}
 
 	var (
-		reportsMutex    sync.Mutex
-		errorsMutex     sync.Mutex
-		threadIDCounter int32 = -1
+		errsMu sync.Mutex
+		errs   []error
+		group  errgroup.Group
 	)
 
-	var group errgroup.Group
-	group.SetLimit(effectiveThreads)
+	mutations := make(chan m.Mutation, effectiveThreads*2)
 
-	for _, mutation := range allMutations {
-		currentMutation := mutation
+	// Producer streams mutations into the channel; workers consume and spill.
+	group.Go(w.produceMutations(ctx, sources, include, mutations))
 
-		ctxTimeout, cancel := context.WithTimeout(ctx, mutationTimeout)
-		defer cancel()
-
-		group.Go(w.processMutation(
-			ctx,
-			ctxTimeout,
-			currentMutation, &threadIDCounter,
-			effectiveThreads, &reportsMutex,
-			&errorsMutex, &reports,
-			&errors,
-		))
+	for threadID := range effectiveThreads {
+		group.Go(w.consumeMutations(ctx, mutations, threadID, mutationTimeout, reports, &errsMu, &errs))
 	}
 
 	if err := group.Wait(); err != nil {
 		return reports, err
 	}
 
-	if len(errors) == 0 {
-		return reports, nil
+	if len(errs) > 0 {
+		return reports, fmt.Errorf("errors occurred during mutation testing: %v", errs)
 	}
 
-	return reports, fmt.Errorf("errors occurred during mutation testing: %v", errors)
+	return reports, nil
 }
 
-func (w *workflow) processMutation(
+// produceMutations returns a task that streams mutations source-by-source into
+// out, sharding inline, and closes out when done.
+func (w *workflow) produceMutations(
 	ctx context.Context,
-	ctxTimeout context.Context,
-	currentMutation m.Mutation,
-	threadIDCounter *int32,
-	threads int,
-	reportsMutex *sync.Mutex,
-	errorsMutex *sync.Mutex,
-	reports *pkg.FileSpill[m.Report],
-	errors *[]error,
+	sources []m.Source,
+	include func(m.Mutation) bool,
+	out chan<- m.Mutation,
 ) func() error {
 	return func() error {
-		// Assign a thread ID to this goroutine
-		threadID := int(atomic.AddInt32(threadIDCounter, 1)) % threads
+		defer close(out)
 
-		w.DisplayStartingTestInfo(ctx, currentMutation, threadID)
+		for _, source := range sources {
+			err := w.mutagen.StreamMutations(ctx, source, func(mutation m.Mutation) error {
+				if include != nil && !include(mutation) {
+					return nil
+				}
 
-		mutationResult, err := w.TestMutation(ctxTimeout, currentMutation)
-		if err != nil {
-			errorsMutex.Lock()
-
-			*errors = append(*errors, err)
-
-			errorsMutex.Unlock()
-
-			return nil
+				select {
+				case out <- mutation:
+					return nil
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			}, DefaultMutations...)
+			if err != nil {
+				return err
+			}
 		}
-
-		report := m.Report{
-			Source: currentMutation.Source,
-			Result: mutationResult,
-		}
-		if getMutationStatus(mutationResult, currentMutation) != m.Killed {
-			diff := currentMutation.DiffCode
-			report.Diff = &diff
-		}
-
-		reportsMutex.Lock()
-
-		err = (*reports).Append(report)
-		if err != nil {
-			slog.Error("failed to append report to filespill", "error", err)
-			return fmt.Errorf("append report to filespill: %w", err)
-		}
-
-		reportsMutex.Unlock()
-
-		w.DisplayCompletedTestInfo(ctx, currentMutation, mutationResult)
 
 		return nil
 	}
+}
+
+// consumeMutations returns a worker task that tests each mutation from in.
+func (w *workflow) consumeMutations(
+	ctx context.Context,
+	in <-chan m.Mutation,
+	threadID int,
+	mutationTimeout time.Duration,
+	reports pkg.FileSpill[m.Report],
+	errsMu *sync.Mutex,
+	errs *[]error,
+) func() error {
+	return func() error {
+		for mutation := range in {
+			if err := w.runMutation(ctx, mutation, threadID, mutationTimeout, reports, errsMu, errs); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	}
+}
+
+// runMutation tests a single mutation under a per-mutation timeout and spills its
+// report. The timeout starts here (at execution time), not when the mutation was
+// queued. Test failures are collected rather than aborting the whole run.
+func (w *workflow) runMutation(
+	ctx context.Context,
+	mutation m.Mutation,
+	threadID int,
+	mutationTimeout time.Duration,
+	reports pkg.FileSpill[m.Report],
+	errsMu *sync.Mutex,
+	errs *[]error,
+) error {
+	w.progress.DisplayStartingTestInfo(ctx, mutation, threadID)
+
+	mutationCtx := ctx
+
+	var cancel context.CancelFunc
+	if mutationTimeout > 0 {
+		mutationCtx, cancel = context.WithTimeout(ctx, mutationTimeout)
+	}
+
+	result, err := w.orchestrator.TestMutation(mutationCtx, mutation)
+
+	if cancel != nil {
+		cancel()
+	}
+
+	if err != nil {
+		errsMu.Lock()
+
+		*errs = append(*errs, err)
+
+		errsMu.Unlock()
+
+		return nil
+	}
+
+	report := m.Report{
+		Source: mutation.Source,
+		Result: result,
+	}
+	if getMutationStatus(result, mutation) != m.Killed {
+		diff := mutation.DiffCode
+		report.Diff = &diff
+	}
+
+	// FileSpill.Append is safe for concurrent use, so no external lock is needed.
+	if err := reports.Append(report); err != nil {
+		slog.Error("failed to append report to filespill", "error", err)
+		return fmt.Errorf("append report to filespill: %w", err)
+	}
+
+	w.progress.DisplayCompletedTestInfo(ctx, mutation, result)
+
+	return nil
 }
 
 func getMutationStatus(result m.Result, mutation m.Mutation) m.TestStatus {

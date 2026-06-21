@@ -18,9 +18,8 @@ import (
 )
 
 var goFileAdapter adapter.GoFileAdapter
-var soirceFSAdapter adapter.SourceFSAdapter
+var sourceFSAdapter adapter.SourceFSAdapter
 var reportStore adapter.ReportStore
-var fsAdapter adapter.SourceFSAdapter
 var testAdapter adapter.TestRunnerAdapter
 var orchestrator domain.Orchestrator
 var mutagen domain.Mutagen
@@ -46,14 +45,13 @@ func init() {
 	// Initialize shared dependencies.
 	ui = controller.NewUI(rootCmd, controller.IsTTY(os.Stdout))
 	goFileAdapter = adapter.NewLocalGoFileAdapter()
-	soirceFSAdapter = adapter.NewLocalSourceFSAdapter()
+	sourceFSAdapter = adapter.NewLocalSourceFSAdapter()
 	reportStore = adapter.NewReportStore()
-	fsAdapter = adapter.NewLocalSourceFSAdapter()
 	testAdapter = adapter.NewLocalTestRunnerAdapter()
-	orchestrator = domain.NewOrchestrator(fsAdapter, testAdapter)
-	mutagen = domain.NewMutagen(goFileAdapter, soirceFSAdapter)
+	orchestrator = domain.NewOrchestrator(sourceFSAdapter, testAdapter)
+	mutagen = domain.NewMutagen(goFileAdapter, sourceFSAdapter)
 	workflow = domain.NewWorkflow(
-		soirceFSAdapter,
+		sourceFSAdapter,
 		reportStore,
 		ui,
 		orchestrator,

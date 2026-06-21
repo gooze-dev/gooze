@@ -30,7 +30,10 @@ install-cobra-cli: prepare-env
 
 install-golangci-lint: prepare-env
 	@echo "Installing golangci-lint $(GOLANGCI_LINT_VERSION)..."
-	@curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b $(abspath $(bin)) $(GOLANGCI_LINT_VERSION)
+	@# Build from source with the local Go toolchain so the linter's embedded
+	@# type-checker matches the installed Go version (the prebuilt release binary
+	@# panics when run against a newer Go than it was compiled with).
+	@GOBIN=$(abspath $(bin)) go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 
 install-mockery: prepare-env
 	@echo "Installing mockery $(MOCKERY_VERSION)..."

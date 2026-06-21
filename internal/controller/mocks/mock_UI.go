@@ -5,8 +5,9 @@ package mocks
 import (
 	context "context"
 
+	domain "gooze.dev/pkg/gooze/internal/domain"
+
 	mock "github.com/stretchr/testify/mock"
-	controller "gooze.dev/pkg/gooze/internal/controller"
 
 	model "gooze.dev/pkg/gooze/internal/model"
 )
@@ -128,17 +129,17 @@ func (_c *MockUI_DisplayConcurrencyInfo_Call) RunAndReturn(run func(context.Cont
 	return _c
 }
 
-// DisplayEstimation provides a mock function with given fields: ctx, mutations, err
-func (_m *MockUI) DisplayEstimation(ctx context.Context, mutations []model.Mutation, err error) error {
-	ret := _m.Called(ctx, mutations, err)
+// DisplayEstimation provides a mock function with given fields: ctx, estimation, err
+func (_m *MockUI) DisplayEstimation(ctx context.Context, estimation domain.Estimation, err error) error {
+	ret := _m.Called(ctx, estimation, err)
 
 	if len(ret) == 0 {
 		panic("no return value specified for DisplayEstimation")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, []model.Mutation, error) error); ok {
-		r0 = rf(ctx, mutations, err)
+	if rf, ok := ret.Get(0).(func(context.Context, domain.Estimation, error) error); ok {
+		r0 = rf(ctx, estimation, err)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -153,15 +154,15 @@ type MockUI_DisplayEstimation_Call struct {
 
 // DisplayEstimation is a helper method to define mock.On call
 //   - ctx context.Context
-//   - mutations []model.Mutation
+//   - estimation domain.Estimation
 //   - err error
-func (_e *MockUI_Expecter) DisplayEstimation(ctx interface{}, mutations interface{}, err interface{}) *MockUI_DisplayEstimation_Call {
-	return &MockUI_DisplayEstimation_Call{Call: _e.mock.On("DisplayEstimation", ctx, mutations, err)}
+func (_e *MockUI_Expecter) DisplayEstimation(ctx interface{}, estimation interface{}, err interface{}) *MockUI_DisplayEstimation_Call {
+	return &MockUI_DisplayEstimation_Call{Call: _e.mock.On("DisplayEstimation", ctx, estimation, err)}
 }
 
-func (_c *MockUI_DisplayEstimation_Call) Run(run func(ctx context.Context, mutations []model.Mutation, err error)) *MockUI_DisplayEstimation_Call {
+func (_c *MockUI_DisplayEstimation_Call) Run(run func(ctx context.Context, estimation domain.Estimation, err error)) *MockUI_DisplayEstimation_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].([]model.Mutation), args[2].(error))
+		run(args[0].(context.Context), args[1].(domain.Estimation), args[2].(error))
 	})
 	return _c
 }
@@ -171,7 +172,7 @@ func (_c *MockUI_DisplayEstimation_Call) Return(_a0 error) *MockUI_DisplayEstima
 	return _c
 }
 
-func (_c *MockUI_DisplayEstimation_Call) RunAndReturn(run func(context.Context, []model.Mutation, error) error) *MockUI_DisplayEstimation_Call {
+func (_c *MockUI_DisplayEstimation_Call) RunAndReturn(run func(context.Context, domain.Estimation, error) error) *MockUI_DisplayEstimation_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -279,24 +280,17 @@ func (_c *MockUI_DisplayUpcomingTestsInfo_Call) RunAndReturn(run func(context.Co
 	return _c
 }
 
-// Start provides a mock function with given fields: ctx, options
-func (_m *MockUI) Start(ctx context.Context, options ...controller.StartOption) error {
-	_va := make([]interface{}, len(options))
-	for _i := range options {
-		_va[_i] = options[_i]
-	}
-	var _ca []interface{}
-	_ca = append(_ca, ctx)
-	_ca = append(_ca, _va...)
-	ret := _m.Called(_ca...)
+// StartEstimate provides a mock function with given fields: ctx
+func (_m *MockUI) StartEstimate(ctx context.Context) error {
+	ret := _m.Called(ctx)
 
 	if len(ret) == 0 {
-		panic("no return value specified for Start")
+		panic("no return value specified for StartEstimate")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, ...controller.StartOption) error); ok {
-		r0 = rf(ctx, options...)
+	if rf, ok := ret.Get(0).(func(context.Context) error); ok {
+		r0 = rf(ctx)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -304,38 +298,76 @@ func (_m *MockUI) Start(ctx context.Context, options ...controller.StartOption) 
 	return r0
 }
 
-// MockUI_Start_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Start'
-type MockUI_Start_Call struct {
+// MockUI_StartEstimate_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'StartEstimate'
+type MockUI_StartEstimate_Call struct {
 	*mock.Call
 }
 
-// Start is a helper method to define mock.On call
+// StartEstimate is a helper method to define mock.On call
 //   - ctx context.Context
-//   - options ...controller.StartOption
-func (_e *MockUI_Expecter) Start(ctx interface{}, options ...interface{}) *MockUI_Start_Call {
-	return &MockUI_Start_Call{Call: _e.mock.On("Start",
-		append([]interface{}{ctx}, options...)...)}
+func (_e *MockUI_Expecter) StartEstimate(ctx interface{}) *MockUI_StartEstimate_Call {
+	return &MockUI_StartEstimate_Call{Call: _e.mock.On("StartEstimate", ctx)}
 }
 
-func (_c *MockUI_Start_Call) Run(run func(ctx context.Context, options ...controller.StartOption)) *MockUI_Start_Call {
+func (_c *MockUI_StartEstimate_Call) Run(run func(ctx context.Context)) *MockUI_StartEstimate_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		variadicArgs := make([]controller.StartOption, len(args)-1)
-		for i, a := range args[1:] {
-			if a != nil {
-				variadicArgs[i] = a.(controller.StartOption)
-			}
-		}
-		run(args[0].(context.Context), variadicArgs...)
+		run(args[0].(context.Context))
 	})
 	return _c
 }
 
-func (_c *MockUI_Start_Call) Return(_a0 error) *MockUI_Start_Call {
+func (_c *MockUI_StartEstimate_Call) Return(_a0 error) *MockUI_StartEstimate_Call {
 	_c.Call.Return(_a0)
 	return _c
 }
 
-func (_c *MockUI_Start_Call) RunAndReturn(run func(context.Context, ...controller.StartOption) error) *MockUI_Start_Call {
+func (_c *MockUI_StartEstimate_Call) RunAndReturn(run func(context.Context) error) *MockUI_StartEstimate_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// StartTest provides a mock function with given fields: ctx
+func (_m *MockUI) StartTest(ctx context.Context) error {
+	ret := _m.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for StartTest")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context) error); ok {
+		r0 = rf(ctx)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockUI_StartTest_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'StartTest'
+type MockUI_StartTest_Call struct {
+	*mock.Call
+}
+
+// StartTest is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *MockUI_Expecter) StartTest(ctx interface{}) *MockUI_StartTest_Call {
+	return &MockUI_StartTest_Call{Call: _e.mock.On("StartTest", ctx)}
+}
+
+func (_c *MockUI_StartTest_Call) Run(run func(ctx context.Context)) *MockUI_StartTest_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context))
+	})
+	return _c
+}
+
+func (_c *MockUI_StartTest_Call) Return(_a0 error) *MockUI_StartTest_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockUI_StartTest_Call) RunAndReturn(run func(context.Context) error) *MockUI_StartTest_Call {
 	_c.Call.Return(run)
 	return _c
 }

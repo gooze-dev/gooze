@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"sort"
 
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
+	"gooze.dev/pkg/gooze/internal/domain"
 	m "gooze.dev/pkg/gooze/internal/model"
 )
 
@@ -30,6 +30,16 @@ func (s *SimpleUI) Start(ctx context.Context, _ ...StartOption) error {
 	return nil
 }
 
+// StartEstimate initializes the UI in estimation mode.
+func (s *SimpleUI) StartEstimate(ctx context.Context) error {
+	return s.Start(ctx, WithEstimateMode())
+}
+
+// StartTest initializes the UI in test execution mode.
+func (s *SimpleUI) StartTest(ctx context.Context) error {
+	return s.Start(ctx, WithTestMode())
+}
+
 // Close finalizes the UI.
 func (s *SimpleUI) Close(ctx context.Context) {
 	if err := ctx.Err(); err != nil {
@@ -46,7 +56,7 @@ func (s *SimpleUI) Wait(ctx context.Context) {
 }
 
 // DisplayEstimation prints the estimation results or error.
-func (s *SimpleUI) DisplayEstimation(ctx context.Context, mutations []m.Mutation, err error) error {
+func (s *SimpleUI) DisplayEstimation(ctx context.Context, estimation domain.Estimation, err error) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -56,45 +66,13 @@ func (s *SimpleUI) DisplayEstimation(ctx context.Context, mutations []m.Mutation
 		return err
 	}
 
-	statsList := buildFileStats(mutations)
-	tableStr := renderEstimationTable(statsList, len(mutations))
+	tableStr := renderEstimationTable(estimation)
 	s.printf("\n%s", tableStr)
 
 	return nil
 }
 
-func buildFileStats(mutations []m.Mutation) []fileStat {
-	info := make(map[string]fileStat)
-
-	for _, mutation := range mutations {
-		if mutation.Source.Origin == nil {
-			continue
-		}
-
-		fileHash := mutation.Source.Origin.Hash
-		if fileHash == "" {
-			fileHash = string(mutation.Source.Origin.ShortPath)
-		}
-
-		stat := info[fileHash]
-		stat.path = string(mutation.Source.Origin.ShortPath)
-		stat.count++
-		info[fileHash] = stat
-	}
-
-	statsList := make([]fileStat, 0, len(info))
-	for _, stat := range info {
-		statsList = append(statsList, stat)
-	}
-
-	sort.Slice(statsList, func(i, j int) bool {
-		return statsList[i].path < statsList[j].path
-	})
-
-	return statsList
-}
-
-func renderEstimationTable(statsList []fileStat, totalMutations int) string {
+func renderEstimationTable(estimation domain.Estimation) string {
 	var tableBuffer bytes.Buffer
 
 	table := tablewriter.NewWriter(&tableBuffer)
@@ -103,17 +81,13 @@ func renderEstimationTable(statsList []fileStat, totalMutations int) string {
 	table.SetCenterSeparator("")
 	table.SetColumnAlignment([]int{tablewriter.ALIGN_LEFT, tablewriter.ALIGN_CENTER})
 
-	pathsCount := 0
-
-	for _, stat := range statsList {
-		table.Append([]string{stat.path, fmt.Sprintf("%d", stat.count)})
-
-		pathsCount++
+	for _, file := range estimation.Files {
+		table.Append([]string{file.Path, fmt.Sprintf("%d", file.Count)})
 	}
 
 	table.SetFooter([]string{
-		fmt.Sprintf("Total Files %d", pathsCount),
-		fmt.Sprintf("%d", totalMutations),
+		fmt.Sprintf("Total Files %d", len(estimation.Files)),
+		fmt.Sprintf("%d", estimation.Total),
 	})
 
 	table.Render()
