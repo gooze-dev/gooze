@@ -14,7 +14,12 @@ import (
 
 // Mutagen defines the interface for mutation generation.
 type Mutagen interface {
+	// GenerateMutation returns every mutation for a source as a slice.
 	GenerateMutation(ctx context.Context, source m.Source, mutationTypes ...m.MutationType) ([]m.Mutation, error)
+	// StreamMutations invokes fn for each generated mutation without retaining
+	// them, so callers can process mutations one at a time. If fn returns an
+	// error, streaming stops and that error is returned.
+	StreamMutations(ctx context.Context, source m.Source, fn func(m.Mutation) error, mutationTypes ...m.MutationType) error
 }
 
 // mutagen handles pure mutation generation logic.
@@ -32,31 +37,47 @@ func NewMutagen(goFileAdapter adapter.GoFileAdapter, sourceFSAdapter adapter.Sou
 }
 
 func (mg *mutagen) GenerateMutation(ctx context.Context, source m.Source, mutationTypes ...m.MutationType) ([]m.Mutation, error) {
-	if err := validateSource(source); err != nil {
+	mutations := make([]m.Mutation, 0)
+
+	err := mg.StreamMutations(ctx, source, func(mutation m.Mutation) error {
+		mutations = append(mutations, mutation)
+		return nil
+	}, mutationTypes...)
+	if err != nil {
 		return nil, err
+	}
+
+	return mutations, nil
+}
+
+func (mg *mutagen) StreamMutations(ctx context.Context, source m.Source, fn func(m.Mutation) error, mutationTypes ...m.MutationType) error {
+	if err := validateSource(source); err != nil {
+		return err
 	}
 
 	mutationTypes, err := resolveMutationTypes(mutationTypes)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	if err := validateAdapters(mg); err != nil {
-		return nil, err
+		return err
 	}
 
 	content, fset, file, err := mg.loadSourceAST(ctx, source)
 	if err != nil {
-		return nil, err
+		return err
 	}
-
-	mutations := make([]m.Mutation, 0)
 
 	for _, mutationType := range mutationTypes {
-		mutations = append(mutations, collectMutations(mutationType, file, fset, content, source)...)
+		for _, mutation := range collectMutations(mutationType, file, fset, content, source) {
+			if err := fn(mutation); err != nil {
+				return err
+			}
+		}
 	}
 
-	return mutations, nil
+	return nil
 }
 
 func validateSource(source m.Source) error {

@@ -109,9 +109,8 @@ func TestInit(t *testing.T) {
 	// Test that init() created all the necessary instances
 	assert.NotNil(t, ui)
 	assert.NotNil(t, goFileAdapter)
-	assert.NotNil(t, soirceFSAdapter)
+	assert.NotNil(t, sourceFSAdapter)
 	assert.NotNil(t, reportStore)
-	assert.NotNil(t, fsAdapter)
 	assert.NotNil(t, testAdapter)
 	assert.NotNil(t, orchestrator)
 	assert.NotNil(t, mutagen)

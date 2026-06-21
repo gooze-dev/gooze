@@ -253,8 +253,6 @@ func (rs *LocalReportStore) writeIndexForReports(dirPath string, reports []m.Rep
 }
 
 // LoadReports retrieves previously saved reports from disk.
-//
-// Note: This is currently a stub; report loading will be implemented later.
 func (rs *LocalReportStore) LoadReports(ctx context.Context, path m.Path) ([]m.Report, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -277,9 +275,7 @@ func (rs *LocalReportStore) LoadReports(ctx context.Context, path m.Path) ([]m.R
 	return reports, nil
 }
 
-// LoadSpillReports loads reports from a FileSpill (stubbed for now - assuming index logic handles it).
-// In a real implementation this would likely return a FileSpill that reads directly from the persisted gob files.
-// For now, if we saved as spilled, we might want to just open it.
+// LoadSpillReports loads previously saved reports from disk into a FileSpill.
 func (rs *LocalReportStore) LoadSpillReports(ctx context.Context, path m.Path) (pkg.FileSpill[m.Report], error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err

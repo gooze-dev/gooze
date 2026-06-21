@@ -89,7 +89,7 @@ func init() {
 			return
 		}
 
-		return
+		slog.Warn("failed to read config file", "error", err)
 	}
 }
 

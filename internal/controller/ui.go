@@ -4,14 +4,9 @@ package controller
 import (
 	"context"
 
+	"gooze.dev/pkg/gooze/internal/domain"
 	m "gooze.dev/pkg/gooze/internal/model"
 )
-
-// MutationEstimation holds estimation counts for different mutation types.
-type MutationEstimation struct {
-	Arithmetic int
-	Boolean    int
-}
 
 // StartMode defines the mode of operation for the UI.
 type StartMode int
@@ -44,13 +39,15 @@ func WithTestMode() StartOption {
 	}
 }
 
-// UI defines the interface for displaying source file lists.
+// UI defines the interface for displaying mutation testing progress and results.
 // Implementations can use different output methods (simple text, TUI, etc).
+// It satisfies domain.Reporter so it can be injected into the workflow.
 type UI interface {
-	Start(ctx context.Context, options ...StartOption) error
+	StartEstimate(ctx context.Context) error
+	StartTest(ctx context.Context) error
 	Close(ctx context.Context)
 	Wait(ctx context.Context) // Wait for UI to finish (user closes it)
-	DisplayEstimation(ctx context.Context, mutations []m.Mutation, err error) error
+	DisplayEstimation(ctx context.Context, estimation domain.Estimation, err error) error
 	DisplayConcurrencyInfo(ctx context.Context, threads int, shardIndex int, shardCount int)
 	DisplayUpcomingTestsInfo(ctx context.Context, i int)
 	DisplayStartingTestInfo(ctx context.Context, currentMutation m.Mutation, threadID int)

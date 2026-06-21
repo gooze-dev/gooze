@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"gooze.dev/pkg/gooze/internal/domain"
 	m "gooze.dev/pkg/gooze/internal/model"
 )
 
@@ -43,6 +44,16 @@ func (t *TUI) Start(ctx context.Context, options ...StartOption) error {
 	}
 
 	return t.startWithModel(model)
+}
+
+// StartEstimate initializes the UI in estimation mode.
+func (t *TUI) StartEstimate(ctx context.Context) error {
+	return t.Start(ctx, WithEstimateMode())
+}
+
+// StartTest initializes the UI in test execution mode.
+func (t *TUI) StartTest(ctx context.Context) error {
+	return t.Start(ctx, WithTestMode())
 }
 
 // startWithModel initializes the UI with a specific model.
@@ -116,7 +127,7 @@ func (t *TUI) Wait(ctx context.Context) {
 }
 
 // DisplayEstimation prints the estimation results or error.
-func (t *TUI) DisplayEstimation(ctx context.Context, mutations []m.Mutation, err error) error {
+func (t *TUI) DisplayEstimation(ctx context.Context, estimation domain.Estimation, err error) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -128,27 +139,14 @@ func (t *TUI) DisplayEstimation(ctx context.Context, mutations []m.Mutation, err
 		return err
 	}
 
-	fileStats := make(map[string]fileStat)
-
-	for _, mutation := range mutations {
-		if mutation.Source.Origin == nil {
-			continue
-		}
-
-		fileHash := mutation.Source.Origin.Hash
-		if fileHash == "" {
-			fileHash = string(mutation.Source.Origin.ShortPath)
-		}
-
-		stat := fileStats[fileHash]
-		stat.path = string(mutation.Source.Origin.ShortPath)
-		stat.count++
-		fileStats[fileHash] = stat
+	fileStats := make(map[string]fileStat, len(estimation.Files))
+	for _, file := range estimation.Files {
+		fileStats[file.Path] = fileStat{path: file.Path, count: file.Count}
 	}
 
 	t.send(estimationMsg{
-		total:     len(mutations),
-		paths:     len(fileStats),
+		total:     estimation.Total,
+		paths:     len(estimation.Files),
 		fileStats: fileStats,
 	})
 
