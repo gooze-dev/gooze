@@ -263,7 +263,14 @@ func (w *workflow) Merge(ctx context.Context, args MergeArgs) error {
 
 	slog.Debug("Saved merged reports and regenerated index", "basePath", base)
 
-	return w.removeShardDirs(shardDirs)
+	if err := w.removeShardDirs(shardDirs); err != nil {
+		return err
+	}
+
+	// Report the combined score last, so `gooze report merge` ends with it.
+	w.progress.DisplayMutationScore(ctx, mutationScoreFromReportSlice(merged))
+
+	return nil
 }
 
 func (w *workflow) findShardDirs(base m.Path) ([]string, error) {
