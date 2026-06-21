@@ -8,9 +8,9 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -120,27 +120,24 @@ func (w *workflow) Test(ctx context.Context, args TestArgs) error {
 		w.progress.DisplayConcurrencyInfo(ctx, args.Threads, args.ShardIndex, args.TotalShardCount)
 
 		reportsDir := shardReportsDir(args.Reports, args.ShardIndex, args.TotalShardCount)
-		slog.Debug("Using reports directory", "path", reportsDir)
 
 		sources, err := w.changedSources(ctx, args.EstimateArgs)
 		if err != nil {
 			slog.Error("Failed to resolve sources", "error", err)
-			return fmt.Errorf("generate mutations: %w", err)
+			return err
 		}
 
 		inThisShard := func(mutation m.Mutation) bool {
 			return inShard(mutation.ID, args.ShardIndex, args.TotalShardCount)
 		}
 
-		// Count-only streaming pass to size the progress display without
-		// retaining any mutations in memory.
+		// Count mutations up front so the UI can show an accurate progress total.
 		estimation, err := w.countMutations(ctx, sources, inThisShard)
 		if err != nil {
 			slog.Error("Failed to count mutations", "error", err)
 			return fmt.Errorf("generate mutations: %w", err)
 		}
 
-		slog.Debug("Counted mutations", "count", estimation.Total)
 		w.progress.DisplayUpcomingTestsInfo(ctx, estimation.Total)
 
 		reports, err := w.testReports(ctx, sources, inThisShard, args.Threads, args.MutationTimeout)
@@ -190,11 +187,8 @@ func (w *workflow) finalizeReports(ctx context.Context, reportsDir m.Path, repor
 
 func shardReportsDir(base m.Path, shardIndex int, totalShardCount int) m.Path {
 	if totalShardCount <= 1 {
-		slog.Debug("Using unsharded reports directory", "path", base)
 		return base
 	}
-
-	slog.Debug("Using sharded reports directory", "base", base, "shardIndex", shardIndex)
 
 	return m.Path(filepath.Join(string(base), fmt.Sprintf("%s%d", ShardDirPrefix, shardIndex)))
 }
@@ -409,50 +403,15 @@ func viewItemsFromReports(reports pkg.FileSpill[m.Report]) ([]m.Mutation, []m.Re
 	results := make([]m.Result, 0)
 
 	err := reports.Range(func(_ uint64, report m.Report) error {
-		if len(report.Result) == 0 {
-			return nil
-		}
-
-		mutationTypes := make([]m.MutationType, 0, len(report.Result))
-		for mutationType := range report.Result {
-			mutationTypes = append(mutationTypes, mutationType)
-		}
-
-		sort.Slice(mutationTypes, func(i, j int) bool {
-			if mutationTypes[i].Name != mutationTypes[j].Name {
-				return mutationTypes[i].Name < mutationTypes[j].Name
-			}
-
-			return mutationTypes[i].Version < mutationTypes[j].Version
-		})
-
-		for _, mutationType := range mutationTypes {
-			entries := report.Result[mutationType]
-			for _, entry := range entries {
-				mutation := m.Mutation{
-					ID:     entry.MutationID,
-					Source: report.Source,
-					Type:   mutationType,
-				}
+		for _, mutationType := range sortedResultTypes(report.Result) {
+			for _, entry := range report.Result[mutationType] {
+				mutation := m.Mutation{ID: entry.MutationID, Source: report.Source, Type: mutationType}
 				if entry.Status == m.Survived && report.Diff != nil {
 					mutation.DiffCode = *report.Diff
 				}
 
-				result := m.Result{}
-				result[mutationType] = []struct {
-					MutationID string
-					Status     m.TestStatus
-					Err        error
-				}{
-					{
-						MutationID: entry.MutationID,
-						Status:     entry.Status,
-						Err:        entry.Err,
-					},
-				}
-
 				mutations = append(mutations, mutation)
-				results = append(results, result)
+				results = append(results, m.Result{mutationType: {entry}})
 			}
 		}
 
@@ -466,13 +425,33 @@ func viewItemsFromReports(reports pkg.FileSpill[m.Report]) ([]m.Mutation, []m.Re
 	return mutations, results, nil
 }
 
-// changedSources resolves the source files to operate on, applying incremental
+// sortedResultTypes returns the mutation types in a result, ordered by name then
+// version, so view output is deterministic.
+func sortedResultTypes(result m.Result) []m.MutationType {
+	types := make([]m.MutationType, 0, len(result))
+	for mutationType := range result {
+		types = append(types, mutationType)
+	}
+
+	sort.Slice(types, func(i, j int) bool {
+		if types[i].Name != types[j].Name {
+			return types[i].Name < types[j].Name
+		}
+
+		return types[i].Version < types[j].Version
+	})
+
+	return types
+}
+
+// changedSources resolves the sources to operate on, applying incremental
 // caching (skipping unchanged files and cleaning reports for deleted ones) when
-// enabled.
+// enabled. The scanner streams its results; they are collected into a slice
+// (sources are lightweight) so the count and test passes can both iterate them.
 func (w *workflow) changedSources(ctx context.Context, args EstimateArgs) ([]m.Source, error) {
-	sources, err := w.sources.Get(ctx, args.Paths, args.Exclude...)
+	sources, err := w.scanSources(ctx, args)
 	if err != nil {
-		return nil, fmt.Errorf("get sources: %w", err)
+		return nil, err
 	}
 
 	if !args.UseCache || args.Reports == "" {
@@ -484,8 +463,7 @@ func (w *workflow) changedSources(ctx context.Context, args EstimateArgs) ([]m.S
 		return nil, fmt.Errorf("check updates: %w", err)
 	}
 
-	currentByPath := w.buildSourcePathMap(sources)
-	deleted, changedExisting := w.separateDeletedAndChanged(changed, currentByPath)
+	deleted, changedExisting := w.separateDeletedAndChanged(changed, w.buildSourcePathMap(sources))
 
 	if len(deleted) > 0 {
 		if err := w.reports.CleanReports(ctx, args.Reports, deleted); err != nil {
@@ -494,6 +472,23 @@ func (w *workflow) changedSources(ctx context.Context, args EstimateArgs) ([]m.S
 	}
 
 	return changedExisting, nil
+}
+
+// scanSources drains the streaming scanner into a slice.
+func (w *workflow) scanSources(ctx context.Context, args EstimateArgs) ([]m.Source, error) {
+	sourceCh, scanErrc := w.sources.Stream(ctx, args.Paths, args.Exclude...)
+
+	//nolint:prealloc // the stream length is unknown ahead of time.
+	var sources []m.Source
+	for source := range sourceCh {
+		sources = append(sources, source)
+	}
+
+	if err := <-scanErrc; err != nil {
+		return nil, fmt.Errorf("get sources: %w", err)
+	}
+
+	return sources, nil
 }
 
 func (w *workflow) buildSourcePathMap(sources []m.Source) map[string]m.Source {
@@ -527,8 +522,8 @@ func (w *workflow) separateDeletedAndChanged(changed []m.Source, currentByPath m
 	return deleted, changedExisting
 }
 
-// estimateMutations streams mutations for the given args and returns per-file
-// counts, without ever holding the mutations themselves in memory.
+// estimateMutations streams sources and mutations and returns per-file counts,
+// without ever holding the sources or mutations in memory all at once.
 func (w *workflow) estimateMutations(ctx context.Context, args EstimateArgs) (Estimation, error) {
 	sources, err := w.changedSources(ctx, args)
 	if err != nil {
@@ -538,9 +533,9 @@ func (w *workflow) estimateMutations(ctx context.Context, args EstimateArgs) (Es
 	return w.countMutations(ctx, sources, nil)
 }
 
-// countMutations streams mutations for the given sources and aggregates per-file
-// counts. include, when non-nil, filters which mutations are counted. Mutations
-// are processed one at a time and never retained.
+// countMutations generates the mutations for the given sources and aggregates
+// per-file counts. include, when non-nil, filters which mutations are counted.
+// Mutations are processed one at a time and never retained.
 func (w *workflow) countMutations(ctx context.Context, sources []m.Source, include func(m.Mutation) bool) (Estimation, error) {
 	byKey := map[string]*FileEstimate{}
 	order := make([]string, 0)
@@ -603,24 +598,6 @@ func fileKey(mutation m.Mutation) (string, string) {
 	return key, path
 }
 
-// ShardMutations filters mutations down to those that belong to the given shard.
-// It is retained as a pure helper; the test pipeline shards inline via inShard.
-func (w *workflow) ShardMutations(allMutations []m.Mutation, shardIndex int, totalShardCount int) []m.Mutation {
-	if totalShardCount <= 0 {
-		return allMutations
-	}
-
-	var shardMutations []m.Mutation
-
-	for _, mutation := range allMutations {
-		if inShard(mutation.ID, shardIndex, totalShardCount) {
-			shardMutations = append(shardMutations, mutation)
-		}
-	}
-
-	return shardMutations
-}
-
 // inShard reports whether a mutation ID is assigned to the given shard. A
 // non-positive total means sharding is disabled and everything is included.
 func inShard(id string, shardIndex int, totalShardCount int) bool {
@@ -638,11 +615,24 @@ func inShard(id string, shardIndex int, totalShardCount int) bool {
 	return hashValue%totalShardCount == shardIndex
 }
 
-// testReports runs mutation testing as a producer/worker pipeline. A single
-// producer streams mutations source-by-source into a bounded channel; a pool of
-// workers consumes them, runs the test, and spills each report to disk. Peak
-// memory is bounded by one file's mutations plus the channel buffer, rather than
-// the whole project's mutations.
+// mutationOutcome is the result of testing one mutation, carried over the
+// results channel from a worker to the collector.
+type mutationOutcome struct {
+	mutation m.Mutation
+	result   m.Result
+	err      error
+}
+
+// testReports runs mutation testing as a fan-out/fan-in channel pipeline:
+//
+//	dispatcher --> [ per-thread mutation queues ] --> workers --> results --> collector --> FileSpill
+//
+// The dispatcher streams mutations source-by-source and hands each one to a
+// ready worker queue (one queue per configured thread). Each worker owns a
+// reusable workspace, tests the mutation, and sends the outcome on the shared
+// results channel. A single collector drains results and spills reports to disk.
+// Peak memory is bounded by one file's mutations plus the small channel buffers,
+// not the whole project's mutations.
 func (w *workflow) testReports(
 	ctx context.Context,
 	sources []m.Source,
@@ -661,42 +651,121 @@ func (w *workflow) testReports(
 		effectiveThreads = 1
 	}
 
-	var (
-		errsMu sync.Mutex
-		errs   []error
-		group  errgroup.Group
-	)
+	// Unbuffered per-thread queues (count == --parallel): reflect.Select can only
+	// hand a mutation to a thread whose worker is idle, giving true load balancing.
+	queues := makeQueues(effectiveThreads)
+	results := make(chan mutationOutcome, effectiveThreads)
 
-	mutations := make(chan m.Mutation, effectiveThreads*2)
+	// Collector drains results into the spill while the dispatcher and workers run.
+	collected := make(chan collectorResult, 1)
 
-	// Producer streams mutations into the channel; workers consume and spill.
-	group.Go(w.produceMutations(ctx, sources, include, mutations))
+	go func() {
+		collected <- w.collectResults(ctx, results, reports)
+	}()
+
+	var group errgroup.Group
+
+	group.Go(w.dispatchMutations(ctx, sources, include, queues))
 
 	for threadID := range effectiveThreads {
-		group.Go(w.consumeMutations(ctx, mutations, threadID, mutationTimeout, reports, &errsMu, &errs))
+		group.Go(w.consumeMutations(ctx, queues[threadID], threadID, mutationTimeout, results))
 	}
 
-	if err := group.Wait(); err != nil {
-		return reports, err
-	}
+	runErr := group.Wait()
 
-	if len(errs) > 0 {
-		return reports, fmt.Errorf("errors occurred during mutation testing: %v", errs)
-	}
+	close(results)
 
-	return reports, nil
+	return reports, testRunError(runErr, <-collected)
 }
 
-// produceMutations returns a task that streams mutations source-by-source into
-// out, sharding inline, and closes out when done.
-func (w *workflow) produceMutations(
+func makeQueues(n int) []chan m.Mutation {
+	queues := make([]chan m.Mutation, n)
+	for i := range queues {
+		queues[i] = make(chan m.Mutation)
+	}
+
+	return queues
+}
+
+// testRunError reduces the pipeline outcome to a single error: a fatal pipeline
+// error wins, otherwise the aggregated per-mutation errors.
+func testRunError(runErr error, outcome collectorResult) error {
+	switch {
+	case runErr != nil:
+		return runErr
+	case outcome.fatalErr != nil:
+		return outcome.fatalErr
+	case len(outcome.errs) > 0:
+		return fmt.Errorf("errors occurred during mutation testing: %v", outcome.errs)
+	default:
+		return nil
+	}
+}
+
+// collectorResult aggregates everything the collector observed: non-fatal
+// per-mutation errors and a fatal error (e.g. a spill write failure).
+type collectorResult struct {
+	errs     []error
+	fatalErr error
+}
+
+// collectResults drains the results channel until it is closed, spilling a
+// report for each successful outcome and accumulating errors. Because a single
+// goroutine owns the report spill and the error slices, no locking is needed.
+func (w *workflow) collectResults(
+	ctx context.Context,
+	results <-chan mutationOutcome,
+	reports pkg.FileSpill[m.Report],
+) collectorResult {
+	var collected collectorResult
+
+	for outcome := range results {
+		if outcome.err != nil {
+			collected.errs = append(collected.errs, outcome.err)
+			continue
+		}
+
+		if err := reports.Append(buildReport(outcome.mutation, outcome.result)); err != nil {
+			slog.Error("failed to append report to filespill", "error", err)
+
+			if collected.fatalErr == nil {
+				collected.fatalErr = fmt.Errorf("append report to filespill: %w", err)
+			}
+
+			continue
+		}
+
+		w.progress.DisplayCompletedTestInfo(ctx, outcome.mutation, outcome.result)
+	}
+
+	return collected
+}
+
+func buildReport(mutation m.Mutation, result m.Result) m.Report {
+	report := m.Report{
+		Source: mutation.Source,
+		Result: result,
+	}
+
+	if getMutationStatus(result, mutation) != m.Killed {
+		diff := mutation.DiffCode
+		report.Diff = &diff
+	}
+
+	return report
+}
+
+// dispatchMutations returns a task that generates each source's mutations,
+// shards inline, and dispatches each kept mutation to a ready worker queue,
+// closing every queue when done so the workers terminate.
+func (w *workflow) dispatchMutations(
 	ctx context.Context,
 	sources []m.Source,
 	include func(m.Mutation) bool,
-	out chan<- m.Mutation,
+	queues []chan m.Mutation,
 ) func() error {
 	return func() error {
-		defer close(out)
+		defer closeQueues(queues)
 
 		for _, source := range sources {
 			err := w.mutagen.StreamMutations(ctx, source, func(mutation m.Mutation) error {
@@ -704,15 +773,10 @@ func (w *workflow) produceMutations(
 					return nil
 				}
 
-				select {
-				case out <- mutation:
-					return nil
-				case <-ctx.Done():
-					return ctx.Err()
-				}
+				return dispatch(ctx, queues, mutation)
 			}, DefaultMutations...)
 			if err != nil {
-				return err
+				return fmt.Errorf("generate mutations: %w", err)
 			}
 		}
 
@@ -720,20 +784,60 @@ func (w *workflow) produceMutations(
 	}
 }
 
-// consumeMutations returns a worker task that tests each mutation from in.
+// dispatch sends a mutation to whichever worker queue can accept it first,
+// blocking only when every queue is full. It returns the context error if the
+// context is canceled while waiting.
+func dispatch(ctx context.Context, queues []chan m.Mutation, mutation m.Mutation) error {
+	cases := make([]reflect.SelectCase, 0, len(queues)+1)
+	for _, queue := range queues {
+		cases = append(cases, reflect.SelectCase{
+			Dir:  reflect.SelectSend,
+			Chan: reflect.ValueOf(queue),
+			Send: reflect.ValueOf(mutation),
+		})
+	}
+
+	cases = append(cases, reflect.SelectCase{
+		Dir:  reflect.SelectRecv,
+		Chan: reflect.ValueOf(ctx.Done()),
+	})
+
+	chosen, _, _ := reflect.Select(cases)
+	if chosen == len(queues) {
+		return ctx.Err()
+	}
+
+	return nil
+}
+
+func closeQueues(queues []chan m.Mutation) {
+	for _, queue := range queues {
+		close(queue)
+	}
+}
+
+// consumeMutations returns a worker task that owns a single reusable workspace
+// (so the project is copied once per worker, not once per mutation), tests each
+// mutation arriving on its dedicated queue, and sends the outcome to the shared
+// results channel.
 func (w *workflow) consumeMutations(
 	ctx context.Context,
-	in <-chan m.Mutation,
+	queue <-chan m.Mutation,
 	threadID int,
 	mutationTimeout time.Duration,
-	reports pkg.FileSpill[m.Report],
-	errsMu *sync.Mutex,
-	errs *[]error,
+	results chan<- mutationOutcome,
 ) func() error {
 	return func() error {
-		for mutation := range in {
-			if err := w.runMutation(ctx, mutation, threadID, mutationTimeout, reports, errsMu, errs); err != nil {
-				return err
+		ws := w.orchestrator.NewWorkspace()
+		defer ws.Close(ctx)
+
+		for mutation := range queue {
+			outcome := w.runMutation(ctx, ws, mutation, threadID, mutationTimeout)
+
+			select {
+			case results <- outcome:
+			case <-ctx.Done():
+				return ctx.Err()
 			}
 		}
 
@@ -741,18 +845,16 @@ func (w *workflow) consumeMutations(
 	}
 }
 
-// runMutation tests a single mutation under a per-mutation timeout and spills its
-// report. The timeout starts here (at execution time), not when the mutation was
-// queued. Test failures are collected rather than aborting the whole run.
+// runMutation tests a single mutation under a per-mutation timeout and returns
+// its outcome. The timeout starts here (at execution time), not when the
+// mutation was queued.
 func (w *workflow) runMutation(
 	ctx context.Context,
+	ws Workspace,
 	mutation m.Mutation,
 	threadID int,
 	mutationTimeout time.Duration,
-	reports pkg.FileSpill[m.Report],
-	errsMu *sync.Mutex,
-	errs *[]error,
-) error {
+) mutationOutcome {
 	w.progress.DisplayStartingTestInfo(ctx, mutation, threadID)
 
 	mutationCtx := ctx
@@ -762,40 +864,13 @@ func (w *workflow) runMutation(
 		mutationCtx, cancel = context.WithTimeout(ctx, mutationTimeout)
 	}
 
-	result, err := w.orchestrator.TestMutation(mutationCtx, mutation)
+	result, err := ws.Run(mutationCtx, mutation)
 
 	if cancel != nil {
 		cancel()
 	}
 
-	if err != nil {
-		errsMu.Lock()
-
-		*errs = append(*errs, err)
-
-		errsMu.Unlock()
-
-		return nil
-	}
-
-	report := m.Report{
-		Source: mutation.Source,
-		Result: result,
-	}
-	if getMutationStatus(result, mutation) != m.Killed {
-		diff := mutation.DiffCode
-		report.Diff = &diff
-	}
-
-	// FileSpill.Append is safe for concurrent use, so no external lock is needed.
-	if err := reports.Append(report); err != nil {
-		slog.Error("failed to append report to filespill", "error", err)
-		return fmt.Errorf("append report to filespill: %w", err)
-	}
-
-	w.progress.DisplayCompletedTestInfo(ctx, mutation, result)
-
-	return nil
+	return mutationOutcome{mutation: mutation, result: result, err: err}
 }
 
 func getMutationStatus(result m.Result, mutation m.Mutation) m.TestStatus {

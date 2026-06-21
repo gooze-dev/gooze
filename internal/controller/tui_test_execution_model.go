@@ -59,60 +59,33 @@ func (d testResultDelegate) Render(w io.Writer, m list.Model, index int, item li
 
 func (d testResultDelegate) getStylesAndFile(result testResult, isSelected bool, fileWidth int) (lipgloss.Style, lipgloss.Style, lipgloss.Style, lipgloss.Style, string) {
 	if isSelected {
-		return lipgloss.NewStyle().
-				Foreground(lipgloss.Color("0")).
-				Background(lipgloss.Color("6")).
-				Bold(true).
-				Width(6).
-				Align(lipgloss.Left),
-			lipgloss.NewStyle().
-				Foreground(lipgloss.Color("0")).
-				Background(lipgloss.Color("6")).
-				Bold(true).
-				Width(10).
-				Align(lipgloss.Left),
-			lipgloss.NewStyle().
-				Foreground(lipgloss.Color("0")).
-				Background(lipgloss.Color("6")).
-				Bold(true).
-				Width(12).
-				Align(lipgloss.Left),
-			lipgloss.NewStyle().
-				Foreground(lipgloss.Color("0")).
-				Background(lipgloss.Color("6")).
-				Bold(true),
-			animateScrollFile(result.file, fileWidth, d.offset)
+		base := lipgloss.NewStyle().Foreground(lipgloss.Color("0")).Background(lipgloss.Color("6")).Bold(true)
+
+		return base.Width(6).Align(lipgloss.Left),
+			base.Width(10).Align(lipgloss.Left),
+			base.Width(12).Align(lipgloss.Left),
+			base,
+			animateScroll(result.file, fileWidth, d.offset)
 	}
 
-	statusColorMap := map[string]lipgloss.Color{
-		"killed":   lipgloss.Color("2"), // Green
-		"survived": lipgloss.Color("1"), // Red
-		"error":    lipgloss.Color("1"), // Red
-		"unknown":  lipgloss.Color("8"), // Gray
-	}
+	idStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Bold(true).Width(6).Align(lipgloss.Left)
+	statusStyle := lipgloss.NewStyle().Foreground(statusColor(result.status)).Bold(true).Width(10).Align(lipgloss.Left)
+	typeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("5")).Width(12).Align(lipgloss.Left)
+	fileStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
 
-	statusColor, ok := statusColorMap[result.status]
-	if !ok {
-		statusColor = lipgloss.Color("8")
-	}
+	return idStyle, statusStyle, typeStyle, fileStyle, truncateToWidth(result.file, fileWidth)
+}
 
-	return lipgloss.NewStyle().
-			Foreground(lipgloss.Color("11")).
-			Bold(true).
-			Width(6).
-			Align(lipgloss.Left),
-		lipgloss.NewStyle().
-			Foreground(statusColor).
-			Bold(true).
-			Width(10).
-			Align(lipgloss.Left),
-		lipgloss.NewStyle().
-			Foreground(lipgloss.Color("5")).
-			Width(12).
-			Align(lipgloss.Left),
-		lipgloss.NewStyle().
-			Foreground(lipgloss.Color("14")),
-		truncateFile(result.file, fileWidth)
+// statusColor maps a mutation status to its display color.
+func statusColor(status string) lipgloss.Color {
+	switch status {
+	case "killed":
+		return lipgloss.Color("2") // Green
+	case "survived", "error":
+		return lipgloss.Color("1") // Red
+	default:
+		return lipgloss.Color("8") // Gray
+	}
 }
 
 // testExecutionModel handles the TUI display during mutation testing.
@@ -135,6 +108,7 @@ type testExecutionModel struct {
 	threadFiles       map[int]string // Maps thread ID to current file being tested
 	threadMutationIDs map[int]string // Maps thread ID to current mutation ID
 	rendered          bool
+	counting          bool // true while the upfront count pass runs (before the total is known)
 	testingFinished   bool
 	results           []testResult
 	resultsList       list.Model
@@ -219,6 +193,10 @@ func (m testExecutionModel) handleConcurrency(msg concurrencyMsg) testExecutionM
 	m.shardIndex = msg.shardIndex
 	m.totalShards = msg.shards
 	m.progressPercent = 0
+	// Concurrency info arrives before the count pass finishes, so show a counting
+	// state instead of leaving the screen on "Initializing…".
+	m.counting = true
+	m.rendered = true
 
 	return m
 }
@@ -227,6 +205,7 @@ func (m testExecutionModel) handleUpcoming(msg upcomingMsg) testExecutionModel {
 	m.totalMutations = msg.count
 	m.completedCount = 0
 	m.progressPercent = 0
+	m.counting = false
 	m.rendered = true
 
 	if msg.count == 0 {
@@ -264,29 +243,6 @@ func (m testExecutionModel) viewProgress() string {
 
 	accentStyle := lipgloss.NewStyle().Foreground(accentColor) // Cyan
 
-	// 1. Title
-	title := titleStyle.Render("🧬 Gooze Mutation Testing")
-
-	// 2. Summary with metadata
-	summary := summaryStyle.Render(fmt.Sprintf(
-		"Progress: %s / %s  •  Threads: %s  •  Shard: %s / %s",
-		accentStyle.Render(fmt.Sprintf("%d", m.completedCount)),
-		accentStyle.Render(fmt.Sprintf("%d", m.totalMutations)),
-		accentStyle.Render(fmt.Sprintf("%d", m.threads)),
-		accentStyle.Render(fmt.Sprintf("%d", m.shardIndex)),
-		accentStyle.Render(fmt.Sprintf("%d", m.totalShards)),
-	))
-
-	// 3. Progress Bar
-	progressStyle := lipgloss.NewStyle().
-		Padding(0, 2)
-
-	progressView := progressStyle.Render(m.progressBar.ViewAs(m.progressPercent))
-
-	// 4. Thread Progress Section
-	threadsBox := m.renderThreadBox(accentColor)
-
-	// 5. Footer
 	footerStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("8")).
 		Align(lipgloss.Center).
@@ -294,6 +250,27 @@ func (m testExecutionModel) viewProgress() string {
 		Padding(0, 0)
 
 	footer := footerStyle.Render("Press q to quit")
+
+	// 1. Title
+	title := titleStyle.Render("🧬 Gooze Mutation Testing")
+
+	// While the upfront count pass runs the total isn't known yet.
+	if m.counting {
+		return lipgloss.JoinVertical(lipgloss.Left,
+			title,
+			summaryStyle.Render("Counting mutations…"),
+			footer,
+		)
+	}
+
+	// 2. Summary with metadata
+	summary := m.progressSummary(summaryStyle, accentStyle)
+
+	// 3. Progress Bar
+	progressView := lipgloss.NewStyle().Padding(0, 2).Render(m.progressBar.ViewAs(m.progressPercent))
+
+	// 4. Thread Progress Section
+	threadsBox := m.renderThreadBox(accentColor)
 
 	return lipgloss.JoinVertical(lipgloss.Left,
 		title,
@@ -304,75 +281,70 @@ func (m testExecutionModel) viewProgress() string {
 	)
 }
 
+// progressSummary renders the one-line "Progress / Threads / Shard" header.
+func (m testExecutionModel) progressSummary(summaryStyle, accentStyle lipgloss.Style) string {
+	num := func(n int) string { return accentStyle.Render(fmt.Sprintf("%d", n)) }
+
+	return summaryStyle.Render(fmt.Sprintf(
+		"Progress: %s / %s  •  Threads: %s  •  Shard: %s / %s",
+		num(m.completedCount), num(m.totalMutations), num(m.threads), num(m.shardIndex), num(m.totalShards),
+	))
+}
+
 func (m testExecutionModel) renderThreadBox(accentColor lipgloss.Color) string {
 	contentStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(accentColor).
-		Padding(0, 1). // Compact padding
+		Padding(0, 1).
 		Margin(1, 1, 1, 0).
-		Width(m.width - 4) // Constrain width
+		Width(m.width - 4)
 
-	fileStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("14"))
-
-	threadLines := make([]string, 0, m.threads)
-	// Calculate max specific width for file path:
-	// Width - Border(2) - Padding(2)
-	availableWidth := m.width - 4 - 2 - 2
-	prefixWidth := 0
+	// Width available for a thread line: box width minus border(2) and padding(2).
+	fileBudget := m.width - 4 - 2 - 2
 	threadLabelFormat := ""
 
 	if m.threads > 1 {
-		// Calculate width needed for thread number
 		digits := len(fmt.Sprintf("%d", m.threads-1))
-		prefixWidth = 7 + digits + 2 // "Thread " + digits + ": "
+		fileBudget -= 7 + digits + 2 // "Thread " + digits + ": "
 		threadLabelFormat = fmt.Sprintf("Thread %%%dd: %%s", digits)
 	}
 
+	threadLines := make([]string, 0, m.threads)
+
 	for i := range m.threads {
-		file := m.threadFiles[i]
-		mutationID := m.threadMutationIDs[i]
-
-		var lineContent string
-
-		if file == "" {
-			lineContent = "idle"
-		} else {
-			// Construct ID string
-			idStr := ""
-			if mutationID != "" {
-				idStr = fmt.Sprintf("ID: %-4s ", mutationID[:4])
-			} // Calculate remaining width for file path
-			// available - prefix - id length
-			remainingForFile := availableWidth - prefixWidth - len(idStr)
-			if remainingForFile < 10 {
-				remainingForFile = 10
-			}
-
-			truncatedFile := truncateFile(file, remainingForFile)
-			lineContent = fmt.Sprintf("%s%s",
-				lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Render(idStr), // Grey for ID
-				fileStyle.Render(truncatedFile),
-			)
-		}
-
-		var threadLine string
+		line := m.threadLineContent(i, fileBudget)
 		if m.threads > 1 {
-			threadLine = fmt.Sprintf(threadLabelFormat,
-				i,
-				lineContent,
-			)
-		} else {
-			threadLine = lineContent
+			line = fmt.Sprintf(threadLabelFormat, i, line)
 		}
 
-		threadLines = append(threadLines, threadLine)
+		threadLines = append(threadLines, line)
 	}
 
-	// Join lines and put in one box
-	threadsContent := lipgloss.JoinVertical(lipgloss.Left, threadLines...)
+	return contentStyle.Render(lipgloss.JoinVertical(lipgloss.Left, threadLines...))
+}
 
-	return contentStyle.Render(threadsContent)
+// threadLineContent renders a single thread's status line: "idle", or its
+// current mutation ID and (truncated) file.
+func (m testExecutionModel) threadLineContent(thread, fileBudget int) string {
+	file := m.threadFiles[thread]
+	if file == "" {
+		return "idle"
+	}
+
+	idStr := ""
+	if id := m.threadMutationIDs[thread]; id != "" {
+		idStr = fmt.Sprintf("ID: %-4s ", id[:4])
+	}
+
+	remainingForFile := fileBudget - len(idStr)
+	if remainingForFile < 10 {
+		remainingForFile = 10
+	}
+
+	return fmt.Sprintf("%s%s",
+		lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Render(idStr), // Grey for ID
+		lipgloss.NewStyle().Foreground(lipgloss.Color("14")).Render(truncateToWidth(file, remainingForFile)),
+	)
 }
 
 func (m testExecutionModel) viewResults() string {
@@ -481,84 +453,6 @@ func (m testExecutionModel) countStatus(status string) int {
 	return count
 }
 
-func animateScrollFile(text string, width int, offset int) string {
-	if width <= 0 {
-		return ""
-	}
-
-	textWidth := lipgloss.Width(text)
-	if textWidth <= width {
-		return text
-	}
-
-	// Gap between repeats
-	gap := "   "
-
-	// Initial pause before scrolling starts (in ticks)
-	pause := 5
-
-	if offset < pause {
-		return truncateFile(text, width)
-	}
-
-	effectiveStep := offset - pause
-
-	// Create the repeating pattern: text + gap
-	runes := []rune(text + gap)
-	n := len(runes)
-
-	if n == 0 {
-		return ""
-	}
-
-	start := effectiveStep % n
-
-	// Construct the window
-	res := make([]rune, 0, width)
-	for i := range width {
-		idx := (start + i) % n
-		res = append(res, runes[idx])
-	}
-
-	return string(res)
-}
-
-func truncateFile(text string, width int) string {
-	if width <= 0 {
-		return ""
-	}
-
-	if lipgloss.Width(text) <= width {
-		return text
-	}
-
-	if width <= 1 {
-		return "…"
-	}
-
-	ellipsis := "…"
-
-	maxWidth := width - lipgloss.Width(ellipsis)
-	if maxWidth <= 0 {
-		return ellipsis
-	}
-
-	currentWidth := 0
-
-	result := make([]rune, 0, len(text))
-	for _, r := range text {
-		rWidth := lipgloss.Width(string(r))
-		if currentWidth+rWidth > maxWidth {
-			break
-		}
-
-		result = append(result, r)
-		currentWidth += rWidth
-	}
-
-	return string(result) + ellipsis
-}
-
 func (m testExecutionModel) handleStartMutation(msg startMutationMsg) testExecutionModel {
 	m.currentFile = msg.displayPath
 	m.currentMutationID = msg.id
@@ -575,6 +469,19 @@ func (m testExecutionModel) handleStartMutation(msg startMutationMsg) testExecut
 func (m testExecutionModel) handleCompletedMutation(msg completedMutationMsg) testExecutionModel {
 	m.completedCount++
 	m.currentStatus = msg.status
+
+	// The worker that ran this mutation is now free; mark its thread idle until
+	// it picks up the next one. (If the next mutation already started on that
+	// thread, the IDs won't match and we leave it as-is.)
+	for thread, id := range m.threadMutationIDs {
+		if id == msg.id {
+			delete(m.threadFiles, thread)
+			delete(m.threadMutationIDs, thread)
+
+			break
+		}
+	}
+
 	result := testResult{
 		id:     msg.id[:4],
 		file:   msg.displayPath,
@@ -745,7 +652,40 @@ func (m testExecutionModel) renderDiffBox(accentColor lipgloss.Color, width int)
 		return "", 0
 	}
 
+	contentWidth := width - 4
+	if contentWidth < 10 {
+		contentWidth = 10
+	}
+
+	header := lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Bold(true).
+		Render(truncateToWidth(m.diffHeader(), contentWidth))
+
+	body := lipgloss.JoinVertical(lipgloss.Left, m.diffBodyLines(diff, contentWidth)...)
+
+	box := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(accentColor).
+		Margin(0, 1, 0, 0).
+		Padding(0, 1).
+		Width(width).
+		Render(lipgloss.JoinVertical(lipgloss.Left, header, body))
+
+	return box, lipgloss.Height(box)
+}
+
+func (m testExecutionModel) diffHeader() string {
+	if m.selectedDiffPath != "" {
+		return fmt.Sprintf("Diff • %s", m.selectedDiffPath)
+	}
+
+	return "Diff"
+}
+
+// diffBodyLines renders the diff lines, capped to the available height with a
+// trailing ellipsis when truncated.
+func (m testExecutionModel) diffBodyLines(diff string, contentWidth int) []string {
 	lines := strings.Split(diff, "\n")
+
 	maxLines := m.diffMaxLines()
 	truncated := false
 
@@ -754,42 +694,16 @@ func (m testExecutionModel) renderDiffBox(accentColor lipgloss.Color, width int)
 		truncated = true
 	}
 
-	contentWidth := width - 4
-	if contentWidth < 10 {
-		contentWidth = 10
-	}
-
 	bodyLines := make([]string, 0, len(lines)+1)
 	for _, line := range lines {
 		bodyLines = append(bodyLines, renderDiffLine(line, contentWidth))
 	}
 
 	if truncated {
-		bodyLines = append(bodyLines, truncateFile("…", contentWidth))
+		bodyLines = append(bodyLines, truncateToWidth("…", contentWidth))
 	}
 
-	headerStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("8")).
-		Bold(true)
-
-	headerText := "Diff"
-	if m.selectedDiffPath != "" {
-		headerText = fmt.Sprintf("Diff • %s", m.selectedDiffPath)
-	}
-
-	header := headerStyle.Render(truncateFile(headerText, contentWidth))
-
-	body := lipgloss.JoinVertical(lipgloss.Left, bodyLines...)
-	boxStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(accentColor).
-		Margin(0, 1, 0, 0).
-		Padding(0, 1).
-		Width(width)
-
-	box := boxStyle.Render(lipgloss.JoinVertical(lipgloss.Left, header, body))
-
-	return box, lipgloss.Height(box)
+	return bodyLines
 }
 
 func renderDiffLine(line string, width int) string {
@@ -812,7 +726,7 @@ func renderDiffLine(line string, width int) string {
 		style = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 	}
 
-	return style.Render(truncateFile(line, width))
+	return style.Render(truncateToWidth(line, width))
 }
 
 func (m testExecutionModel) handleWindowSize(msg tea.WindowSizeMsg) testExecutionModel {

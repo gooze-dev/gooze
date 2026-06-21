@@ -547,6 +547,56 @@ func copyExampleFile(t *testing.T, src, dst string) {
 	require.NoError(t, os.WriteFile(dst, content, 0o644))
 }
 
+func TestLocalSourceFSAdapter_Stream(t *testing.T) {
+	adapter := NewLocalSourceFSAdapter()
+
+	t.Run("yields the same sources as Get", func(t *testing.T) {
+		root := t.TempDir()
+		mainPath := filepath.Join(root, "main.go")
+		copyExampleFile(t, filepath.Join(examplePath(t, "basic"), "main.go"), mainPath)
+
+		nestedDir := filepath.Join(root, "nested")
+		mustMkdir(t, nestedDir)
+		copyExampleFile(t, filepath.Join(examplePath(t, "nested", "sub"), "child.go"), filepath.Join(nestedDir, "child.go"))
+
+		wd, err := os.Getwd()
+		require.NoError(t, err)
+		require.NoError(t, os.Chdir(root))
+		t.Cleanup(func() { _ = os.Chdir(wd) })
+
+		ctx := context.Background()
+
+		want, err := adapter.Get(ctx, []m.Path{"./..."})
+		require.NoError(t, err)
+		require.NotEmpty(t, want)
+
+		sourceCh, errc := adapter.Stream(ctx, []m.Path{"./..."})
+
+		var got []m.Source
+		for source := range sourceCh {
+			got = append(got, source)
+		}
+
+		require.NoError(t, <-errc)
+		require.ElementsMatch(t, want, got)
+	})
+
+	t.Run("cancellation stops the scan", func(t *testing.T) {
+		root := t.TempDir()
+		copyExampleFile(t, filepath.Join(examplePath(t, "basic"), "main.go"), filepath.Join(root, "main.go"))
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		sourceCh, errc := adapter.Stream(ctx, []m.Path{m.Path(root)})
+
+		for range sourceCh { //nolint:revive // draining the (possibly empty) stream
+		}
+
+		require.ErrorIs(t, <-errc, context.Canceled)
+	})
+}
+
 func readFileBytes(t *testing.T, path string) []byte {
 	t.Helper()
 	content, err := os.ReadFile(path)

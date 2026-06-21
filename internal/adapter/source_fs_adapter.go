@@ -26,6 +26,13 @@ import (
 type SourceFSAdapter interface {
 	Get(ctx context.Context, roots []m.Path, ignore ...string) ([]m.Source, error)
 
+	// Stream scans the provided roots and emits each discovered source on the
+	// returned channel as it is found, instead of buffering them all. The source
+	// channel is closed when the scan finishes; the error channel then yields a
+	// single error (or nothing on success). Callers should cancel ctx if they
+	// stop reading early so the scanning goroutine can exit.
+	Stream(ctx context.Context, roots []m.Path, ignore ...string) (<-chan m.Source, <-chan error)
+
 	// Walk traverses the provided root path. When recursive is false the
 	// implementation should limit itself to the root directory (no sub-dirs).
 	Walk(ctx context.Context, root m.Path, recursive bool, fn FilepathWalkFunc) error
@@ -83,32 +90,72 @@ func NewLocalSourceFSAdapter() *LocalSourceFSAdapter {
 
 // Get collects Go source files for the provided roots and returns SourceV2 entries.
 func (a *LocalSourceFSAdapter) Get(ctx context.Context, roots []m.Path, ignore ...string) ([]m.Source, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-
-	if len(roots) == 0 {
-		return []m.Source{}, nil
-	}
-
-	ignoreRegexps, err := compileIgnoreRegexps(ignore)
-	if err != nil {
-		return nil, err
-	}
-
-	seen := make(map[string]struct{})
 	sources := make([]m.Source, 0, len(roots))
 
-	for _, root := range roots {
-		if err := a.collectSourcesFromRoot(ctx, root, ignoreRegexps, seen, &sources); err != nil {
-			return nil, err
-		}
+	err := a.eachSource(ctx, roots, ignore, func(source m.Source) error {
+		sources = append(sources, source)
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return sources, nil
 }
 
-func (a *LocalSourceFSAdapter) collectSourcesFromRoot(ctx context.Context, root m.Path, ignoreRegexps []*regexp.Regexp, seen map[string]struct{}, sources *[]m.Source) error {
+// Stream scans the roots and emits sources on a channel as they are discovered.
+func (a *LocalSourceFSAdapter) Stream(ctx context.Context, roots []m.Path, ignore ...string) (<-chan m.Source, <-chan error) {
+	out := make(chan m.Source)
+	errc := make(chan error, 1)
+
+	go func() {
+		defer close(out)
+		defer close(errc)
+
+		err := a.eachSource(ctx, roots, ignore, func(source m.Source) error {
+			select {
+			case out <- source:
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		})
+		if err != nil {
+			errc <- err
+		}
+	}()
+
+	return out, errc
+}
+
+// eachSource walks the roots and invokes emit once for each unique source. It is
+// the shared core behind both Get (buffering) and Stream (channeling).
+func (a *LocalSourceFSAdapter) eachSource(ctx context.Context, roots []m.Path, ignore []string, emit func(m.Source) error) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	if len(roots) == 0 {
+		return nil
+	}
+
+	ignoreRegexps, err := compileIgnoreRegexps(ignore)
+	if err != nil {
+		return err
+	}
+
+	emitUnique := dedupEmit(make(map[string]struct{}), emit)
+
+	for _, root := range roots {
+		if err := a.collectSourcesFromRoot(ctx, root, ignoreRegexps, emitUnique); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (a *LocalSourceFSAdapter) collectSourcesFromRoot(ctx context.Context, root m.Path, ignoreRegexps []*regexp.Regexp, emit func(m.Source) error) error {
 	rootPath, recursive, err := normalizeRootPath(string(root))
 	if err != nil {
 		return err
@@ -119,24 +166,30 @@ func (a *LocalSourceFSAdapter) collectSourcesFromRoot(ctx context.Context, root 
 		return fmt.Errorf("root path error: %w", err)
 	}
 
-	if !info.IsDir() {
-		source, ok, err := a.processFilePath(ctx, rootPath, ignoreRegexps)
-		if err != nil {
-			if isInvalidSourceErr(err) {
-				return nil
-			}
+	if info.IsDir() {
+		return a.collectSourcesFromDir(ctx, rootPath, recursive, ignoreRegexps, emit)
+	}
 
-			return err
+	return a.emitFileSource(ctx, rootPath, ignoreRegexps, emit)
+}
+
+// emitFileSource emits the source for a single file path, skipping files that
+// are not valid mutation sources.
+func (a *LocalSourceFSAdapter) emitFileSource(ctx context.Context, path string, ignoreRegexps []*regexp.Regexp, emit func(m.Source) error) error {
+	source, ok, err := a.processFilePath(ctx, path, ignoreRegexps)
+	if err != nil {
+		if isInvalidSourceErr(err) {
+			return nil
 		}
 
-		if ok {
-			addSourceIfNew(sources, seen, source)
-		}
+		return err
+	}
 
+	if !ok {
 		return nil
 	}
 
-	return a.collectSourcesFromDir(ctx, rootPath, recursive, ignoreRegexps, seen, sources)
+	return emit(source)
 }
 
 // Walk iterates over files under root, optionally descending into subdirectories.
@@ -371,20 +424,24 @@ func (a *LocalSourceFSAdapter) JoinPath(ctx context.Context, elem ...string) m.P
 	return m.Path(filepath.Join(elem...))
 }
 
-func addSourceIfNew(sources *[]m.Source, seen map[string]struct{}, source m.Source) {
-	if source.Origin == nil {
-		return
-	}
+// dedupEmit wraps emit so each unique source (by origin path) is emitted once.
+func dedupEmit(seen map[string]struct{}, emit func(m.Source) error) func(m.Source) error {
+	return func(source m.Source) error {
+		if source.Origin == nil {
+			return nil
+		}
 
-	if _, exists := seen[string(source.Origin.FullPath)]; exists {
-		return
-	}
+		if _, exists := seen[string(source.Origin.FullPath)]; exists {
+			return nil
+		}
 
-	seen[string(source.Origin.FullPath)] = struct{}{}
-	*sources = append(*sources, source)
+		seen[string(source.Origin.FullPath)] = struct{}{}
+
+		return emit(source)
+	}
 }
 
-func (a *LocalSourceFSAdapter) collectSourcesFromDir(ctx context.Context, rootPath string, recursive bool, ignoreRegexps []*regexp.Regexp, seen map[string]struct{}, sources *[]m.Source) error {
+func (a *LocalSourceFSAdapter) collectSourcesFromDir(ctx context.Context, rootPath string, recursive bool, ignoreRegexps []*regexp.Regexp, emit func(m.Source) error) error {
 	return a.Walk(ctx, m.Path(rootPath), recursive, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -407,9 +464,7 @@ func (a *LocalSourceFSAdapter) collectSourcesFromDir(ctx context.Context, rootPa
 			return nil
 		}
 
-		addSourceIfNew(sources, seen, source)
-
-		return nil
+		return emit(source)
 	})
 }
 

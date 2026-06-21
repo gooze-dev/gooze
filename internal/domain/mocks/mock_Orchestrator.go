@@ -6,7 +6,7 @@ import (
 	context "context"
 
 	mock "github.com/stretchr/testify/mock"
-
+	domain "gooze.dev/pkg/gooze/internal/domain"
 	model "gooze.dev/pkg/gooze/internal/model"
 )
 
@@ -21,6 +21,53 @@ type MockOrchestrator_Expecter struct {
 
 func (_m *MockOrchestrator) EXPECT() *MockOrchestrator_Expecter {
 	return &MockOrchestrator_Expecter{mock: &_m.Mock}
+}
+
+// NewWorkspace provides a mock function with no fields
+func (_m *MockOrchestrator) NewWorkspace() domain.Workspace {
+	ret := _m.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for NewWorkspace")
+	}
+
+	var r0 domain.Workspace
+	if rf, ok := ret.Get(0).(func() domain.Workspace); ok {
+		r0 = rf()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(domain.Workspace)
+		}
+	}
+
+	return r0
+}
+
+// MockOrchestrator_NewWorkspace_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'NewWorkspace'
+type MockOrchestrator_NewWorkspace_Call struct {
+	*mock.Call
+}
+
+// NewWorkspace is a helper method to define mock.On call
+func (_e *MockOrchestrator_Expecter) NewWorkspace() *MockOrchestrator_NewWorkspace_Call {
+	return &MockOrchestrator_NewWorkspace_Call{Call: _e.mock.On("NewWorkspace")}
+}
+
+func (_c *MockOrchestrator_NewWorkspace_Call) Run(run func()) *MockOrchestrator_NewWorkspace_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockOrchestrator_NewWorkspace_Call) Return(_a0 domain.Workspace) *MockOrchestrator_NewWorkspace_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockOrchestrator_NewWorkspace_Call) RunAndReturn(run func() domain.Workspace) *MockOrchestrator_NewWorkspace_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // TestMutation provides a mock function with given fields: ctx, mutation

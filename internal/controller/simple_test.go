@@ -104,7 +104,7 @@ func TestSimpleUI_OtherDisplays(t *testing.T) {
 
 	output := buf.String()
 	for _, want := range []string{
-		"Running 2 mutations",
+		"Running with 3 worker(s) (shard 1/2)",
 		"Upcoming mutations: 7",
 		"Starting mutation abcd (arithmetic)",
 		"Starting mutation efgh (boolean) a.go",

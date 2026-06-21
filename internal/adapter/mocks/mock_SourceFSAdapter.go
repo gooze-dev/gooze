@@ -4,13 +4,10 @@ package mocks
 
 import (
 	context "context"
-
-	adapter "gooze.dev/pkg/gooze/internal/adapter"
-
 	fs "io/fs"
 
 	mock "github.com/stretchr/testify/mock"
-
+	adapter "gooze.dev/pkg/gooze/internal/adapter"
 	model "gooze.dev/pkg/gooze/internal/model"
 )
 
@@ -657,6 +654,82 @@ func (_c *MockSourceFSAdapter_RemoveAll_Call) Return(_a0 error) *MockSourceFSAda
 }
 
 func (_c *MockSourceFSAdapter_RemoveAll_Call) RunAndReturn(run func(context.Context, model.Path) error) *MockSourceFSAdapter_RemoveAll_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// Stream provides a mock function with given fields: ctx, roots, ignore
+func (_m *MockSourceFSAdapter) Stream(ctx context.Context, roots []model.Path, ignore ...string) (<-chan model.Source, <-chan error) {
+	_va := make([]interface{}, len(ignore))
+	for _i := range ignore {
+		_va[_i] = ignore[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx, roots)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Stream")
+	}
+
+	var r0 <-chan model.Source
+	var r1 <-chan error
+	if rf, ok := ret.Get(0).(func(context.Context, []model.Path, ...string) (<-chan model.Source, <-chan error)); ok {
+		return rf(ctx, roots, ignore...)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, []model.Path, ...string) <-chan model.Source); ok {
+		r0 = rf(ctx, roots, ignore...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(<-chan model.Source)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, []model.Path, ...string) <-chan error); ok {
+		r1 = rf(ctx, roots, ignore...)
+	} else {
+		if ret.Get(1) != nil {
+			r1 = ret.Get(1).(<-chan error)
+		}
+	}
+
+	return r0, r1
+}
+
+// MockSourceFSAdapter_Stream_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Stream'
+type MockSourceFSAdapter_Stream_Call struct {
+	*mock.Call
+}
+
+// Stream is a helper method to define mock.On call
+//   - ctx context.Context
+//   - roots []model.Path
+//   - ignore ...string
+func (_e *MockSourceFSAdapter_Expecter) Stream(ctx interface{}, roots interface{}, ignore ...interface{}) *MockSourceFSAdapter_Stream_Call {
+	return &MockSourceFSAdapter_Stream_Call{Call: _e.mock.On("Stream",
+		append([]interface{}{ctx, roots}, ignore...)...)}
+}
+
+func (_c *MockSourceFSAdapter_Stream_Call) Run(run func(ctx context.Context, roots []model.Path, ignore ...string)) *MockSourceFSAdapter_Stream_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]string, len(args)-2)
+		for i, a := range args[2:] {
+			if a != nil {
+				variadicArgs[i] = a.(string)
+			}
+		}
+		run(args[0].(context.Context), args[1].([]model.Path), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *MockSourceFSAdapter_Stream_Call) Return(_a0 <-chan model.Source, _a1 <-chan error) *MockSourceFSAdapter_Stream_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockSourceFSAdapter_Stream_Call) RunAndReturn(run func(context.Context, []model.Path, ...string) (<-chan model.Source, <-chan error)) *MockSourceFSAdapter_Stream_Call {
 	_c.Call.Return(run)
 	return _c
 }

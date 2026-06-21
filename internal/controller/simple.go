@@ -96,12 +96,12 @@ func renderEstimationTable(estimation domain.Estimation) string {
 }
 
 // DisplayConcurrencyInfo shows concurrency settings.
-func (s *SimpleUI) DisplayConcurrencyInfo(ctx context.Context, threads int, shardIndex int, count int) {
+func (s *SimpleUI) DisplayConcurrencyInfo(ctx context.Context, threads int, shardIndex int, shardCount int) {
 	if err := ctx.Err(); err != nil {
 		return
 	}
 
-	s.printf("Running %d mutations with %d worker(s) (Shard %d/%d)\n", count, threads, shardIndex, count)
+	s.printf("Running with %d worker(s) (shard %d/%d)\n", threads, shardIndex, shardCount)
 }
 
 // DisplayUpcomingTestsInfo shows the number of upcoming mutations to be tested.

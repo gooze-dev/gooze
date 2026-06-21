@@ -7,7 +7,6 @@ import (
 
 	mock "github.com/stretchr/testify/mock"
 	model "gooze.dev/pkg/gooze/internal/model"
-
 	pkg "gooze.dev/pkg/gooze/pkg"
 )
 
