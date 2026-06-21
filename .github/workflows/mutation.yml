@@ -1,0 +1,93 @@
+---
+name: Mutation testing
+
+# Runs on every pull request. The :main baseline is read-only here (pulled for
+# the incremental cache); to refresh it, run `gooze report push "$REPORTS_REF"`
+# from a separate main-branch workflow or seed it manually.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  packages: read           # pull the baseline from GHCR
+
+env:
+  REPORTS_REF: ghcr.io/${{ github.repository }}/gooze-reports:main
+  GOOZE_REGISTRY_USERNAME: ${{ github.actor }}
+  GOOZE_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+  GOFLAGS: -buildvcs=false
+  GOPROXY: direct
+  GOSUMDB: off
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    container: golang:1.26
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+    steps:
+    - uses: actions/checkout@v4
+
+      # Dogfood: install gooze at this branch's commit (not @latest). The
+      # checkout is still needed below so gooze has source to mutate.
+    - name: Install gooze
+      run: go install "gooze.dev/pkg/gooze@${{ github.event.pull_request.head.sha }}"
+
+      # Reuse the main baseline so unchanged files are skipped (the cache).
+    - name: Restore baseline from main
+      run: gooze report pull "$REPORTS_REF" || echo "no baseline yet"
+
+    - name: Run shard ${{ matrix.shard }}
+      run: gooze run -p 2 -s ${{ matrix.shard }}/4 -x mocks/ -x examples/ ./...
+
+      # Archive this shard's reports into a single tarball so the artifact is one
+      # file; tar preserves the shard_N/ directory exactly through upload/download
+      # (no upload-artifact path/least-common-ancestor surprises).
+    - name: Archive shard reports
+      run: tar -czf "shard_${{ matrix.shard }}.tgz" -C .gooze-reports "shard_${{ matrix.shard }}"
+    - name: Upload shard reports
+      uses: actions/upload-artifact@v4
+      with:
+        name: shard_${{ matrix.shard }}
+        path: shard_${{ matrix.shard }}.tgz
+        if-no-files-found: error
+
+  merge:
+    needs: test
+    runs-on: ubuntu-latest
+    container: golang:1.26
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install gooze
+      run: go install "gooze.dev/pkg/gooze@${{ github.event.pull_request.head.sha }}"
+
+      # Pull main's baseline first so the merge keeps unchanged (cached) reports
+      # alongside the shards' freshly-tested ones.
+    - name: Restore baseline from main
+      run: gooze report pull "$REPORTS_REF" || echo "no baseline yet"
+
+      # Playwright-style: pull every shard's archive into one staging dir. The
+      # tarballs are uniquely named (shard_0.tgz, ...), so merge-multiple is safe.
+    - name: Download shard archives
+      uses: actions/download-artifact@v4
+      with:
+        path: shard-archives
+        pattern: shard_*
+        merge-multiple: true
+
+      # Unpack each tarball; each restores its own .gooze-reports/shard_N/ dir,
+      # giving `gooze report merge` the shard_* layout it expects.
+    - name: Extract shard reports
+      run: |
+        mkdir -p .gooze-reports
+        for archive in shard-archives/*.tgz; do
+          tar -xzf "$archive" -C .gooze-reports
+        done
+
+    - name: Merge shards
+      run: gooze report merge
+
+    - name: Show mutation score
+      run: gooze report view

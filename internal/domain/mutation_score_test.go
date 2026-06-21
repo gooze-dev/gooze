@@ -47,7 +47,7 @@ func TestMutationScoreFromReports(t *testing.T) {
 	require.Equal(t, 0.4, score)
 }
 
-func TestMutationScoreFromReports_EmptySpillIs100(t *testing.T) {
+func TestMutationScoreFromReports_EmptySpillIsFull(t *testing.T) {
 	spill, err := goozepkg.NewFileSpill[m.Report]()
 	require.NoError(t, err)
 	defer spill.Close()
@@ -55,7 +55,7 @@ func TestMutationScoreFromReports_EmptySpillIs100(t *testing.T) {
 	score, err := mutationScoreFromReports(spill)
 	require.NoError(t, err)
 
-	require.Equal(t, 100.0, score)
+	require.Equal(t, 1.0, score)
 }
 
 func TestMutationScoreFromReports_OnlySkippedAndErrorIs100(t *testing.T) {

@@ -1,0 +1,36 @@
+---
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  GOFLAGS: -buildvcs=false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    container: golang:1.26
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build
+      run: go install ./...
+    - name: Vet
+      run: go vet ./...
+    - name: Test
+      run: go test -race ./...
+
+  lint:
+    runs-on: ubuntu-latest
+    container: golang:1.26
+    steps:
+    - uses: actions/checkout@v4
+      # golangci-lint must be built with the same Go as the toolchain (1.26):
+      # prebuilt release binaries are compiled with an older Go and panic when
+      # they type-check a newer-Go module. The Makefile installs it from source.
+    - name: Install golangci-lint
+      run: make install-golangci-lint
+    - name: Lint
+      run: make lint
