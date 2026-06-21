@@ -47,6 +47,28 @@ func TestMutationScoreFromReports(t *testing.T) {
 	require.Equal(t, 0.4, score)
 }
 
+func TestMutationScoreFromReports_NotCoveredCountsAsSurvivor(t *testing.T) {
+	spill, err := goozepkg.NewFileSpill[m.Report]()
+	require.NoError(t, err)
+	defer spill.Close()
+
+	report := m.Report{
+		Result: m.Result{
+			m.MutationBoolean: {
+				{MutationID: "m1", Status: m.Killed, Err: nil},
+				{MutationID: "m2", Status: m.NotCovered, Err: nil},
+			},
+		},
+	}
+
+	require.NoError(t, spill.Append(report))
+
+	score, err := mutationScoreFromReports(spill)
+	require.NoError(t, err)
+
+	require.Equal(t, 0.5, score)
+}
+
 func TestMutationScoreFromReports_EmptySpillIsFull(t *testing.T) {
 	spill, err := goozepkg.NewFileSpill[m.Report]()
 	require.NoError(t, err)

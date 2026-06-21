@@ -28,9 +28,12 @@ const (
 
 	mutationTimeoutFlagName = "mutation-timeout"
 
-	runParallelConfigKey = "run.parallel"
-	mutationTimeoutKey   = "run.mutation_timeout"
-	excludeConfigKey     = "paths.exclude"
+	coverageProfileFlagName = "coverage-profile"
+
+	runParallelConfigKey  = "run.parallel"
+	mutationTimeoutKey    = "run.mutation_timeout"
+	runCoverageProfileKey = "run.coverage_profile"
+	excludeConfigKey      = "paths.exclude"
 
 	defaultMutationTimeout = time.Minute * 2
 
@@ -73,6 +76,7 @@ func init() {
 	viper.SetDefault(noCacheFlagName, defaultNoCache)
 	viper.SetDefault(runParallelConfigKey, defaultRunParallel)
 	viper.SetDefault(mutationTimeoutKey, int64(defaultMutationTimeout.Seconds()))
+	viper.SetDefault(runCoverageProfileKey, "")
 	viper.SetDefault(excludeConfigKey, []string{})
 
 	// Logging defaults (used by config/env and as fallbacks for flags).

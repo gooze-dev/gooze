@@ -26,6 +26,7 @@ go install gooze.dev/pkg/gooze@latest
 ```
 gooze run [paths...]            Run mutation testing
       run --estimate            Preview files + applicable mutation counts (no tests run)
+      run --coverage-profile    Skip mutations on uncovered lines using a Go coverage profile
 gooze report view               View previously generated reports
        report merge             Merge sharded reports into one directory
        report push <reference>  Push reports to an OCI registry as an artifact
@@ -53,6 +54,20 @@ to `./...` (the current module, recursively).
 gooze run          # same as: gooze run ./...
 gooze run ./pkg/...
 ```
+
+### Skip mutations on uncovered lines
+
+Pass a Go coverage profile and gooze will report any mutation on a line that the
+profile shows as uncovered as `not_covered` — immediately, without running its
+tests. This speeds up runs (uncovered mutations can never be killed) and makes
+test gaps explicit. `not_covered` counts as a survivor in the mutation score and
+is tallied separately (`not_covered_mutations` in `_index.yaml`).
+
+```bash
+go test -coverprofile=coverage.out ./...
+gooze run --coverage-profile coverage.out ./...
+```
+
 ### Config File Support (`.gooze.yml`)
 
 Gooze supports a configuration file (`.gooze.yml`) for persistent settings, reducing the need to specify options repeatedly on the command line. Place the file in the root of your project or specify its location with the `--config` flag.
@@ -92,6 +107,7 @@ Flag precedence is generally: CLI flags → env vars → config file → default
 | `paths.exclude` | `GOOZE_PATHS_EXCLUDE` | string list | `[]` | Comma-separated (e.g. `^vendor/,^mock_`) |
 | `run.parallel` | `GOOZE_RUN_PARALLEL` | int | `1` | Worker count for `run` |
 | `run.mutation_timeout` | `GOOZE_RUN_MUTATION_TIMEOUT` | int | `120` | Per-mutation timeout (seconds) (also `--mutation-timeout`) |
+| `run.coverage_profile` | `GOOZE_RUN_COVERAGE_PROFILE` | string | `""` | Go coverage profile path; mutations on uncovered lines become `not_covered` (also `--coverage-profile`) |
 | `log.filename` | `GOOZE_LOG_FILENAME` | string | `.gooze.log` | Log file path (also settable via `--log-output`) |
 | `log.verbose` | `GOOZE_LOG_VERBOSE` | bool | `false` | When `true`, forces debug logging (also `--verbose`) |
 | `log.level` | `GOOZE_LOG_LEVEL` | string/int | `info` | `debug`, `info`, `warn`, `error` (or numeric slog level) |

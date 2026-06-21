@@ -16,6 +16,7 @@ var mutationTimeoutFlag int64
 var runParallelFlag int
 var runShardFlag string
 var runEstimateFlag bool
+var runCoverageProfileFlag string
 
 // runCmd represents the run command.
 var runCmd = newRunCmd()
@@ -54,6 +55,7 @@ func newRunCmd() *cobra.Command {
 				ShardIndex:      shardIndex,
 				TotalShardCount: totalShards,
 				MutationTimeout: time.Duration(timeoutSeconds) * time.Second,
+				CoverageProfile: m.Path(viper.GetString(runCoverageProfileKey)),
 			})
 		},
 	}
@@ -75,6 +77,9 @@ func configureRunFlags(cmd *cobra.Command) {
 	bindFlagToConfig(cmd.Flags().Lookup(runParallelFlagName), runParallelConfigKey)
 	cmd.Flags().StringVarP(&runShardFlag, "shard", "s", "", "shard index and total shard count in the format INDEX/TOTAL (e.g., 0/3)")
 	cmd.Flags().BoolVar(&runEstimateFlag, "estimate", false, "list source files and applicable mutation counts without running tests")
+
+	cmd.Flags().StringVar(&runCoverageProfileFlag, coverageProfileFlagName, viper.GetString(runCoverageProfileKey), "path to a Go coverage profile; mutations on uncovered lines are reported as not_covered without running tests")
+	bindFlagToConfig(cmd.Flags().Lookup(coverageProfileFlagName), runCoverageProfileKey)
 }
 
 func parseShardFlag(shard string) (int, int) {

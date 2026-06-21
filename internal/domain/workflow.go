@@ -41,6 +41,7 @@ type TestArgs struct {
 	ShardIndex      int
 	TotalShardCount int
 	MutationTimeout time.Duration
+	CoverageProfile m.Path
 }
 
 // ViewArgs contains the arguments for viewing mutation test reports.
@@ -140,7 +141,16 @@ func (w *workflow) Test(ctx context.Context, args TestArgs) error {
 
 		w.progress.DisplayUpcomingTestsInfo(ctx, estimation.Total)
 
-		reports, err := w.testReports(ctx, sources, inThisShard, args.Threads, args.MutationTimeout)
+		var gate *CoverageIndex
+		if args.CoverageProfile != "" {
+			gate, err = w.loadCoverage(ctx, args.CoverageProfile)
+			if err != nil {
+				slog.Error("Failed to load coverage profile", "error", err)
+				return fmt.Errorf("load coverage profile: %w", err)
+			}
+		}
+
+		reports, err := w.testReports(ctx, sources, inThisShard, gate, args.Threads, args.MutationTimeout)
 		if err != nil {
 			slog.Error("Failed to run mutation tests", "error", err)
 			return fmt.Errorf("run mutation tests: %w", err)
@@ -640,10 +650,21 @@ type mutationOutcome struct {
 // results channel. A single collector drains results and spills reports to disk.
 // Peak memory is bounded by one file's mutations plus the small channel buffers,
 // not the whole project's mutations.
+// loadCoverage reads and parses the supplied coverage profile.
+func (w *workflow) loadCoverage(ctx context.Context, profile m.Path) (*CoverageIndex, error) {
+	content, err := w.sources.ReadFile(ctx, profile)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", profile, err)
+	}
+
+	return ParseCoverage(content)
+}
+
 func (w *workflow) testReports(
 	ctx context.Context,
 	sources []m.Source,
 	include func(m.Mutation) bool,
+	gate *CoverageIndex,
 	threads int,
 	mutationTimeout time.Duration,
 ) (pkg.FileSpill[m.Report], error) {
@@ -672,7 +693,7 @@ func (w *workflow) testReports(
 
 	var group errgroup.Group
 
-	group.Go(w.dispatchMutations(ctx, sources, include, queues))
+	group.Go(w.dispatchMutations(ctx, sources, include, gate, queues, results))
 
 	for threadID := range effectiveThreads {
 		group.Go(w.consumeMutations(ctx, queues[threadID], threadID, mutationTimeout, results))
@@ -769,7 +790,9 @@ func (w *workflow) dispatchMutations(
 	ctx context.Context,
 	sources []m.Source,
 	include func(m.Mutation) bool,
+	gate *CoverageIndex,
 	queues []chan m.Mutation,
+	results chan<- mutationOutcome,
 ) func() error {
 	return func() error {
 		defer closeQueues(queues)
@@ -780,6 +803,13 @@ func (w *workflow) dispatchMutations(
 					return nil
 				}
 
+				if gate != nil && !gate.Covers(string(mutation.Source.Origin.ShortPath), mutation.Line) {
+					return sendOutcome(ctx, results, mutationOutcome{
+						mutation: mutation,
+						result:   resultForStatus(mutation, m.NotCovered),
+					})
+				}
+
 				return dispatch(ctx, queues, mutation)
 			}, DefaultMutations...)
 			if err != nil {
@@ -788,6 +818,16 @@ func (w *workflow) dispatchMutations(
 		}
 
 		return nil
+	}
+}
+
+// sendOutcome delivers a precomputed outcome to the collector, respecting cancellation.
+func sendOutcome(ctx context.Context, results chan<- mutationOutcome, outcome mutationOutcome) error {
+	select {
+	case results <- outcome:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 

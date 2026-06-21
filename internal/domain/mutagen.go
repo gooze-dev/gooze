@@ -2,6 +2,7 @@
 package domain
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"go/ast"
@@ -154,12 +155,53 @@ func collectMutations(mutationType m.MutationType, file *ast.File, fset *token.F
 			return true
 		}
 
-		mutations = append(mutations, generateMutationsForNode(mutationType, n, fset, content, source)...)
+		nodeMutations := generateMutationsForNode(mutationType, n, fset, content, source)
+		for i := range nodeMutations {
+			nodeMutations[i].Line = lineForOffset(content, firstDifference(content, nodeMutations[i].MutatedCode))
+		}
+
+		mutations = append(mutations, nodeMutations...)
 
 		return true
 	})
 
 	return mutations
+}
+
+// firstDifference returns the index of the first byte that differs between a and
+// b, or -1 if one is a prefix of the other. This locates where a mutation begins,
+// since MutatedCode shares an identical prefix with the original up to that point.
+func firstDifference(a, b []byte) int {
+	n := len(a)
+	if len(b) < n {
+		n = len(b)
+	}
+
+	for i := range n {
+		if a[i] != b[i] {
+			return i
+		}
+	}
+
+	if len(a) != len(b) {
+		return n
+	}
+
+	return -1
+}
+
+// lineForOffset maps a byte offset in content to its 1-based line number,
+// clamping out-of-range offsets.
+func lineForOffset(content []byte, offset int) int {
+	if offset < 0 {
+		offset = 0
+	}
+
+	if offset > len(content) {
+		offset = len(content)
+	}
+
+	return 1 + bytes.Count(content[:offset], []byte{'\n'})
 }
 
 var mutationGenerators = map[m.MutationType]func(ast.Node, *token.FileSet, []byte, m.Source) []m.Mutation{

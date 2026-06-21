@@ -14,6 +14,9 @@ const (
 	Timeout
 	// Error indicates an error occurred during testing.
 	Error
+	// NotCovered indicates the mutated line is not exercised by any test, so the
+	// mutation survives without running tests.
+	NotCovered
 )
 
 func (t TestStatus) String() string {
@@ -28,6 +31,8 @@ func (t TestStatus) String() string {
 		return "error"
 	case Timeout:
 		return "timeout"
+	case NotCovered:
+		return "not_covered"
 	default:
 		return "unknown"
 	}

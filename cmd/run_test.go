@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -36,6 +37,51 @@ func TestRunCmd_TestMode(t *testing.T) {
 	cmd.SetArgs([]string{"run", "--parallel", "2", "./..."})
 	err := cmd.Execute()
 	require.NoError(t, err)
+
+	mockWorkflow.AssertExpectations(t)
+}
+
+func TestRunCmd_CoverageProfileFlag(t *testing.T) {
+	mockWorkflow := domainmocks.NewMockWorkflow(t)
+
+	cmd := newRootCmd()
+	cmd.AddCommand(newRunCmd())
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+
+	originalWorkflow := workflow
+	workflow = mockWorkflow
+	defer func() { workflow = originalWorkflow }()
+	defer viper.Set(runCoverageProfileKey, "")
+
+	mockWorkflow.On("Test", mock.Anything, mock.MatchedBy(func(args domain.TestArgs) bool {
+		return args.CoverageProfile == m.Path("coverage.out")
+	})).Return(nil)
+
+	cmd.SetArgs([]string{"run", "--coverage-profile", "coverage.out", "./..."})
+	require.NoError(t, cmd.Execute())
+
+	mockWorkflow.AssertExpectations(t)
+}
+
+func TestRunCmd_CoverageProfileDefaultsEmpty(t *testing.T) {
+	mockWorkflow := domainmocks.NewMockWorkflow(t)
+
+	cmd := newRootCmd()
+	cmd.AddCommand(newRunCmd())
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+
+	originalWorkflow := workflow
+	workflow = mockWorkflow
+	defer func() { workflow = originalWorkflow }()
+
+	mockWorkflow.On("Test", mock.Anything, mock.MatchedBy(func(args domain.TestArgs) bool {
+		return args.CoverageProfile == ""
+	})).Return(nil)
+
+	cmd.SetArgs([]string{"run", "./..."})
+	require.NoError(t, cmd.Execute())
 
 	mockWorkflow.AssertExpectations(t)
 }
