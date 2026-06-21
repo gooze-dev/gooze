@@ -42,4 +42,5 @@ type Mutation struct {
 	Type        MutationType
 	MutatedCode []byte
 	DiffCode    []byte
+	Line        int
 }

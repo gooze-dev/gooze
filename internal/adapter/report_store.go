@@ -71,12 +71,13 @@ type resultEntry struct {
 }
 
 type indexEntry struct {
-	TotalMutations    int           `yaml:"total_mutations"`
-	KilledMutations   int           `yaml:"killed_mutations"`
-	SurvivedMutations int           `yaml:"survived_mutations"`
-	FailedMutations   int           `yaml:"failed_mutations"`
-	IgnoredMutations  int           `yaml:"ignored_mutations"`
-	Result            []resultEntry `yaml:"result"`
+	TotalMutations      int           `yaml:"total_mutations"`
+	KilledMutations     int           `yaml:"killed_mutations"`
+	SurvivedMutations   int           `yaml:"survived_mutations"`
+	FailedMutations     int           `yaml:"failed_mutations"`
+	IgnoredMutations    int           `yaml:"ignored_mutations"`
+	NotCoveredMutations int           `yaml:"not_covered_mutations"`
+	Result              []resultEntry `yaml:"result"`
 }
 
 // SaveReports writes one YAML file per report into the provided directory.
@@ -843,6 +844,8 @@ func (rs *LocalReportStore) incrementStatusCount(index *indexEntry, status m.Tes
 		index.FailedMutations++
 	case m.Skipped:
 		index.IgnoredMutations++
+	case m.NotCovered:
+		index.NotCoveredMutations++
 	}
 }
 
