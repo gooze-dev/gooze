@@ -71,37 +71,38 @@ linters:
   - unconvert
   - usestdlibvars
   - wastedassign
+  settings:
+    funlen:
+      lines: 50
+      statements: 30
+      ignore-comments: true
+    wsl_v5:
+      allow-first-in-block: true
+      allow-whole-block: false
+      branch-max-lines: 2
+    gocyclo:
+      min-complexity: 15
+    gocognit:
+      min-complexity: 20
+    cyclop:
+      max-complexity: 10
+    nestif:
+      min-complexity: 4
+    dupl:
+      threshold: 100
+    misspell:
+      locale: US
+  exclusions:
+    generated: lax
+    paths:
+    - .*_test\.go$
+    - examples
 
 formatters:
   enable:
   - gofmt
   - goimports
 
-linters-settings:
-  funlen:
-    lines: 50
-    statements: 30
-    ignore-comments: true
-  wsl_v5:
-    allow-first-in-block: true
-    allow-whole-block: false
-    branch-max-lines: 2
-  gocyclo:
-    min-complexity: 15
-  gocognit:
-    min-complexity: 20
-  dupl:
-    threshold: 100
-  misspell:
-    locale: US
-  cyclop:
-    max-complexity: 10
-
 issues:
-  exclude-use-default: false
   max-issues-per-linter: 0
   max-same-issues: 0
-  exclude-files:
-  - .*_test\.go$
-  exclude-dirs:
-  - examples

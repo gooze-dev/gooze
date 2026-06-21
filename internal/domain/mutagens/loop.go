@@ -103,32 +103,19 @@ func mutateLoopBoundary(cond ast.Expr, fset *token.FileSet, content []byte, sour
 
 // removeForLoopBody creates a mutation that removes the for loop body.
 func removeForLoopBody(stmt *ast.ForStmt, fset *token.FileSet, content []byte, source m.Source) []m.Mutation {
-	bodyStart, ok1 := offsetForPos(fset, stmt.Body.Lbrace)
-	bodyEnd, ok2 := offsetForPos(fset, stmt.Body.Rbrace)
-
-	if !ok1 || !ok2 {
-		return nil
-	}
-
-	mutated := replaceRange(content, bodyStart+1, bodyEnd, "")
-	diff := diffCode(content, mutated)
-
-	h := sha256.Sum256([]byte(fmt.Sprintf("%s-%s-body-%d", source.Origin.FullPath, m.MutationLoop.Name, bodyStart)))
-	id := fmt.Sprintf("%x", h)[:16]
-
-	return []m.Mutation{{
-		ID:          id,
-		Source:      source,
-		Type:        m.MutationLoop,
-		MutatedCode: ensureTrailingNewline(mutated),
-		DiffCode:    diff,
-	}}
+	return removeLoopBody(stmt.Body, "body", fset, content, source)
 }
 
 // removeRangeLoopBody creates a mutation that removes the range loop body.
 func removeRangeLoopBody(stmt *ast.RangeStmt, fset *token.FileSet, content []byte, source m.Source) []m.Mutation {
-	bodyStart, ok1 := offsetForPos(fset, stmt.Body.Lbrace)
-	bodyEnd, ok2 := offsetForPos(fset, stmt.Body.Rbrace)
+	return removeLoopBody(stmt.Body, "range", fset, content, source)
+}
+
+// removeLoopBody creates a mutation that empties a loop body. tag distinguishes
+// the loop kind so generated mutation IDs stay stable and unique.
+func removeLoopBody(body *ast.BlockStmt, tag string, fset *token.FileSet, content []byte, source m.Source) []m.Mutation {
+	bodyStart, ok1 := offsetForPos(fset, body.Lbrace)
+	bodyEnd, ok2 := offsetForPos(fset, body.Rbrace)
 
 	if !ok1 || !ok2 {
 		return nil
@@ -137,7 +124,7 @@ func removeRangeLoopBody(stmt *ast.RangeStmt, fset *token.FileSet, content []byt
 	mutated := replaceRange(content, bodyStart+1, bodyEnd, "")
 	diff := diffCode(content, mutated)
 
-	h := sha256.Sum256([]byte(fmt.Sprintf("%s-%s-range-%d", source.Origin.FullPath, m.MutationLoop.Name, bodyStart)))
+	h := sha256.Sum256([]byte(fmt.Sprintf("%s-%s-%s-%d", source.Origin.FullPath, m.MutationLoop.Name, tag, bodyStart)))
 	id := fmt.Sprintf("%x", h)[:16]
 
 	return []m.Mutation{{

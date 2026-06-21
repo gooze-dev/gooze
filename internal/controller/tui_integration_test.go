@@ -194,29 +194,29 @@ func TestEstimateModelAnimationCoverage(t *testing.T) {
 // TestTestExecutionModelAnimationCoverage tests test execution animation helpers
 func TestTestExecutionModelAnimationCoverage(t *testing.T) {
 	// Test animateScrollFile with empty string
-	if got := animateScrollFile("", 10, 0); got != "" {
+	if got := animateScroll("", 10, 0); got != "" {
 		t.Fatalf("animateScrollFile empty string = %q", got)
 	}
 
 	// Test with width larger than text
-	if got := animateScrollFile("short", 20, 5); got != "short" {
+	if got := animateScroll("short", 20, 5); got != "short" {
 		t.Fatalf("animateScrollFile short = %q", got)
 	}
 
 	// Test scrolling behavior
 	text := "verylongfilepath.go"
-	got1 := animateScrollFile(text, 5, 10)
-	got2 := animateScrollFile(text, 5, 15)
+	got1 := animateScroll(text, 5, 10)
+	got2 := animateScroll(text, 5, 15)
 	if got1 == got2 {
 		t.Fatalf("animateScrollFile should change with offset")
 	}
 
 	// Test truncateFile edge cases
-	if got := truncateFile("", 10); got != "" {
+	if got := truncateToWidth("", 10); got != "" {
 		t.Fatalf("truncateFile empty = %q", got)
 	}
 
-	if got := truncateFile("test", 2); len([]rune(got)) != 2 {
+	if got := truncateToWidth("test", 2); len([]rune(got)) != 2 {
 		t.Fatalf("truncateFile length = %d, want 2", len([]rune(got)))
 	}
 }

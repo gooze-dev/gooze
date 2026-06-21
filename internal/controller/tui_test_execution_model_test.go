@@ -18,20 +18,20 @@ func TestTestResult_FilterValue(t *testing.T) {
 }
 
 func TestAnimateScrollFileAndTruncateFile(t *testing.T) {
-	if got := truncateFile("hello", 0); got != "" {
+	if got := truncateToWidth("hello", 0); got != "" {
 		t.Fatalf("truncateFile width 0 = %q", got)
 	}
-	if got := truncateFile("hello", 1); got != "…" {
+	if got := truncateToWidth("hello", 1); got != "…" {
 		t.Fatalf("truncateFile width 1 = %q", got)
 	}
-	if got := truncateFile("hello", 10); got != "hello" {
+	if got := truncateToWidth("hello", 10); got != "hello" {
 		t.Fatalf("truncateFile no truncation = %q", got)
 	}
 
-	if got := animateScrollFile("abcdef", 3, 0); got != "ab…" {
+	if got := animateScroll("abcdef", 3, 0); got != "ab…" {
 		t.Fatalf("animateScrollFile pause = %q", got)
 	}
-	got := animateScrollFile("abcdef", 3, 10)
+	got := animateScroll("abcdef", 3, 10)
 	if got == "ab…" || len([]rune(got)) != 3 {
 		t.Fatalf("animateScrollFile scrolled = %q", got)
 	}
@@ -64,6 +64,50 @@ func TestTestExecutionModel_HandleStartAndComplete(t *testing.T) {
 	m = m.handleCompletedMutation(completedMutationMsg{id: "hash-6", kind: "arith", fileHash: "hash-b", displayPath: "path/b.go", status: "survived"})
 	if m.progressPercent != 1 {
 		t.Fatalf("progressPercent = %v, want 1", m.progressPercent)
+	}
+}
+
+func TestTestExecutionModel_CountingPhase(t *testing.T) {
+	m := newTestExecutionModel()
+
+	// Concurrency info arrives first (before the count pass finishes).
+	m = m.handleConcurrency(concurrencyMsg{threads: 2, shardIndex: 0, shards: 1})
+	if !m.rendered || !m.counting {
+		t.Fatalf("expected rendered and counting after concurrency")
+	}
+
+	if got := m.View(); !strings.Contains(got, "Counting mutations") {
+		t.Fatalf("View during count pass = %q, want counting message", got)
+	}
+
+	// Once the total is known, counting ends and the progress bar takes over.
+	m = m.handleUpcoming(upcomingMsg{count: 5})
+	if m.counting || m.totalMutations != 5 {
+		t.Fatalf("expected counting=false and total=5 after upcoming")
+	}
+
+	if got := m.View(); strings.Contains(got, "Counting mutations") {
+		t.Fatalf("View after upcoming should not show counting message")
+	}
+}
+
+func TestTestExecutionModel_CompletionClearsThread(t *testing.T) {
+	m := newTestExecutionModel()
+	m.threads = 2
+	m.totalMutations = 2
+
+	m = m.handleStartMutation(startMutationMsg{id: "aaaa", thread: 0, kind: "arith", displayPath: "a.go"})
+	m = m.handleStartMutation(startMutationMsg{id: "bbbb", thread: 1, kind: "bool", displayPath: "b.go"})
+
+	// Completing thread 0's mutation frees that thread; thread 1 stays busy.
+	m = m.handleCompletedMutation(completedMutationMsg{id: "aaaa", kind: "arith", displayPath: "a.go", status: "killed"})
+
+	if _, ok := m.threadMutationIDs[0]; ok {
+		t.Fatalf("thread 0 should be idle after its mutation completed")
+	}
+
+	if m.threadMutationIDs[1] != "bbbb" {
+		t.Fatalf("thread 1 should still be running its mutation")
 	}
 }
 

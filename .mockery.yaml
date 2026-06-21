@@ -12,6 +12,7 @@ packages:
       Orchestrator:
       Mutagen:
       Reporter:
+      Workspace:
   gooze.dev/pkg/gooze/internal/adapter:
     config:
       dir: internal/adapter/mocks
