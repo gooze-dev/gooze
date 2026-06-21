@@ -137,6 +137,55 @@ func TestRunCmd_NoCacheFlag_DisablesCache(t *testing.T) {
 	mockWorkflow.AssertExpectations(t)
 }
 
+func TestRunCmd_DefaultsToRecursiveCurrentDir(t *testing.T) {
+	mockWorkflow := domainmocks.NewMockWorkflow(t)
+
+	cmd := newRootCmd()
+	cmd.AddCommand(newRunCmd())
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+
+	originalWorkflow := workflow
+	workflow = mockWorkflow
+	defer func() { workflow = originalWorkflow }()
+
+	// No paths given → defaults to ./...
+	mockWorkflow.On("Test", mock.Anything, mock.MatchedBy(func(args domain.TestArgs) bool {
+		return len(args.Paths) == 1 && args.Paths[0] == m.Path("./...")
+	})).Return(nil)
+
+	cmd.SetArgs([]string{"run"})
+	err := cmd.Execute()
+	require.NoError(t, err)
+
+	mockWorkflow.AssertExpectations(t)
+}
+
+func TestRunCmd_EstimateMode(t *testing.T) {
+	mockWorkflow := domainmocks.NewMockWorkflow(t)
+
+	cmd := newRootCmd()
+	cmd.AddCommand(newRunCmd())
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+
+	originalWorkflow := workflow
+	workflow = mockWorkflow
+	defer func() { workflow = originalWorkflow }()
+
+	// --estimate routes to Estimate, not Test.
+	mockWorkflow.On("Estimate", mock.Anything, mock.MatchedBy(func(args domain.EstimateArgs) bool {
+		return len(args.Paths) == 1 && args.Paths[0] == m.Path("./...")
+	})).Return(nil)
+
+	cmd.SetArgs([]string{"run", "--estimate", "./..."})
+	err := cmd.Execute()
+	require.NoError(t, err)
+
+	mockWorkflow.AssertExpectations(t)
+	mockWorkflow.AssertNotCalled(t, "Test", mock.Anything, mock.Anything)
+}
+
 func TestNewRunCmd(t *testing.T) {
 	cmd := newRunCmd()
 

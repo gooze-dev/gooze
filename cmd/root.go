@@ -11,6 +11,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	configcmd "gooze.dev/pkg/gooze/cmd/config"
+	"gooze.dev/pkg/gooze/cmd/report"
 	"gooze.dev/pkg/gooze/internal/adapter"
 	"gooze.dev/pkg/gooze/internal/controller"
 	"gooze.dev/pkg/gooze/internal/domain"
@@ -21,9 +23,11 @@ var goFileAdapter adapter.GoFileAdapter
 var sourceFSAdapter adapter.SourceFSAdapter
 var reportStore adapter.ReportStore
 var testAdapter adapter.TestRunnerAdapter
+var ociRegistry adapter.OCIRegistry
 var orchestrator domain.Orchestrator
 var mutagen domain.Mutagen
 var workflow domain.Workflow
+var publisher domain.ReportPublisher
 var ui controller.UI
 
 // Logging flags.
@@ -48,6 +52,7 @@ func init() {
 	sourceFSAdapter = adapter.NewLocalSourceFSAdapter()
 	reportStore = adapter.NewReportStore()
 	testAdapter = adapter.NewLocalTestRunnerAdapter()
+	ociRegistry = adapter.NewORASRegistry()
 	orchestrator = domain.NewOrchestrator(sourceFSAdapter, testAdapter)
 	mutagen = domain.NewMutagen(goFileAdapter, sourceFSAdapter)
 	workflow = domain.NewWorkflow(
@@ -57,6 +62,18 @@ func init() {
 		orchestrator,
 		mutagen,
 	)
+	publisher = domain.NewReportPublisher(ociRegistry)
+
+	rootCmd.AddCommand(report.New(report.Deps{
+		Workflow:  workflow,
+		Publisher: publisher,
+		OutputKey: outputFlagName,
+	}))
+
+	rootCmd.AddCommand(configcmd.New(configcmd.Deps{
+		Dir:      configFolderPath,
+		FileName: configFileName,
+	}))
 }
 
 const pathPatternsHelp = `Supports Go-style path patterns:
@@ -70,11 +87,11 @@ and verifying that your tests catch them.
 
 ` + pathPatternsHelp
 
-const runLongDescription = `Run mutation testing for the given paths (default: current module).
+const runLongDescription = `Run mutation testing for the given paths. With no paths, defaults to ./...
+(the current module, recursively).
 
-` + pathPatternsHelp
-
-const listLongDescription = `List source files and the number of applicable mutations.
+Use --estimate to list source files and applicable mutation counts without
+running tests.
 
 ` + pathPatternsHelp
 
