@@ -13,6 +13,7 @@ packages:
       Mutagen:
       Reporter:
       Workspace:
+      ReportPublisher:
   gooze.dev/pkg/gooze/internal/adapter:
     config:
       dir: internal/adapter/mocks
@@ -22,6 +23,7 @@ packages:
       SourceFSAdapter:
       TestRunnerAdapter:
       ReportStore:
+      OCIRegistry:
   gooze.dev/pkg/gooze/internal/controller:
     config:
       dir: internal/controller/mocks

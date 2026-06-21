@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -85,7 +86,8 @@ func init() {
 
 	if err := viper.ReadInConfig(); err != nil {
 		var notFound viper.ConfigFileNotFoundError
-		if errors.As(err, &notFound) {
+		// A missing config file is expected; only warn on real read errors.
+		if errors.As(err, &notFound) || errors.Is(err, os.ErrNotExist) {
 			return
 		}
 

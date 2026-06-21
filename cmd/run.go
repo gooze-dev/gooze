@@ -15,6 +15,7 @@ import (
 var mutationTimeoutFlag int64
 var runParallelFlag int
 var runShardFlag string
+var runEstimateFlag bool
 
 // runCmd represents the run command.
 var runCmd = newRunCmd()
@@ -25,22 +26,31 @@ func newRunCmd() *cobra.Command {
 		Short: "Run mutation testing",
 		Long:  runLongDescription,
 		RunE: func(_ *cobra.Command, args []string) error {
-			shardIndex, totalShards := parseShardFlag(runShardFlag)
-			paths := parsePaths(args)
-			useCache := !viper.GetBool(noCacheFlagName)
+			// Default to scanning the current module recursively when no paths
+			// are given (equivalent to `gooze run ./...`).
+			if len(args) == 0 {
+				args = []string{"./..."}
+			}
+
 			reportsPath := m.Path(viper.GetString(outputFlagName))
-			threads := viper.GetInt(runParallelConfigKey)
+			estimateArgs := domain.EstimateArgs{
+				Paths:    parsePaths(args),
+				Exclude:  viper.GetStringSlice(excludeConfigKey),
+				UseCache: !viper.GetBool(noCacheFlagName),
+				Reports:  reportsPath,
+			}
+
+			if runEstimateFlag {
+				return workflow.Estimate(context.Background(), estimateArgs)
+			}
+
+			shardIndex, totalShards := parseShardFlag(runShardFlag)
 			timeoutSeconds := viper.GetInt64(mutationTimeoutKey)
 
 			return workflow.Test(context.Background(), domain.TestArgs{
-				EstimateArgs: domain.EstimateArgs{
-					Paths:    paths,
-					Exclude:  viper.GetStringSlice(excludeConfigKey),
-					UseCache: useCache,
-					Reports:  reportsPath,
-				},
+				EstimateArgs:    estimateArgs,
 				Reports:         reportsPath,
-				Threads:         threads,
+				Threads:         viper.GetInt(runParallelConfigKey),
 				ShardIndex:      shardIndex,
 				TotalShardCount: totalShards,
 				MutationTimeout: time.Duration(timeoutSeconds) * time.Second,
@@ -64,6 +74,7 @@ func configureRunFlags(cmd *cobra.Command) {
 	cmd.Flags().IntVarP(&runParallelFlag, runParallelFlagName, "p", viper.GetInt(runParallelConfigKey), "number of parallel workers for mutation testing")
 	bindFlagToConfig(cmd.Flags().Lookup(runParallelFlagName), runParallelConfigKey)
 	cmd.Flags().StringVarP(&runShardFlag, "shard", "s", "", "shard index and total shard count in the format INDEX/TOTAL (e.g., 0/3)")
+	cmd.Flags().BoolVar(&runEstimateFlag, "estimate", false, "list source files and applicable mutation counts without running tests")
 }
 
 func parseShardFlag(shard string) (int, int) {

@@ -21,21 +21,37 @@ go install gooze.dev/pkg/gooze@latest
 
 `gooze.dev/pkg/gooze` is a vanity import path. For this to work, `https://gooze.dev/pkg/gooze?go-get=1` must serve a `go-import` meta tag pointing at this repo (template: `docs/pkg/gooze/index.html`).
 
+### Commands
 
-### List files and mutation counts
+```
+gooze run [paths...]            Run mutation testing
+      run --estimate            Preview files + applicable mutation counts (no tests run)
+gooze report view               View previously generated reports
+       report merge             Merge sharded reports into one directory
+       report push <reference>  Push reports to an OCI registry as an artifact
+       report pull <reference>  Pull reports from an OCI registry
+gooze config init               Generate a default gooze.yaml
+gooze version                   Show version information
+```
 
-Preview which files will be mutated and how many mutations apply.
+Run `gooze <command> --help` (e.g. `gooze report --help`) for full flags.
+
+### Preview files and mutation counts
+
+Preview which files will be mutated and how many mutations apply, without running tests.
 
 ```bash
-gooze list ./...
+gooze run --estimate ./...
 ```
 
 ### Run mutation testing
 
-Execute mutation testing across the target paths.
+Execute mutation testing across the target paths. With no paths, `run` defaults
+to `./...` (the current module, recursively).
 
 ```bash
-gooze run ./...
+gooze run          # same as: gooze run ./...
+gooze run ./pkg/...
 ```
 ### Config File Support (`.gooze.yml`)
 
@@ -100,13 +116,13 @@ By default, Gooze writes mutation reports to `.gooze-reports` (override with `-o
 View the last run:
 
 ```bash
-gooze view
+gooze report view
 ```
 
-Or point `view` at an explicit directory:
+Or point it at an explicit directory:
 
 ```bash
-gooze view -o .gooze-reports
+gooze report view -o .gooze-reports
 ```
 
 ### Incremental runs (`--no-cache`)
@@ -153,79 +169,50 @@ gooze run --no-cache ./...
 - Mutator version changed (e.g., after upgrading Gooze)
 - Source file deleted
 
-### Using ORAS for report storage
+### Storing reports in an OCI registry
 
-Store and retrieve mutation reports as OCI artifacts using [ORAS](https://oras.land/).
+Store and retrieve mutation reports as OCI artifacts in any registry — built in
+via `gooze report push` / `pull` (powered by [ORAS](https://oras.land/)), so no
+external `oras` or `tar` steps are needed.
 
-**Push reports to registry:**
+`push`/`pull` operate on the reports directory (`-o/--output`, default
+`.gooze-reports`). Flags: `--plain-http` (non-TLS registry), `--insecure` (skip
+TLS verification).
 
-Run mutation testing and write reports to `.gooze-reports`:
+**Authentication.** For registries that require login, set
+`GOOZE_REGISTRY_USERNAME` and `GOOZE_REGISTRY_PASSWORD`. The password may be a
+token/PAT — e.g. for GHCR use your GitHub username with a PAT (or `GITHUB_TOKEN`
+in CI):
+
+```bash
+export GOOZE_REGISTRY_USERNAME="$USER"
+export GOOZE_REGISTRY_PASSWORD="$GITHUB_TOKEN"
+gooze report push ghcr.io/your-org/your-repo/gooze-reports:main
+```
+
+If unset, gooze falls back to the Docker credential store (whatever
+`docker login` saved).
+
+**Push reports:**
 
 ```bash
 gooze run -o .gooze-reports ./...
+gooze report push ghcr.io/your-org/your-repo/gooze-reports:main
 ```
 
-Package reports into a single archive (this avoids nested paths on pull):
+**Pull and view reports:**
 
 ```bash
-tar -C .gooze-reports -czf gooze-reports.tgz .
+gooze report pull ghcr.io/your-org/your-repo/gooze-reports:main
+gooze report view
 ```
 
-Push the archive as an OCI artifact:
+**Incremental testing in CI** — restore the baseline, run, publish:
 
 ```bash
-oras push ghcr.io/your-org/your-repo/gooze-reports:main \
-   gooze-reports.tgz:application/gzip
-
-rm -f gooze-reports.tgz
-```
-
-**Pull reports from registry:**
-
-Pull the artifact to a staging directory:
-
-```bash
-rm -rf /tmp/gooze-reports-oci && mkdir -p /tmp/gooze-reports-oci
-oras pull ghcr.io/your-org/your-repo/gooze-reports:main -o /tmp/gooze-reports-oci
-```
-
-Restore into the reports directory Gooze reads from:
-
-```bash
-rm -rf .gooze-reports && mkdir -p .gooze-reports
-tar -C .gooze-reports -xzf /tmp/gooze-reports-oci/gooze-reports.tgz
-```
-
-View the pulled reports:
-
-```bash
-gooze view -o .gooze-reports
-```
-
-**Incremental testing with OCI artifacts:**
-
-In CI, restore baseline reports first:
-
-```bash
-rm -rf /tmp/gooze-reports-oci && mkdir -p /tmp/gooze-reports-oci
-oras pull ghcr.io/your-org/your-repo/gooze-reports:main -o /tmp/gooze-reports-oci
-rm -rf .gooze-reports && mkdir -p .gooze-reports
-tar -C .gooze-reports -xzf /tmp/gooze-reports-oci/gooze-reports.tgz
-```
-
-Then run mutation testing; only changed sources will be re-tested:
-
-```bash
-gooze run -o .gooze-reports ./...
-```
-
-Finally, package and push the updated reports:
-
-```bash
-tar -C .gooze-reports -czf gooze-reports.tgz .
-oras push ghcr.io/your-org/your-repo/gooze-reports:feature-branch \
-   gooze-reports.tgz:application/gzip
-rm -f gooze-reports.tgz
+gooze report pull ghcr.io/your-org/your-repo/gooze-reports:main   # restore baseline
+gooze run ./...                                                    # only changed sources re-tested
+gooze report push ghcr.io/your-org/your-repo/gooze-reports:main   # publish updated reports
 ```
 
 **Benefits:**
@@ -249,8 +236,8 @@ gooze run -o .gooze-reports -s 0/3 ./...
 gooze run -o .gooze-reports -s 1/3 ./...
 gooze run -o .gooze-reports -s 2/3 ./...
 
-gooze merge -o .gooze-reports
-gooze view -o .gooze-reports
+gooze report merge -o .gooze-reports
+gooze report view -o .gooze-reports
 ```
 
 With parallel workers:
@@ -266,7 +253,7 @@ gooze run -x '^vendor/' -x '^mock_' ./...
 ```
 
 > Tips:
-> - Use `gooze list` to preview the files and mutation counts before running tests.
+> - Use `gooze run --estimate` to preview the files and mutation counts before running tests.
 > - Use `--parallel` to reduce total runtime on multi-core machines.
 > - Use `-x`/`--exclude` to skip files by regex (path or base name).
 
@@ -354,7 +341,7 @@ func main() {
 - [x] `--parallel` flag for concurrent mutation testing
 - [x] Sharding support for distributed execution across multiple machines
 - [x] Compatible with parallel execution within shards
-- [x] Automatic report merging from multiple shards (`gooze merge`)
+- [x] Automatic report merging from multiple shards (`gooze report merge`)
 
 ### Reporting
 - [x] Incremental testing: cache and reuse results for unchanged files
