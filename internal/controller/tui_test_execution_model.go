@@ -336,10 +336,7 @@ func (m testExecutionModel) threadLineContent(thread, fileBudget int) string {
 		idStr = fmt.Sprintf("ID: %-4s ", id[:4])
 	}
 
-	remainingForFile := fileBudget - len(idStr)
-	if remainingForFile < 10 {
-		remainingForFile = 10
-	}
+	remainingForFile := max(fileBudget-len(idStr), 10)
 
 	return fmt.Sprintf("%s%s",
 		lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Render(idStr), // Grey for ID
@@ -402,10 +399,7 @@ func (m testExecutionModel) renderResultsBox(accentColor lipgloss.Color) string 
 	listWidth := m.width - 4
 	diffBoxHeight := m.diffBoxHeight()
 
-	listHeight := m.height - 9 - diffBoxHeight
-	if listHeight < 5 {
-		listHeight = 5
-	}
+	listHeight := max(m.height-9-diffBoxHeight, 5)
 
 	m.resultsList.SetHeight(listHeight)
 	m.resultsList.SetWidth(listWidth)
@@ -602,10 +596,7 @@ func (m *testExecutionModel) toggleSelectedDiff() {
 }
 
 func (m testExecutionModel) diffMaxLines() int {
-	maxLines := m.height / 3
-	if maxLines < 6 {
-		maxLines = 6
-	}
+	maxLines := max(m.height/3, 6)
 
 	if maxLines > 20 {
 		maxLines = 20
@@ -644,10 +635,7 @@ func (m testExecutionModel) renderDiffBox(accentColor lipgloss.Color, width int)
 		return "", 0
 	}
 
-	contentWidth := width - 4
-	if contentWidth < 10 {
-		contentWidth = 10
-	}
+	contentWidth := max(width-4, 10)
 
 	header := lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Bold(true).
 		Render(truncateToWidth(m.diffHeader(), contentWidth))
@@ -725,10 +713,7 @@ func (m testExecutionModel) handleWindowSize(msg tea.WindowSizeMsg) testExecutio
 	m.width = msg.Width
 	m.height = msg.Height
 
-	m.progressBar.Width = m.width - 8
-	if m.progressBar.Width < 20 {
-		m.progressBar.Width = 20
-	}
+	m.progressBar.Width = max(m.width-8, 20)
 
 	return m
 }

@@ -12,7 +12,7 @@ env:
 jobs:
   test:
     runs-on: ubuntu-latest
-    container: golang:1.26
+    container: golang:1.27
     steps:
     - uses: actions/checkout@v4
     - name: Build
@@ -24,10 +24,10 @@ jobs:
 
   lint:
     runs-on: ubuntu-latest
-    container: golang:1.26
+    container: golang:1.27
     steps:
     - uses: actions/checkout@v4
-      # golangci-lint must be built with the same Go as the toolchain (1.26):
+      # golangci-lint must be built with the same Go as the toolchain (1.27):
       # prebuilt release binaries are compiled with an older Go and panic when
       # they type-check a newer-Go module. The Makefile installs it from source.
     - name: Install golangci-lint

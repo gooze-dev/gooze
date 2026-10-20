@@ -171,7 +171,7 @@ func (s *SimpleUI) DisplayMutationScore(ctx context.Context, score float64) {
 	s.printf("Mutation score: %.2f%%\n", score*100)
 }
 
-func (s *SimpleUI) printf(format string, args ...interface{}) {
+func (s *SimpleUI) printf(format string, args ...any) {
 	_, _ = fmt.Fprintf(s.cmd.OutOrStdout(), format, args...)
 }
 

@@ -193,10 +193,7 @@ func walkMutations(
 // b, or -1 if one is a prefix of the other. This locates where a mutation begins,
 // since MutatedCode shares an identical prefix with the original up to that point.
 func firstDifference(a, b []byte) int {
-	n := len(a)
-	if len(b) < n {
-		n = len(b)
-	}
+	n := min(len(b), len(a))
 
 	for i := range n {
 		if a[i] != b[i] {

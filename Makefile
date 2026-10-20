@@ -2,8 +2,8 @@ name := gooze
 bin := ./.bin
 # Versions
 COBRA_CLI_VERSION := v1.3.0
-GOLANGCI_LINT_VERSION := v2.8.0
-MOCKERY_VERSION := v2.53.5
+GOLANGCI_LINT_VERSION := v2.15.0
+MOCKERY_VERSION := v2.53.8
 SEMGREP_VERSION := 1.181.0
 
 # Default benchtime for benchmarks run via `make test`.

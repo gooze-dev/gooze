@@ -24,7 +24,7 @@ type CoverageIndex struct {
 func ParseCoverage(content []byte) (*CoverageIndex, error) {
 	idx := &CoverageIndex{files: make(map[string][]coveredRange)}
 
-	for _, raw := range strings.Split(string(content), "\n") {
+	for raw := range strings.SplitSeq(string(content), "\n") {
 		line := strings.TrimSpace(raw)
 		if line == "" || strings.HasPrefix(line, "mode:") {
 			continue

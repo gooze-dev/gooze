@@ -7,6 +7,7 @@ import (
 
 	mock "github.com/stretchr/testify/mock"
 	domain "gooze.dev/pkg/gooze/internal/domain"
+
 	model "gooze.dev/pkg/gooze/internal/model"
 )
 

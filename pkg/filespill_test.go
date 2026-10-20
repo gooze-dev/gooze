@@ -196,7 +196,7 @@ func BenchmarkGet(b *testing.B) {
 	defer spill.Close()
 
 	// Pre-populate with 1000 items
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		_ = spill.Append(i)
 	}
 
@@ -215,7 +215,7 @@ func BenchmarkRange(b *testing.B) {
 	defer spill.Close()
 
 	// Pre-populate with 1000 items
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		_ = spill.Append(i)
 	}
 
@@ -236,7 +236,7 @@ func BenchmarkAppendBatch(b *testing.B) {
 	defer spill.Close()
 
 	items := make([]int, 100)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		items[i] = i
 	}
 
@@ -291,7 +291,7 @@ func BenchmarkGetLarge(b *testing.B) {
 
 	// Pre-populate with 10,000 items
 	count := 10000
-	for i := 0; i < count; i++ {
+	for i := range count {
 		_ = spill.Append(i)
 	}
 
@@ -311,7 +311,7 @@ func BenchmarkGetFirst(b *testing.B) {
 	defer spill.Close()
 
 	// Pre-populate with 10,000 items to ensure file is significant
-	for i := 0; i < 10000; i++ {
+	for i := range 10000 {
 		_ = spill.Append(i)
 	}
 
@@ -330,7 +330,7 @@ func BenchmarkGetLast(b *testing.B) {
 	defer spill.Close()
 
 	count := 10000
-	for i := 0; i < count; i++ {
+	for i := range count {
 		_ = spill.Append(i)
 	}
 
@@ -351,7 +351,7 @@ func BenchmarkRangeLarge(b *testing.B) {
 	defer spill.Close()
 
 	count := 10000
-	for i := 0; i < count; i++ {
+	for i := range count {
 		_ = spill.Append(i)
 	}
 
@@ -474,7 +474,7 @@ func TestEdgeCases(t *testing.T) {
 		require.NoError(t, err)
 		defer spill.Close()
 
-		for i := 0; i < 100; i++ {
+		for i := range 100 {
 			spill.Append(i)
 		}
 
@@ -488,7 +488,7 @@ func TestEdgeCases(t *testing.T) {
 		require.NoError(t, err)
 		defer spill.Close()
 
-		for i := 0; i < 100; i++ {
+		for i := range 100 {
 			spill.Append(i)
 		}
 
@@ -518,7 +518,7 @@ func TestEdgeCases(t *testing.T) {
 		defer spill.Close()
 
 		longStr := ""
-		for i := 0; i < 10000; i++ {
+		for range 10000 {
 			longStr += "x"
 		}
 
@@ -574,7 +574,7 @@ func TestEdgeCases(t *testing.T) {
 		defer spill.Close()
 
 		n := 10000
-		for i := 0; i < n; i++ {
+		for i := range n {
 			spill.Append(i)
 		}
 

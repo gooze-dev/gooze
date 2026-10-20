@@ -51,10 +51,10 @@ func mergeIgnoreRule(dst *ignoreRule, src ignoreRule) {
 
 func parseIgnoreDirective(commentText string) (ignoreRule, bool) {
 	s := strings.TrimSpace(commentText)
-	if strings.HasPrefix(s, "//") {
-		s = strings.TrimSpace(strings.TrimPrefix(s, "//"))
-	} else if strings.HasPrefix(s, "/*") {
-		s = strings.TrimSpace(strings.TrimPrefix(s, "/*"))
+	if after, ok := strings.CutPrefix(s, "//"); ok {
+		s = strings.TrimSpace(after)
+	} else if after, ok := strings.CutPrefix(s, "/*"); ok {
+		s = strings.TrimSpace(after)
 		s = strings.TrimSpace(strings.TrimSuffix(s, "*/"))
 	}
 
