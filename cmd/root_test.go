@@ -27,22 +27,31 @@ func TestParseShardFlag(t *testing.T) {
 		shard     string
 		wantIndex int
 		wantTotal int
+		wantErr   bool
 	}{
-		{"empty string", "", 0, 1},
-		{"valid 0/3", "0/3", 0, 3},
-		{"valid 1/3", "1/3", 1, 3},
-		{"valid 2/3", "2/3", 2, 3},
-		{"invalid format", "invalid", 0, 1},
-		{"zero total", "0/0", 0, 1},
-		{"negative total", "0/-1", 0, 1},
-		{"negative index", "-1/3", 0, 1},
-		{"index >= total", "3/3", 0, 1},
-		{"index > total", "5/3", 0, 1},
+		{"empty string", "", 0, 1, false},
+		{"valid 0/3", "0/3", 0, 3, false},
+		{"valid 1/3", "1/3", 1, 3, false},
+		{"valid 2/3", "2/3", 2, 3, false},
+		{"invalid format", "invalid", 0, 0, true},
+		{"trailing garbage", "1/4abc", 0, 0, true},
+		{"zero total", "0/0", 0, 0, true},
+		{"negative total", "0/-1", 0, 0, true},
+		{"negative index", "-1/3", 0, 0, true},
+		{"index >= total", "3/3", 0, 0, true},
+		{"index > total", "5/3", 0, 0, true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotIndex, gotTotal := parseShardFlag(tt.shard)
+			gotIndex, gotTotal, err := parseShardFlag(tt.shard)
+			if tt.wantErr {
+				assert.Error(t, err)
+
+				return
+			}
+
+			assert.NoError(t, err)
 			assert.Equal(t, tt.wantIndex, gotIndex, "index")
 			assert.Equal(t, tt.wantTotal, gotTotal, "total")
 		})

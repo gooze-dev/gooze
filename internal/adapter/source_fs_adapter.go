@@ -10,6 +10,7 @@ import (
 	"go/parser"
 	"go/token"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -179,6 +180,8 @@ func (a *LocalSourceFSAdapter) emitFileSource(ctx context.Context, path string, 
 	source, ok, err := a.processFilePath(ctx, path, ignoreRegexps)
 	if err != nil {
 		if isInvalidSourceErr(err) {
+			slog.Warn("Skipping source file that could not be parsed", "path", path, "error", err)
+
 			return nil
 		}
 
@@ -454,6 +457,8 @@ func (a *LocalSourceFSAdapter) collectSourcesFromDir(ctx context.Context, rootPa
 		source, ok, err := a.processFilePath(ctx, path, ignoreRegexps)
 		if err != nil {
 			if isInvalidSourceErr(err) {
+				slog.Warn("Skipping source file that could not be parsed", "path", path, "error", err)
+
 				return nil
 			}
 

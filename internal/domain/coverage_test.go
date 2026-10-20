@@ -56,3 +56,33 @@ func TestParseCoverage_Malformed(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, idx.Covers("a.go", 1))
 }
+
+func TestCoverageIndex_Covers_PrefersShortestMatchingPath(t *testing.T) {
+	profile := []byte("mode: set\n" +
+		"example.com/m/cmd/x/main.go:1.1,50.1 1 1\n" +
+		"example.com/m/main.go:1.1,2.1 1 0\n")
+
+	idx, err := ParseCoverage(profile)
+	if err != nil {
+		t.Fatalf("ParseCoverage() error = %v", err)
+	}
+
+	if idx.Covers("main.go", 10) {
+		t.Fatal("root main.go line 10 reported covered by the nested cmd/x/main.go entry")
+	}
+
+	if !idx.Covers("cmd/x/main.go", 10) {
+		t.Fatal("cmd/x/main.go line 10 should be covered")
+	}
+}
+
+func TestParseCoverage_IgnoresEmptyPath(t *testing.T) {
+	idx, err := ParseCoverage([]byte(":1.1,2.1 1 1\n"))
+	if err != nil {
+		t.Fatalf("ParseCoverage() error = %v", err)
+	}
+
+	if len(idx.files) != 0 {
+		t.Fatalf("expected no indexed files, got %v", idx.files)
+	}
+}
