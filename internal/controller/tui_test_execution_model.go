@@ -490,15 +490,7 @@ func (m testExecutionModel) handleCompletedMutation(msg completedMutationMsg) te
 		diff:   string(msg.diff),
 	}
 	m.results = append(m.results, result)
-
-	// Update results list with new items
-	items := make([]list.Item, 0, len(m.results))
-
-	for _, r := range m.results {
-		items = append(items, r)
-	}
-
-	m.resultsList.SetItems(items)
+	m.resultsList.InsertItem(len(m.resultsList.Items()), result)
 
 	if m.totalMutations > 0 {
 		m.progressPercent = float64(m.completedCount) / float64(m.totalMutations)
