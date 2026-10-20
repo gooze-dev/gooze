@@ -49,6 +49,11 @@ Log rotation settings (config key / env var, defaults shown):
 | `log.max_age` | `GOOZE_LOG_MAX_AGE` | `28` | Days to keep old logs |
 | `log.compress` | `GOOZE_LOG_COMPRESS` | `true` | Gzip rotated logs |
 
+`gooze run` rejects out-of-range settings, whether they come from flags,
+environment variables or `gooze.yaml`: `version` must be `1`, and `run.parallel`
+and `run.mutation_timeout` must be at least `1`. `log.level` takes `debug`, `info`
+(the default), `warn` or `error`, or a numeric slog level.
+
 Cached results for a file are invalidated when its source content hash changes,
 its test file content hash changes, a mutator version changes (e.g. after upgrading
 Gooze), or the source file is deleted.
@@ -64,7 +69,7 @@ Tools that work with gooze (editors, language servers, CI) can import its file
 formats instead of re-implementing them. These packages depend only on the
 standard library and `gopkg.in/yaml.v3`:
 
-- [`gooze.dev/pkg/gooze/pkg/config`](https://pkg.go.dev/gooze.dev/pkg/gooze/pkg/config): the `gooze.yaml` schema (keys, kinds, defaults, docs) and the config file name.
+- [`gooze.dev/pkg/gooze/pkg/config`](https://pkg.go.dev/gooze.dev/pkg/gooze/pkg/config): the `gooze.yaml` schema (keys, kinds, defaults, bounds, docs) and the config file name.
 - [`gooze.dev/pkg/gooze/pkg/report`](https://pkg.go.dev/gooze.dev/pkg/gooze/pkg/report): report and `_index.yaml` files, test statuses, and the mutation score.
 - [`gooze.dev/pkg/gooze/pkg/directive`](https://pkg.go.dev/gooze.dev/pkg/gooze/pkg/directive): the `//gooze:ignore` parser, with byte offsets.
 - [`gooze.dev/pkg/gooze/pkg/mutagen`](https://pkg.go.dev/gooze.dev/pkg/gooze/pkg/mutagen): the mutagen registry (names, versions, docs).

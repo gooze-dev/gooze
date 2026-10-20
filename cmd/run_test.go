@@ -42,6 +42,25 @@ func TestRunCmd_TestMode(t *testing.T) {
 	mockWorkflow.AssertExpectations(t)
 }
 
+func TestRunCmd_RejectsOutOfRangeParallel(t *testing.T) {
+	mockWorkflow := domainmocks.NewMockWorkflow(t)
+
+	cmd := newRootCmd()
+	cmd.AddCommand(newRunCmd())
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+
+	originalWorkflow := workflow
+	workflow = mockWorkflow
+	defer func() { workflow = originalWorkflow }()
+	// Rebind run.parallel to a fresh, unset flag so later tests see the default.
+	defer newRunCmd()
+
+	cmd.SetArgs([]string{"run", "--parallel", "0", "./..."})
+	err := cmd.Execute()
+	require.EqualError(t, err, "invalid run.parallel: 0 is out of range: must be at least 1")
+}
+
 func TestRunCmd_CoverageProfileFlag(t *testing.T) {
 	mockWorkflow := domainmocks.NewMockWorkflow(t)
 

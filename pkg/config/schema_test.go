@@ -17,7 +17,7 @@ func TestDefaults(t *testing.T) {
 		KeyRunMutationTimeout: 120,
 		KeyRunCoverageProfile: "",
 		KeyLogFilename:        ".gooze.log",
-		KeyLogLevel:           0,
+		KeyLogLevel:           "info",
 		KeyLogVerbose:         false,
 		KeyLogMaxSize:         10,
 		KeyLogMaxBackups:      3,
@@ -113,4 +113,56 @@ func TestSchema_ReturnsCopy(t *testing.T) {
 	second := Schema()
 	assert.Equal(t, "version", second[0].Name)
 	assert.Equal(t, "exclude", second[3].Children[0].Name)
+}
+
+func TestSchema_Bounds(t *testing.T) {
+	want := map[string][2]*int{
+		KeyVersion:            {new(1), new(1)},
+		KeyRunParallel:        {new(1), nil},
+		KeyRunMutationTimeout: {new(1), nil},
+	}
+
+	for _, key := range Keys() {
+		field, ok := Lookup(key)
+		require.True(t, ok, key)
+
+		bounds := want[key]
+		assert.Equal(t, bounds[0], field.Min, key)
+		assert.Equal(t, bounds[1], field.Max, key)
+
+		if field.Min != nil || field.Max != nil {
+			assert.Equal(t, KindInt, field.Kind, key)
+			assert.NoError(t, field.CheckInt(field.Default.(int)), key)
+		}
+	}
+}
+
+func TestField_CheckInt(t *testing.T) {
+	tests := []struct {
+		name    string
+		field   Field
+		value   int
+		wantErr string
+	}{
+		{name: "no bounds", field: Field{}, value: -5},
+		{name: "at min", field: Field{Min: new(1)}, value: 1},
+		{name: "below min", field: Field{Min: new(1)}, value: 0, wantErr: "0 is out of range: must be at least 1"},
+		{name: "at max", field: Field{Max: new(3)}, value: 3},
+		{name: "above max", field: Field{Max: new(3)}, value: 4, wantErr: "4 is out of range: must be at most 3"},
+		{name: "inside range", field: Field{Min: new(1), Max: new(3)}, value: 2},
+		{name: "outside range", field: Field{Min: new(1), Max: new(3)}, value: 9, wantErr: "9 is out of range: must be between 1 and 3"},
+		{name: "single value", field: Field{Min: new(1), Max: new(1)}, value: 2, wantErr: "2 is out of range: must be 1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.field.CheckInt(tt.value)
+			if tt.wantErr == "" {
+				assert.NoError(t, err)
+				return
+			}
+
+			assert.EqualError(t, err, tt.wantErr)
+		})
+	}
 }
