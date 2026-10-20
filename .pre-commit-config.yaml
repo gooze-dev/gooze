@@ -50,6 +50,14 @@ repos:
     pass_filenames: false
     files: go\.mod$
 
+  - id: no-ignored-go-sources
+    name: no Go sources hidden by .gitignore
+    entry: sh -c 'files=$(git ls-files --others --ignored --exclude-standard -- "*.go"); test -z "$files" || { echo "Go files ignored by .gitignore:"; echo
+      "$files"; exit 1; }'
+    language: system
+    pass_filenames: false
+    always_run: true
+
 - repo: https://github.com/semgrep/pre-commit
   rev: v1.181.0
   hooks:
