@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -665,10 +666,8 @@ func shouldIgnorePath(path string, ignoreRegexps []*regexp.Regexp) bool {
 	}
 
 	for _, re := range ignoreRegexps {
-		for _, candidate := range candidates {
-			if re.MatchString(candidate) {
-				return true
-			}
+		if slices.ContainsFunc(candidates, re.MatchString) {
+			return true
 		}
 	}
 

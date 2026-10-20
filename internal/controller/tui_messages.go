@@ -15,14 +15,14 @@ type upcomingMsg struct {
 type startMutationMsg struct {
 	id          string
 	thread      int
-	kind        interface{}
+	kind        any
 	fileHash    string
 	displayPath string
 }
 
 type completedMutationMsg struct {
 	id          string
-	kind        interface{}
+	kind        any
 	fileHash    string
 	displayPath string
 	status      string

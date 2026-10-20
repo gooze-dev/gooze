@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -483,13 +484,7 @@ func mustMkdir(t *testing.T, path string) {
 }
 
 func containsPath(paths []string, target string) bool {
-	for _, p := range paths {
-		if p == target {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(paths, target)
 }
 
 func findSourceV2ByOrigin(sources []m.Source, origin string) *m.Source {

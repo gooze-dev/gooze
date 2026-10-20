@@ -22,7 +22,7 @@ env:
 jobs:
   test:
     runs-on: ubuntu-latest
-    container: golang:1.26
+    container: golang:1.27
     strategy:
       fail-fast: false
       matrix:
@@ -57,7 +57,7 @@ jobs:
   merge:
     needs: test
     runs-on: ubuntu-latest
-    container: golang:1.26
+    container: golang:1.27
     steps:
     - uses: actions/checkout@v4
     - name: Install gooze

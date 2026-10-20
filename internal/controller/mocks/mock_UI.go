@@ -5,8 +5,10 @@ package mocks
 import (
 	context "context"
 
-	mock "github.com/stretchr/testify/mock"
 	domain "gooze.dev/pkg/gooze/internal/domain"
+
+	mock "github.com/stretchr/testify/mock"
+
 	model "gooze.dev/pkg/gooze/internal/model"
 )
 

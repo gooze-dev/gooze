@@ -128,9 +128,7 @@ func TestWorkflow_Test_Success(t *testing.T) {
 
 	// Act
 	args := domain.TestArgs{
-		EstimateArgs: domain.EstimateArgs{
-			Paths: []m.Path{"test.go"},
-		},
+		Paths:           []m.Path{"test.go"},
 		Reports:         "reports.json",
 		Threads:         1,
 		ShardIndex:      0,
@@ -171,9 +169,7 @@ func TestWorkflow_Test_GetSourcesError(t *testing.T) {
 
 	// Act
 	args := domain.TestArgs{
-		EstimateArgs: domain.EstimateArgs{
-			Paths: []m.Path{"test.go"},
-		},
+		Paths:   []m.Path{"test.go"},
 		Reports: "reports.json",
 	}
 	err := wf.Test(context.Background(), args)
@@ -215,9 +211,7 @@ func TestWorkflow_Test_GenerateMutationsError(t *testing.T) {
 
 	// Act
 	args := domain.TestArgs{
-		EstimateArgs: domain.EstimateArgs{
-			Paths: []m.Path{"test.go"},
-		},
+		Paths:   []m.Path{"test.go"},
 		Reports: "reports.json",
 	}
 	err := wf.Test(context.Background(), args)
@@ -266,9 +260,7 @@ func TestWorkflow_Test_TestMutationError(t *testing.T) {
 
 	// Act
 	args := domain.TestArgs{
-		EstimateArgs: domain.EstimateArgs{
-			Paths: []m.Path{"test.go"},
-		},
+		Paths:           []m.Path{"test.go"},
 		Reports:         "reports.json",
 		Threads:         1,
 		ShardIndex:      0,
@@ -323,9 +315,7 @@ func TestWorkflow_Test_SaveReportsError(t *testing.T) {
 
 	// Act
 	args := domain.TestArgs{
-		EstimateArgs: domain.EstimateArgs{
-			Paths: []m.Path{"test.go"},
-		},
+		Paths:           []m.Path{"test.go"},
 		Reports:         "reports.json",
 		Threads:         1,
 		ShardIndex:      0,
@@ -376,9 +366,7 @@ func TestWorkflow_Test_NoMutations(t *testing.T) {
 
 	// Act
 	args := domain.TestArgs{
-		EstimateArgs: domain.EstimateArgs{
-			Paths: []m.Path{"test.go"},
-		},
+		Paths:           []m.Path{"test.go"},
 		Reports:         "reports.json",
 		Threads:         1,
 		ShardIndex:      0,
@@ -440,9 +428,7 @@ func TestWorkflow_Test_MultipleThreads(t *testing.T) {
 
 	// Act
 	args := domain.TestArgs{
-		EstimateArgs: domain.EstimateArgs{
-			Paths: []m.Path{"test.go"},
-		},
+		Paths:           []m.Path{"test.go"},
 		Reports:         "reports.json",
 		Threads:         4,
 		ShardIndex:      0,
@@ -509,9 +495,7 @@ func TestWorkflow_Test_WithSharding(t *testing.T) {
 
 	// Act
 	args := domain.TestArgs{
-		EstimateArgs: domain.EstimateArgs{
-			Paths: []m.Path{"test.go"},
-		},
+		Paths:           []m.Path{"test.go"},
 		Reports:         baseReportsDir,
 		Threads:         1,
 		ShardIndex:      0,
@@ -1725,7 +1709,7 @@ func TestWorkflow_Test_GeneratesMutationsOncePerSource(t *testing.T) {
 
 	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockReporter, mockOrchestrator, mockMutagen)
 	require.NoError(t, wf.Test(ctx, domain.TestArgs{
-		EstimateArgs:    domain.EstimateArgs{Paths: []m.Path{"."}},
+		Paths:           []m.Path{"."},
 		Reports:         "reports",
 		Threads:         1,
 		TotalShardCount: 1,
@@ -1946,7 +1930,7 @@ func TestWorkflow_Test_ErrorsAreReturned(t *testing.T) {
 		fs, store, reporter, mutagen := setup()
 		fs.EXPECT().ReadFile(ctx, m.Path("cover.out")).Return(nil, boom)
 
-		args := domain.TestArgs{EstimateArgs: domain.EstimateArgs{Paths: []m.Path{"."}}, Reports: "reports", Threads: 1, TotalShardCount: 1, CoverageProfile: "cover.out"}
+		args := domain.TestArgs{Paths: []m.Path{"."}, Reports: "reports", Threads: 1, TotalShardCount: 1, CoverageProfile: "cover.out"}
 		err := domain.NewWorkflow(fs, store, reporter, nil, mutagen).Test(ctx, args)
 		require.ErrorIs(t, err, boom)
 	})
@@ -2029,7 +2013,7 @@ func TestWorkflow_Test_SourceSpillCreationErrorIsReturned(t *testing.T) {
 	t.Setenv("TMPDIR", filepath.Join(t.TempDir(), "missing"))
 
 	err := domain.NewWorkflow(fs, nil, reporter, nil, nil).Test(ctx, domain.TestArgs{
-		EstimateArgs:    domain.EstimateArgs{Paths: []m.Path{"."}},
+		Paths:           []m.Path{"."},
 		Reports:         "reports",
 		Threads:         1,
 		TotalShardCount: 1,
@@ -2141,7 +2125,7 @@ func TestWorkflow_Test_ShardFilterExcludesOtherShardsMutations(t *testing.T) {
 
 	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockReporter, mockOrchestrator, mockMutagen)
 	require.NoError(t, wf.Test(ctx, domain.TestArgs{
-		EstimateArgs:    domain.EstimateArgs{Paths: []m.Path{"."}},
+		Paths:           []m.Path{"."},
 		Reports:         "reports",
 		Threads:         1,
 		ShardIndex:      0,

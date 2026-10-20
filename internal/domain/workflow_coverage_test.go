@@ -70,7 +70,7 @@ func TestWorkflow_Test_CoverageGateSkipsUncovered(t *testing.T) {
 	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockReporter, mockOrchestrator, mockMutagen)
 
 	err := wf.Test(ctx, domain.TestArgs{
-		EstimateArgs:    domain.EstimateArgs{Paths: []m.Path{"pkg"}},
+		Paths:           []m.Path{"pkg"},
 		Reports:         "reports",
 		Threads:         1,
 		TotalShardCount: 1,

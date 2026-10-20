@@ -6,8 +6,10 @@ import (
 	context "context"
 	fs "io/fs"
 
-	mock "github.com/stretchr/testify/mock"
 	domain "gooze.dev/pkg/gooze/internal/domain"
+
+	mock "github.com/stretchr/testify/mock"
+
 	model "gooze.dev/pkg/gooze/internal/model"
 )
 

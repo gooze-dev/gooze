@@ -244,10 +244,7 @@ func (m estimateModel) renderTable() string {
 	// - Border (2)
 	// - Padding/Headers (2)
 	// = Left for list
-	listHeight := m.height - 9
-	if listHeight < 5 {
-		listHeight = 5
-	}
+	listHeight := max(m.height-9, 5)
 
 	// Widths:
 	// Window Width

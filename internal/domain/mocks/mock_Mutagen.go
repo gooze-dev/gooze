@@ -6,6 +6,7 @@ import (
 	context "context"
 
 	mock "github.com/stretchr/testify/mock"
+
 	model "gooze.dev/pkg/gooze/internal/model"
 )
 
