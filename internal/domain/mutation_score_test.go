@@ -23,7 +23,14 @@ func (e errSpill[T]) Get(_ uint64) (T, error)                        { var zero 
 func (e errSpill[T]) Range(_ func(index uint64, item T) error) error { return e.err }
 func (e errSpill[T]) Close() error                                   { return nil }
 
-func TestMutationScoreFromReports(t *testing.T) {
+// scoreOf is the score of every report in the spill.
+func scoreOf(reports goozepkg.FileSpill[m.Report]) (float64, error) {
+	summary, err := summarizeReports(reports, nil)
+
+	return summary.Score(), err
+}
+
+func TestSummarizeReports(t *testing.T) {
 	spill, err := goozepkg.NewFileSpill[m.Report]()
 	require.NoError(t, err)
 	defer spill.Close()
@@ -43,13 +50,13 @@ func TestMutationScoreFromReports(t *testing.T) {
 	err = spill.Append(report)
 	require.NoError(t, err)
 
-	score, err := mutationScoreFromReports(spill)
+	score, err := scoreOf(spill)
 	require.NoError(t, err)
 
 	require.Equal(t, 0.5, score)
 }
 
-func TestMutationScoreFromReports_NotCoveredCountsAsSurvivor(t *testing.T) {
+func TestSummarizeReports_NotCoveredCountsAsSurvivor(t *testing.T) {
 	spill, err := goozepkg.NewFileSpill[m.Report]()
 	require.NoError(t, err)
 	defer spill.Close()
@@ -65,24 +72,24 @@ func TestMutationScoreFromReports_NotCoveredCountsAsSurvivor(t *testing.T) {
 
 	require.NoError(t, spill.Append(report))
 
-	score, err := mutationScoreFromReports(spill)
+	score, err := scoreOf(spill)
 	require.NoError(t, err)
 
 	require.Equal(t, 0.5, score)
 }
 
-func TestMutationScoreFromReports_EmptySpillIsFull(t *testing.T) {
+func TestSummarizeReports_EmptySpillIsFull(t *testing.T) {
 	spill, err := goozepkg.NewFileSpill[m.Report]()
 	require.NoError(t, err)
 	defer spill.Close()
 
-	score, err := mutationScoreFromReports(spill)
+	score, err := scoreOf(spill)
 	require.NoError(t, err)
 
 	require.Equal(t, 1.0, score)
 }
 
-func TestMutationScoreFromReports_OnlySkippedAndErrorIs100(t *testing.T) {
+func TestSummarizeReports_OnlySkippedAndErrorIs100(t *testing.T) {
 	spill, err := goozepkg.NewFileSpill[m.Report]()
 	require.NoError(t, err)
 	defer spill.Close()
@@ -98,13 +105,13 @@ func TestMutationScoreFromReports_OnlySkippedAndErrorIs100(t *testing.T) {
 	err = spill.Append(report)
 	require.NoError(t, err)
 
-	score, err := mutationScoreFromReports(spill)
+	score, err := scoreOf(spill)
 	require.NoError(t, err)
 
 	require.Equal(t, 0.0, score)
 }
 
-func TestMutationScoreFromReports_AllSurvivedIs0(t *testing.T) {
+func TestSummarizeReports_AllSurvivedIs0(t *testing.T) {
 	spill, err := goozepkg.NewFileSpill[m.Report]()
 	require.NoError(t, err)
 	defer spill.Close()
@@ -120,13 +127,13 @@ func TestMutationScoreFromReports_AllSurvivedIs0(t *testing.T) {
 	err = spill.Append(report)
 	require.NoError(t, err)
 
-	score, err := mutationScoreFromReports(spill)
+	score, err := scoreOf(spill)
 	require.NoError(t, err)
 
 	require.Equal(t, 0.0, score)
 }
 
-func TestMutationScoreFromReports_AggregatesAcrossReports(t *testing.T) {
+func TestSummarizeReports_AggregatesAcrossReports(t *testing.T) {
 	spill, err := goozepkg.NewFileSpill[m.Report]()
 	require.NoError(t, err)
 	defer spill.Close()
@@ -157,16 +164,33 @@ func TestMutationScoreFromReports_AggregatesAcrossReports(t *testing.T) {
 	err = spill.Append(report2)
 	require.NoError(t, err)
 
-	score, err := mutationScoreFromReports(spill)
+	score, err := scoreOf(spill)
 	require.NoError(t, err)
 
 	require.InDelta(t, 4.0/7.0, score, 1e-9)
 }
 
-func TestMutationScoreFromReports_RangeErrorPropagates(t *testing.T) {
+func TestSummarizeReports_RangeErrorPropagates(t *testing.T) {
 	wantErr := errors.New("range failed")
 
-	_, err := mutationScoreFromReports(errSpill[m.Report]{err: wantErr})
+	_, err := scoreOf(errSpill[m.Report]{err: wantErr})
 	require.Error(t, err)
 	require.ErrorIs(t, err, wantErr)
+}
+
+func TestSummarizeReports_IncludeFiltersBySource(t *testing.T) {
+	inScope := rpt.Source{Origin: &rpt.File{ShortPath: "a.go"}}
+	outOfScope := rpt.Source{Origin: &rpt.File{ShortPath: "b.go"}}
+
+	spill, err := goozepkg.FromSlice([]m.Report{
+		{Source: inScope, Result: m.Result{mgen.Boolean: {{MutationID: "a1", Status: rpt.Killed}, {MutationID: "a2", Status: rpt.Survived}}}},
+		{Source: outOfScope, Result: m.Result{mgen.Boolean: {{MutationID: "b1", Status: rpt.Survived}}}},
+	})
+	require.NoError(t, err)
+
+	defer spill.Close()
+
+	summary, err := summarizeReports(spill, func(source rpt.Source) bool { return source.Key() == "a.go" })
+	require.NoError(t, err)
+	require.Equal(t, rpt.Summary{Total: 2, Killed: 1, Survived: 1}, summary)
 }

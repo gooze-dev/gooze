@@ -52,5 +52,5 @@ type UI interface {
 	DisplayUpcomingTestsInfo(ctx context.Context, i int)
 	DisplayStartingTestInfo(ctx context.Context, currentMutation m.Mutation, threadID int)
 	DisplayCompletedTestInfo(ctx context.Context, currentMutation m.Mutation, mutationResult m.Result)
-	DisplayMutationScore(ctx context.Context, score float64)
+	DisplayMutationScore(ctx context.Context, score domain.MutationScore)
 }

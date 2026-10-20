@@ -6,20 +6,33 @@ import (
 	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
-// mutationScoreFromReports returns the killed/scored ratio in the 0..1 range
-// the reporters expect (they render it as a percentage), see rpt.Score.
-func mutationScoreFromReports(reports pkg.FileSpill[m.Report]) (float64, error) {
+// MutationScore is a mutation score with the counts it is computed from. For a
+// run, Cached and Tested split Summary.Total into results reused from stored
+// reports and results of mutations the run tested; both are zero for the score
+// of a reports directory (view, merge).
+type MutationScore struct {
+	rpt.Summary
+	Cached int
+	Tested int
+}
+
+// summarizeReports counts the results of the reports whose source include
+// accepts, or of every report when include is nil.
+func summarizeReports(reports pkg.FileSpill[m.Report], include func(rpt.Source) bool) (rpt.Summary, error) {
 	var summary rpt.Summary
 
 	err := reports.Range(func(_ uint64, report m.Report) error {
-		summary.Merge(summarizeReport(report))
+		if include == nil || include(report.Source) {
+			summary.Merge(summarizeReport(report))
+		}
+
 		return nil
 	})
 	if err != nil {
-		return 0.0, err
+		return rpt.Summary{}, err
 	}
 
-	return summary.Score(), nil
+	return summary, nil
 }
 
 func summarizeReport(report m.Report) rpt.Summary {

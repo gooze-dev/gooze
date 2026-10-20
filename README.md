@@ -56,7 +56,11 @@ and `run.mutation_timeout` must be at least `1`. `log.level` takes `debug`, `inf
 
 Cached results for a file are invalidated when its source content hash changes,
 its test file content hash changes, a mutator version changes (e.g. after upgrading
-Gooze), or the source file is deleted.
+Gooze), or the source file is deleted. The score `gooze run` prints covers every
+file in the run's paths, cached and newly tested alike, e.g.
+`Mutation score: 87.50% (14 killed, 2 survived; 16 cached, 0 tested)`; a sharded
+run scores only its own results until `gooze report merge`. `gooze run --estimate`
+marks cached files; pass `--no-cache` to re-test everything.
 
 Mutation categories not implemented yet: core logic, return value, conditional,
 complex expression, slice, map, pointer & memory, interface / type assertion,

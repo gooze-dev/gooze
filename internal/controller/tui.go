@@ -141,11 +141,12 @@ func (t *TUI) DisplayEstimation(ctx context.Context, estimation domain.Estimatio
 
 	fileStats := make(map[string]fileStat, len(estimation.Files))
 	for _, file := range estimation.Files {
-		fileStats[file.Path] = fileStat{path: file.Path, count: file.Count}
+		fileStats[file.Path] = fileStat{path: file.Path, count: file.Count, cached: file.Cached}
 	}
 
 	t.send(estimationMsg{
 		total:     estimation.Total,
+		hint:      cachedEstimateHint(estimation),
 		paths:     len(estimation.Files),
 		fileStats: fileStats,
 	})
@@ -232,7 +233,7 @@ func (t *TUI) DisplayCompletedTestInfo(ctx context.Context, currentMutation m.Mu
 }
 
 // DisplayMutationScore shows the final mutation score.
-func (t *TUI) DisplayMutationScore(ctx context.Context, score float64) {
+func (t *TUI) DisplayMutationScore(ctx context.Context, score domain.MutationScore) {
 	if err := ctx.Err(); err != nil {
 		return
 	}

@@ -49,6 +49,60 @@ func TestSimpleUI_DisplayEstimation_PrintsTable(t *testing.T) {
 	}
 }
 
+func TestSimpleUI_DisplayEstimation_MarksCachedFiles(t *testing.T) {
+	var buf bytes.Buffer
+	cmd := &cobra.Command{}
+	cmd.SetOut(&buf)
+
+	estimation := domain.Estimation{
+		Total:  5,
+		Cached: 3,
+		Files: []domain.FileEstimate{
+			{Path: "a.go", Count: 3, Cached: true},
+			{Path: "b.go", Count: 2},
+		},
+	}
+
+	if err := NewSimpleUI(cmd).DisplayEstimation(context.Background(), estimation, nil); err != nil {
+		t.Fatalf("DisplayEstimation() error = %v", err)
+	}
+
+	output := buf.String()
+
+	for _, want := range []string{
+		"CACHE",
+		"cached",
+		"TOTAL FILES 2",
+		"3 CACHED",
+		"3 of 5 mutations are in cached files and will not be re-tested; use --no-cache to re-test everything.",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output missing %q\noutput:\n%s", want, output)
+		}
+	}
+
+	for _, line := range strings.Split(output, "\n") {
+		if strings.Contains(line, "b.go") && strings.Contains(line, "cached") {
+			t.Fatalf("b.go marked cached\noutput:\n%s", output)
+		}
+	}
+}
+
+func TestSimpleUI_DisplayEstimation_NoCacheColumnWithoutCachedFiles(t *testing.T) {
+	var buf bytes.Buffer
+	cmd := &cobra.Command{}
+	cmd.SetOut(&buf)
+
+	estimation := domain.Estimation{Total: 1, Files: []domain.FileEstimate{{Path: "a.go", Count: 1}}}
+	if err := NewSimpleUI(cmd).DisplayEstimation(context.Background(), estimation, nil); err != nil {
+		t.Fatalf("DisplayEstimation() error = %v", err)
+	}
+
+	if output := buf.String(); strings.Contains(strings.ToLower(output), "cache") {
+		t.Fatalf("output mentions the cache\noutput:\n%s", output)
+	}
+}
+
 func TestSimpleUI_DisplayEstimation_Error(t *testing.T) {
 	var buf bytes.Buffer
 	cmd := &cobra.Command{}
@@ -102,7 +156,7 @@ func TestSimpleUI_OtherDisplays(t *testing.T) {
 	}
 	ui.DisplayCompletedTestInfo(ctx, m.Mutation{ID: "abcd1234567890", Type: mgen.Arithmetic}, result)
 	ui.DisplayCompletedTestInfo(ctx, m.Mutation{ID: "efgh5678901234", Type: mgen.Boolean, Source: rpt.Source{Origin: &rpt.File{FullPath: "path/a.go"}}, DiffCode: []byte("--- original\n+++ mutated\n@@\n")}, result)
-	ui.DisplayMutationScore(ctx, 0.75)
+	ui.DisplayMutationScore(ctx, domain.MutationScore{Summary: rpt.Summary{Total: 4, Killed: 3, Survived: 1}})
 
 	output := buf.String()
 	for _, want := range []string{
@@ -114,7 +168,7 @@ func TestSimpleUI_OtherDisplays(t *testing.T) {
 		"Completed mutation efgh (boolean) -> survived",
 		"File: path/a.go",
 		"--- original",
-		"Mutation score: 75.00%",
+		"Mutation score: 75.00% (3 killed, 1 survived)\n",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("output missing %q\noutput:\n%s", want, output)

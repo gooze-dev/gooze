@@ -126,16 +126,15 @@ func (w *workflow) Test(ctx context.Context, args TestArgs) error {
 
 		reportsDir := shardReportsDir(args.Reports, args.ShardIndex, args.TotalShardCount)
 
-		sources, deleted, err := w.changedSources(ctx, args.EstimateArgs)
+		sources, err := w.resolveSources(ctx, args.EstimateArgs)
 		if err != nil {
 			slog.Error("Failed to resolve sources", "error", err)
 			return err
 		}
 
-		defer closeSpill("sources", sources)
-		defer closeSpill("deleted sources", deleted)
+		defer sources.close()
 
-		if err := w.cleanDeleted(ctx, args.Reports, reportsDir, deleted); err != nil {
+		if err := w.cleanDeleted(ctx, args.Reports, reportsDir, sources.deleted); err != nil {
 			return err
 		}
 
@@ -143,7 +142,7 @@ func (w *workflow) Test(ctx context.Context, args TestArgs) error {
 			return inShard(mutation.ID, args.ShardIndex, args.TotalShardCount)
 		}
 
-		mutations, total, err := w.generateMutations(ctx, sources, inThisShard)
+		mutations, total, err := w.generateMutations(ctx, sources.changed, inThisShard)
 		if err != nil {
 			slog.Error("Failed to generate mutations", "error", err)
 			return fmt.Errorf("generate mutations: %w", err)
@@ -167,7 +166,7 @@ func (w *workflow) Test(ctx context.Context, args TestArgs) error {
 
 		slog.Info("Completed mutation tests", "reportsCount", reports.Len())
 
-		return w.finalizeReports(ctx, reportsDir, sources, reports)
+		return w.finalizeReports(ctx, args, sources, reports)
 	})
 }
 
@@ -228,20 +227,14 @@ func closeSpill[T any](name string, spill pkg.FileSpill[T]) {
 	}
 }
 
-// finalizeReports computes the mutation score, replaces previous reports for
-// the tested sources with the spilled ones, and regenerates the reports index.
-func (w *workflow) finalizeReports(ctx context.Context, reportsDir m.Path, tested pkg.FileSpill[rpt.Source], reports pkg.FileSpill[m.Report]) error {
+// finalizeReports replaces previous reports for the tested sources with the
+// spilled ones, regenerates the reports index and displays the run's score.
+func (w *workflow) finalizeReports(ctx context.Context, args TestArgs, sources sourceSet, reports pkg.FileSpill[m.Report]) error {
 	defer closeSpill("reports", reports)
 
-	score, err := mutationScoreFromReports(reports)
-	if err != nil {
-		return fmt.Errorf("calculate mutation score: %w", err)
-	}
+	reportsDir := shardReportsDir(args.Reports, args.ShardIndex, args.TotalShardCount)
 
-	slog.Info("Calculated mutation score", "score", score)
-	w.progress.DisplayMutationScore(ctx, score)
-
-	if err := w.reports.CleanReports(ctx, reportsDir, tested); err != nil {
+	if err := w.reports.CleanReports(ctx, reportsDir, sources.changed); err != nil {
 		slog.Error("Failed to clean stale reports", "error", err, "path", reportsDir)
 		return fmt.Errorf("clean stale reports: %w", err)
 	}
@@ -260,7 +253,56 @@ func (w *workflow) finalizeReports(ctx context.Context, reportsDir m.Path, teste
 
 	slog.Debug("Regenerated reports index", "path", reportsDir)
 
+	score, err := w.runScore(ctx, args, sources, reports)
+	if err != nil {
+		return fmt.Errorf("calculate mutation score: %w", err)
+	}
+
+	slog.Info("Calculated mutation score", "score", score.Score(), "cached", score.Cached, "tested", score.Tested)
+	w.progress.DisplayMutationScore(ctx, score)
+
 	return nil
+}
+
+// runScore scores a run over every source in its scope: the results tested now
+// plus, for an unsharded cached run, the stored results of unchanged sources.
+// A shard scores only its own results; `report merge` scores the whole set.
+func (w *workflow) runScore(ctx context.Context, args TestArgs, sources sourceSet, tested pkg.FileSpill[m.Report]) (MutationScore, error) {
+	testedSummary, err := summarizeReports(tested, nil)
+	if err != nil {
+		return MutationScore{}, err
+	}
+
+	score := MutationScore{Summary: testedSummary, Tested: testedSummary.Total}
+	if !sources.cached || args.TotalShardCount > 1 {
+		return score, nil
+	}
+
+	inScope, err := sourceKeys(sources.scanned)
+	if err != nil {
+		return MutationScore{}, err
+	}
+
+	stored, err := w.reports.LoadSpillReports(ctx, args.Reports)
+	if err != nil {
+		return MutationScore{}, fmt.Errorf("load reports: %w", err)
+	}
+
+	defer closeSpill("stored reports", stored)
+
+	scopeSummary, err := summarizeReports(stored, func(source rpt.Source) bool {
+		_, ok := inScope[source.Key()]
+		return ok
+	})
+	if err != nil {
+		return MutationScore{}, err
+	}
+
+	return MutationScore{
+		Summary: scopeSummary,
+		Cached:  max(scopeSummary.Total-testedSummary.Total, 0),
+		Tested:  testedSummary.Total,
+	}, nil
 }
 
 func shardReportsDir(base m.Path, shardIndex int, totalShardCount int) m.Path {
@@ -289,12 +331,14 @@ func (w *workflow) View(ctx context.Context, args ViewArgs) error {
 			return fmt.Errorf("count view items: %w", err)
 		}
 
-		score, err := mutationScoreFromReports(reports)
+		summary, err := summarizeReports(reports, nil)
 		if err != nil {
 			return fmt.Errorf("calculate mutation score: %w", err)
 		}
 
-		slog.Info("Calculated mutation score", "score", score, "reportsCount", reports.Len(), "mutationsCount", total)
+		score := MutationScore{Summary: summary}
+
+		slog.Info("Calculated mutation score", "score", score.Score(), "reportsCount", reports.Len(), "mutationsCount", total)
 		w.progress.DisplayUpcomingTestsInfo(ctx, total)
 
 		if err := rangeViewItems(reports, func(mutation m.Mutation, result m.Result) {
@@ -362,12 +406,12 @@ func (w *workflow) displayScore(ctx context.Context, base m.Path) error {
 
 	defer closeSpill("reports", reports)
 
-	score, err := mutationScoreFromReports(reports)
+	summary, err := summarizeReports(reports, nil)
 	if err != nil {
 		return fmt.Errorf("calculate mutation score: %w", err)
 	}
 
-	w.progress.DisplayMutationScore(ctx, score)
+	w.progress.DisplayMutationScore(ctx, MutationScore{Summary: summary})
 
 	return nil
 }
@@ -645,28 +689,54 @@ func sortedResultTypes(result m.Result) []mgen.Type {
 	})
 }
 
-// changedSources resolves the sources to operate on. With caching enabled,
-// unchanged files are skipped and sources whose files are gone are returned
-// as deleted. Both spills must be closed by the caller; deleted is nil when
-// caching is off.
-func (w *workflow) changedSources(ctx context.Context, args EstimateArgs) (pkg.FileSpill[rpt.Source], pkg.FileSpill[rpt.Source], error) {
-	sources, err := w.scanSources(ctx, args)
+// sourceSet holds the sources a run or an estimate operates on. Without
+// caching every scanned source is changed and deleted is empty.
+type sourceSet struct {
+	scanned pkg.FileSpill[rpt.Source] // every source in the run's scope
+	changed pkg.FileSpill[rpt.Source] // the sources to (re-)test
+	deleted pkg.FileSpill[rpt.Source] // stored sources whose files are gone, or nil
+	cached  bool                      // whether unchanged sources reuse stored reports
+}
+
+func (s sourceSet) close() {
+	// changed may be scanned itself; closing a spill twice is a no-op.
+	closeSpill("scanned sources", s.scanned)
+	closeSpill("changed sources", s.changed)
+	closeSpill("deleted sources", s.deleted)
+}
+
+// resolveSources scans the sources in scope. With caching enabled, unchanged
+// files are left out of changed and sources whose files are gone are returned
+// as deleted. The caller must close the set.
+func (w *workflow) resolveSources(ctx context.Context, args EstimateArgs) (sourceSet, error) {
+	scanned, err := w.scanSources(ctx, args)
 	if err != nil {
-		return nil, nil, err
+		return sourceSet{}, err
 	}
 
 	if !args.UseCache || args.Reports == "" {
-		return sources, nil, nil
+		return sourceSet{scanned: scanned, changed: scanned}, nil
 	}
 
-	defer closeSpill("scanned sources", sources)
-
-	changed, deleted, err := w.reports.CheckUpdates(ctx, args.Reports, sources)
+	changed, deleted, err := w.reports.CheckUpdates(ctx, args.Reports, scanned)
 	if err != nil {
-		return nil, nil, fmt.Errorf("check updates: %w", err)
+		closeSpill("scanned sources", scanned)
+		return sourceSet{}, fmt.Errorf("check updates: %w", err)
 	}
 
-	return changed, deleted, nil
+	return sourceSet{scanned: scanned, changed: changed, deleted: deleted, cached: true}, nil
+}
+
+// sourceKeys returns the Key of every source in the spill.
+func sourceKeys(sources pkg.FileSpill[rpt.Source]) (map[string]struct{}, error) {
+	keys := make(map[string]struct{})
+
+	err := sources.Range(func(_ uint64, source rpt.Source) error {
+		keys[source.Key()] = struct{}{}
+		return nil
+	})
+
+	return keys, err
 }
 
 // scanSources drains the streaming scanner into a spill.
@@ -699,35 +769,56 @@ func (w *workflow) scanSources(ctx context.Context, args EstimateArgs) (pkg.File
 }
 
 // estimateMutations streams sources and mutations and returns per-file counts,
-// without ever holding the sources or mutations in memory all at once.
+// without ever holding the sources or mutations in memory all at once. Files
+// whose stored reports are still valid are listed too, marked as cached.
 func (w *workflow) estimateMutations(ctx context.Context, args EstimateArgs) (Estimation, error) {
-	sources, deleted, err := w.changedSources(ctx, args)
+	sources, err := w.resolveSources(ctx, args)
 	if err != nil {
 		return Estimation{}, err
 	}
 
-	defer closeSpill("sources", sources)
-	defer closeSpill("deleted sources", deleted)
+	defer sources.close()
 
-	return w.countMutations(ctx, sources)
+	isCached := func(rpt.Source) bool { return false }
+
+	if sources.cached {
+		changed, err := sourceKeys(sources.changed)
+		if err != nil {
+			return Estimation{}, err
+		}
+
+		isCached = func(source rpt.Source) bool {
+			_, ok := changed[source.Key()]
+			return !ok
+		}
+	}
+
+	return w.countMutations(ctx, sources.scanned, isCached)
 }
 
 // countMutations generates the mutations for the given sources and aggregates
 // per-file counts. Mutations are processed one at a time and never retained.
-func (w *workflow) countMutations(ctx context.Context, sources pkg.FileSpill[rpt.Source]) (Estimation, error) {
+func (w *workflow) countMutations(ctx context.Context, sources pkg.FileSpill[rpt.Source], isCached func(rpt.Source) bool) (Estimation, error) {
 	byKey := map[string]*FileEstimate{}
 	order := make([]string, 0)
-	total := 0
+
+	var estimation Estimation
 
 	err := sources.Range(func(_ uint64, source rpt.Source) error {
+		cached := isCached(source)
+
 		return w.mutagen.StreamMutations(ctx, source, func(mutation m.Mutation) error {
-			total++
+			estimation.Total++
+
+			if cached {
+				estimation.Cached++
+			}
 
 			key, path := fileKey(mutation)
 
 			estimate, ok := byKey[key]
 			if !ok {
-				estimate = &FileEstimate{Path: path}
+				estimate = &FileEstimate{Path: path, Cached: cached}
 				byKey[key] = estimate
 				order = append(order, key)
 			}
@@ -741,12 +832,13 @@ func (w *workflow) countMutations(ctx context.Context, sources pkg.FileSpill[rpt
 		return Estimation{}, err
 	}
 
-	files := make([]FileEstimate, 0, len(order))
+	estimation.Files = make([]FileEstimate, 0, len(order))
 	for _, key := range order {
-		files = append(files, *byKey[key])
+		estimation.Files = append(estimation.Files, *byKey[key])
 	}
 
-	sort.Slice(files, func(i, j int) bool {
+	sort.Slice(estimation.Files, func(i, j int) bool {
+		files := estimation.Files
 		if files[i].Path != files[j].Path {
 			return files[i].Path < files[j].Path
 		}
@@ -754,7 +846,7 @@ func (w *workflow) countMutations(ctx context.Context, sources pkg.FileSpill[rpt
 		return files[i].Count < files[j].Count
 	})
 
-	return Estimation{Total: total, Files: files}, nil
+	return estimation, nil
 }
 
 func fileKey(mutation m.Mutation) (string, string) {

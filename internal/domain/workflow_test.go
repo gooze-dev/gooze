@@ -1530,7 +1530,7 @@ func mergeReporter(ctx context.Context, score *float64) *domainmocks.MockReporte
 	reporter.EXPECT().StartTest(ctx).Return(nil).Once()
 	reporter.EXPECT().Wait(ctx).Return().Maybe()
 	reporter.EXPECT().Close(ctx).Return().Once()
-	reporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Run(func(_ context.Context, s float64) { *score = s }).Once()
+	reporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Run(func(_ context.Context, s domain.MutationScore) { *score = s.Score() }).Once()
 
 	return reporter
 }
@@ -1628,6 +1628,8 @@ func TestWorkflow_Test_CleansStaleReportsForTestedSources(t *testing.T) {
 			return assert.ObjectsAreEqual([]string{"a.go"}, spillKeys(sources))
 		})).
 		Return(spillOf(t, source), spillOf(t, gone), nil)
+	mockReportStore.EXPECT().LoadSpillReports(ctx, m.Path("reports")).
+		Return(spillOf(t, m.Report{Source: source, Result: m.Result{mgen.Arithmetic: {{MutationID: "m2", Status: rpt.Killed}}}}), nil).Once()
 
 	var order []string
 
@@ -1750,7 +1752,7 @@ func TestWorkflow_View_DisplaysEveryMutationWithDiffsForNonKilled(t *testing.T) 
 
 	var score float64
 
-	reporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Run(func(_ context.Context, s float64) { score = s }).Once()
+	reporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Run(func(_ context.Context, s domain.MutationScore) { score = s.Score() }).Once()
 
 	wf := domain.NewWorkflow(nil, adapter.NewReportStore(), reporter, nil, nil)
 	require.NoError(t, wf.View(ctx, domain.ViewArgs{Reports: m.Path(dir)}))

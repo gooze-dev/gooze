@@ -1,8 +1,11 @@
 package controller
 
+import "gooze.dev/pkg/gooze/internal/domain"
+
 // Message types.
 type estimationMsg struct {
 	total     int
+	hint      string
 	paths     int
 	fileStats map[string]fileStat
 	err       error
@@ -30,8 +33,9 @@ type completedMutationMsg struct {
 }
 
 type fileStat struct {
-	path  string
-	count int
+	path   string
+	count  int
+	cached bool
 }
 
 type concurrencyMsg struct {
@@ -41,13 +45,14 @@ type concurrencyMsg struct {
 }
 
 type mutationScoreMsg struct {
-	score float64
+	score domain.MutationScore
 }
 
 // List item types.
 type fileItem struct {
-	path  string
-	count int
+	path   string
+	count  int
+	cached bool
 }
 
 func (f fileItem) FilterValue() string {

@@ -93,6 +93,32 @@ func TestEstimateModel_HandleEstimationMsgAndView(t *testing.T) {
 	_ = m.renderTable()
 }
 
+func TestEstimateModel_ViewShowsCachedFiles(t *testing.T) {
+	m := newEstimateModel()
+	m = m.handleEstimationMsg(estimationMsg{
+		total: 3,
+		paths: 2,
+		hint:  "2 of 3 mutations are in cached files",
+		fileStats: map[string]fileStat{
+			"hash-a": {path: "a.go", count: 2, cached: true},
+			"hash-b": {path: "b.go", count: 1},
+		},
+	})
+	m.width = 80
+	m.height = 25
+
+	view := m.View()
+	for _, want := range []string{"2 of 3 mutations are in cached files", "a.go (cached)"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("View() missing %q\n%s", want, view)
+		}
+	}
+
+	if strings.Contains(view, "b.go (cached)") {
+		t.Fatalf("View() marks b.go cached\n%s", view)
+	}
+}
+
 func TestEstimateModel_UpdateBranches(t *testing.T) {
 	m := newEstimateModel()
 	m.rendered = true

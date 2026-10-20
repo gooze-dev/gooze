@@ -11,14 +11,19 @@ import (
 type FileEstimate struct {
 	Path  string
 	Count int
+	// Cached reports whether the file's stored reports are still valid, so a
+	// run would reuse them instead of testing its mutations.
+	Cached bool
 }
 
 // Estimation summarizes how many mutations would be generated for a run,
 // broken down per source file. It carries only counts, so producing it never
-// requires holding the mutations themselves in memory.
+// requires holding the mutations themselves in memory. Total includes the
+// Cached mutations of files a run would not re-test.
 type Estimation struct {
-	Total int
-	Files []FileEstimate
+	Total  int
+	Cached int
+	Files  []FileEstimate
 }
 
 // Reporter is the presentation port the workflow depends on. It is defined in
@@ -34,5 +39,5 @@ type Reporter interface {
 	DisplayUpcomingTestsInfo(ctx context.Context, total int)
 	DisplayStartingTestInfo(ctx context.Context, mutation m.Mutation, threadID int)
 	DisplayCompletedTestInfo(ctx context.Context, mutation m.Mutation, result m.Result)
-	DisplayMutationScore(ctx context.Context, score float64)
+	DisplayMutationScore(ctx context.Context, score MutationScore)
 }

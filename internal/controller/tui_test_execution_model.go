@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/bubbles/progress"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"gooze.dev/pkg/gooze/internal/domain"
 )
 
 // testResult holds information about a completed mutation test.
@@ -97,7 +98,7 @@ type testExecutionModel struct {
 	currentMutationID string
 	currentType       string
 	currentStatus     string
-	mutationScore     float64
+	mutationScore     domain.MutationScore
 	mutationScoreSet  bool
 	totalMutations    int
 	completedCount    int
@@ -371,7 +372,7 @@ func (m testExecutionModel) viewResults() string {
 	}
 
 	if m.mutationScoreSet {
-		summaryParts = append(summaryParts, fmt.Sprintf("Score: %s", accentStyle.Render(fmt.Sprintf("%.2f%%", m.mutationScore*100))))
+		summaryParts = append(summaryParts, fmt.Sprintf("Score: %s", accentStyle.Render(formatMutationScore(m.mutationScore))))
 	}
 
 	summary := summaryStyle.Render(strings.Join(summaryParts, "  •  "))
