@@ -114,6 +114,39 @@ func TestRootCmd_HelpOutput(t *testing.T) {
 	assert.Contains(t, output.String(), "Supports Go-style path patterns")
 }
 
+func TestRootCmd_UsageOnlyForArgumentErrors(t *testing.T) {
+	tests := []struct {
+		name      string
+		args      []string
+		wantUsage bool
+	}{
+		{name: "runtime error", args: []string{"fail"}, wantUsage: false},
+		{name: "argument error", args: []string{"fail", "extra"}, wantUsage: true},
+		{name: "flag error", args: []string{"fail", "--nope"}, wantUsage: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := newRootCmd()
+			cmd.AddCommand(&cobra.Command{
+				Use:  "fail",
+				Args: cobra.NoArgs,
+				RunE: func(*cobra.Command, []string) error {
+					return fmt.Errorf("runtime failure")
+				},
+			})
+
+			output := &bytes.Buffer{}
+			cmd.SetOut(output)
+			cmd.SetErr(output)
+			cmd.SetArgs(append(tt.args, "--log-output", t.TempDir()+"/gooze.log"))
+
+			require.Error(t, cmd.Execute())
+			assert.Equal(t, tt.wantUsage, bytes.Contains(output.Bytes(), []byte("Usage:")), output.String())
+		})
+	}
+}
+
 func TestInit(t *testing.T) {
 	// Test that init() created all the necessary instances
 	assert.NotNil(t, ui)
