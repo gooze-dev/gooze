@@ -34,7 +34,7 @@ The full documentation lives at <https://gooze.dev/docs>:
 - CLI reference: [`gooze run`](https://gooze.dev/docs/cli/run), [`gooze report`](https://gooze.dev/docs/cli/report)
 - [Configuration](https://gooze.dev/docs/config) (`gooze.yaml`, flags, environment variables)
 - [Bypass mutation](https://gooze.dev/docs/features/bypass-mutation) (`//gooze:ignore`)
-- [Incremental execution](https://gooze.dev/docs/features/incremental-execution) and [OCI reports](https://gooze.dev/docs/cli/report/push)
+- [Incremental execution](https://gooze.dev/docs/features/incremental-execution) and [OCI reports](https://gooze.dev/docs/cli/report/#push)
 - CI guides: [GitHub Actions](https://gooze.dev/docs/ci), [GitLab CI](https://gooze.dev/docs/gitlab)
 - [Troubleshooting](https://gooze.dev/docs/troubleshooting)
 
