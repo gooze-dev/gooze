@@ -194,7 +194,7 @@ func TestTUI_DisplayMethods_NoProgram(t *testing.T) {
 	tui.DisplayStartingTestInfo(ctx, mutationWithoutOrigin(), 8)
 	tui.DisplayCompletedTestInfo(ctx, mutationWithOrigin(), completedResult())
 	tui.DisplayCompletedTestInfo(ctx, mutationWithoutOrigin(), mResultEmpty())
-	tui.DisplayMutationScore(ctx, domain.MutationScore{Summary: rpt.Summary{Total: 2, Killed: 1, Survived: 1}})
+	tui.DisplayMutationScore(ctx, domain.MutationScore{Total: 2, Killed: 1, Survived: 1})
 }
 
 var errSentinel = errors.New("boom")

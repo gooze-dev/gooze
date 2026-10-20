@@ -42,6 +42,8 @@ func WithTestMode() StartOption {
 // UI defines the interface for displaying mutation testing progress and results.
 // Implementations can use different output methods (simple text, TUI, etc).
 // It satisfies domain.Reporter so it can be injected into the workflow.
+//
+//nolint:interfacebloat // Mirrors domain.Reporter, the workflow's single presentation port.
 type UI interface {
 	StartEstimate(ctx context.Context) error
 	StartTest(ctx context.Context) error
@@ -53,4 +55,5 @@ type UI interface {
 	DisplayStartingTestInfo(ctx context.Context, currentMutation m.Mutation, threadID int)
 	DisplayCompletedTestInfo(ctx context.Context, currentMutation m.Mutation, mutationResult m.Result)
 	DisplayMutationScore(ctx context.Context, score domain.MutationScore)
+	DisplayReportSummary(ctx context.Context, summary domain.ReportSummary)
 }

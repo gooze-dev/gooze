@@ -29,6 +29,8 @@ type Estimation struct {
 // Reporter is the presentation port the workflow depends on. It is defined in
 // the domain so the domain layer does not import the controller (presentation)
 // layer. Any UI implementation that satisfies this interface can be injected.
+//
+//nolint:interfacebloat // One presentation port keeps every workflow output in a single UI.
 type Reporter interface {
 	StartEstimate(ctx context.Context) error
 	StartTest(ctx context.Context) error
@@ -40,4 +42,7 @@ type Reporter interface {
 	DisplayStartingTestInfo(ctx context.Context, mutation m.Mutation, threadID int)
 	DisplayCompletedTestInfo(ctx context.Context, mutation m.Mutation, result m.Result)
 	DisplayMutationScore(ctx context.Context, score MutationScore)
+	// DisplayReportSummary prints a per-file summary of stored reports. It is
+	// static output: callers do not start the UI first.
+	DisplayReportSummary(ctx context.Context, summary ReportSummary)
 }

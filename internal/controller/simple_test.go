@@ -81,7 +81,7 @@ func TestSimpleUI_DisplayEstimation_MarksCachedFiles(t *testing.T) {
 		}
 	}
 
-	for _, line := range strings.Split(output, "\n") {
+	for line := range strings.SplitSeq(output, "\n") {
 		if strings.Contains(line, "b.go") && strings.Contains(line, "cached") {
 			t.Fatalf("b.go marked cached\noutput:\n%s", output)
 		}
@@ -156,7 +156,7 @@ func TestSimpleUI_OtherDisplays(t *testing.T) {
 	}
 	ui.DisplayCompletedTestInfo(ctx, m.Mutation{ID: "abcd1234567890", Type: mgen.Arithmetic}, result)
 	ui.DisplayCompletedTestInfo(ctx, m.Mutation{ID: "efgh5678901234", Type: mgen.Boolean, Source: rpt.Source{Origin: &rpt.File{FullPath: "path/a.go"}}, DiffCode: []byte("--- original\n+++ mutated\n@@\n")}, result)
-	ui.DisplayMutationScore(ctx, domain.MutationScore{Summary: rpt.Summary{Total: 4, Killed: 3, Survived: 1}})
+	ui.DisplayMutationScore(ctx, domain.MutationScore{Total: 4, Killed: 3, Survived: 1})
 
 	output := buf.String()
 	for _, want := range []string{

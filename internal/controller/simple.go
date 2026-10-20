@@ -210,6 +210,15 @@ func (s *SimpleUI) DisplayMutationScore(ctx context.Context, score domain.Mutati
 	s.printf("Mutation score: %s\n", formatMutationScore(score))
 }
 
+// DisplayReportSummary prints a per-file summary of stored reports.
+func (s *SimpleUI) DisplayReportSummary(ctx context.Context, summary domain.ReportSummary) {
+	if err := ctx.Err(); err != nil {
+		return
+	}
+
+	s.printf("%s", renderReportSummary(summary))
+}
+
 func (s *SimpleUI) printf(format string, args ...any) {
 	_, _ = fmt.Fprintf(s.cmd.OutOrStdout(), format, args...)
 }

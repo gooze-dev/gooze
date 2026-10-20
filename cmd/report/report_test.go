@@ -31,11 +31,28 @@ func TestReportView(t *testing.T) {
 	defer viper.Reset()
 
 	wf := domainmocks.NewMockWorkflow(t)
-	wf.On("View", mock.Anything, domain.ViewArgs{Reports: m.Path("/tmp/reports")}).Return(nil)
+	wf.On("View", mock.Anything, domain.ViewArgs{Reports: m.Path("/tmp/reports"), Paths: []m.Path{}}).Return(nil)
 
 	deps := Deps{Workflow: wf, Publisher: domainmocks.NewMockReportPublisher(t), OutputKey: testOutputKey}
 
 	require.NoError(t, execReport(t, deps, "view"))
+	wf.AssertExpectations(t)
+}
+
+func TestReportView_PathsAndAll(t *testing.T) {
+	viper.Set(testOutputKey, "/tmp/reports")
+	defer viper.Reset()
+
+	wf := domainmocks.NewMockWorkflow(t)
+	wf.On("View", mock.Anything, domain.ViewArgs{
+		Reports: m.Path("/tmp/reports"),
+		Paths:   []m.Path{"./internal/...", "cmd/run.go"},
+		All:     true,
+	}).Return(nil)
+
+	deps := Deps{Workflow: wf, Publisher: domainmocks.NewMockReportPublisher(t), OutputKey: testOutputKey}
+
+	require.NoError(t, execReport(t, deps, "view", "--all", "./internal/...", "cmd/run.go"))
 	wf.AssertExpectations(t)
 }
 
