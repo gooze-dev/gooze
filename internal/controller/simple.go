@@ -71,6 +71,10 @@ func (s *SimpleUI) DisplayEstimation(ctx context.Context, estimation domain.Esti
 	tableStr := renderEstimationTable(estimation)
 	s.printf("\n%s", tableStr)
 
+	if hint := cachedEstimateHint(estimation); hint != "" {
+		s.printf("\n%s\n", hint)
+	}
+
 	return nil
 }
 
@@ -84,24 +88,48 @@ func renderEstimationTable(estimation domain.Estimation) string {
 		tablewriter.WithAlignment(tw.Alignment{tw.AlignLeft, tw.AlignCenter}),
 		tablewriter.WithFooterAutoFormat(tw.On),
 	)
-	table.Header("Path", "Mutations")
+
+	withCache := estimation.Cached > 0
+	if withCache {
+		table.Header("Path", "Mutations", "Cache")
+	} else {
+		table.Header("Path", "Mutations")
+	}
 
 	for _, file := range estimation.Files {
-		if err := table.Append(file.Path, fmt.Sprintf("%d", file.Count)); err != nil {
+		if err := table.Append(estimationRow(file, withCache)); err != nil {
 			return fmt.Sprintf("failed to render estimation table: %v\n", err)
 		}
 	}
 
-	table.Footer(
+	footer := []string{
 		fmt.Sprintf("Total Files %d", len(estimation.Files)),
 		fmt.Sprintf("%d", estimation.Total),
-	)
+	}
+	if withCache {
+		footer = append(footer, fmt.Sprintf("%d cached", estimation.Cached))
+	}
+
+	table.Footer(footer)
 
 	if err := table.Render(); err != nil {
 		return fmt.Sprintf("failed to render estimation table: %v\n", err)
 	}
 
 	return tableBuffer.String()
+}
+
+func estimationRow(file domain.FileEstimate, withCache bool) []string {
+	row := []string{file.Path, fmt.Sprintf("%d", file.Count)}
+	if !withCache {
+		return row
+	}
+
+	if file.Cached {
+		return append(row, "cached")
+	}
+
+	return append(row, "")
 }
 
 // DisplayConcurrencyInfo shows concurrency settings.
@@ -173,13 +201,13 @@ func reportedDiff(status string, diff []byte) []byte {
 	return diff
 }
 
-// DisplayMutationScore prints the final mutation score.
-func (s *SimpleUI) DisplayMutationScore(ctx context.Context, score float64) {
+// DisplayMutationScore prints the final mutation score and its breakdown.
+func (s *SimpleUI) DisplayMutationScore(ctx context.Context, score domain.MutationScore) {
 	if err := ctx.Err(); err != nil {
 		return
 	}
 
-	s.printf("Mutation score: %.2f%%\n", score*100)
+	s.printf("Mutation score: %s\n", formatMutationScore(score))
 }
 
 func (s *SimpleUI) printf(format string, args ...any) {

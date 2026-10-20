@@ -37,6 +37,9 @@ func (d estimateDelegate) Render(w io.Writer, m list.Model, index int, item list
 	var displayPath string
 
 	width := m.Width() - 8 // Subtract count width (6) + spacing (2)
+	if file.cached {
+		width -= len(cachedMarker)
+	}
 
 	if isSelected {
 		pathStyle = lipgloss.NewStyle().
@@ -66,8 +69,16 @@ func (d estimateDelegate) Render(w io.Writer, m list.Model, index int, item list
 		countStyle.Render(fmt.Sprintf("%d", file.count)),
 		pathStyle.Render(displayPath),
 	)
+
+	if file.cached {
+		line += lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render(cachedMarker)
+	}
+
 	_, _ = fmt.Fprint(w, line)
 }
+
+// cachedMarker follows the path of a file whose stored reports are reused.
+const cachedMarker = " (cached)"
 
 // estimateModel is used for listing mutations without interactive testing.
 type estimateModel struct {
@@ -76,6 +87,7 @@ type estimateModel struct {
 	fileList     list.Model
 	delegate     estimateDelegate
 	total        int
+	hint         string
 	totalFiles   int
 	rendered     bool
 	animOffset   int
@@ -159,6 +171,7 @@ func (m estimateModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m estimateModel) handleEstimationMsg(msg estimationMsg) estimateModel {
 	m.total = msg.total
+	m.hint = msg.hint
 	m.totalFiles = msg.paths
 
 	// Create sorted file items
@@ -209,11 +222,16 @@ func (m estimateModel) View() string {
 	title := titleStyle.Render("🧬 Gooze Mutation Estimate")
 
 	// 2. Summary
-	summary := summaryStyle.Render(fmt.Sprintf(
+	summaryText := fmt.Sprintf(
 		"Total Mutations: %s   Files: %s",
 		accentStyle.Render(fmt.Sprintf("%d", m.total)),
 		accentStyle.Render(fmt.Sprintf("%d", m.totalFiles)),
-	))
+	)
+	if m.hint != "" {
+		summaryText += "\n" + m.hint
+	}
+
+	summary := summaryStyle.Render(summaryText)
 
 	// 3. Table with border
 	table := m.renderTable()
@@ -244,7 +262,13 @@ func (m estimateModel) renderTable() string {
 	// - Border (2)
 	// - Padding/Headers (2)
 	// = Left for list
-	listHeight := max(m.height-9, 5)
+	// - Cache hint (1, when shown)
+	reserved := 9
+	if m.hint != "" {
+		reserved++
+	}
+
+	listHeight := max(m.height-reserved, 5)
 
 	// Widths:
 	// Window Width

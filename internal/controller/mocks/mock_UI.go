@@ -178,7 +178,7 @@ func (_c *MockUI_DisplayEstimation_Call) RunAndReturn(run func(context.Context, 
 }
 
 // DisplayMutationScore provides a mock function with given fields: ctx, score
-func (_m *MockUI) DisplayMutationScore(ctx context.Context, score float64) {
+func (_m *MockUI) DisplayMutationScore(ctx context.Context, score domain.MutationScore) {
 	_m.Called(ctx, score)
 }
 
@@ -189,14 +189,14 @@ type MockUI_DisplayMutationScore_Call struct {
 
 // DisplayMutationScore is a helper method to define mock.On call
 //   - ctx context.Context
-//   - score float64
+//   - score domain.MutationScore
 func (_e *MockUI_Expecter) DisplayMutationScore(ctx interface{}, score interface{}) *MockUI_DisplayMutationScore_Call {
 	return &MockUI_DisplayMutationScore_Call{Call: _e.mock.On("DisplayMutationScore", ctx, score)}
 }
 
-func (_c *MockUI_DisplayMutationScore_Call) Run(run func(ctx context.Context, score float64)) *MockUI_DisplayMutationScore_Call {
+func (_c *MockUI_DisplayMutationScore_Call) Run(run func(ctx context.Context, score domain.MutationScore)) *MockUI_DisplayMutationScore_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(float64))
+		run(args[0].(context.Context), args[1].(domain.MutationScore))
 	})
 	return _c
 }
@@ -206,7 +206,7 @@ func (_c *MockUI_DisplayMutationScore_Call) Return() *MockUI_DisplayMutationScor
 	return _c
 }
 
-func (_c *MockUI_DisplayMutationScore_Call) RunAndReturn(run func(context.Context, float64)) *MockUI_DisplayMutationScore_Call {
+func (_c *MockUI_DisplayMutationScore_Call) RunAndReturn(run func(context.Context, domain.MutationScore)) *MockUI_DisplayMutationScore_Call {
 	_c.Run(run)
 	return _c
 }

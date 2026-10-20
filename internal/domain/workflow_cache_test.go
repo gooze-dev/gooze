@@ -1,0 +1,185 @@
+package domain_test
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+	"gooze.dev/pkg/gooze/internal/adapter"
+	domain "gooze.dev/pkg/gooze/internal/domain"
+	domainmocks "gooze.dev/pkg/gooze/internal/domain/mocks"
+	m "gooze.dev/pkg/gooze/internal/model"
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
+)
+
+// cacheFixture is a reports directory holding results for a.go (two killed,
+// one survived) and for b.go, a file outside the run's scope that still
+// exists, so the cache keeps its reports.
+type cacheFixture struct {
+	reports string
+	a, b    rpt.Source
+}
+
+func newCacheFixture(t *testing.T) cacheFixture {
+	t.Helper()
+
+	dir := t.TempDir()
+	bPath := filepath.Join(dir, "b.go")
+	require.NoError(t, os.WriteFile(bPath, []byte("package b\n"), 0o600))
+
+	fx := cacheFixture{
+		reports: filepath.Join(dir, "reports"),
+		a:       rpt.Source{Origin: &rpt.File{ShortPath: "a.go", FullPath: "/p/a.go", Hash: "a1"}, Test: &rpt.File{Hash: "at"}},
+		b:       rpt.Source{Origin: &rpt.File{ShortPath: "b.go", FullPath: bPath, Hash: "b1"}},
+	}
+
+	writeReports(t, fx.reports,
+		m.Report{Source: fx.a, Result: m.Result{mgen.Arithmetic: {{MutationID: "a-1", Status: rpt.Killed}}}},
+		m.Report{Source: fx.a, Result: m.Result{mgen.Arithmetic: {{MutationID: "a-2", Status: rpt.Killed}}}},
+		m.Report{Source: fx.a, Result: m.Result{mgen.Arithmetic: {{MutationID: "a-3", Status: rpt.Survived}}}},
+		m.Report{Source: fx.b, Result: m.Result{mgen.Arithmetic: {{MutationID: "b-1", Status: rpt.Survived}}}},
+	)
+
+	return fx
+}
+
+// cachedRunWorkflow wires a workflow over the real report store that scans
+// sources and generates mutations per source key. It records the displayed
+// score and estimation.
+func cachedRunWorkflow(t *testing.T, sources []rpt.Source, mutations map[string][]m.Mutation, score *domain.MutationScore, estimation *domain.Estimation) domain.Workflow {
+	t.Helper()
+
+	fs := domainmocks.NewMockSourceFSAdapter(t)
+	fs.EXPECT().Stream(mock.Anything, mock.Anything).Return(streamSources(sources))
+
+	mutagen := domainmocks.NewMockMutagen(t)
+	mutagen.EXPECT().
+		StreamMutations(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		RunAndReturn(func(_ context.Context, source rpt.Source, fn func(m.Mutation) error, _ ...mgen.Type) error {
+			for _, mutation := range mutations[source.Key()] {
+				if err := fn(mutation); err != nil {
+					return err
+				}
+			}
+
+			return nil
+		}).Maybe()
+
+	workspace := domainmocks.NewMockWorkspace(t)
+	workspace.EXPECT().Close(mock.Anything).Return().Maybe()
+	workspace.EXPECT().Run(mock.Anything, mock.Anything).
+		RunAndReturn(func(_ context.Context, mutation m.Mutation) (m.Result, error) {
+			return m.Result{mutation.Type: {{MutationID: mutation.ID, Status: rpt.Survived}}}, nil
+		}).Maybe()
+
+	orchestrator := domainmocks.NewMockOrchestrator(t)
+	orchestrator.EXPECT().NewWorkspace().Return(workspace).Maybe()
+
+	reporter := domainmocks.NewMockReporter(t)
+	reporter.EXPECT().StartTest(mock.Anything).Return(nil).Maybe()
+	reporter.EXPECT().StartEstimate(mock.Anything).Return(nil).Maybe()
+	reporter.EXPECT().Wait(mock.Anything).Return().Maybe()
+	reporter.EXPECT().Close(mock.Anything).Return().Maybe()
+	reporter.EXPECT().DisplayConcurrencyInfo(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return().Maybe()
+	reporter.EXPECT().DisplayUpcomingTestsInfo(mock.Anything, mock.Anything).Return().Maybe()
+	reporter.EXPECT().DisplayStartingTestInfo(mock.Anything, mock.Anything, mock.Anything).Return().Maybe()
+	reporter.EXPECT().DisplayCompletedTestInfo(mock.Anything, mock.Anything, mock.Anything).Return().Maybe()
+	reporter.EXPECT().DisplayMutationScore(mock.Anything, mock.Anything).
+		Run(func(_ context.Context, s domain.MutationScore) { *score = s }).Maybe()
+	reporter.EXPECT().DisplayEstimation(mock.Anything, mock.Anything, mock.Anything).
+		RunAndReturn(func(_ context.Context, e domain.Estimation, _ error) error {
+			*estimation = e
+			return nil
+		}).Maybe()
+
+	return domain.NewWorkflow(fs, adapter.NewReportStore(), reporter, orchestrator, mutagen)
+}
+
+func cachedTestArgs(reports string) domain.TestArgs {
+	return domain.TestArgs{
+		EstimateArgs:    domain.EstimateArgs{Paths: []m.Path{"./..."}, UseCache: true, Reports: m.Path(reports)},
+		Reports:         m.Path(reports),
+		Threads:         1,
+		TotalShardCount: 1,
+	}
+}
+
+func TestWorkflow_Test_FullyCachedRunScoresStoredResultsInScope(t *testing.T) {
+	fx := newCacheFixture(t)
+
+	var (
+		score      domain.MutationScore
+		estimation domain.Estimation
+	)
+
+	wf := cachedRunWorkflow(t, []rpt.Source{fx.a}, nil, &score, &estimation)
+	require.NoError(t, wf.Test(context.Background(), cachedTestArgs(fx.reports)))
+
+	// b.go is outside the scanned scope, so its survivor does not count.
+	assert.Equal(t, domain.MutationScore{Summary: rpt.Summary{Total: 3, Killed: 2, Survived: 1}, Cached: 3}, score)
+}
+
+func TestWorkflow_Test_IncrementalRunScoresCachedAndTestedResults(t *testing.T) {
+	fx := newCacheFixture(t)
+	c := rpt.Source{Origin: &rpt.File{ShortPath: "c.go", FullPath: "/p/c.go", Hash: "c1"}}
+
+	var (
+		score      domain.MutationScore
+		estimation domain.Estimation
+	)
+
+	mutations := map[string][]m.Mutation{"c.go": {{ID: "c-1", Source: c, Type: mgen.Arithmetic}}}
+	wf := cachedRunWorkflow(t, []rpt.Source{fx.a, c}, mutations, &score, &estimation)
+	require.NoError(t, wf.Test(context.Background(), cachedTestArgs(fx.reports)))
+
+	assert.Equal(t, domain.MutationScore{Summary: rpt.Summary{Total: 4, Killed: 2, Survived: 2}, Cached: 3, Tested: 1}, score)
+}
+
+func TestWorkflow_Test_UncachedRunScoresTestedResultsOnly(t *testing.T) {
+	fx := newCacheFixture(t)
+
+	var (
+		score      domain.MutationScore
+		estimation domain.Estimation
+	)
+
+	mutations := map[string][]m.Mutation{"a.go": {{ID: "a-1", Source: fx.a, Type: mgen.Arithmetic}}}
+	wf := cachedRunWorkflow(t, []rpt.Source{fx.a}, mutations, &score, &estimation)
+
+	args := cachedTestArgs(fx.reports)
+	args.UseCache = false
+	require.NoError(t, wf.Test(context.Background(), args))
+
+	assert.Equal(t, domain.MutationScore{Summary: rpt.Summary{Total: 1, Survived: 1}, Tested: 1}, score)
+}
+
+func TestWorkflow_Estimate_ListsCachedFiles(t *testing.T) {
+	fx := newCacheFixture(t)
+	c := rpt.Source{Origin: &rpt.File{ShortPath: "c.go", FullPath: "/p/c.go", Hash: "c1"}}
+
+	var (
+		score      domain.MutationScore
+		estimation domain.Estimation
+	)
+
+	mutations := map[string][]m.Mutation{
+		"a.go": {{ID: "a-1", Source: fx.a}, {ID: "a-2", Source: fx.a}},
+		"c.go": {{ID: "c-1", Source: c}},
+	}
+	wf := cachedRunWorkflow(t, []rpt.Source{fx.a, c}, mutations, &score, &estimation)
+	require.NoError(t, wf.Estimate(context.Background(), cachedTestArgs(fx.reports).EstimateArgs))
+
+	assert.Equal(t, domain.Estimation{
+		Total:  3,
+		Cached: 2,
+		Files: []domain.FileEstimate{
+			{Path: "a.go", Count: 2, Cached: true},
+			{Path: "c.go", Count: 1},
+		},
+	}, estimation)
+}
