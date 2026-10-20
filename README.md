@@ -75,6 +75,12 @@ environment variables or `gooze.yaml`: `version` must be `1`, and `run.parallel`
 and `run.mutation_timeout` must be at least `1`. `log.level` takes `debug`, `info`
 (the default), `warn` or `error`, or a numeric slog level.
 
+The `comparison` mutagen (version 2) does not generate the one mutant that is
+equivalent when an operand is the minimum of the other: the empty string, or `0`
+compared with `len(...)` or `cap(...)`. For example, `v == ""` is not mutated to
+`v <= ""`, nor `len(s) != 0` to `len(s) > 0`; the other mutants of those
+comparisons remain. Reports from version 1 are re-tested.
+
 Cached results for a file are invalidated when its source content hash changes,
 its test file content hash changes, a mutator version changes (e.g. after upgrading
 Gooze), or the source file is deleted. The score `gooze run` prints covers every
