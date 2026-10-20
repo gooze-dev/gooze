@@ -49,3 +49,24 @@ repos:
     language: system
     pass_filenames: false
     files: go\.mod$
+
+- repo: https://github.com/semgrep/pre-commit
+  rev: v1.181.0
+  hooks:
+  - id: semgrep
+    name: semgrep
+    args: [scan, --config, .semgrep/security.yaml, --config, .semgrep/correctness.yaml, --config, p/golang, --error, --disable-version-check, --quiet, --skip-unknown-extensions]
+    types: [go]
+    # pre-commit passes explicit file names, which bypass .semgrepignore; keep this in sync with it.
+    exclude: ^(examples/|.*/mocks/|.*/testdata/)
+    # One semgrep process for all files: a single report and a single registry fetch of p/golang.
+    require_serial: true
+  - id: semgrep
+    alias: semgrep-architecture
+    name: semgrep (architecture, informational)
+    # No --error: architecture findings are reported but never block a commit.
+    args: [scan, --config, .semgrep/architecture.yaml, --disable-version-check, --quiet, --skip-unknown-extensions]
+    verbose: true
+    types: [go]
+    exclude: ^(examples/|.*/mocks/|.*/testdata/)
+    require_serial: true

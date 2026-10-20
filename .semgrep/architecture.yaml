@@ -1,0 +1,114 @@
+---
+# Clean-architecture rules for gooze.
+#
+# Dependency direction (outer -> inner):
+#   cmd -> internal/controller -> internal/domain -> internal/model
+#   internal/adapter implements ports for domain and is wired in cmd.
+#
+# Validate with:  semgrep --validate --config .semgrep/
+rules:
+- id: gooze-arch-model-has-no-behaviour
+  languages: [go]
+  severity: WARNING
+  message: >-
+    `internal/model` holds plain data types only. Free functions belong in
+    `internal/domain` (business rules) or `internal/adapter` (I/O). Methods on
+    model types (`String()`, `Key()`, ...) are allowed.
+  metadata:
+    category: architecture
+    confidence: HIGH
+  paths:
+    include:
+    - internal/model/
+    exclude:
+    - '*_test.go'
+  patterns:
+  - pattern-either:
+    - pattern: func $FN(...) { ... }
+    - pattern: func $FN(...) $RET { ... }
+  - pattern-not: func ($RECV $T) $FN(...) { ... }
+  - pattern-not: func ($RECV $T) $FN(...) $RET { ... }
+
+- id: gooze-arch-domain-no-third-party-imports
+  languages: [go]
+  severity: WARNING
+  message: >-
+    `$PKG` is a third-party package imported from the domain/model layer. Keep
+    the core free of external dependencies: use the standard library, or put
+    the dependency behind a port implemented in `internal/adapter`.
+  metadata:
+    category: architecture
+    confidence: HIGH
+  paths:
+    include:
+    - internal/domain/
+    - internal/model/
+    exclude:
+    - '*_test.go'
+  patterns:
+  - pattern-either:
+    - pattern: import "$PKG"
+    - pattern: import $ALIAS "$PKG"
+  - metavariable-regex:
+      metavariable: $PKG
+      # First path element contains a dot => hosted module rather than the
+      # standard library; the project's own module path and golang.org/x
+      # (standard-library adjacent) are allowed.
+      regex: ^(?!gooze\.dev/pkg/gooze/|golang\.org/x/)[^/]+\.[^/]+/.*
+
+- id: gooze-arch-inner-layer-imports-outer-layer
+  languages: [go]
+  severity: ERROR
+  message: >-
+    `$PKG` is an outer layer. Dependencies point inwards only: `internal/model`
+    imports nothing from the project, `internal/domain` may import `model`,
+    `pkg` and its own sub-packages, and `internal/controller` talks to
+    `domain`, never to `adapter` or `cmd`. Declare an interface (port) in the
+    inner layer and inject the implementation from `cmd`.
+  metadata:
+    category: architecture
+    confidence: HIGH
+  paths:
+    exclude:
+    - '*_test.go'
+  pattern-either:
+  - patterns:
+    - pattern-inside: |
+        package model
+        ...
+    - pattern-either:
+      - pattern: import "$PKG"
+      - pattern: import $ALIAS "$PKG"
+    - metavariable-regex:
+        metavariable: $PKG
+        regex: ^gooze\.dev/pkg/gooze/
+  - patterns:
+    - pattern-inside: |
+        package domain
+        ...
+    - pattern-either:
+      - pattern: import "$PKG"
+      - pattern: import $ALIAS "$PKG"
+    - metavariable-regex:
+        metavariable: $PKG
+        regex: ^gooze\.dev/pkg/gooze/(internal/(adapter|controller)|cmd)(/|$)
+  - patterns:
+    - pattern-inside: |
+        package mutagens
+        ...
+    - pattern-either:
+      - pattern: import "$PKG"
+      - pattern: import $ALIAS "$PKG"
+    - metavariable-regex:
+        metavariable: $PKG
+        regex: ^gooze\.dev/pkg/gooze/(internal/(adapter|controller|domain)|cmd)(/|$)
+  - patterns:
+    - pattern-inside: |
+        package controller
+        ...
+    - pattern-either:
+      - pattern: import "$PKG"
+      - pattern: import $ALIAS "$PKG"
+    - metavariable-regex:
+        metavariable: $PKG
+        regex: ^gooze\.dev/pkg/gooze/(internal/adapter|cmd)(/|$)

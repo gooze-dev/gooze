@@ -281,7 +281,7 @@ func insecureRetryClient() *http.Client {
 		transport = transport.Clone()
 	}
 
-	transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // --insecure is an explicit opt-in.
+	transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true, MinVersion: tls.VersionTLS12} //nolint:gosec // --insecure is an explicit opt-in.
 
 	return &http.Client{Transport: retry.NewTransport(transport)}
 }
