@@ -116,3 +116,14 @@ func TestValidateConfig(t *testing.T) {
 func TestValidateConfig_Defaults(t *testing.T) {
 	assert.NoError(t, validateConfig())
 }
+
+func TestSchemaDefault(t *testing.T) {
+	t.Setenv("GOOZE_OUTPUT", "env-reports")
+
+	assert.Equal(t, ".gooze-reports", schemaDefault[string](config.KeyOutput))
+	assert.Equal(t, 120, schemaDefault[int](config.KeyRunMutationTimeout))
+	assert.False(t, schemaDefault[bool](config.KeyNoCache))
+	assert.Equal(t, []string{}, schemaDefault[[]string](config.KeyPathsExclude))
+	assert.Equal(t, "overlay", schemaDefault[string](config.KeyRunWorkspace))
+	assert.Empty(t, schemaDefault[string]("missing"))
+}

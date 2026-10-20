@@ -333,3 +333,17 @@ func TestExecute_ProcessLevel_ExitCodes(t *testing.T) {
 	assert.Equal(t, 2, runExitSubprocess(t, "ok", "--unknown"))
 	assert.Equal(t, 3, runExitSubprocess(t, "threshold", "--known"))
 }
+
+func TestRootCmd_FlagDefaultsMatchSchema(t *testing.T) {
+	t.Setenv("GOOZE_OUTPUT", "env-reports")
+	t.Setenv("GOOZE_NO_CACHE", "true")
+	t.Setenv("GOOZE_NO_UPDATE_CHECK", "true")
+	t.Setenv("GOOZE_PATHS_EXCLUDE", "env-exclude")
+
+	for _, cmd := range []*cobra.Command{rootCmd, newRootCmd()} {
+		assert.Equal(t, ".gooze-reports", cmd.PersistentFlags().Lookup(outputFlagName).DefValue)
+		assert.Equal(t, "false", cmd.PersistentFlags().Lookup(noCacheFlagName).DefValue)
+		assert.Equal(t, "false", cmd.PersistentFlags().Lookup(noUpdateCheckFlag).DefValue)
+		assert.Equal(t, "[]", cmd.PersistentFlags().Lookup(excludeFlagName).DefValue)
+	}
+}
