@@ -92,7 +92,7 @@ func generateBinaryExprMutations(
 
 	var mutations []m.Mutation
 
-	for _, mutatedOp := range getAlternatives(binExpr.Op) {
+	for _, mutatedOp := range viableOps(binExpr, getAlternatives(binExpr.Op)) {
 		mutatedCode := replaceRange(content, start, end, mutatedOp.String())
 		diff := diffCode(content, mutatedCode)
 		h := sha256.Sum256(mutatedCode)
@@ -107,4 +107,46 @@ func generateBinaryExprMutations(
 	}
 
 	return mutations
+}
+
+// viableOps drops operator alternatives that cannot compile for the given
+// operands: nil may only be compared with == and !=, and string literals only
+// support +.
+func viableOps(expr *ast.BinaryExpr, ops []token.Token) []token.Token {
+	hasNil := isNilIdent(expr.X) || isNilIdent(expr.Y)
+	hasString := isStringLit(expr.X) || isStringLit(expr.Y)
+
+	if !hasNil && !hasString {
+		return ops
+	}
+
+	viable := make([]token.Token, 0, len(ops))
+
+	for _, op := range ops {
+		if opCompiles(op, hasNil, hasString) {
+			viable = append(viable, op)
+		}
+	}
+
+	return viable
+}
+
+func opCompiles(op token.Token, hasNil, hasString bool) bool {
+	if hasNil && op != token.EQL && op != token.NEQ {
+		return false
+	}
+
+	return !hasString || !isArithmeticOp(op) || op == token.ADD
+}
+
+func isNilIdent(e ast.Expr) bool {
+	ident, ok := e.(*ast.Ident)
+
+	return ok && ident.Name == "nil"
+}
+
+func isStringLit(e ast.Expr) bool {
+	lit, ok := e.(*ast.BasicLit)
+
+	return ok && lit.Kind == token.STRING
 }

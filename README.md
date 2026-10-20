@@ -61,7 +61,8 @@ Pass a Go coverage profile and gooze will report any mutation on a line that the
 profile shows as uncovered as `not_covered` — immediately, without running its
 tests. This speeds up runs (uncovered mutations can never be killed) and makes
 test gaps explicit. `not_covered` counts as a survivor in the mutation score and
-is tallied separately (`not_covered_mutations` in `_index.yaml`).
+is tallied separately (`not_covered_mutations` in `_index.yaml`). Mutations that
+do not compile are reported as `error` and excluded from the score.
 
 ```bash
 go test -coverprofile=coverage.out ./...

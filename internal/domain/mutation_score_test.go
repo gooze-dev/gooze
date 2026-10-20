@@ -44,7 +44,7 @@ func TestMutationScoreFromReports(t *testing.T) {
 	score, err := mutationScoreFromReports(spill)
 	require.NoError(t, err)
 
-	require.Equal(t, 0.4, score)
+	require.Equal(t, 0.5, score)
 }
 
 func TestMutationScoreFromReports_NotCoveredCountsAsSurvivor(t *testing.T) {
@@ -158,7 +158,7 @@ func TestMutationScoreFromReports_AggregatesAcrossReports(t *testing.T) {
 	score, err := mutationScoreFromReports(spill)
 	require.NoError(t, err)
 
-	require.Equal(t, 0.5, score)
+	require.InDelta(t, 4.0/7.0, score, 1e-9)
 }
 
 func TestMutationScoreFromReports_RangeErrorPropagates(t *testing.T) {
