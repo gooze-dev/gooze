@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	m "gooze.dev/pkg/gooze/internal/model"
@@ -181,7 +182,6 @@ func (a *LocalSourceFSAdapter) emitFileSource(ctx context.Context, path string, 
 	if err != nil {
 		if isInvalidSourceErr(err) {
 			slog.Warn("Skipping source file that could not be parsed", "path", path, "error", err)
-
 			return nil
 		}
 
@@ -208,12 +208,24 @@ func (a *LocalSourceFSAdapter) Walk(ctx context.Context, root m.Path, recursive 
 			return fn(path, info, err)
 		}
 
-		if info.IsDir() && !recursive && path != rootStr {
-			return filepath.SkipDir
+		if info.IsDir() && path != rootStr {
+			if !recursive || skipDirForGoList(path, info.Name()) {
+				return filepath.SkipDir
+			}
 		}
 
 		return fn(path, info, nil)
 	})
+}
+
+func skipDirForGoList(path, name string) bool {
+	if name == "vendor" || name == "testdata" || strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_") {
+		return true
+	}
+
+	_, err := os.Stat(filepath.Join(path, "go.mod"))
+
+	return err == nil
 }
 
 // ReadFile loads file contents from disk.
@@ -263,18 +275,24 @@ func (a *LocalSourceFSAdapter) DetectTestFile(ctx context.Context, sourcePath m.
 		return "", nil
 	}
 
+	dir := filepath.Dir(source)
 	base := strings.TrimSuffix(filepath.Base(source), ".go")
-	testFile := filepath.Join(filepath.Dir(source), base+"_test.go")
+	testFile := filepath.Join(dir, base+"_test.go")
 
-	if _, err := os.Stat(testFile); err != nil {
-		if os.IsNotExist(err) {
-			return "", nil
-		}
-
+	if _, err := os.Stat(testFile); err == nil {
+		return m.Path(testFile), nil
+	} else if !os.IsNotExist(err) {
 		return "", err
 	}
 
-	return m.Path(testFile), nil
+	matches, err := filepath.Glob(filepath.Join(dir, "*_test.go"))
+	if err != nil || len(matches) == 0 {
+		return "", err
+	}
+
+	sort.Strings(matches)
+
+	return m.Path(matches[0]), nil
 }
 
 // FileInfo returns os.FileInfo metadata for the given path.
@@ -348,22 +366,33 @@ func (a *LocalSourceFSAdapter) CopyDir(ctx context.Context, src, dst m.Path) err
 			return err
 		}
 
-		// Skip common directories that don't need to be copied
 		if info.IsDir() {
 			baseName := filepath.Base(path)
-			if baseName == ".git" || baseName == "vendor" || baseName == "node_modules" {
+			if baseName == ".git" || baseName == "node_modules" {
 				return filepath.SkipDir
 			}
 		}
 
-		targetPath := filepath.Join(string(dst), relPath)
+		return a.copyEntry(path, filepath.Join(string(dst), relPath), info)
+	})
+}
 
-		if info.IsDir() {
-			return os.MkdirAll(targetPath, info.Mode())
+func (a *LocalSourceFSAdapter) copyEntry(path, targetPath string, info os.FileInfo) error {
+	switch {
+	case info.IsDir():
+		return os.MkdirAll(targetPath, info.Mode())
+	case info.Mode()&os.ModeSymlink != 0:
+		link, err := os.Readlink(path)
+		if err != nil {
+			return err
 		}
 
+		return os.Symlink(link, targetPath)
+	case info.Mode().IsRegular():
 		return a.copyFile(path, targetPath, info.Mode())
-	})
+	default:
+		return nil
+	}
 }
 
 // copyFile copies a single file.
@@ -688,14 +717,39 @@ func shouldIgnorePath(path string, ignoreRegexps []*regexp.Regexp) bool {
 		return false
 	}
 
-	base := filepath.Base(path)
+	candidates := []string{path, filepath.Base(path)}
+	if rel, ok := relativeToCwd(path); ok {
+		candidates = append(candidates, rel)
+	}
+
 	for _, re := range ignoreRegexps {
-		if re.MatchString(path) || re.MatchString(base) {
-			return true
+		for _, candidate := range candidates {
+			if re.MatchString(candidate) {
+				return true
+			}
 		}
 	}
 
 	return false
+}
+
+func relativeToCwd(path string) (string, bool) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", false
+	}
+
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", false
+	}
+
+	rel, err := filepath.Rel(cwd, abs)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		return "", false
+	}
+
+	return filepath.ToSlash(rel), true
 }
 
 func isInvalidSourceErr(err error) bool {

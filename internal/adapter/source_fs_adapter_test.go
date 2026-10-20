@@ -110,11 +110,21 @@ func TestLocalSourceFSAdapter_DetectTestFile(t *testing.T) {
 
 	assert.Equal(t, m.Path(testFile), got)
 
-	t.Run("returns empty path when test file missing", func(t *testing.T) {
-		missingSrc := filepath.Join(root, "other.go")
-		writeTestFile(t, missingSrc, "package main\n")
+	t.Run("falls back to another test file in the package", func(t *testing.T) {
+		otherSrc := filepath.Join(root, "other.go")
+		writeTestFile(t, otherSrc, "package calc\n")
 
-		got, err := adapter.DetectTestFile(context.Background(), m.Path(missingSrc))
+		got, err := adapter.DetectTestFile(context.Background(), m.Path(otherSrc))
+		require.NoError(t, err)
+
+		assert.Equal(t, m.Path(testFile), got)
+	})
+
+	t.Run("returns empty path when the package has no tests", func(t *testing.T) {
+		untested := filepath.Join(t.TempDir(), "lonely.go")
+		writeTestFile(t, untested, "package lonely\n")
+
+		got, err := adapter.DetectTestFile(context.Background(), m.Path(untested))
 		require.NoError(t, err)
 
 		assert.Empty(t, got)
@@ -603,4 +613,67 @@ func readFileBytes(t *testing.T, path string) []byte {
 	require.NoError(t, err)
 
 	return content
+}
+
+func TestLocalSourceFSAdapter_Walk_SkipsDirsGoListIgnores(t *testing.T) {
+	adapter := NewLocalSourceFSAdapter()
+	root := t.TempDir()
+	writeNestedFile(t, filepath.Join(root, "main.go"), "package main\n")
+	writeNestedFile(t, filepath.Join(root, "pkg", "ok.go"), "package pkg\n")
+
+	for _, dir := range []string{"vendor", "testdata", "_skip", ".hidden"} {
+		writeNestedFile(t, filepath.Join(root, dir, "x.go"), "package x\n")
+	}
+
+	writeNestedFile(t, filepath.Join(root, "nested", "go.mod"), "module nested\n")
+	writeNestedFile(t, filepath.Join(root, "nested", "n.go"), "package nested\n")
+
+	var visited []string
+	err := adapter.Walk(context.Background(), m.Path(root), true, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			visited = append(visited, path)
+		}
+		return nil
+	})
+	require.NoError(t, err)
+
+	assert.ElementsMatch(t, []string{filepath.Join(root, "main.go"), filepath.Join(root, "pkg", "ok.go")}, visited)
+}
+
+func TestShouldIgnorePath_MatchesWorkingDirRelativePath(t *testing.T) {
+	root := t.TempDir()
+	t.Chdir(root)
+
+	res, err := compileIgnoreRegexps([]string{"^vendor/"})
+	require.NoError(t, err)
+
+	assert.True(t, shouldIgnorePath(filepath.Join(root, "vendor", "dep", "d.go"), res))
+	assert.False(t, shouldIgnorePath(filepath.Join(root, "pkg", "vendor_helper.go"), res))
+}
+
+func TestLocalSourceFSAdapter_CopyDir_KeepsVendorAndSymlinks(t *testing.T) {
+	adapter := NewLocalSourceFSAdapter()
+	src := t.TempDir()
+	writeNestedFile(t, filepath.Join(src, "main.go"), "package main\n")
+	writeNestedFile(t, filepath.Join(src, "vendor", "modules.txt"), "# x\n")
+	require.NoError(t, os.Symlink("main.go", filepath.Join(src, "link.go")))
+
+	dst := filepath.Join(t.TempDir(), "copy")
+	require.NoError(t, adapter.CopyDir(context.Background(), m.Path(src), m.Path(dst)))
+
+	_, err := os.Stat(filepath.Join(dst, "vendor", "modules.txt"))
+	require.NoError(t, err)
+
+	target, err := os.Readlink(filepath.Join(dst, "link.go"))
+	require.NoError(t, err)
+	assert.Equal(t, "main.go", target)
+}
+
+func writeNestedFile(t *testing.T, path, contents string) {
+	t.Helper()
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o750))
+	writeTestFile(t, path, contents)
 }

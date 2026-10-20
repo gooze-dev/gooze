@@ -7,20 +7,20 @@ import (
 )
 
 type coveredRange struct {
-	start int
-	end   int
+	start   int
+	end     int
+	covered bool
 }
 
-// CoverageIndex reports whether a given source file line was executed, based on a
-// parsed Go coverage profile. Every file in the profile is indexed, but only
-// ranges with a positive count are retained, so any line not found is treated
-// as uncovered.
+// CoverageIndex answers line coverage questions from a parsed Go coverage
+// profile. Lines outside every profiled block (such as package-level
+// declarations) are unknown rather than uncovered.
 type CoverageIndex struct {
 	files map[string][]coveredRange
 }
 
-// ParseCoverage parses `go test -coverprofile` output, retaining only blocks with
-// count > 0. The leading `mode:` line and unparseable lines are ignored.
+// ParseCoverage parses `go test -coverprofile` output. The leading `mode:`
+// line and unparseable lines are ignored.
 func ParseCoverage(content []byte) (*CoverageIndex, error) {
 	idx := &CoverageIndex{files: make(map[string][]coveredRange)}
 
@@ -35,14 +35,8 @@ func ParseCoverage(content []byte) (*CoverageIndex, error) {
 			continue
 		}
 
-		// Record every file the profile mentions, even when no block has a
-		// positive count, so Covers can resolve an ambiguous short path to the
-		// right file instead of falling through to a longer, unrelated match.
-		if count > 0 {
-			idx.files[path] = append(idx.files[path], r)
-		} else if _, seen := idx.files[path]; !seen {
-			idx.files[path] = nil
-		}
+		r.covered = count > 0
+		idx.files[path] = append(idx.files[path], r)
 	}
 
 	return idx, nil
@@ -52,15 +46,11 @@ func ParseCoverage(content []byte) (*CoverageIndex, error) {
 // "path:startLine.col,endLine.col numStmts count".
 func parseProfileLine(line string) (path string, r coveredRange, count int, ok bool) {
 	colon := strings.LastIndex(line, ":")
-	if colon < 0 {
+	if colon <= 0 {
 		return "", coveredRange{}, 0, false
 	}
 
 	path = line[:colon]
-	if path == "" {
-		return "", coveredRange{}, 0, false
-	}
-
 	rest := line[colon+1:]
 
 	var startLine, startCol, endLine, endCol, numStmts int
@@ -72,45 +62,60 @@ func parseProfileLine(line string) (path string, r coveredRange, count int, ok b
 }
 
 // Covers reports whether the given line of shortPath (a project-root-relative
-// path) was executed. A profile entry matches when its path ends with shortPath
-// at a separator boundary. When several entries match (for example a root
-// main.go and a nested cmd/x/main.go both match "main.go"), the shortest
-// profile path is the one that corresponds to shortPath, because the correct
-// entry is the module path plus shortPath and every other match carries extra
-// directories.
+// path) was executed.
 func (c *CoverageIndex) Covers(shortPath string, line int) bool {
+	covered, _ := c.lookup(shortPath, line)
+
+	return covered
+}
+
+// Uncovered reports whether the profile shows the given line of shortPath as
+// never executed. Lines the profile knows nothing about return false.
+func (c *CoverageIndex) Uncovered(shortPath string, line int) bool {
+	covered, known := c.lookup(shortPath, line)
+
+	return known && !covered
+}
+
+func (c *CoverageIndex) lookup(shortPath string, line int) (covered, known bool) {
 	if c == nil {
-		return false
+		return false, false
 	}
 
-	target := strings.TrimPrefix(filepath.ToSlash(shortPath), "/")
+	ranges, ok := c.files[c.resolve(shortPath)]
+	if !ok {
+		return false, false
+	}
 
-	var (
-		bestPath string
-		found    bool
-	)
-
-	for path := range c.files {
-		if !pathMatches(path, target) {
+	for _, r := range ranges {
+		if line < r.start || line > r.end {
 			continue
 		}
 
-		if !found || len(path) < len(bestPath) {
-			bestPath, found = path, true
+		known = true
+
+		if r.covered {
+			return true, true
 		}
 	}
 
-	if !found {
-		return false
-	}
+	return false, known
+}
 
-	for _, r := range c.files[bestPath] {
-		if line >= r.start && line <= r.end {
-			return true
+// resolve finds the profile path for a project-relative path. Profile paths are
+// module-qualified, so the shortest entry ending in shortPath is the match.
+func (c *CoverageIndex) resolve(shortPath string) string {
+	target := strings.TrimPrefix(filepath.ToSlash(shortPath), "/")
+
+	best := ""
+
+	for path := range c.files {
+		if pathMatches(path, target) && (best == "" || len(path) < len(best)) {
+			best = path
 		}
 	}
 
-	return false
+	return best
 }
 
 func pathMatches(profilePath, target string) bool {

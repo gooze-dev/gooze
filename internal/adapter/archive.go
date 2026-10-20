@@ -12,9 +12,8 @@ import (
 	"strings"
 )
 
-// tarGz writes a gzip-compressed tar of srcDir's contents (paths relative to
-// srcDir) to dest. Only regular files and directories are archived; symlinks
-// and other special entries are skipped.
+// tarGz writes a gzip-compressed tar of srcDir's regular files and directories
+// (paths relative to srcDir) to dest.
 func tarGz(srcDir, dest string) error {
 	out, err := os.Create(dest) //nolint:gosec // dest is an internal staging path.
 	if err != nil {
@@ -68,9 +67,6 @@ func tarGz(srcDir, dest string) error {
 }
 
 func writeTarEntry(tw *tar.Writer, path, rel string, info os.FileInfo) error {
-	// filepath.Walk reports symlinks via Lstat, so anything that is neither a
-	// directory nor a regular file would produce a header whose declared size
-	// does not match what we could copy. Skip such entries entirely.
 	if !info.IsDir() && !info.Mode().IsRegular() {
 		return nil
 	}
@@ -104,9 +100,8 @@ func writeTarEntry(tw *tar.Writer, path, rel string, info os.FileInfo) error {
 	return nil
 }
 
-// unTarGz extracts a gzip-compressed tar at src into destDir. Entries are
-// resolved inside an os.Root so neither archive names nor pre-existing
-// symlinks under destDir can redirect writes outside of it.
+// unTarGz extracts a gzip-compressed tar at src into destDir, confining every
+// entry to destDir via os.Root.
 func unTarGz(src, destDir string) error {
 	in, err := os.Open(src) //nolint:gosec // src is an internal staging path.
 	if err != nil {
@@ -175,8 +170,6 @@ func writeRegularFile(tr *tar.Reader, root *os.Root, name string, header *tar.He
 		}
 	}
 
-	// A previous pull may have left a read-only copy behind; O_TRUNC cannot
-	// reopen it for writing, so drop it first.
 	if err := root.Remove(name); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("replace %q: %w", header.Name, err)
 	}
@@ -188,8 +181,6 @@ func writeRegularFile(tr *tar.Reader, root *os.Root, name string, header *tar.He
 
 	defer func() { _ = out.Close() }()
 
-	// tar.Reader already limits reads to the declared entry size; CopyN keeps
-	// that bound explicit.
 	if _, err := io.CopyN(out, tr, header.Size); err != nil && !errors.Is(err, io.EOF) {
 		return fmt.Errorf("write %q: %w", header.Name, err)
 	}
@@ -201,21 +192,16 @@ func writeRegularFile(tr *tar.Reader, root *os.Root, name string, header *tar.He
 	return nil
 }
 
-// filePerm maps an archived mode onto a file permission that the owner can
-// always read and write, so a later extraction can overwrite the file.
 func filePerm(mode int64) os.FileMode {
 	return os.FileMode(mode).Perm() | 0o600 //nolint:gosec // mode comes from a tar header.
 }
 
-// dirPerm maps an archived mode onto a directory permission the owner can
-// always traverse and write into.
 func dirPerm(mode int64) os.FileMode {
 	return os.FileMode(mode).Perm() | 0o700 //nolint:gosec // mode comes from a tar header.
 }
 
-// archiveEntryPath normalises an archive entry name to a relative, slash-free
-// path that stays inside the extraction root. It rejects absolute names and
-// names that climb above the root.
+// archiveEntryPath normalises an archive entry name to a relative path inside
+// the extraction root.
 func archiveEntryPath(name string) (string, error) {
 	cleaned := filepath.Clean(filepath.FromSlash(name))
 

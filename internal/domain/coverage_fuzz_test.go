@@ -26,6 +26,6 @@ func FuzzParseCoverage(f *testing.F) {
 			_ = idx.Covers(path, 1)
 		}
 		_ = idx.Covers("a.go", 0)
-		_ = idx.Covers("", -1)
+		_ = idx.Uncovered("", -1)
 	})
 }

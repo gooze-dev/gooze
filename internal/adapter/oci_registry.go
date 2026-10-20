@@ -21,8 +21,6 @@ import (
 )
 
 const (
-	// registryUsernameEnv and registryPasswordEnv carry explicit registry
-	// credentials; when unset the Docker credential store is used.
 	registryUsernameEnv = "GOOZE_REGISTRY_USERNAME"
 	registryPasswordEnv = "GOOZE_REGISTRY_PASSWORD" //nolint:gosec // env var name, not a secret.
 	// reportsArtifactType identifies a Gooze reports artifact in a registry.
@@ -143,8 +141,7 @@ func (r *ORASRegistry) Pull(ctx context.Context, ref string, dir m.Path, opts Re
 	return nil
 }
 
-// parseReference parses ref and requires it to name a tag or a digest, since an
-// untagged reference can neither be pushed nor pulled.
+// parseReference parses ref and requires a tag or digest.
 func parseReference(ref string) (registry.Reference, error) {
 	parsed, err := registry.ParseReference(ref)
 	if err != nil {
@@ -158,8 +155,7 @@ func parseReference(ref string) (registry.Reference, error) {
 	return parsed, nil
 }
 
-// parseTaggedReference is parseReference restricted to tags; a digest cannot
-// be the target of a push.
+// parseTaggedReference parses ref and requires a tag.
 func parseTaggedReference(ref string) (registry.Reference, error) {
 	parsed, err := parseReference(ref)
 	if err != nil {
@@ -173,8 +169,7 @@ func parseTaggedReference(ref string) (registry.Reference, error) {
 	return parsed, nil
 }
 
-// validateReportsDir checks that dir is a non-empty directory so an empty or
-// mistyped path cannot silently publish an empty archive.
+// validateReportsDir checks that dir is a non-empty directory.
 func validateReportsDir(dir string) error {
 	info, err := os.Stat(dir)
 	if err != nil {
@@ -266,7 +261,6 @@ func registryCredential(host string) (auth.CredentialFunc, error) {
 	case user != "":
 		return nil, fmt.Errorf("%s is set but %s is empty", registryUsernameEnv, registryPasswordEnv)
 	case password != "":
-		// A token-only credential (common in CI) is sent as a bearer token.
 		return auth.StaticCredential(host, auth.Credential{AccessToken: password}), nil
 	}
 
@@ -279,7 +273,6 @@ func registryCredential(host string) (auth.CredentialFunc, error) {
 }
 
 // insecureRetryClient mirrors retry.DefaultClient but skips TLS verification.
-// It clones http.DefaultTransport so proxy settings and timeouts are kept.
 func insecureRetryClient() *http.Client {
 	transport, ok := http.DefaultTransport.(*http.Transport)
 	if !ok {

@@ -1,8 +1,6 @@
 package report
 
 import (
-	"context"
-
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -16,9 +14,9 @@ func newViewCmd(deps Deps) *cobra.Command {
 		Short: "View previously generated mutation reports",
 		Long:  "View previously generated mutation reports from a reports directory.",
 		Args:  cobra.ExactArgs(0),
-		RunE: func(_ *cobra.Command, _ []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			reportsPath := m.Path(viper.GetString(deps.OutputKey))
-			return deps.Workflow.View(context.Background(), domain.ViewArgs{Reports: reportsPath})
+			return deps.Workflow.View(cmd.Context(), domain.ViewArgs{Reports: reportsPath})
 		},
 	}
 }

@@ -27,8 +27,8 @@ func newTransferCmd(use, short, long string, run func(ctx context.Context, ref s
 		Short: short,
 		Long:  long,
 		Args:  cobra.ExactArgs(1),
-		RunE: func(_ *cobra.Command, args []string) error {
-			return run(context.Background(), args[0], opts)
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return run(cmd.Context(), args[0], opts)
 		},
 	}
 

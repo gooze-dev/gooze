@@ -58,25 +58,21 @@ func parseIgnoreDirective(commentText string) (ignoreRule, bool) {
 		s = strings.TrimSpace(strings.TrimSuffix(s, "*/"))
 	}
 
-	if !strings.HasPrefix(s, "gooze:ignore") {
+	rest, ok := strings.CutPrefix(s, "gooze:ignore")
+	if !ok || (rest != "" && !unicode.IsSpace(rune(rest[0]))) {
 		return ignoreRule{}, false
 	}
 
-	rest := strings.TrimSpace(strings.TrimPrefix(s, "gooze:ignore"))
+	rest = strings.TrimSpace(rest)
 	if rest == "" {
 		return ignoreRule{all: true}, true
 	}
 
-	parts := strings.Split(rest, ",")
+	parts := strings.FieldsFunc(rest, func(r rune) bool { return r == ',' || unicode.IsSpace(r) })
 	rule := ignoreRule{names: make(map[string]struct{}, len(parts))}
 
 	for _, part := range parts {
-		name := strings.ToLower(strings.TrimSpace(part))
-		if name == "" {
-			continue
-		}
-
-		rule.names[name] = struct{}{}
+		rule.names[strings.ToLower(part)] = struct{}{}
 	}
 
 	if len(rule.names) == 0 {
@@ -184,7 +180,7 @@ func buildLineIgnoreRules(
 
 			targetLine := pos.Line
 			if isLeadingComment(pos.Line, pos.Offset, lineStarts, content) {
-				targetLine = pos.Line + 1
+				targetLine = fset.PositionFor(group.End(), true).Line + 1
 			}
 
 			current := lineRules[targetLine]
