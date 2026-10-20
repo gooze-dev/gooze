@@ -187,7 +187,7 @@ func (t *TUI) DisplayStartingTestInfo(ctx context.Context, currentMutation m.Mut
 	fileHash := ""
 
 	if currentMutation.Source.Origin != nil {
-		path = string(currentMutation.Source.Origin.ShortPath)
+		path = currentMutation.Source.Origin.ShortPath
 		fileHash = currentMutation.Source.Origin.Hash
 	}
 
@@ -215,15 +215,10 @@ func (t *TUI) DisplayCompletedTestInfo(ctx context.Context, currentMutation m.Mu
 
 	path := ""
 	fileHash := ""
-	diff := []byte(nil)
 
 	if currentMutation.Source.Origin != nil {
-		path = string(currentMutation.Source.Origin.ShortPath)
+		path = currentMutation.Source.Origin.ShortPath
 		fileHash = currentMutation.Source.Origin.Hash
-	}
-
-	if status != formatTestStatus(m.Killed) && len(currentMutation.DiffCode) > 0 {
-		diff = currentMutation.DiffCode
 	}
 
 	t.send(completedMutationMsg{
@@ -232,7 +227,7 @@ func (t *TUI) DisplayCompletedTestInfo(ctx context.Context, currentMutation m.Mu
 		fileHash:    fileHash,
 		displayPath: path,
 		status:      status,
-		diff:        diff,
+		diff:        reportedDiff(status, currentMutation.DiffCode),
 	})
 }
 

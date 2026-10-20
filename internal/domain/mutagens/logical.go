@@ -5,11 +5,13 @@ import (
 	"go/token"
 
 	m "gooze.dev/pkg/gooze/internal/model"
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 // GenerateLogicalMutations generates logical operator mutations for the given AST node.
-func GenerateLogicalMutations(n ast.Node, fset *token.FileSet, content []byte, source m.Source) []m.Mutation {
-	return generateBinaryExprMutations(n, fset, content, source, m.MutationLogical, isLogicalOp, getLogicalAlternatives)
+func GenerateLogicalMutations(n ast.Node, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
+	return generateBinaryExprMutations(n, fset, content, source, mgen.Logical, isLogicalOp, getLogicalAlternatives)
 }
 
 func isLogicalOp(op token.Token) bool {

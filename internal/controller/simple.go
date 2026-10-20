@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 	"gooze.dev/pkg/gooze/internal/domain"
 	m "gooze.dev/pkg/gooze/internal/model"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 // SimpleUI implements UI using cobra Command's Println.
@@ -129,7 +130,7 @@ func (s *SimpleUI) DisplayStartingTestInfo(ctx context.Context, currentMutation 
 
 	path := ""
 	if currentMutation.Source.Origin != nil {
-		path = string(currentMutation.Source.Origin.ShortPath)
+		path = currentMutation.Source.Origin.ShortPath
 	}
 
 	s.printf("Starting mutation %s (%s) %s\n", currentMutation.ID[:4], currentMutation.Type.Name, path)
@@ -148,18 +149,28 @@ func (s *SimpleUI) DisplayCompletedTestInfo(ctx context.Context, currentMutation
 
 	s.printf("Completed mutation %s (%s) -> %s\n", currentMutation.ID[:4], currentMutation.Type.Name, status)
 
-	if status != formatTestStatus(m.Killed) && len(currentMutation.DiffCode) > 0 {
+	if diff := reportedDiff(status, currentMutation.DiffCode); diff != nil {
 		path := ""
 		if currentMutation.Source.Origin != nil {
-			path = string(currentMutation.Source.Origin.FullPath)
+			path = currentMutation.Source.Origin.FullPath
 		}
 
 		if path != "" {
 			s.printf("File: %s\n", path)
 		}
 
-		s.printf("%s\n", currentMutation.DiffCode)
+		s.printf("%s\n", diff)
 	}
+}
+
+// reportedDiff returns the diff to show for a completed mutation: none for
+// killed mutations or empty diffs.
+func reportedDiff(status string, diff []byte) []byte {
+	if status == formatTestStatus(rpt.Killed) || len(diff) == 0 {
+		return nil
+	}
+
+	return diff
 }
 
 // DisplayMutationScore prints the final mutation score.
@@ -175,7 +186,7 @@ func (s *SimpleUI) printf(format string, args ...any) {
 	_, _ = fmt.Fprintf(s.cmd.OutOrStdout(), format, args...)
 }
 
-func formatTestStatus(status m.TestStatus) string {
+func formatTestStatus(status rpt.TestStatus) string {
 	return status.String()
 }
 

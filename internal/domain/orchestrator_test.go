@@ -11,16 +11,18 @@ import (
 	domain "gooze.dev/pkg/gooze/internal/domain"
 	domainmocks "gooze.dev/pkg/gooze/internal/domain/mocks"
 	m "gooze.dev/pkg/gooze/internal/model"
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 func TestOrchestrator_TestMutation_NoOrigin(t *testing.T) {
 	orch := domain.NewOrchestrator(nil, nil)
 	mutation := m.Mutation{
 		ID:   "hash-1",
-		Type: m.MutationArithmetic,
-		Source: m.Source{
+		Type: mgen.Arithmetic,
+		Source: rpt.Source{
 			Origin: nil,
-			Test:   &m.File{FullPath: m.Path("/project/main_test.go")},
+			Test:   &rpt.File{FullPath: "/project/main_test.go"},
 		},
 	}
 
@@ -33,9 +35,9 @@ func TestOrchestrator_TestMutation_NoTestFile(t *testing.T) {
 
 	mutation := m.Mutation{
 		ID:   "test-hash-id",
-		Type: m.MutationBoolean,
-		Source: m.Source{
-			Origin: &m.File{FullPath: m.Path("/project/main.go")},
+		Type: mgen.Boolean,
+		Source: rpt.Source{
+			Origin: &rpt.File{FullPath: "/project/main.go"},
 			Test:   nil,
 		},
 	}
@@ -47,7 +49,7 @@ func TestOrchestrator_TestMutation_NoTestFile(t *testing.T) {
 	require.True(t, ok)
 	require.Len(t, entries, 1)
 	require.Equal(t, "test-hash-id", entries[0].MutationID)
-	require.Equal(t, m.Survived, entries[0].Status)
+	require.Equal(t, rpt.Survived, entries[0].Status)
 }
 
 func TestOrchestrator_TestMutation_FindProjectRootError(t *testing.T) {
@@ -57,7 +59,7 @@ func TestOrchestrator_TestMutation_FindProjectRootError(t *testing.T) {
 	ctx := context.Background()
 	mutation := makeTestMutation()
 
-	fsAdapter.EXPECT().FindProjectRoot(ctx, mutation.Source.Origin.FullPath).Return(m.Path(""), errors.New("root err"))
+	fsAdapter.EXPECT().FindProjectRoot(ctx, m.Path(mutation.Source.Origin.FullPath)).Return(m.Path(""), errors.New("root err"))
 
 	_, err := orch.TestMutation(ctx, mutation)
 	require.Error(t, err)
@@ -74,12 +76,12 @@ func TestOrchestrator_TestMutation_TestFailureMarksKilled(t *testing.T) {
 
 	original := []byte("package main\nfunc main() { _ = 1 + 2 }\n")
 
-	fsAdapter.EXPECT().FindProjectRoot(ctx, mutation.Source.Origin.FullPath).Return(projectRoot, nil)
+	fsAdapter.EXPECT().FindProjectRoot(ctx, m.Path(mutation.Source.Origin.FullPath)).Return(projectRoot, nil)
 	fsAdapter.EXPECT().CreateTempDir(ctx, "gooze-mutation-*").Return(tmpDir, nil)
 	fsAdapter.EXPECT().CopyDir(ctx, projectRoot, tmpDir).Return(nil)
-	fsAdapter.EXPECT().RelPath(ctx, projectRoot, mutation.Source.Origin.FullPath).Return(m.Path("main.go"), nil)
+	fsAdapter.EXPECT().RelPath(ctx, projectRoot, m.Path(mutation.Source.Origin.FullPath)).Return(m.Path("main.go"), nil)
 	fsAdapter.EXPECT().JoinPath(ctx, string(tmpDir), "main.go").Return(m.Path("/tmp/mut/main.go"))
-	fsAdapter.EXPECT().RelPath(ctx, projectRoot, mutation.Source.Test.FullPath).Return(m.Path("main_test.go"), nil)
+	fsAdapter.EXPECT().RelPath(ctx, projectRoot, m.Path(mutation.Source.Test.FullPath)).Return(m.Path("main_test.go"), nil)
 	fsAdapter.EXPECT().JoinPath(ctx, string(tmpDir), "main_test.go").Return(m.Path("/tmp/mut/main_test.go"))
 	// Save the original, write the mutation, then restore the original so the
 	// workspace can be reused (restore runs under a cancellation-free context).
@@ -95,7 +97,7 @@ func TestOrchestrator_TestMutation_TestFailureMarksKilled(t *testing.T) {
 	entries, ok := result[mutation.Type]
 	require.True(t, ok)
 	require.Len(t, entries, 1)
-	require.Equal(t, m.Killed, entries[0].Status)
+	require.Equal(t, rpt.Killed, entries[0].Status)
 }
 
 func TestOrchestrator_TestMutation_ContextCancelledReturnsTimeout(t *testing.T) {
@@ -111,17 +113,17 @@ func TestOrchestrator_TestMutation_ContextCancelledReturnsTimeout(t *testing.T) 
 	entries, ok := result[mutation.Type]
 	require.True(t, ok)
 	require.Len(t, entries, 1)
-	require.Equal(t, m.Timeout, entries[0].Status)
+	require.Equal(t, rpt.Timeout, entries[0].Status)
 }
 
 func makeTestMutation() m.Mutation {
 	return m.Mutation{
 		ID:          "test-mutation-hash",
-		Type:        m.MutationArithmetic,
+		Type:        mgen.Arithmetic,
 		MutatedCode: []byte("package main\nfunc main() { _ = 1 + 1 }\n"),
-		Source: m.Source{
-			Origin: &m.File{FullPath: m.Path("/project/main.go")},
-			Test:   &m.File{FullPath: m.Path("/project/main_test.go")},
+		Source: rpt.Source{
+			Origin: &rpt.File{FullPath: "/project/main.go"},
+			Test:   &rpt.File{FullPath: "/project/main_test.go"},
 		},
 	}
 }
@@ -136,12 +138,12 @@ func TestOrchestrator_TestMutation_BuildFailureMarksError(t *testing.T) {
 	tmpDir := m.Path("/tmp/mut")
 	original := []byte("package main\nfunc main() { _ = 1 + 2 }\n")
 
-	fsAdapter.EXPECT().FindProjectRoot(ctx, mutation.Source.Origin.FullPath).Return(projectRoot, nil)
+	fsAdapter.EXPECT().FindProjectRoot(ctx, m.Path(mutation.Source.Origin.FullPath)).Return(projectRoot, nil)
 	fsAdapter.EXPECT().CreateTempDir(ctx, "gooze-mutation-*").Return(tmpDir, nil)
 	fsAdapter.EXPECT().CopyDir(ctx, projectRoot, tmpDir).Return(nil)
-	fsAdapter.EXPECT().RelPath(ctx, projectRoot, mutation.Source.Origin.FullPath).Return(m.Path("main.go"), nil)
+	fsAdapter.EXPECT().RelPath(ctx, projectRoot, m.Path(mutation.Source.Origin.FullPath)).Return(m.Path("main.go"), nil)
 	fsAdapter.EXPECT().JoinPath(ctx, string(tmpDir), "main.go").Return(m.Path("/tmp/mut/main.go"))
-	fsAdapter.EXPECT().RelPath(ctx, projectRoot, mutation.Source.Test.FullPath).Return(m.Path("main_test.go"), nil)
+	fsAdapter.EXPECT().RelPath(ctx, projectRoot, m.Path(mutation.Source.Test.FullPath)).Return(m.Path("main_test.go"), nil)
 	fsAdapter.EXPECT().JoinPath(ctx, string(tmpDir), "main_test.go").Return(m.Path("/tmp/mut/main_test.go"))
 	fsAdapter.EXPECT().ReadFile(ctx, m.Path("/tmp/mut/main.go")).Return(original, nil)
 	fsAdapter.EXPECT().WriteFile(ctx, m.Path("/tmp/mut/main.go"), mutation.MutatedCode, os.FileMode(0o600)).Return(nil)
@@ -155,5 +157,5 @@ func TestOrchestrator_TestMutation_BuildFailureMarksError(t *testing.T) {
 
 	entries := result[mutation.Type]
 	require.Len(t, entries, 1)
-	require.Equal(t, m.Error, entries[0].Status)
+	require.Equal(t, rpt.Error, entries[0].Status)
 }

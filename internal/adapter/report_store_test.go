@@ -15,6 +15,8 @@ import (
 
 	m "gooze.dev/pkg/gooze/internal/model"
 	"gooze.dev/pkg/gooze/pkg"
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 func TestLocalReportStore_SaveReports_WritesReportFields(t *testing.T) {
@@ -24,17 +26,17 @@ func TestLocalReportStore_SaveReports_WritesReportFields(t *testing.T) {
 	rs := &LocalReportStore{}
 
 	report := m.Report{
-		Source: m.Source{
-			Origin: &m.File{FullPath: m.Path("/abs/path/file.go"), Hash: "abc123"},
-			Test:   &m.File{FullPath: m.Path("/abs/path/file_test.go"), Hash: "def456"},
+		Source: rpt.Source{
+			Origin: &rpt.File{FullPath: "/abs/path/file.go", Hash: "abc123"},
+			Test:   &rpt.File{FullPath: "/abs/path/file_test.go", Hash: "def456"},
 		},
 		Result: m.Result{
-			m.MutationBoolean: {
-				{MutationID: "m1", Status: m.Killed, Err: nil},
-				{MutationID: "m2", Status: m.Error, Err: nil},
+			mgen.Boolean: {
+				{MutationID: "m1", Status: rpt.Killed, Err: nil},
+				{MutationID: "m2", Status: rpt.Error, Err: nil},
 			},
-			m.MutationArithmetic: {
-				{MutationID: "m3", Status: m.Survived, Err: nil},
+			mgen.Arithmetic: {
+				{MutationID: "m3", Status: rpt.Survived, Err: nil},
 			},
 		},
 		Diff: nil,
@@ -74,7 +76,7 @@ func TestLocalReportStore_SaveReports_WritesReportFields(t *testing.T) {
 		t.Fatalf("read report file: %v", err)
 	}
 
-	var decoded reportYAML
+	var decoded rpt.Report
 	if err := yaml.Unmarshal(data, &decoded); err != nil {
 		t.Fatalf("unmarshal YAML: %v", err)
 	}
@@ -96,7 +98,7 @@ func TestLocalReportStore_SaveReports_WritesReportFields(t *testing.T) {
 	// Ensure the boolean mutation entry includes the error string for m2.
 	foundM2Err := false
 	for _, entry := range decoded.Result {
-		if entry.Name != m.MutationBoolean.Name {
+		if entry.Name != mgen.Boolean.Name {
 			continue
 		}
 		for _, mut := range entry.Mutations {
@@ -120,7 +122,7 @@ func TestLocalReportStore_SaveReports_SkipsReportsWithNoMutations(t *testing.T) 
 	rs := &LocalReportStore{}
 
 	report := m.Report{
-		Source: m.Source{Origin: &m.File{FullPath: m.Path("/abs/path/file.go"), Hash: "abc123"}},
+		Source: rpt.Source{Origin: &rpt.File{FullPath: "/abs/path/file.go", Hash: "abc123"}},
 		Result: m.Result{},
 		Diff:   nil,
 	}
@@ -145,20 +147,20 @@ func TestLocalReportStore_SaveReports_WritesIndexYAML(t *testing.T) {
 	rs := &LocalReportStore{}
 
 	report1 := m.Report{
-		Source: m.Source{Origin: &m.File{FullPath: m.Path("/abs/a.go"), Hash: "sourceA"}},
+		Source: rpt.Source{Origin: &rpt.File{FullPath: "/abs/a.go", Hash: "sourceA"}},
 		Result: m.Result{
-			m.MutationBoolean: {
-				{MutationID: "b1", Status: m.Killed, Err: nil},
-				{MutationID: "b2", Status: m.Skipped, Err: nil},
+			mgen.Boolean: {
+				{MutationID: "b1", Status: rpt.Killed, Err: nil},
+				{MutationID: "b2", Status: rpt.Skipped, Err: nil},
 			},
 		},
 	}
 
 	report2 := m.Report{
-		Source: m.Source{Origin: &m.File{FullPath: m.Path("/abs/b.go"), Hash: "sourceB"}},
+		Source: rpt.Source{Origin: &rpt.File{FullPath: "/abs/b.go", Hash: "sourceB"}},
 		Result: m.Result{
-			m.MutationArithmetic: {
-				{MutationID: "a1", Status: m.Error, Err: nil},
+			mgen.Arithmetic: {
+				{MutationID: "a1", Status: rpt.Error, Err: nil},
 			},
 		},
 	}
@@ -180,7 +182,7 @@ func TestLocalReportStore_SaveReports_WritesIndexYAML(t *testing.T) {
 		t.Fatalf("expected _index.yaml to exist: %v", err)
 	}
 
-	var idx indexEntry
+	var idx rpt.Index
 	if err := yaml.Unmarshal(data, &idx); err != nil {
 		t.Fatalf("unmarshal _index.yaml: %v", err)
 	}
@@ -213,7 +215,7 @@ func TestLocalReportStore_SaveReports_WritesIndexYAML(t *testing.T) {
 	file1 := hash1 + ".yaml"
 	file2 := hash2 + ".yaml"
 
-	bySource := map[string]resultEntry{}
+	bySource := map[string]rpt.IndexResult{}
 	for _, re := range idx.Result {
 		bySource[re.SourceHex] = re
 	}
@@ -225,8 +227,8 @@ func TestLocalReportStore_SaveReports_WritesIndexYAML(t *testing.T) {
 	if len(reA.Mutations) != 1 {
 		t.Fatalf("expected sourceA to have 1 mutation entry, got %d", len(reA.Mutations))
 	}
-	if reA.Mutations[0].MutationName != m.MutationBoolean.Name {
-		t.Fatalf("expected sourceA mutation_name=%q, got %q", m.MutationBoolean.Name, reA.Mutations[0].MutationName)
+	if reA.Mutations[0].MutationName != mgen.Boolean.Name {
+		t.Fatalf("expected sourceA mutation_name=%q, got %q", mgen.Boolean.Name, reA.Mutations[0].MutationName)
 	}
 	if len(reA.Mutations[0].MutationReports) != 1 || reA.Mutations[0].MutationReports[0] != file1 {
 		t.Fatalf("unexpected sourceA mutation_reports: %v", reA.Mutations[0].MutationReports)
@@ -239,8 +241,8 @@ func TestLocalReportStore_SaveReports_WritesIndexYAML(t *testing.T) {
 	if len(reB.Mutations) != 1 {
 		t.Fatalf("expected sourceB to have 1 mutation entry, got %d", len(reB.Mutations))
 	}
-	if reB.Mutations[0].MutationName != m.MutationArithmetic.Name {
-		t.Fatalf("expected sourceB mutation_name=%q, got %q", m.MutationArithmetic.Name, reB.Mutations[0].MutationName)
+	if reB.Mutations[0].MutationName != mgen.Arithmetic.Name {
+		t.Fatalf("expected sourceB mutation_name=%q, got %q", mgen.Arithmetic.Name, reB.Mutations[0].MutationName)
 	}
 	if len(reB.Mutations[0].MutationReports) != 1 || reB.Mutations[0].MutationReports[0] != file2 {
 		t.Fatalf("unexpected sourceB mutation_reports: %v", reB.Mutations[0].MutationReports)
@@ -261,13 +263,13 @@ func TestLocalReportStore_SaveReports_WritesHashedYAMLPerReport(t *testing.T) {
 	defer spill.Close()
 
 	report := m.Report{
-		Source: m.Source{
-			Origin: &m.File{FullPath: m.Path("/abs/path/file.go"), Hash: "abc123"},
-			Test:   &m.File{FullPath: m.Path("/abs/path/file_test.go"), Hash: "def456"},
+		Source: rpt.Source{
+			Origin: &rpt.File{FullPath: "/abs/path/file.go", Hash: "abc123"},
+			Test:   &rpt.File{FullPath: "/abs/path/file_test.go", Hash: "def456"},
 		},
 		Result: m.Result{
-			m.MutationBoolean: {
-				{MutationID: "m1", Status: m.Killed, Err: nil},
+			mgen.Boolean: {
+				{MutationID: "m1", Status: rpt.Killed, Err: nil},
 			},
 		},
 	}
@@ -299,24 +301,24 @@ func TestLocalReportStore_LoadSpillReports_LoadsReportsIntoSpill(t *testing.T) {
 
 	// First, save some reports using SaveReports
 	report1 := m.Report{
-		Source: m.Source{
-			Origin: &m.File{FullPath: m.Path("/abs/path/file1.go"), Hash: "abc123"},
-			Test:   &m.File{FullPath: m.Path("/abs/path/file1_test.go"), Hash: "def456"},
+		Source: rpt.Source{
+			Origin: &rpt.File{FullPath: "/abs/path/file1.go", Hash: "abc123"},
+			Test:   &rpt.File{FullPath: "/abs/path/file1_test.go", Hash: "def456"},
 		},
 		Result: m.Result{
-			m.MutationBoolean: {
-				{MutationID: "m1", Status: m.Killed, Err: nil},
+			mgen.Boolean: {
+				{MutationID: "m1", Status: rpt.Killed, Err: nil},
 			},
 		},
 	}
 	report2 := m.Report{
-		Source: m.Source{
-			Origin: &m.File{FullPath: m.Path("/abs/path/file2.go"), Hash: "ghi789"},
-			Test:   &m.File{FullPath: m.Path("/abs/path/file2_test.go"), Hash: "jkl012"},
+		Source: rpt.Source{
+			Origin: &rpt.File{FullPath: "/abs/path/file2.go", Hash: "ghi789"},
+			Test:   &rpt.File{FullPath: "/abs/path/file2_test.go", Hash: "jkl012"},
 		},
 		Result: m.Result{
-			m.MutationArithmetic: {
-				{MutationID: "m2", Status: m.Survived, Err: nil},
+			mgen.Arithmetic: {
+				{MutationID: "m2", Status: rpt.Survived, Err: nil},
 			},
 		},
 	}
@@ -350,7 +352,7 @@ func TestLocalReportStore_LoadSpillReports_LoadsReportsIntoSpill(t *testing.T) {
 	// For simplicity, check that the sources are present (order may vary)
 	sources := make(map[string]bool)
 	for _, r := range loadedReports {
-		sources[string(r.Source.Origin.FullPath)] = true
+		sources[r.Source.Origin.FullPath] = true
 	}
 	if !sources["/abs/path/file1.go"] || !sources["/abs/path/file2.go"] {
 		t.Fatalf("loaded reports do not match expected sources")
@@ -363,9 +365,9 @@ func TestLocalReportStore_CheckUpdates_NoReportsDir_ReturnsAllSources(t *testing
 	dir := filepath.Join(t.TempDir(), "does-not-exist")
 	rs := &LocalReportStore{}
 
-	sources := []m.Source{
-		{Origin: &m.File{FullPath: m.Path("/abs/a.go"), Hash: "hash-a"}},
-		{Origin: &m.File{FullPath: m.Path("/abs/b.go"), Hash: "hash-b"}},
+	sources := []rpt.Source{
+		{Origin: &rpt.File{FullPath: "/abs/a.go", Hash: "hash-a"}},
+		{Origin: &rpt.File{FullPath: "/abs/b.go", Hash: "hash-b"}},
 	}
 
 	changedSpill, deletedSpill, err := rs.CheckUpdates(context.Background(), m.Path(dir), sourceSpill(t, sources...))
@@ -417,7 +419,7 @@ func TestLocalReportStore_CheckUpdates_EmptyReportsDir_ReturnsAllSources(t *test
 	dir := t.TempDir()
 	rs := &LocalReportStore{}
 
-	sources := []m.Source{{Origin: &m.File{FullPath: m.Path("/abs/a.go"), Hash: "hash-a"}}}
+	sources := []rpt.Source{{Origin: &rpt.File{FullPath: "/abs/a.go", Hash: "hash-a"}}}
 	changedSpill, deletedSpill, err := rs.CheckUpdates(context.Background(), m.Path(dir), sourceSpill(t, sources...))
 	changed := spillItems(t, changedSpill)
 	_ = spillItems(t, deletedSpill)
@@ -435,10 +437,10 @@ func TestLocalReportStore_CheckUpdates_SourceDeleted_ReturnsMissingSource(t *tes
 	dir := t.TempDir()
 	rs := &LocalReportStore{}
 
-	deleted := m.Source{Origin: &m.File{FullPath: m.Path("/abs/deleted.go"), Hash: "old-hash"}}
+	deleted := rpt.Source{Origin: &rpt.File{FullPath: "/abs/deleted.go", Hash: "old-hash"}}
 	report := m.Report{
 		Source: deleted,
-		Result: m.Result{m.MutationBoolean: {{MutationID: "m1", Status: m.Killed, Err: nil}}},
+		Result: m.Result{mgen.Boolean: {{MutationID: "m1", Status: rpt.Killed, Err: nil}}},
 	}
 	if err := rs.SaveReports(context.Background(), m.Path(dir), reportSpill(t, report)); err != nil {
 		t.Fatalf("SaveReports returned error: %v", err)
@@ -469,21 +471,21 @@ func TestLocalReportStore_CheckUpdates_CodeOrTestChanged_ReturnsSource(t *testin
 	dir := t.TempDir()
 	rs := &LocalReportStore{}
 
-	old := m.Source{
-		Origin: &m.File{FullPath: m.Path("/abs/a.go"), Hash: "old-code"},
-		Test:   &m.File{FullPath: m.Path("/abs/a_test.go"), Hash: "old-test"},
+	old := rpt.Source{
+		Origin: &rpt.File{FullPath: "/abs/a.go", Hash: "old-code"},
+		Test:   &rpt.File{FullPath: "/abs/a_test.go", Hash: "old-test"},
 	}
 	report := m.Report{
 		Source: old,
-		Result: m.Result{m.MutationBoolean: {{MutationID: "m1", Status: m.Killed, Err: nil}}},
+		Result: m.Result{mgen.Boolean: {{MutationID: "m1", Status: rpt.Killed, Err: nil}}},
 	}
 	if err := rs.SaveReports(context.Background(), m.Path(dir), reportSpill(t, report)); err != nil {
 		t.Fatalf("SaveReports returned error: %v", err)
 	}
 
-	current := []m.Source{{
-		Origin: &m.File{FullPath: m.Path("/abs/a.go"), Hash: "new-code"},
-		Test:   &m.File{FullPath: m.Path("/abs/a_test.go"), Hash: "old-test"},
+	current := []rpt.Source{{
+		Origin: &rpt.File{FullPath: "/abs/a.go", Hash: "new-code"},
+		Test:   &rpt.File{FullPath: "/abs/a_test.go", Hash: "old-test"},
 	}}
 
 	changedSpill, deletedSpill, err := rs.CheckUpdates(context.Background(), m.Path(dir), sourceSpill(t, current...))
@@ -507,20 +509,20 @@ func TestLocalReportStore_CheckUpdates_TestFileAddedOrRemoved_ReturnsSource(t *t
 	rs := &LocalReportStore{}
 
 	// Stored run had a test file.
-	stored := m.Source{
-		Origin: &m.File{FullPath: m.Path("/abs/a.go"), Hash: "same"},
-		Test:   &m.File{FullPath: m.Path("/abs/a_test.go"), Hash: "test-hash"},
+	stored := rpt.Source{
+		Origin: &rpt.File{FullPath: "/abs/a.go", Hash: "same"},
+		Test:   &rpt.File{FullPath: "/abs/a_test.go", Hash: "test-hash"},
 	}
 	report := m.Report{
 		Source: stored,
-		Result: m.Result{m.MutationBoolean: {{MutationID: "m1", Status: m.Killed, Err: nil}}},
+		Result: m.Result{mgen.Boolean: {{MutationID: "m1", Status: rpt.Killed, Err: nil}}},
 	}
 	if err := rs.SaveReports(context.Background(), m.Path(dir), reportSpill(t, report)); err != nil {
 		t.Fatalf("SaveReports returned error: %v", err)
 	}
 
 	// Current run has no test file associated.
-	current := []m.Source{{Origin: &m.File{FullPath: m.Path("/abs/a.go"), Hash: "same"}}}
+	current := []rpt.Source{{Origin: &rpt.File{FullPath: "/abs/a.go", Hash: "same"}}}
 	changedSpill, deletedSpill, err := rs.CheckUpdates(context.Background(), m.Path(dir), sourceSpill(t, current...))
 	changed := spillItems(t, changedSpill)
 	_ = spillItems(t, deletedSpill)
@@ -538,18 +540,18 @@ func TestLocalReportStore_CheckUpdates_NewMutator_ReturnsSource(t *testing.T) {
 	dir := t.TempDir()
 	rs := &LocalReportStore{}
 
-	old := m.Source{Origin: &m.File{FullPath: m.Path("/abs/a.go"), Hash: "same"}}
+	old := rpt.Source{Origin: &rpt.File{FullPath: "/abs/a.go", Hash: "same"}}
 
 	// Previous run only had boolean mutations recorded.
 	report := m.Report{
 		Source: old,
-		Result: m.Result{m.MutationBoolean: {{MutationID: "m1", Status: m.Killed, Err: nil}}},
+		Result: m.Result{mgen.Boolean: {{MutationID: "m1", Status: rpt.Killed, Err: nil}}},
 	}
 	if err := rs.SaveReports(context.Background(), m.Path(dir), reportSpill(t, report)); err != nil {
 		t.Fatalf("SaveReports returned error: %v", err)
 	}
 
-	current := []m.Source{{Origin: &m.File{FullPath: m.Path("/abs/a.go"), Hash: "same"}}}
+	current := []rpt.Source{{Origin: &rpt.File{FullPath: "/abs/a.go", Hash: "same"}}}
 	changedSpill, deletedSpill, err := rs.CheckUpdates(context.Background(), m.Path(dir), sourceSpill(t, current...))
 	changed := spillItems(t, changedSpill)
 	_ = spillItems(t, deletedSpill)
@@ -567,17 +569,17 @@ func TestLocalReportStore_CheckUpdates_StoredHasUnknownMutator_ReturnsSource(t *
 	dir := t.TempDir()
 	rs := &LocalReportStore{}
 
-	old := m.Source{Origin: &m.File{FullPath: m.Path("/abs/a.go"), Hash: "same"}}
-	unknown := m.MutationType{Name: "custom-mut", Version: 1}
+	old := rpt.Source{Origin: &rpt.File{FullPath: "/abs/a.go", Hash: "same"}}
+	unknown := mgen.Type{Name: "custom-mut", Version: 1}
 	report := m.Report{
 		Source: old,
-		Result: m.Result{unknown: {{MutationID: "m1", Status: m.Killed, Err: nil}}},
+		Result: m.Result{unknown: {{MutationID: "m1", Status: rpt.Killed, Err: nil}}},
 	}
 	if err := rs.SaveReports(context.Background(), m.Path(dir), reportSpill(t, report)); err != nil {
 		t.Fatalf("SaveReports returned error: %v", err)
 	}
 
-	current := []m.Source{{Origin: &m.File{FullPath: m.Path("/abs/a.go"), Hash: "same"}}}
+	current := []rpt.Source{{Origin: &rpt.File{FullPath: "/abs/a.go", Hash: "same"}}}
 	changedSpill, deletedSpill, err := rs.CheckUpdates(context.Background(), m.Path(dir), sourceSpill(t, current...))
 	changed := spillItems(t, changedSpill)
 	_ = spillItems(t, deletedSpill)
@@ -595,7 +597,7 @@ func TestLocalReportStore_CheckUpdates_IgnoresSourcesWithNilOrigin(t *testing.T)
 	dir := filepath.Join(t.TempDir(), "does-not-exist")
 	rs := &LocalReportStore{}
 
-	sources := []m.Source{{Origin: nil}}
+	sources := []rpt.Source{{Origin: nil}}
 	changedSpill, deletedSpill, err := rs.CheckUpdates(context.Background(), m.Path(dir), sourceSpill(t, sources...))
 	changed := spillItems(t, changedSpill)
 	_ = spillItems(t, deletedSpill)
@@ -613,11 +615,11 @@ func TestLocalReportStore_CleanReports_DeletesOnlySelectedAndLeavesIndexToCaller
 	dir := t.TempDir()
 	rs := &LocalReportStore{}
 
-	sourceA := m.Source{Origin: &m.File{FullPath: m.Path("/abs/a.go"), Hash: "sourceA"}}
-	sourceB := m.Source{Origin: &m.File{FullPath: m.Path("/abs/b.go"), Hash: "sourceB"}}
+	sourceA := rpt.Source{Origin: &rpt.File{FullPath: "/abs/a.go", Hash: "sourceA"}}
+	sourceB := rpt.Source{Origin: &rpt.File{FullPath: "/abs/b.go", Hash: "sourceB"}}
 
-	reportA := m.Report{Source: sourceA, Result: m.Result{m.MutationBoolean: {{MutationID: "b1", Status: m.Killed, Err: nil}}}}
-	reportB := m.Report{Source: sourceB, Result: m.Result{m.MutationArithmetic: {{MutationID: "a1", Status: m.Survived, Err: nil}}}}
+	reportA := m.Report{Source: sourceA, Result: m.Result{mgen.Boolean: {{MutationID: "b1", Status: rpt.Killed, Err: nil}}}}
+	reportB := m.Report{Source: sourceB, Result: m.Result{mgen.Arithmetic: {{MutationID: "a1", Status: rpt.Survived, Err: nil}}}}
 
 	if err := rs.SaveReports(context.Background(), m.Path(dir), reportSpill(t, reportA, reportB)); err != nil {
 		t.Fatalf("SaveReports returned error: %v", err)
@@ -657,7 +659,7 @@ func TestLocalReportStore_CleanReports_DeletesOnlySelectedAndLeavesIndexToCaller
 	if err != nil {
 		t.Fatalf("read _index.yaml: %v", err)
 	}
-	var staleIdx indexEntry
+	var staleIdx rpt.Index
 	if err := yaml.Unmarshal(stale, &staleIdx); err != nil {
 		t.Fatalf("unmarshal _index.yaml: %v", err)
 	}
@@ -673,7 +675,7 @@ func TestLocalReportStore_CleanReports_DeletesOnlySelectedAndLeavesIndexToCaller
 	if err != nil {
 		t.Fatalf("read _index.yaml: %v", err)
 	}
-	var idx indexEntry
+	var idx rpt.Index
 	if err := yaml.Unmarshal(data, &idx); err != nil {
 		t.Fatalf("unmarshal _index.yaml: %v", err)
 	}
@@ -691,8 +693,8 @@ func TestLocalReportStore_CleanReports_DeleteAll_RemovesIndex(t *testing.T) {
 	dir := t.TempDir()
 	rs := &LocalReportStore{}
 
-	sourceA := m.Source{Origin: &m.File{FullPath: m.Path("/abs/a.go"), Hash: "sourceA"}}
-	reportA := m.Report{Source: sourceA, Result: m.Result{m.MutationBoolean: {{MutationID: "b1", Status: m.Killed, Err: nil}}}}
+	sourceA := rpt.Source{Origin: &rpt.File{FullPath: "/abs/a.go", Hash: "sourceA"}}
+	reportA := m.Report{Source: sourceA, Result: m.Result{mgen.Boolean: {{MutationID: "b1", Status: rpt.Killed, Err: nil}}}}
 
 	if err := rs.SaveReports(context.Background(), m.Path(dir), reportSpill(t, reportA)); err != nil {
 		t.Fatalf("SaveReports returned error: %v", err)
@@ -752,19 +754,19 @@ func TestLocalReportStore_CheckUpdates_MutatorVersionDiff_ReturnsSource(t *testi
 	dir := t.TempDir()
 	rs := &LocalReportStore{}
 
-	old := m.Source{Origin: &m.File{FullPath: m.Path("/abs/a.go"), Hash: "same"}}
+	old := rpt.Source{Origin: &rpt.File{FullPath: "/abs/a.go", Hash: "same"}}
 
 	// Simulate a stored report with an older boolean mutator version.
-	oldBool := m.MutationType{Name: m.MutationBoolean.Name, Version: 0}
+	oldBool := mgen.Type{Name: mgen.Boolean.Name, Version: 0}
 	report := m.Report{
 		Source: old,
-		Result: m.Result{oldBool: {{MutationID: "m1", Status: m.Killed, Err: nil}}},
+		Result: m.Result{oldBool: {{MutationID: "m1", Status: rpt.Killed, Err: nil}}},
 	}
 	if err := rs.SaveReports(context.Background(), m.Path(dir), reportSpill(t, report)); err != nil {
 		t.Fatalf("SaveReports returned error: %v", err)
 	}
 
-	current := []m.Source{{Origin: &m.File{FullPath: m.Path("/abs/a.go"), Hash: "same"}}}
+	current := []rpt.Source{{Origin: &rpt.File{FullPath: "/abs/a.go", Hash: "same"}}}
 	changedSpill, deletedSpill, err := rs.CheckUpdates(context.Background(), m.Path(dir), sourceSpill(t, current...))
 	changed := spillItems(t, changedSpill)
 	_ = spillItems(t, deletedSpill)
@@ -784,12 +786,12 @@ func TestLocalReportStore_RegenerateIndex_ListsReportsPerSource(t *testing.T) {
 
 	reports := []m.Report{
 		{
-			Source: m.Source{Origin: &m.File{FullPath: "/abs/a.go", Hash: "sourceA"}},
-			Result: m.Result{m.MutationBoolean: {{MutationID: "a1", Status: m.Killed}}},
+			Source: rpt.Source{Origin: &rpt.File{FullPath: "/abs/a.go", Hash: "sourceA"}},
+			Result: m.Result{mgen.Boolean: {{MutationID: "a1", Status: rpt.Killed}}},
 		},
 		{
-			Source: m.Source{Origin: &m.File{FullPath: "/abs/b.go", Hash: "sourceB"}},
-			Result: m.Result{m.MutationBoolean: {{MutationID: "b1", Status: m.Survived}}},
+			Source: rpt.Source{Origin: &rpt.File{FullPath: "/abs/b.go", Hash: "sourceB"}},
+			Result: m.Result{mgen.Boolean: {{MutationID: "b1", Status: rpt.Survived}}},
 		},
 	}
 
@@ -799,7 +801,7 @@ func TestLocalReportStore_RegenerateIndex_ListsReportsPerSource(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join(dir, "_index.yaml"))
 	require.NoError(t, err)
 
-	var idx indexEntry
+	var idx rpt.Index
 	require.NoError(t, yaml.Unmarshal(data, &idx))
 	require.Len(t, idx.Result, 2)
 
@@ -814,7 +816,7 @@ func TestLocalReportStore_RegenerateIndex_ListsReportsPerSource(t *testing.T) {
 	}
 }
 
-func sourceSpill(t *testing.T, sources ...m.Source) pkg.FileSpill[m.Source] {
+func sourceSpill(t *testing.T, sources ...rpt.Source) pkg.FileSpill[rpt.Source] {
 	t.Helper()
 
 	spill, err := pkg.FromSlice(sources)
@@ -843,16 +845,16 @@ func TestLocalReportStore_CheckUpdates_ChangedKeepsScanOrderAndDeletedIsSorted(t
 	rs := &LocalReportStore{}
 
 	stored := []m.Report{
-		{Source: m.Source{Origin: &m.File{ShortPath: "z.go", FullPath: "/old/z.go", Hash: "z"}}, Result: m.Result{m.MutationBoolean: {{MutationID: "z1", Status: m.Killed}}}},
-		{Source: m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "/old/a.go", Hash: "a"}}, Result: m.Result{m.MutationBoolean: {{MutationID: "a1", Status: m.Killed}}}},
-		{Source: m.Source{Origin: &m.File{ShortPath: "keep.go", FullPath: "/old/keep.go", Hash: "k"}}, Result: m.Result{m.MutationBoolean: {{MutationID: "k1", Status: m.Killed}}}},
+		{Source: rpt.Source{Origin: &rpt.File{ShortPath: "z.go", FullPath: "/old/z.go", Hash: "z"}}, Result: m.Result{mgen.Boolean: {{MutationID: "z1", Status: rpt.Killed}}}},
+		{Source: rpt.Source{Origin: &rpt.File{ShortPath: "a.go", FullPath: "/old/a.go", Hash: "a"}}, Result: m.Result{mgen.Boolean: {{MutationID: "a1", Status: rpt.Killed}}}},
+		{Source: rpt.Source{Origin: &rpt.File{ShortPath: "keep.go", FullPath: "/old/keep.go", Hash: "k"}}, Result: m.Result{mgen.Boolean: {{MutationID: "k1", Status: rpt.Killed}}}},
 	}
 	require.NoError(t, rs.SaveReports(context.Background(), m.Path(dir), reportSpill(t, stored...)))
 
-	current := []m.Source{
-		{Origin: &m.File{ShortPath: "new2.go", FullPath: "/new/new2.go", Hash: "n2"}},
-		{Origin: &m.File{ShortPath: "keep.go", FullPath: "/new/keep.go", Hash: "k"}},
-		{Origin: &m.File{ShortPath: "new1.go", FullPath: "/new/new1.go", Hash: "n1"}},
+	current := []rpt.Source{
+		{Origin: &rpt.File{ShortPath: "new2.go", FullPath: "/new/new2.go", Hash: "n2"}},
+		{Origin: &rpt.File{ShortPath: "keep.go", FullPath: "/new/keep.go", Hash: "k"}},
+		{Origin: &rpt.File{ShortPath: "new1.go", FullPath: "/new/new1.go", Hash: "n1"}},
 	}
 
 	changedSpill, deletedSpill, err := rs.CheckUpdates(context.Background(), m.Path(dir), sourceSpill(t, current...))
@@ -865,10 +867,10 @@ func TestLocalReportStore_CheckUpdates_ChangedKeepsScanOrderAndDeletedIsSorted(t
 	require.Equal(t, []string{"a.go", "z.go"}, shortPaths(deleted))
 }
 
-func shortPaths(sources []m.Source) []string {
+func shortPaths(sources []rpt.Source) []string {
 	paths := make([]string, 0, len(sources))
 	for _, source := range sources {
-		paths = append(paths, string(source.Origin.ShortPath))
+		paths = append(paths, source.Origin.ShortPath)
 	}
 
 	return paths
@@ -892,10 +894,10 @@ func TestLocalReportStore_RegenerateIndex_ListsEachReportFileOnce(t *testing.T) 
 	dir := t.TempDir()
 	rs := &LocalReportStore{}
 
-	source := m.Source{Origin: &m.File{FullPath: "/abs/a.go", Hash: "sourceA"}}
+	source := rpt.Source{Origin: &rpt.File{FullPath: "/abs/a.go", Hash: "sourceA"}}
 	reports := []m.Report{
-		{Source: source, Result: m.Result{m.MutationBoolean: {{MutationID: "b1", Status: m.Killed}}}},
-		{Source: source, Result: m.Result{m.MutationBoolean: {{MutationID: "b2", Status: m.Survived}}}},
+		{Source: source, Result: m.Result{mgen.Boolean: {{MutationID: "b1", Status: rpt.Killed}}}},
+		{Source: source, Result: m.Result{mgen.Boolean: {{MutationID: "b2", Status: rpt.Survived}}}},
 	}
 	require.NoError(t, rs.SaveReports(context.Background(), m.Path(dir), reportSpill(t, reports...)))
 	require.NoError(t, rs.RegenerateIndex(context.Background(), m.Path(dir)))
@@ -903,7 +905,7 @@ func TestLocalReportStore_RegenerateIndex_ListsEachReportFileOnce(t *testing.T) 
 	data, err := os.ReadFile(filepath.Join(dir, "_index.yaml"))
 	require.NoError(t, err)
 
-	var idx indexEntry
+	var idx rpt.Index
 	require.NoError(t, yaml.Unmarshal(data, &idx))
 	require.Equal(t, 2, idx.TotalMutations)
 	require.Len(t, idx.Result, 1)
@@ -926,8 +928,8 @@ func TestLocalReportStore_MarshalReport_WritesErrorString(t *testing.T) {
 
 	rs := &LocalReportStore{}
 	report := m.Report{
-		Source: m.Source{Origin: &m.File{FullPath: "/abs/a.go", Hash: "h"}},
-		Result: m.Result{m.MutationBoolean: {{MutationID: "m2", Status: m.Error, Err: errors.New("boom")}}},
+		Source: rpt.Source{Origin: &rpt.File{FullPath: "/abs/a.go", Hash: "h"}},
+		Result: m.Result{mgen.Boolean: {{MutationID: "m2", Status: rpt.Error, Err: errors.New("boom")}}},
 	}
 
 	data, err := rs.marshalReport(report)
@@ -935,7 +937,7 @@ func TestLocalReportStore_MarshalReport_WritesErrorString(t *testing.T) {
 	require.Contains(t, string(data), "boom")
 }
 
-func closedSourceSpill(t *testing.T, sources ...m.Source) pkg.FileSpill[m.Source] {
+func closedSourceSpill(t *testing.T, sources ...rpt.Source) pkg.FileSpill[rpt.Source] {
 	t.Helper()
 
 	spill, err := pkg.FromSlice(sources)
@@ -954,7 +956,7 @@ func TestLocalReportStore_RangeErrors(t *testing.T) {
 
 	unreadable := t.TempDir()
 	require.NoError(t, os.Mkdir(filepath.Join(unreadable, "dir.yaml"), 0o750))
-	require.NoError(t, os.Symlink(filepath.Join(unreadable, "missing"), filepath.Join(unreadable, "dangling.yaml")))
+	require.NoError(t, os.WriteFile(filepath.Join(unreadable, "locked.yaml"), []byte("result: []\n"), 0o000))
 
 	t.Run("CheckUpdates on corrupt reports", func(t *testing.T) {
 		_, _, err := rs.CheckUpdates(ctx, m.Path(corrupt), sourceSpill(t))
@@ -966,27 +968,31 @@ func TestLocalReportStore_RangeErrors(t *testing.T) {
 	})
 
 	t.Run("unreadable report file", func(t *testing.T) {
+		if os.Geteuid() == 0 {
+			t.Skip("root can read files without permission bits")
+		}
+
 		_, err := rs.LoadSpillReports(ctx, m.Path(unreadable))
-		require.ErrorContains(t, err, "dangling.yaml")
+		require.ErrorContains(t, err, "locked.yaml")
 	})
 
 	t.Run("CleanReports with closed sources spill", func(t *testing.T) {
 		dir := t.TempDir()
 		require.NoError(t, rs.SaveReports(ctx, m.Path(dir), reportSpill(t, m.Report{
-			Source: m.Source{Origin: &m.File{FullPath: "/abs/a.go", Hash: "h"}},
-			Result: m.Result{m.MutationBoolean: {{MutationID: "b1", Status: m.Killed}}},
+			Source: rpt.Source{Origin: &rpt.File{FullPath: "/abs/a.go", Hash: "h"}},
+			Result: m.Result{mgen.Boolean: {{MutationID: "b1", Status: rpt.Killed}}},
 		})))
 
-		require.ErrorContains(t, rs.CleanReports(ctx, m.Path(dir), closedSourceSpill(t, m.Source{Origin: &m.File{FullPath: "/abs/a.go"}})), "read sources to clean")
+		require.ErrorContains(t, rs.CleanReports(ctx, m.Path(dir), closedSourceSpill(t, rpt.Source{Origin: &rpt.File{FullPath: "/abs/a.go"}})), "read sources to clean")
 	})
 
 	t.Run("CleanReports with corrupt report", func(t *testing.T) {
-		err := rs.CleanReports(ctx, m.Path(corrupt), sourceSpill(t, m.Source{Origin: &m.File{FullPath: "/abs/a.go", Hash: "h"}}))
+		err := rs.CleanReports(ctx, m.Path(corrupt), sourceSpill(t, rpt.Source{Origin: &rpt.File{FullPath: "/abs/a.go", Hash: "h"}}))
 		require.ErrorContains(t, err, "bad.yaml")
 	})
 
 	t.Run("CheckUpdates with closed sources spill", func(t *testing.T) {
-		_, _, err := rs.CheckUpdates(ctx, m.Path(t.TempDir()), closedSourceSpill(t, m.Source{Origin: &m.File{FullPath: "/abs/a.go"}}))
+		_, _, err := rs.CheckUpdates(ctx, m.Path(t.TempDir()), closedSourceSpill(t, rpt.Source{Origin: &rpt.File{FullPath: "/abs/a.go"}}))
 		require.ErrorContains(t, err, "split changed sources")
 	})
 
@@ -1008,13 +1014,13 @@ func TestLocalReportStore_CleanReports_IgnoresNilAndOriginlessSources(t *testing
 	dir := t.TempDir()
 
 	report := m.Report{
-		Source: m.Source{Origin: &m.File{FullPath: "/abs/a.go", Hash: "h"}},
-		Result: m.Result{m.MutationBoolean: {{MutationID: "b1", Status: m.Killed}}},
+		Source: rpt.Source{Origin: &rpt.File{FullPath: "/abs/a.go", Hash: "h"}},
+		Result: m.Result{mgen.Boolean: {{MutationID: "b1", Status: rpt.Killed}}},
 	}
 	require.NoError(t, rs.SaveReports(ctx, m.Path(dir), reportSpill(t, report)))
 
 	require.NoError(t, rs.CleanReports(ctx, m.Path(dir), nil))
-	require.NoError(t, rs.CleanReports(ctx, m.Path(dir), sourceSpill(t, m.Source{})))
+	require.NoError(t, rs.CleanReports(ctx, m.Path(dir), sourceSpill(t, rpt.Source{})))
 
 	reports := spillItems(t, mustLoad(t, rs, dir))
 	require.Len(t, reports, 1)
@@ -1034,11 +1040,11 @@ func TestLocalReportStore_CheckUpdates_InconsistentStoredVersionsReturnSource(t 
 	ctx := context.Background()
 	dir := t.TempDir()
 
-	source := m.Source{Origin: &m.File{FullPath: "/abs/a.go", Hash: "same"}}
+	source := rpt.Source{Origin: &rpt.File{FullPath: "/abs/a.go", Hash: "same"}}
 	reports := []m.Report{
-		{Source: source, Result: m.Result{m.MutationBoolean: {{MutationID: "b1", Status: m.Killed}}}},
-		{Source: source, Result: m.Result{m.MutationType{Name: m.MutationBoolean.Name, Version: m.MutationBoolean.Version + 1}: {{MutationID: "b2", Status: m.Killed}}}},
-		{Source: m.Source{}, Result: m.Result{m.MutationBoolean: {{MutationID: "orphan", Status: m.Killed}}}},
+		{Source: source, Result: m.Result{mgen.Boolean: {{MutationID: "b1", Status: rpt.Killed}}}},
+		{Source: source, Result: m.Result{mgen.Type{Name: mgen.Boolean.Name, Version: mgen.Boolean.Version + 1}: {{MutationID: "b2", Status: rpt.Killed}}}},
+		{Source: rpt.Source{}, Result: m.Result{mgen.Boolean: {{MutationID: "orphan", Status: rpt.Killed}}}},
 	}
 	require.NoError(t, rs.SaveReports(ctx, m.Path(dir), reportSpill(t, reports...)))
 
@@ -1054,15 +1060,15 @@ func TestLocalReportStore_RegenerateIndex_SkipsSourcesWithoutHash(t *testing.T) 
 	dir := t.TempDir()
 
 	require.NoError(t, rs.SaveReports(ctx, m.Path(dir), reportSpill(t, m.Report{
-		Source: m.Source{Origin: &m.File{FullPath: "/abs/a.go"}},
-		Result: m.Result{m.MutationBoolean: {{MutationID: "b1", Status: m.Killed}}},
+		Source: rpt.Source{Origin: &rpt.File{FullPath: "/abs/a.go"}},
+		Result: m.Result{mgen.Boolean: {{MutationID: "b1", Status: rpt.Killed}}},
 	})))
 	require.NoError(t, rs.RegenerateIndex(ctx, m.Path(dir)))
 
 	data, err := os.ReadFile(filepath.Join(dir, "_index.yaml"))
 	require.NoError(t, err)
 
-	var idx indexEntry
+	var idx rpt.Index
 	require.NoError(t, yaml.Unmarshal(data, &idx))
 	require.Equal(t, 1, idx.TotalMutations)
 	require.Empty(t, idx.Result)
@@ -1070,27 +1076,27 @@ func TestLocalReportStore_RegenerateIndex_SkipsSourcesWithoutHash(t *testing.T) 
 
 func TestLocalReportStore_AddStoredReport_MarksAnyVersionMismatch(t *testing.T) {
 	rs := &LocalReportStore{}
-	source := m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "/abs/a.go", Hash: "h"}}
-	older := m.MutationType{Name: m.MutationBoolean.Name, Version: m.MutationBoolean.Version - 1}
+	source := rpt.Source{Origin: &rpt.File{ShortPath: "a.go", FullPath: "/abs/a.go", Hash: "h"}}
+	older := mgen.Type{Name: mgen.Boolean.Name, Version: mgen.Boolean.Version - 1}
 
 	state := make(map[string]storedSourceState)
-	rs.addStoredReport(state, m.Report{Source: source, Result: m.Result{m.MutationBoolean: {{MutationID: "b1", Status: m.Killed}}}})
-	rs.addStoredReport(state, m.Report{Source: source, Result: m.Result{older: {{MutationID: "b2", Status: m.Killed}}}})
+	rs.addStoredReport(state, m.Report{Source: source, Result: m.Result{mgen.Boolean: {{MutationID: "b1", Status: rpt.Killed}}}})
+	rs.addStoredReport(state, m.Report{Source: source, Result: m.Result{older: {{MutationID: "b2", Status: rpt.Killed}}}})
 
-	require.Equal(t, -1, state["a.go"].mutator[m.MutationBoolean.Name])
+	require.Equal(t, -1, state["a.go"].mutator[mgen.Boolean.Name])
 	require.True(t, rs.isSourceChanged(state, "a.go", source))
 }
 
 func TestLocalReportStore_AddStoredReport_MarksMismatchInEitherOrder(t *testing.T) {
 	rs := &LocalReportStore{}
-	source := m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "/abs/a.go", Hash: "h"}}
-	older := m.MutationType{Name: m.MutationBoolean.Name, Version: m.MutationBoolean.Version - 1}
+	source := rpt.Source{Origin: &rpt.File{ShortPath: "a.go", FullPath: "/abs/a.go", Hash: "h"}}
+	older := mgen.Type{Name: mgen.Boolean.Name, Version: mgen.Boolean.Version - 1}
 
 	state := make(map[string]storedSourceState)
-	rs.addStoredReport(state, m.Report{Source: source, Result: m.Result{older: {{MutationID: "b2", Status: m.Killed}}}})
-	rs.addStoredReport(state, m.Report{Source: source, Result: m.Result{m.MutationBoolean: {{MutationID: "b1", Status: m.Killed}}}})
+	rs.addStoredReport(state, m.Report{Source: source, Result: m.Result{older: {{MutationID: "b2", Status: rpt.Killed}}}})
+	rs.addStoredReport(state, m.Report{Source: source, Result: m.Result{mgen.Boolean: {{MutationID: "b1", Status: rpt.Killed}}}})
 
-	require.Equal(t, -1, state["a.go"].mutator[m.MutationBoolean.Name])
+	require.Equal(t, -1, state["a.go"].mutator[mgen.Boolean.Name])
 }
 
 func TestLocalReportStore_LoadSpillReports_ReturnsErrorWhenReportUnreadable(t *testing.T) {
@@ -1106,13 +1112,138 @@ func TestLocalReportStore_RegenerateIndex_OmitsReportsWithoutResults(t *testing.
 	rs := &LocalReportStore{}
 	builder := newIndexBuilder(rs)
 
-	builder.add(m.Report{Source: m.Source{Origin: &m.File{FullPath: "/abs/empty.go", Hash: "empty"}}, Result: m.Result{}})
+	builder.add(m.Report{Source: rpt.Source{Origin: &rpt.File{FullPath: "/abs/empty.go", Hash: "empty"}}, Result: m.Result{}})
 	builder.add(m.Report{
-		Source: m.Source{Origin: &m.File{FullPath: "/abs/a.go", Hash: "a"}},
-		Result: m.Result{m.MutationBoolean: {{MutationID: "b1", Status: m.Killed}}},
+		Source: rpt.Source{Origin: &rpt.File{FullPath: "/abs/a.go", Hash: "a"}},
+		Result: m.Result{mgen.Boolean: {{MutationID: "b1", Status: rpt.Killed}}},
 	})
 
 	index := builder.build()
 	require.Len(t, index.Result, 1)
 	require.Equal(t, "a", index.Result[0].SourceHex)
+}
+
+func goldenReports() []m.Report {
+	pkgName := "calc"
+	diff := []byte("--- original\n+++ mutated\n@@ -1 +1 @@\n-a + b\n+a - b\n")
+
+	return []m.Report{
+		{
+			Source: rpt.Source{
+				Origin:  &rpt.File{ShortPath: "calc/add.go", FullPath: "/repo/calc/add.go", Hash: "aaaa"},
+				Test:    &rpt.File{ShortPath: "calc/add_test.go", FullPath: "/repo/calc/add_test.go", Hash: "bbbb"},
+				Package: &pkgName,
+			},
+			Result: m.Result{
+				mgen.Arithmetic: {
+					{MutationID: "m1", Status: rpt.Killed},
+					{MutationID: "m2", Status: rpt.Survived},
+				},
+				mgen.Boolean: {
+					{MutationID: "m3", Status: rpt.Error},
+				},
+			},
+			Diff: &diff,
+		},
+		{
+			Source: rpt.Source{Origin: &rpt.File{ShortPath: "calc/sub.go", FullPath: "/repo/calc/sub.go", Hash: "cccc"}},
+			Result: m.Result{
+				mgen.Numbers: {
+					{MutationID: "m4", Status: rpt.Timeout},
+					{MutationID: "m5", Status: rpt.Skipped},
+					{MutationID: "m6", Status: rpt.NotCovered},
+				},
+			},
+		},
+	}
+}
+
+func TestLocalReportStore_SaveReports_MatchesGoldenFormat(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	rs := &LocalReportStore{}
+
+	require.NoError(t, rs.SaveReports(context.Background(), m.Path(dir), reportSpill(t, goldenReports()...)))
+	require.NoError(t, rs.RegenerateIndex(context.Background(), m.Path(dir)))
+
+	golden := filepath.Join("..", "..", "testdata", "report")
+
+	want, err := os.ReadDir(golden)
+	require.NoError(t, err)
+
+	got, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	require.Len(t, got, len(want))
+
+	for i, entry := range want {
+		require.Equal(t, entry.Name(), got[i].Name())
+
+		wantData, err := os.ReadFile(filepath.Join(golden, entry.Name()))
+		require.NoError(t, err)
+
+		gotData, err := os.ReadFile(filepath.Join(dir, entry.Name()))
+		require.NoError(t, err)
+		require.Equal(t, string(wantData), string(gotData), entry.Name())
+	}
+}
+
+func TestLocalReportStore_CheckUpdates_EveryRegisteredMutatorIsKnown(t *testing.T) {
+	t.Parallel()
+
+	for _, mg := range mgen.All() {
+		dir := t.TempDir()
+		rs := &LocalReportStore{}
+		source := rpt.Source{Origin: &rpt.File{FullPath: "/abs/a.go", Hash: "same"}}
+		report := m.Report{Source: source, Result: m.Result{mg.Type: {{MutationID: "m1", Status: rpt.Killed}}}}
+
+		require.NoError(t, rs.SaveReports(context.Background(), m.Path(dir), reportSpill(t, report)))
+
+		changedSpill, deletedSpill, err := rs.CheckUpdates(context.Background(), m.Path(dir), sourceSpill(t, source))
+		require.NoError(t, err)
+		require.Empty(t, spillItems(t, changedSpill), mg.Name)
+		require.Empty(t, spillItems(t, deletedSpill), mg.Name)
+	}
+}
+
+func TestLocalReportStore_CleanReports_ReturnsRemoveError(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root can remove files from read-only directories")
+	}
+
+	rs := &LocalReportStore{}
+	ctx := context.Background()
+	dir := t.TempDir()
+	source := rpt.Source{Origin: &rpt.File{FullPath: "/abs/a.go", Hash: "h"}}
+
+	require.NoError(t, rs.SaveReports(ctx, m.Path(dir), reportSpill(t, m.Report{
+		Source: source,
+		Result: m.Result{mgen.Boolean: {{MutationID: "b1", Status: rpt.Killed}}},
+	})))
+	require.NoError(t, os.Chmod(dir, 0o500))
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+
+	require.ErrorContains(t, rs.CleanReports(ctx, m.Path(dir), sourceSpill(t, source)), "remove report file")
+}
+
+func TestLocalReportStore_CheckUpdates_SourcesOutsideTheScanAreNotDeleted(t *testing.T) {
+	rs := &LocalReportStore{}
+	ctx := context.Background()
+	project := t.TempDir()
+	t.Chdir(project)
+	require.NoError(t, os.WriteFile(filepath.Join(project, "kept.go"), []byte("package p\n"), 0o600))
+
+	dir := filepath.Join(project, "reports")
+	kept := rpt.Source{Origin: &rpt.File{ShortPath: "kept.go", FullPath: "/elsewhere/kept.go", Hash: "k"}}
+	gone := rpt.Source{Origin: &rpt.File{ShortPath: "gone.go", FullPath: "/elsewhere/gone.go", Hash: "g"}}
+
+	require.NoError(t, rs.SaveReports(ctx, m.Path(dir), reportSpill(t,
+		m.Report{Source: kept, Result: m.Result{mgen.Boolean: {{MutationID: "k1", Status: rpt.Killed}}}},
+		m.Report{Source: gone, Result: m.Result{mgen.Boolean: {{MutationID: "g1", Status: rpt.Killed}}}},
+	)))
+
+	changed, deleted, err := rs.CheckUpdates(ctx, m.Path(dir), sourceSpill(t))
+	require.NoError(t, err)
+	require.Empty(t, spillItems(t, changed))
+	require.Equal(t, []string{"gone.go"}, shortPaths(spillItems(t, deleted)))
 }

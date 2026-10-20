@@ -88,6 +88,7 @@ fmt:
 clean-mocks:
 	@echo "Cleaning mocks..."
 	@rm -rf internal/*/mocks
+	@rm -f pkg/mock_*.go pkg/*/mock_*.go
 
 mocks: clean-mocks
 	@echo "Generating mocks..."

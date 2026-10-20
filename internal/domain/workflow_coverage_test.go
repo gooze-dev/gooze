@@ -12,6 +12,8 @@ import (
 	domainmocks "gooze.dev/pkg/gooze/internal/domain/mocks"
 	m "gooze.dev/pkg/gooze/internal/model"
 	pkg "gooze.dev/pkg/gooze/pkg"
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 func TestWorkflow_Test_CoverageGateSkipsUncovered(t *testing.T) {
@@ -25,13 +27,13 @@ func TestWorkflow_Test_CoverageGateSkipsUncovered(t *testing.T) {
 	mockWorkspace := new(domainmocks.MockWorkspace)
 	mockMutagen := new(domainmocks.MockMutagen)
 
-	source := m.Source{
-		Origin: &m.File{FullPath: "pkg/foo.go", ShortPath: "pkg/foo.go", Hash: "h"},
-		Test:   &m.File{FullPath: "pkg/foo_test.go", Hash: "th"},
+	source := rpt.Source{
+		Origin: &rpt.File{FullPath: "pkg/foo.go", ShortPath: "pkg/foo.go", Hash: "h"},
+		Test:   &rpt.File{FullPath: "pkg/foo_test.go", Hash: "th"},
 	}
 
-	covered := m.Mutation{ID: "covered", Source: source, Type: m.MutationArithmetic, Line: 10}
-	uncovered := m.Mutation{ID: "uncovered", Source: source, Type: m.MutationArithmetic, Line: 20}
+	covered := m.Mutation{ID: "covered", Source: source, Type: mgen.Arithmetic, Line: 10}
+	uncovered := m.Mutation{ID: "uncovered", Source: source, Type: mgen.Arithmetic, Line: 20}
 
 	profile := []byte("mode: set\nmod/pkg/foo.go:10.1,10.20 1 1\nmod/pkg/foo.go:20.1,20.20 1 0\n")
 
@@ -44,7 +46,7 @@ func TestWorkflow_Test_CoverageGateSkipsUncovered(t *testing.T) {
 	mockReporter.EXPECT().DisplayStartingTestInfo(ctx, mock.Anything, mock.Anything).Return().Maybe()
 	mockReporter.EXPECT().DisplayCompletedTestInfo(ctx, mock.Anything, mock.Anything).Return().Maybe()
 
-	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources([]m.Source{source}))
+	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources([]rpt.Source{source}))
 	mockFSAdapter.EXPECT().ReadFile(ctx, m.Path("cov.out")).Return(profile, nil)
 
 	mockMutagen.EXPECT().
@@ -56,7 +58,7 @@ func TestWorkflow_Test_CoverageGateSkipsUncovered(t *testing.T) {
 	mockWorkspace.EXPECT().Close(mock.Anything).Return().Maybe()
 	mockWorkspace.EXPECT().
 		Run(mock.Anything, mock.MatchedBy(func(mut m.Mutation) bool { return mut.ID == "covered" })).
-		Return(m.Result{m.MutationArithmetic: {{MutationID: "covered", Status: m.Killed}}}, nil).
+		Return(m.Result{mgen.Arithmetic: {{MutationID: "covered", Status: rpt.Killed}}}, nil).
 		Once()
 
 	var saved []m.Report
@@ -78,7 +80,7 @@ func TestWorkflow_Test_CoverageGateSkipsUncovered(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	statusByID := map[string]m.TestStatus{}
+	statusByID := map[string]rpt.TestStatus{}
 	for _, r := range saved {
 		for _, entries := range r.Result {
 			for _, e := range entries {
@@ -87,8 +89,8 @@ func TestWorkflow_Test_CoverageGateSkipsUncovered(t *testing.T) {
 		}
 	}
 
-	assert.Equal(t, m.Killed, statusByID["covered"])
-	assert.Equal(t, m.NotCovered, statusByID["uncovered"], "uncovered mutation should be reported NotCovered without running tests")
+	assert.Equal(t, rpt.Killed, statusByID["covered"])
+	assert.Equal(t, rpt.NotCovered, statusByID["uncovered"], "uncovered mutation should be reported NotCovered without running tests")
 
 	mockWorkspace.AssertExpectations(t)
 	mockMutagen.AssertExpectations(t)

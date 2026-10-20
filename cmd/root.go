@@ -20,6 +20,7 @@ import (
 	"gooze.dev/pkg/gooze/internal/controller"
 	"gooze.dev/pkg/gooze/internal/domain"
 	m "gooze.dev/pkg/gooze/internal/model"
+	"gooze.dev/pkg/gooze/pkg/config"
 )
 
 var goFileAdapter domain.GoFileAdapter
@@ -70,12 +71,12 @@ func init() {
 	rootCmd.AddCommand(report.New(report.Deps{
 		Workflow:  workflow,
 		Publisher: publisher,
-		OutputKey: outputFlagName,
+		OutputKey: config.KeyOutput,
 	}))
 
 	rootCmd.AddCommand(configcmd.New(configcmd.Deps{
 		Dir:      configFolderPath,
-		FileName: configFileName,
+		FileName: config.FileName,
 	}))
 }
 
@@ -109,16 +110,16 @@ func baseRootCmd() *cobra.Command {
 		PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
 			logPath := strings.TrimSpace(logOutputFlag)
 			if logPath == "" {
-				logPath = viper.GetString(logFilenameKey)
+				logPath = viper.GetString(config.KeyLogFilename)
 			}
 
 			if strings.TrimSpace(logPath) == "" {
-				logPath = defaultLogFilename
+				logPath = defaultLogFilename()
 			}
 
 			verbose := verboseFlag
 			if !verbose {
-				verbose = viper.GetBool(logVerboseKey)
+				verbose = viper.GetBool(config.KeyLogVerbose)
 			}
 
 			configureLogger(logPath, verbose)
@@ -138,16 +139,16 @@ func configureRootFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().
 		StringVarP(
 			&reportsOutputDirFlag, outputFlagName, "o",
-			viper.GetString(outputFlagName),
+			viper.GetString(config.KeyOutput),
 			"output directory for mutation testing reports",
 		)
-	bindFlagToConfig(cmd.PersistentFlags().Lookup(outputFlagName), outputFlagName)
+	bindFlagToConfig(cmd.PersistentFlags().Lookup(outputFlagName), config.KeyOutput)
 
-	cmd.PersistentFlags().BoolVar(&noCacheFlag, noCacheFlagName, viper.GetBool(noCacheFlagName), "disable cached incremental runs (re-test everything)")
-	bindFlagToConfig(cmd.PersistentFlags().Lookup(noCacheFlagName), noCacheFlagName)
+	cmd.PersistentFlags().BoolVar(&noCacheFlag, noCacheFlagName, viper.GetBool(config.KeyNoCache), "disable cached incremental runs (re-test everything)")
+	bindFlagToConfig(cmd.PersistentFlags().Lookup(noCacheFlagName), config.KeyNoCache)
 
-	cmd.PersistentFlags().StringArrayVarP(&excludePatterns, excludeFlagName, "x", viper.GetStringSlice(excludeConfigKey), "exclude files matching regex (can be repeated)")
-	bindFlagToConfig(cmd.PersistentFlags().Lookup(excludeFlagName), excludeConfigKey)
+	cmd.PersistentFlags().StringArrayVarP(&excludePatterns, excludeFlagName, "x", viper.GetStringSlice(config.KeyPathsExclude), "exclude files matching regex (can be repeated)")
+	bindFlagToConfig(cmd.PersistentFlags().Lookup(excludeFlagName), config.KeyPathsExclude)
 
 	// Add verbose and log output flags (handled directly; not bound to Viper).
 	cmd.PersistentFlags().BoolVarP(&verboseFlag, "verbose", "v", false, "enable verbose logging")

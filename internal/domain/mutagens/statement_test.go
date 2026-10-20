@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	m "gooze.dev/pkg/gooze/internal/model"
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 func TestGenerateStatementMutations_AssignmentDeletion(t *testing.T) {
@@ -25,8 +27,8 @@ func TestGenerateStatementMutations_AssignmentDeletion(t *testing.T) {
 		t.Fatalf("failed to parse source: %v", err)
 	}
 
-	src := m.Source{
-		Origin: &m.File{FullPath: m.Path(examplePath)},
+	src := rpt.Source{
+		Origin: &rpt.File{FullPath: examplePath},
 	}
 
 	var mutations []m.Mutation
@@ -69,8 +71,8 @@ func TestGenerateStatementMutations_ExpressionDeletion(t *testing.T) {
 		t.Fatalf("failed to parse source: %v", err)
 	}
 
-	src := m.Source{
-		Origin: &m.File{FullPath: m.Path(examplePath)},
+	src := rpt.Source{
+		Origin: &rpt.File{FullPath: examplePath},
 	}
 
 	var mutations []m.Mutation
@@ -119,8 +121,8 @@ func TestGenerateStatementMutations_DeferDeletion(t *testing.T) {
 		t.Fatalf("failed to parse source: %v", err)
 	}
 
-	src := m.Source{
-		Origin: &m.File{FullPath: m.Path(examplePath)},
+	src := rpt.Source{
+		Origin: &rpt.File{FullPath: examplePath},
 	}
 
 	var mutations []m.Mutation
@@ -162,8 +164,8 @@ func TestGenerateStatementMutations_GoDeletion(t *testing.T) {
 		t.Fatalf("failed to parse source: %v", err)
 	}
 
-	src := m.Source{
-		Origin: &m.File{FullPath: m.Path(examplePath)},
+	src := rpt.Source{
+		Origin: &rpt.File{FullPath: examplePath},
 	}
 
 	var mutations []m.Mutation
@@ -205,8 +207,8 @@ func TestGenerateStatementMutations_SendStatementDeletion(t *testing.T) {
 		t.Fatalf("failed to parse source: %v", err)
 	}
 
-	src := m.Source{
-		Origin: &m.File{FullPath: m.Path(examplePath)},
+	src := rpt.Source{
+		Origin: &rpt.File{FullPath: examplePath},
 	}
 
 	var mutations []m.Mutation
@@ -248,8 +250,8 @@ func TestGenerateStatementMutations_OnlyDeletions(t *testing.T) {
 		t.Fatalf("failed to parse source: %v", err)
 	}
 
-	src := m.Source{
-		Origin: &m.File{FullPath: m.Path(examplePath)},
+	src := rpt.Source{
+		Origin: &rpt.File{FullPath: examplePath},
 	}
 
 	var mutations []m.Mutation
@@ -265,7 +267,7 @@ func TestGenerateStatementMutations_OnlyDeletions(t *testing.T) {
 
 	// All mutations should be statement deletions
 	for _, mutation := range mutations {
-		if mutation.Type != m.MutationStatement {
+		if mutation.Type != mgen.Statement {
 			t.Errorf("expected mutation type MutationStatement, got %v", mutation.Type)
 		}
 	}

@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	m "gooze.dev/pkg/gooze/internal/model"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 func TestLocalSourceFSAdapter_Walk(t *testing.T) {
@@ -433,7 +434,7 @@ func TestLocalSourceFSAdapter_Get(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, sources, 1)
 
-		assert.Equal(t, m.Path(keptPath), sources[0].Origin.FullPath)
+		assert.Equal(t, keptPath, sources[0].Origin.FullPath)
 	})
 
 	t.Run("broken source files are skipped", func(t *testing.T) {
@@ -458,7 +459,7 @@ func TestLocalSourceFSAdapter_Get(t *testing.T) {
 		require.Len(t, sources, 1)
 
 		if assert.NotNil(t, sources[0].Origin) {
-			assert.Equal(t, m.Path(sourcePath), sources[0].Origin.FullPath)
+			assert.Equal(t, sourcePath, sources[0].Origin.FullPath)
 		}
 		assert.Nil(t, sources[0].Test)
 	})
@@ -487,7 +488,7 @@ func containsPath(paths []string, target string) bool {
 	return slices.Contains(paths, target)
 }
 
-func findSourceV2ByOrigin(sources []m.Source, origin string) *m.Source {
+func findSourceV2ByOrigin(sources []rpt.Source, origin string) *rpt.Source {
 	for i := range sources {
 		if sources[i].Origin == nil {
 			continue
@@ -500,7 +501,7 @@ func findSourceV2ByOrigin(sources []m.Source, origin string) *m.Source {
 	return nil
 }
 
-func assertSourceV2(t *testing.T, source *m.Source, originPath string, originShort string, originContent []byte, pkg string, testPath string, testShort string, testContent []byte) {
+func assertSourceV2(t *testing.T, source *rpt.Source, originPath string, originShort string, originContent []byte, pkg string, testPath string, testShort string, testContent []byte) {
 	t.Helper()
 
 	if source == nil {
@@ -511,8 +512,8 @@ func assertSourceV2(t *testing.T, source *m.Source, originPath string, originSho
 		require.Fail(t, "Origin is nil")
 	}
 
-	assert.Equal(t, m.Path(originPath), source.Origin.FullPath)
-	assert.Equal(t, m.Path(originShort), source.Origin.ShortPath)
+	assert.Equal(t, originPath, source.Origin.FullPath)
+	assert.Equal(t, originShort, source.Origin.ShortPath)
 	assert.Equal(t, hashBytes(originContent), source.Origin.Hash)
 	if assert.NotNil(t, source.Package) {
 		assert.Equal(t, pkg, *source.Package)
@@ -524,8 +525,8 @@ func assertSourceV2(t *testing.T, source *m.Source, originPath string, originSho
 	}
 
 	if assert.NotNil(t, source.Test) {
-		assert.Equal(t, m.Path(testPath), source.Test.FullPath)
-		assert.Equal(t, m.Path(testShort), source.Test.ShortPath)
+		assert.Equal(t, testPath, source.Test.FullPath)
+		assert.Equal(t, testShort, source.Test.ShortPath)
 		assert.Equal(t, hashBytes(testContent), source.Test.Hash)
 	}
 }
@@ -577,7 +578,7 @@ func TestLocalSourceFSAdapter_Stream(t *testing.T) {
 
 		sourceCh, errc := adapter.Stream(ctx, []m.Path{"./..."})
 
-		var got []m.Source
+		var got []rpt.Source
 		for source := range sourceCh {
 			got = append(got, source)
 		}
@@ -671,4 +672,18 @@ func writeNestedFile(t *testing.T, path, contents string) {
 	t.Helper()
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o750))
 	writeTestFile(t, path, contents)
+}
+
+func TestLocalSourceFSAdapter_Get_IgnoresNonGoFiles(t *testing.T) {
+	root := t.TempDir()
+	writeNestedFile(t, filepath.Join(root, "go.mod"), "module example\n")
+	writeNestedFile(t, filepath.Join(root, "a.go"), "package example\n")
+	writeNestedFile(t, filepath.Join(root, "notes.txt"), "not go\n")
+	writeNestedFile(t, filepath.Join(root, "a_test.go"), "package example\n")
+	t.Chdir(root)
+
+	sources, err := NewLocalSourceFSAdapter().Get(context.Background(), []m.Path{"./..."})
+	require.NoError(t, err)
+	require.Len(t, sources, 1)
+	assert.Equal(t, "a.go", sources[0].Origin.ShortPath)
 }

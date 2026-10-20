@@ -11,6 +11,8 @@ import (
 	"testing"
 
 	m "gooze.dev/pkg/gooze/internal/model"
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 func TestGenerateBooleanMutations(t *testing.T) {
@@ -26,7 +28,7 @@ func TestGenerateBooleanMutations(t *testing.T) {
 		t.Fatalf("failed to parse source %s: %v", booleanPath, err)
 	}
 
-	source := m.Source{Origin: &m.File{FullPath: m.Path(booleanPath)}}
+	source := rpt.Source{Origin: &rpt.File{FullPath: booleanPath}}
 	var mutations []m.Mutation
 
 	ast.Inspect(file, func(n ast.Node) bool {
@@ -49,10 +51,10 @@ func TestGenerateBooleanMutations(t *testing.T) {
 		if len(mutation.ID) == 0 {
 			t.Fatalf("expected non-empty mutation ID for mutation %d", i)
 		}
-		if mutation.Type != m.MutationBoolean {
+		if mutation.Type != mgen.Boolean {
 			t.Fatalf("expected boolean mutation, got %v", mutation.Type)
 		}
-		if mutation.Source.Origin == nil || mutation.Source.Origin.FullPath != m.Path(booleanPath) {
+		if mutation.Source.Origin == nil || mutation.Source.Origin.FullPath != booleanPath {
 			t.Fatalf("unexpected source origin: %+v", mutation.Source.Origin)
 		}
 		if bytes.Equal(mutation.MutatedCode, content) {

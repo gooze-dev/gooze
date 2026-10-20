@@ -7,6 +7,8 @@ import (
 	"github.com/stretchr/testify/require"
 	m "gooze.dev/pkg/gooze/internal/model"
 	goozepkg "gooze.dev/pkg/gooze/pkg"
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 type errSpill[T any] struct {
@@ -28,12 +30,12 @@ func TestMutationScoreFromReports(t *testing.T) {
 
 	report := m.Report{
 		Result: m.Result{
-			m.MutationBoolean: {
-				{MutationID: "m1", Status: m.Killed, Err: nil},
-				{MutationID: "m2", Status: m.Survived, Err: nil},
-				{MutationID: "m3", Status: m.Skipped, Err: nil},
-				{MutationID: "m4", Status: m.Error, Err: nil},
-				{MutationID: "m5", Status: m.Killed, Err: nil},
+			mgen.Boolean: {
+				{MutationID: "m1", Status: rpt.Killed, Err: nil},
+				{MutationID: "m2", Status: rpt.Survived, Err: nil},
+				{MutationID: "m3", Status: rpt.Skipped, Err: nil},
+				{MutationID: "m4", Status: rpt.Error, Err: nil},
+				{MutationID: "m5", Status: rpt.Killed, Err: nil},
 			},
 		},
 	}
@@ -54,9 +56,9 @@ func TestMutationScoreFromReports_NotCoveredCountsAsSurvivor(t *testing.T) {
 
 	report := m.Report{
 		Result: m.Result{
-			m.MutationBoolean: {
-				{MutationID: "m1", Status: m.Killed, Err: nil},
-				{MutationID: "m2", Status: m.NotCovered, Err: nil},
+			mgen.Boolean: {
+				{MutationID: "m1", Status: rpt.Killed, Err: nil},
+				{MutationID: "m2", Status: rpt.NotCovered, Err: nil},
 			},
 		},
 	}
@@ -87,9 +89,9 @@ func TestMutationScoreFromReports_OnlySkippedAndErrorIs100(t *testing.T) {
 
 	report := m.Report{
 		Result: m.Result{
-			m.MutationBoolean: {
-				{MutationID: "m1", Status: m.Skipped, Err: nil},
-				{MutationID: "m2", Status: m.Error, Err: nil},
+			mgen.Boolean: {
+				{MutationID: "m1", Status: rpt.Skipped, Err: nil},
+				{MutationID: "m2", Status: rpt.Error, Err: nil},
 			},
 		},
 	}
@@ -109,9 +111,9 @@ func TestMutationScoreFromReports_AllSurvivedIs0(t *testing.T) {
 
 	report := m.Report{
 		Result: m.Result{
-			m.MutationBoolean: {
-				{MutationID: "m1", Status: m.Survived, Err: nil},
-				{MutationID: "m2", Status: m.Survived, Err: nil},
+			mgen.Boolean: {
+				{MutationID: "m1", Status: rpt.Survived, Err: nil},
+				{MutationID: "m2", Status: rpt.Survived, Err: nil},
 			},
 		},
 	}
@@ -131,21 +133,21 @@ func TestMutationScoreFromReports_AggregatesAcrossReports(t *testing.T) {
 
 	report1 := m.Report{
 		Result: m.Result{
-			m.MutationArithmetic: {
-				{MutationID: "a1", Status: m.Killed, Err: nil},
-				{MutationID: "a2", Status: m.Survived, Err: nil},
+			mgen.Arithmetic: {
+				{MutationID: "a1", Status: rpt.Killed, Err: nil},
+				{MutationID: "a2", Status: rpt.Survived, Err: nil},
 			},
 		},
 	}
 	report2 := m.Report{
 		Result: m.Result{
-			m.MutationBoolean: {
-				{MutationID: "b1", Status: m.Killed, Err: nil},
-				{MutationID: "b2", Status: m.Killed, Err: nil},
-				{MutationID: "b3", Status: m.Killed, Err: nil},
-				{MutationID: "b4", Status: m.Error, Err: nil},
-				{MutationID: "b5", Status: m.Survived, Err: nil},
-				{MutationID: "b6", Status: m.Timeout, Err: nil},
+			mgen.Boolean: {
+				{MutationID: "b1", Status: rpt.Killed, Err: nil},
+				{MutationID: "b2", Status: rpt.Killed, Err: nil},
+				{MutationID: "b3", Status: rpt.Killed, Err: nil},
+				{MutationID: "b4", Status: rpt.Error, Err: nil},
+				{MutationID: "b5", Status: rpt.Survived, Err: nil},
+				{MutationID: "b6", Status: rpt.Timeout, Err: nil},
 			},
 		},
 	}

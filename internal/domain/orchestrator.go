@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	m "gooze.dev/pkg/gooze/internal/model"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 // Orchestrator coordinates applying a mutation to a temporary copy of
@@ -70,7 +71,7 @@ type workspace struct {
 
 func (ws *workspace) Run(ctx context.Context, mutation m.Mutation) (m.Result, error) {
 	if err := ctx.Err(); err != nil {
-		return resultForStatus(mutation, m.Timeout), nil
+		return resultForStatus(mutation, rpt.Timeout), nil
 	}
 
 	if err := validateMutation(mutation); err != nil {
@@ -81,16 +82,16 @@ func (ws *workspace) Run(ctx context.Context, mutation m.Mutation) (m.Result, er
 		return resultForNoTest(mutation), nil
 	}
 
-	if err := ws.ensurePrepared(ctx, mutation.Source.Origin.FullPath); err != nil {
+	if err := ws.ensurePrepared(ctx, m.Path(mutation.Source.Origin.FullPath)); err != nil {
 		return m.Result{}, err
 	}
 
-	tmpSourcePath, err := ws.tmpPath(ctx, mutation.Source.Origin.FullPath)
+	tmpSourcePath, err := ws.tmpPath(ctx, m.Path(mutation.Source.Origin.FullPath))
 	if err != nil {
 		return m.Result{}, err
 	}
 
-	tmpTestPath, err := ws.tmpPath(ctx, mutation.Source.Test.FullPath)
+	tmpTestPath, err := ws.tmpPath(ctx, m.Path(mutation.Source.Test.FullPath))
 	if err != nil {
 		return m.Result{}, err
 	}
@@ -193,26 +194,26 @@ func (ws *workspace) writeFile(ctx context.Context, path m.Path, content []byte)
 	return nil
 }
 
-func (ws *workspace) runTests(ctx context.Context, testPath m.Path) m.TestStatus {
+func (ws *workspace) runTests(ctx context.Context, testPath m.Path) rpt.TestStatus {
 	if err := ctx.Err(); err != nil {
-		return m.Timeout
+		return rpt.Timeout
 	}
 
 	output, testErr := ws.testAdapter.RunGoTest(ctx, string(ws.tmpDir), string(testPath))
 	if testErr != nil {
 		if ctx.Err() != nil {
-			return m.Timeout
+			return rpt.Timeout
 		}
 
 		if isBuildFailure(output) {
 			slog.Debug("Mutation did not compile", "test", testPath)
-			return m.Error
+			return rpt.Error
 		}
 
-		return m.Killed
+		return rpt.Killed
 	}
 
-	return m.Survived
+	return rpt.Survived
 }
 
 func isBuildFailure(output string) bool {
@@ -241,14 +242,14 @@ func validateMutation(mutation m.Mutation) error {
 }
 
 func resultForNoTest(mutation m.Mutation) m.Result {
-	return resultForStatus(mutation, m.Survived)
+	return resultForStatus(mutation, rpt.Survived)
 }
 
-func resultForStatus(mutation m.Mutation, status m.TestStatus) m.Result {
+func resultForStatus(mutation m.Mutation, status rpt.TestStatus) m.Result {
 	result := m.Result{}
 	result[mutation.Type] = []struct {
 		MutationID string
-		Status     m.TestStatus
+		Status     rpt.TestStatus
 		Err        error
 	}{
 		{

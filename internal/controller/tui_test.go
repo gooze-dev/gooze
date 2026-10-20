@@ -10,6 +10,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"gooze.dev/pkg/gooze/internal/domain"
 	m "gooze.dev/pkg/gooze/internal/model"
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 type quitModel struct{}
@@ -76,17 +78,17 @@ func TestTUI_DisplayCompletedTestInfo_WithDiff(t *testing.T) {
 
 	mutation := m.Mutation{
 		ID:       "hash-10",
-		Type:     m.MutationArithmetic,
-		Source:   m.Source{Origin: &m.File{ShortPath: "test.go", Hash: "hash1"}},
+		Type:     mgen.Arithmetic,
+		Source:   rpt.Source{Origin: &rpt.File{ShortPath: "test.go", Hash: "hash1"}},
 		DiffCode: diffCode,
 	}
 
 	survivedResult := m.Result{
-		m.MutationArithmetic: []struct {
+		mgen.Arithmetic: []struct {
 			MutationID string
-			Status     m.TestStatus
+			Status     rpt.TestStatus
 			Err        error
-		}{{MutationID: "hash-10", Status: m.Survived}},
+		}{{MutationID: "hash-10", Status: rpt.Survived}},
 	}
 
 	// Start TUI in test mode
@@ -108,17 +110,17 @@ func TestTUI_DisplayCompletedTestInfo_WithoutDiff(t *testing.T) {
 
 	mutation := m.Mutation{
 		ID:     "hash-10",
-		Type:   m.MutationArithmetic,
-		Source: m.Source{Origin: &m.File{ShortPath: "test.go", Hash: "hash1"}},
+		Type:   mgen.Arithmetic,
+		Source: rpt.Source{Origin: &rpt.File{ShortPath: "test.go", Hash: "hash1"}},
 		// No DiffCode
 	}
 
 	killedResult := m.Result{
-		m.MutationArithmetic: []struct {
+		mgen.Arithmetic: []struct {
 			MutationID string
-			Status     m.TestStatus
+			Status     rpt.TestStatus
 			Err        error
-		}{{MutationID: "hash-10", Status: m.Killed}},
+		}{{MutationID: "hash-10", Status: rpt.Killed}},
 	}
 
 	// Start TUI in test mode
@@ -198,20 +200,20 @@ func TestTUI_DisplayMethods_NoProgram(t *testing.T) {
 var errSentinel = errors.New("boom")
 
 func mutationWithOrigin() m.Mutation {
-	return m.Mutation{ID: "hash-1", Type: m.MutationArithmetic, Source: m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "path/a.go", Hash: "hash-a"}}}
+	return m.Mutation{ID: "hash-1", Type: mgen.Arithmetic, Source: rpt.Source{Origin: &rpt.File{ShortPath: "a.go", FullPath: "path/a.go", Hash: "hash-a"}}}
 }
 
 func mutationWithoutOrigin() m.Mutation {
-	return m.Mutation{ID: "hash-2", Type: m.MutationBoolean}
+	return m.Mutation{ID: "hash-2", Type: mgen.Boolean}
 }
 
 func completedResult() m.Result {
 	return m.Result{
-		m.MutationArithmetic: []struct {
+		mgen.Arithmetic: []struct {
 			MutationID string
-			Status     m.TestStatus
+			Status     rpt.TestStatus
 			Err        error
-		}{{MutationID: "hash-1", Status: m.Killed}},
+		}{{MutationID: "hash-1", Status: rpt.Killed}},
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"sync"
@@ -40,7 +41,6 @@ func (f *fileSpillImpl[T]) Append(item T) error {
 	}
 
 	f.length++
-	slog.Debug("appended item", "path", f.path, "index", f.length-1)
 
 	return nil
 }
@@ -70,25 +70,18 @@ func (f *fileSpillImpl[T]) Close() error {
 		return nil
 	}
 
-	err := f.file.Close()
+	err := errors.Join(f.file.Close(), ignoreNotExist(os.Remove(f.path)))
 	f.file = nil
 
-	if removeErr := os.Remove(f.path); removeErr != nil && !os.IsNotExist(removeErr) {
-		slog.Error("failed to remove spill file", "path", f.path, "error", removeErr)
+	return err
+}
 
-		if err == nil {
-			err = removeErr
-		}
+func ignoreNotExist(err error) error {
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
 	}
 
-	if err != nil {
-		slog.Error("failed to close filespill", "path", f.path, "error", err)
-		return err
-	}
-
-	slog.Debug("closed filespill", "path", f.path, "length", f.length)
-
-	return nil
+	return err
 }
 
 // Get implements FileSpill.
@@ -113,11 +106,7 @@ func (f *fileSpillImpl[T]) Get(index uint64) (T, error) {
 		return zero, fmt.Errorf("failed to open file: %w", err)
 	}
 
-	defer func() {
-		if err := file.Close(); err != nil {
-			slog.Error("failed to close file", "path", f.path, "error", err)
-		}
-	}()
+	defer func() { _ = file.Close() }()
 
 	decoder := gob.NewDecoder(file)
 
@@ -157,11 +146,7 @@ func (f *fileSpillImpl[T]) Range(fn func(index uint64, item T) error) error {
 		return fmt.Errorf("failed to open file: %w", err)
 	}
 
-	defer func() {
-		if err := file.Close(); err != nil {
-			slog.Error("failed to close file", "path", f.path, "error", err)
-		}
-	}()
+	defer func() { _ = file.Close() }()
 
 	decoder := gob.NewDecoder(file)
 

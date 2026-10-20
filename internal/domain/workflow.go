@@ -1,14 +1,17 @@
 package domain
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -16,10 +19,12 @@ import (
 	"golang.org/x/sync/errgroup"
 	m "gooze.dev/pkg/gooze/internal/model"
 	pkg "gooze.dev/pkg/gooze/pkg"
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 // DefaultMutations defines the default set of mutation types to generate.
-var DefaultMutations = []m.MutationType{m.MutationArithmetic, m.MutationBoolean, m.MutationNumbers, m.MutationComparison, m.MutationLogical, m.MutationUnary}
+var DefaultMutations = []mgen.Type{mgen.Arithmetic, mgen.Boolean, mgen.Numbers, mgen.Comparison, mgen.Logical, mgen.Unary}
 
 // ShardDirPrefix is the directory name prefix used when storing sharded reports.
 const ShardDirPrefix = "shard_"
@@ -166,7 +171,7 @@ func (w *workflow) Test(ctx context.Context, args TestArgs) error {
 	})
 }
 
-func (w *workflow) cleanDeleted(ctx context.Context, base, reportsDir m.Path, deleted pkg.FileSpill[m.Source]) error {
+func (w *workflow) cleanDeleted(ctx context.Context, base, reportsDir m.Path, deleted pkg.FileSpill[rpt.Source]) error {
 	if deleted == nil || deleted.Len() == 0 {
 		return nil
 	}
@@ -186,7 +191,7 @@ func (w *workflow) cleanDeleted(ctx context.Context, base, reportsDir m.Path, de
 // generateMutations generates every mutation of the given sources once,
 // keeping those include accepts, and spills them so the test pass can replay
 // them without regenerating or holding them in memory.
-func (w *workflow) generateMutations(ctx context.Context, sources pkg.FileSpill[m.Source], include func(m.Mutation) bool) (pkg.FileSpill[m.Mutation], int, error) {
+func (w *workflow) generateMutations(ctx context.Context, sources pkg.FileSpill[rpt.Source], include func(m.Mutation) bool) (pkg.FileSpill[m.Mutation], int, error) {
 	mutations, err := pkg.NewFileSpill[m.Mutation]()
 	if err != nil {
 		return nil, 0, fmt.Errorf("create mutations spill: %w", err)
@@ -194,7 +199,7 @@ func (w *workflow) generateMutations(ctx context.Context, sources pkg.FileSpill[
 
 	total := 0
 
-	err = sources.Range(func(_ uint64, source m.Source) error {
+	err = sources.Range(func(_ uint64, source rpt.Source) error {
 		return w.mutagen.StreamMutations(ctx, source, func(mutation m.Mutation) error {
 			if include != nil && !include(mutation) {
 				return nil
@@ -225,7 +230,7 @@ func closeSpill[T any](name string, spill pkg.FileSpill[T]) {
 
 // finalizeReports computes the mutation score, replaces previous reports for
 // the tested sources with the spilled ones, and regenerates the reports index.
-func (w *workflow) finalizeReports(ctx context.Context, reportsDir m.Path, tested pkg.FileSpill[m.Source], reports pkg.FileSpill[m.Report]) error {
+func (w *workflow) finalizeReports(ctx context.Context, reportsDir m.Path, tested pkg.FileSpill[rpt.Source], reports pkg.FileSpill[m.Report]) error {
 	defer closeSpill("reports", reports)
 
 	score, err := mutationScoreFromReports(reports)
@@ -451,8 +456,8 @@ func (w *workflow) appendReportsFrom(ctx context.Context, dir m.Path, into pkg.F
 // staleBaselineSources returns the baseline sources to drop from base: every
 // source a shard re-tested, plus, when the merge runs in the project checkout,
 // baseline sources whose file no longer exists.
-func (w *workflow) staleBaselineSources(ctx context.Context, base m.Path, shardReports pkg.FileSpill[m.Report]) (pkg.FileSpill[m.Source], error) {
-	stale, err := pkg.NewFileSpill[m.Source]()
+func (w *workflow) staleBaselineSources(ctx context.Context, base m.Path, shardReports pkg.FileSpill[m.Report]) (pkg.FileSpill[rpt.Source], error) {
+	stale, err := pkg.NewFileSpill[rpt.Source]()
 	if err != nil {
 		return nil, fmt.Errorf("create stale sources spill: %w", err)
 	}
@@ -478,10 +483,10 @@ func (w *workflow) staleBaselineSources(ctx context.Context, base m.Path, shardR
 	return stale, nil
 }
 
-func uniqueSourceAppender(into pkg.FileSpill[m.Source]) func(m.Source) error {
+func uniqueSourceAppender(into pkg.FileSpill[rpt.Source]) func(rpt.Source) error {
 	seen := make(map[string]struct{})
 
-	return func(source m.Source) error {
+	return func(source rpt.Source) error {
 		key := source.Key()
 		if key == "" {
 			return nil
@@ -500,7 +505,7 @@ func uniqueSourceAppender(into pkg.FileSpill[m.Source]) func(m.Source) error {
 // shardSourcesInCheckout passes every shard source to add and reports whether
 // all shard sources with a project-relative path resolve from the current
 // directory, i.e. the merge runs inside the project checkout.
-func shardSourcesInCheckout(shardReports pkg.FileSpill[m.Report], add func(m.Source) error) (bool, error) {
+func shardSourcesInCheckout(shardReports pkg.FileSpill[m.Report], add func(rpt.Source) error) (bool, error) {
 	checked, resolvable := false, true
 
 	err := shardReports.Range(func(_ uint64, report m.Report) error {
@@ -532,17 +537,17 @@ func (w *workflow) rangeBaseline(ctx context.Context, base m.Path, fn func(m.Rep
 	})
 }
 
-func sourceFileExists(source m.Source) bool {
+func sourceFileExists(source rpt.Source) bool {
 	if source.Origin == nil {
 		return false
 	}
 
-	for _, candidate := range []m.Path{source.Origin.ShortPath, source.Origin.FullPath} {
+	for _, candidate := range []string{source.Origin.ShortPath, source.Origin.FullPath} {
 		if candidate == "" {
 			continue
 		}
 
-		if _, err := os.Stat(string(candidate)); err == nil {
+		if _, err := os.Stat(candidate); err == nil {
 			return true
 		}
 	}
@@ -620,7 +625,7 @@ func rangeViewItems(reports pkg.FileSpill[m.Report], fn func(m.Mutation, m.Resul
 		for _, mutationType := range sortedResultTypes(report.Result) {
 			for _, entry := range report.Result[mutationType] {
 				mutation := m.Mutation{ID: entry.MutationID, Source: report.Source, Type: mutationType}
-				if entry.Status != m.Killed && report.Diff != nil {
+				if entry.Status != rpt.Killed && report.Diff != nil {
 					mutation.DiffCode = *report.Diff
 				}
 
@@ -634,28 +639,17 @@ func rangeViewItems(reports pkg.FileSpill[m.Report], fn func(m.Mutation, m.Resul
 
 // sortedResultTypes returns the mutation types in a result, ordered by name then
 // version, so view output is deterministic.
-func sortedResultTypes(result m.Result) []m.MutationType {
-	types := make([]m.MutationType, 0, len(result))
-	for mutationType := range result {
-		types = append(types, mutationType)
-	}
-
-	sort.Slice(types, func(i, j int) bool {
-		if types[i].Name != types[j].Name {
-			return types[i].Name < types[j].Name
-		}
-
-		return types[i].Version < types[j].Version
+func sortedResultTypes(result m.Result) []mgen.Type {
+	return slices.SortedFunc(maps.Keys(result), func(a, b mgen.Type) int {
+		return cmp.Or(cmp.Compare(a.Name, b.Name), cmp.Compare(a.Version, b.Version))
 	})
-
-	return types
 }
 
 // changedSources resolves the sources to operate on. With caching enabled,
 // unchanged files are skipped and sources whose files are gone are returned
 // as deleted. Both spills must be closed by the caller; deleted is nil when
 // caching is off.
-func (w *workflow) changedSources(ctx context.Context, args EstimateArgs) (pkg.FileSpill[m.Source], pkg.FileSpill[m.Source], error) {
+func (w *workflow) changedSources(ctx context.Context, args EstimateArgs) (pkg.FileSpill[rpt.Source], pkg.FileSpill[rpt.Source], error) {
 	sources, err := w.scanSources(ctx, args)
 	if err != nil {
 		return nil, nil, err
@@ -676,10 +670,10 @@ func (w *workflow) changedSources(ctx context.Context, args EstimateArgs) (pkg.F
 }
 
 // scanSources drains the streaming scanner into a spill.
-func (w *workflow) scanSources(ctx context.Context, args EstimateArgs) (pkg.FileSpill[m.Source], error) {
+func (w *workflow) scanSources(ctx context.Context, args EstimateArgs) (pkg.FileSpill[rpt.Source], error) {
 	sourceCh, scanErrc := w.sources.Stream(ctx, args.Paths, args.Exclude...)
 
-	sources, err := pkg.NewFileSpill[m.Source]()
+	sources, err := pkg.NewFileSpill[rpt.Source]()
 	if err != nil {
 		return nil, fmt.Errorf("create sources spill: %w", err)
 	}
@@ -720,12 +714,12 @@ func (w *workflow) estimateMutations(ctx context.Context, args EstimateArgs) (Es
 
 // countMutations generates the mutations for the given sources and aggregates
 // per-file counts. Mutations are processed one at a time and never retained.
-func (w *workflow) countMutations(ctx context.Context, sources pkg.FileSpill[m.Source]) (Estimation, error) {
+func (w *workflow) countMutations(ctx context.Context, sources pkg.FileSpill[rpt.Source]) (Estimation, error) {
 	byKey := map[string]*FileEstimate{}
 	order := make([]string, 0)
 	total := 0
 
-	err := sources.Range(func(_ uint64, source m.Source) error {
+	err := sources.Range(func(_ uint64, source rpt.Source) error {
 		return w.mutagen.StreamMutations(ctx, source, func(mutation m.Mutation) error {
 			total++
 
@@ -768,7 +762,7 @@ func fileKey(mutation m.Mutation) (string, string) {
 		return "", ""
 	}
 
-	path := string(mutation.Source.Origin.ShortPath)
+	path := mutation.Source.Origin.ShortPath
 
 	key := mutation.Source.Origin.Hash
 	if key == "" {
@@ -946,7 +940,7 @@ func buildReport(mutation m.Mutation, result m.Result) m.Report {
 		Result: result,
 	}
 
-	if getMutationStatus(result, mutation) != m.Killed {
+	if getMutationStatus(result, mutation) != rpt.Killed {
 		diff := mutation.DiffCode
 		report.Diff = &diff
 	}
@@ -969,12 +963,12 @@ func (w *workflow) dispatchMutations(
 		defer closeQueues(queues)
 
 		return mutations.Range(func(_ uint64, mutation m.Mutation) error {
-			if gate != nil && gate.Uncovered(string(mutation.Source.Origin.ShortPath), mutation.Line) {
+			if gate != nil && gate.Uncovered(mutation.Source.Origin.ShortPath, mutation.Line) {
 				mutation.MutatedCode = nil
 
 				return sendOutcome(ctx, results, mutationOutcome{
 					mutation: mutation,
-					result:   resultForStatus(mutation, m.NotCovered),
+					result:   resultForStatus(mutation, rpt.NotCovered),
 				})
 			}
 
@@ -1084,10 +1078,10 @@ func (w *workflow) runMutation(
 	return mutationOutcome{mutation: mutation, result: result, err: err}
 }
 
-func getMutationStatus(result m.Result, mutation m.Mutation) m.TestStatus {
+func getMutationStatus(result m.Result, mutation m.Mutation) rpt.TestStatus {
 	entries, ok := result[mutation.Type]
 	if !ok || len(entries) < 1 {
-		return m.Error
+		return rpt.Error
 	}
 
 	for _, entry := range entries {
@@ -1099,5 +1093,5 @@ func getMutationStatus(result m.Result, mutation m.Mutation) m.TestStatus {
 	// If the orchestrator returned entries for a different mutation ID, do not
 	// guess: treating it as an error avoids inflating the score and attaching an
 	// incorrect diff.
-	return m.Error
+	return rpt.Error
 }

@@ -11,6 +11,8 @@ import (
 	"testing"
 
 	m "gooze.dev/pkg/gooze/internal/model"
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 func TestGenerateArithmeticMutations(t *testing.T) {
@@ -26,7 +28,7 @@ func TestGenerateArithmeticMutations(t *testing.T) {
 		t.Fatalf("failed to parse source %s: %v", basicPath, err)
 	}
 
-	source := m.Source{Origin: &m.File{FullPath: m.Path(basicPath)}}
+	source := rpt.Source{Origin: &rpt.File{FullPath: basicPath}}
 	var mutations []m.Mutation
 
 	ast.Inspect(file, func(n ast.Node) bool {
@@ -43,10 +45,10 @@ func TestGenerateArithmeticMutations(t *testing.T) {
 		if len(mutation.ID) == 0 {
 			t.Fatalf("expected non-empty mutation ID")
 		}
-		if mutation.Type != m.MutationArithmetic {
+		if mutation.Type != mgen.Arithmetic {
 			t.Fatalf("expected arithmetic mutation, got %v", mutation.Type)
 		}
-		if mutation.Source.Origin == nil || mutation.Source.Origin.FullPath != m.Path(basicPath) {
+		if mutation.Source.Origin == nil || mutation.Source.Origin.FullPath != basicPath {
 			t.Fatalf("unexpected source origin: %+v", mutation.Source.Origin)
 		}
 		if bytes.Equal(mutation.MutatedCode, content) {

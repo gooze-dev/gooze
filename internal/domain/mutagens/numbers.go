@@ -8,6 +8,8 @@ import (
 	"go/token"
 
 	m "gooze.dev/pkg/gooze/internal/model"
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 // GenerateNumberMutations generates numeric literal mutations for the given AST node.
@@ -15,7 +17,7 @@ import (
 // Currently supported:
 //   - token.INT:  mutate to 0 and/or 1
 //   - token.FLOAT: mutate to 0.0 and/or 1.0
-func GenerateNumberMutations(n ast.Node, fset *token.FileSet, content []byte, source m.Source) []m.Mutation {
+func GenerateNumberMutations(n ast.Node, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
 	lit, ok := n.(*ast.BasicLit)
 	if !ok {
 		return nil
@@ -45,7 +47,7 @@ func GenerateNumberMutations(n ast.Node, fset *token.FileSet, content []byte, so
 		mutations = append(mutations, m.Mutation{
 			ID:          id,
 			Source:      source,
-			Type:        m.MutationNumbers,
+			Type:        mgen.Numbers,
 			MutatedCode: mutatedCode,
 		})
 	}
@@ -59,7 +61,7 @@ func numberAlternatives(kind token.Token, literal string) []string {
 		return nil
 	}
 
-	switch kind { //nolint:exhaustive
+	switch kind {
 	case token.INT:
 		return numericAlternatives(original, constant.MakeInt64(0), constant.MakeInt64(1), "0", "1")
 	case token.FLOAT:

@@ -2,8 +2,10 @@
 # Clean-architecture rules for gooze.
 #
 # Dependency direction (outer -> inner):
-#   cmd -> internal/controller -> internal/domain -> internal/model
+#   cmd -> internal/controller -> internal/domain -> internal/model -> pkg
 #   internal/adapter implements ports for domain and is wired in cmd.
+#   pkg/... is public API shared with other modules: it imports only the
+#   standard library and gopkg.in/yaml.v3 (generated mock_*.go files aside).
 #
 # Validate with:  semgrep --validate --config .semgrep/
 rules:
@@ -61,7 +63,7 @@ rules:
   severity: ERROR
   message: >-
     `$PKG` is an outer layer. Dependencies point inwards only: `internal/model`
-    imports nothing from the project, `internal/domain` may import `model`,
+    imports only `pkg`, `internal/domain` may import `model`,
     `pkg` and its own sub-packages, and `internal/controller` talks to
     `domain`, never to `adapter` or `cmd`. Declare an interface (port) in the
     inner layer and inject the implementation from `cmd`.
@@ -81,7 +83,7 @@ rules:
       - pattern: import $ALIAS "$PKG"
     - metavariable-regex:
         metavariable: $PKG
-        regex: ^gooze\.dev/pkg/gooze/
+        regex: ^gooze\.dev/pkg/gooze/(internal|cmd)(/|$)
   - patterns:
     - pattern-inside: |
         package domain
@@ -112,3 +114,52 @@ rules:
     - metavariable-regex:
         metavariable: $PKG
         regex: ^gooze\.dev/pkg/gooze/(internal/adapter|cmd)(/|$)
+
+- id: gooze-arch-pkg-imports-internal
+  languages: [go]
+  severity: ERROR
+  message: >-
+    `$PKG` is not importable from `pkg/...`. The `pkg` packages are public API
+    used by other modules (e.g. goozels), so they are the innermost layer and
+    must not depend on `internal/...` or `cmd/...`. Move the shared code into
+    `pkg` instead.
+  metadata:
+    category: architecture
+    confidence: HIGH
+  paths:
+    include:
+    - /pkg/
+    exclude:
+    - '*_test.go'
+    - mock_*.go
+  patterns:
+  - pattern-either:
+    - pattern: import "$PKG"
+    - pattern: import $ALIAS "$PKG"
+  - metavariable-regex:
+      metavariable: $PKG
+      regex: ^gooze\.dev/pkg/gooze/(internal|cmd)(/|$)
+
+- id: gooze-arch-pkg-third-party-imports
+  languages: [go]
+  severity: ERROR
+  message: >-
+    `$PKG` is a third-party package imported from `pkg/...`. The public `pkg`
+    packages may import only the standard library and gopkg.in/yaml.v3, so
+    that importing them does not pull dependencies into other modules.
+  metadata:
+    category: architecture
+    confidence: HIGH
+  paths:
+    include:
+    - /pkg/
+    exclude:
+    - '*_test.go'
+    - mock_*.go
+  patterns:
+  - pattern-either:
+    - pattern: import "$PKG"
+    - pattern: import $ALIAS "$PKG"
+  - metavariable-regex:
+      metavariable: $PKG
+      regex: ^(?!gooze\.dev/pkg/gooze/|gopkg\.in/yaml\.v3$)[^/]+\.[^/]+/.*

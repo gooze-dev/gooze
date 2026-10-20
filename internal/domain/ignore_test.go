@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	m "gooze.dev/pkg/gooze/internal/model"
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
 )
 
 func TestParseIgnoreDirective_All(t *testing.T) {
@@ -73,10 +73,10 @@ func TestBuildIgnoreIndex_FileFuncLineScopes(t *testing.T) {
 
 	idx := buildIgnoreIndex(file, fset, content)
 
-	if !idx.file.ignores(m.MutationArithmetic) {
+	if !idx.file.ignores(mgen.Arithmetic) {
 		t.Fatalf("expected file-level ignore for arithmetic")
 	}
-	if idx.file.ignores(m.MutationNumbers) {
+	if idx.file.ignores(mgen.Numbers) {
 		t.Fatalf("did not expect file-level ignore for numbers")
 	}
 
@@ -104,7 +104,7 @@ func TestBuildIgnoreIndex_FileFuncLineScopes(t *testing.T) {
 				targetLine = pos.Line + 1
 			}
 
-			if rule, ok := idx.line[targetLine]; !ok || !rule.ignores(m.MutationArithmetic) {
+			if rule, ok := idx.line[targetLine]; !ok || !rule.ignores(mgen.Arithmetic) {
 				t.Fatalf("expected line-level ignore for arithmetic on target line %d", targetLine)
 			}
 
@@ -150,7 +150,7 @@ func TestBuildIgnoreIndex_LeadingDirectiveWithFollowingCommentLine(t *testing.T)
 	idx := buildIgnoreIndex(file, fset, []byte(src))
 
 	rule, ok := idx.line[6]
-	if !ok || !rule.ignores(m.MutationArithmetic) {
+	if !ok || !rule.ignores(mgen.Arithmetic) {
 		t.Fatalf("expected line 6 to ignore arithmetic, got %+v (ok=%v)", rule, ok)
 	}
 }

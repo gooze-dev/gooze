@@ -4,18 +4,23 @@ repos:
   rev: v5.0.0
   hooks:
   - id: trailing-whitespace
+    exclude: ^testdata/
   - id: end-of-file-fixer
+    exclude: ^testdata/
   - id: check-yaml
   - id: check-added-large-files
   - id: check-merge-conflict
   - id: check-case-conflict
   - id: mixed-line-ending
+    exclude: ^testdata/
 
 - repo: https://github.com/jumanjihouse/pre-commit-hook-yamlfmt
   rev: 0.2.3
   hooks:
   - id: yamlfmt
     args: [--mapping, '2', --sequence, '2', --offset, '0']
+    # Report fixtures are byte-for-byte gooze output.
+    exclude: ^testdata/
 
 - repo: local
   hooks:
@@ -66,6 +71,6 @@ repos:
     args: [scan, --config, .semgrep/, --config, p/golang, --error, --disable-version-check, --quiet, --skip-unknown-extensions]
     types: [go]
     # pre-commit passes explicit file names, which bypass .semgrepignore; keep this in sync with it.
-    exclude: ^(examples/|.*/mocks/|.*/testdata/)
+    exclude: ^(examples/|testdata/|.*/mocks/|.*/testdata/|pkg/(.*/)?mock_[^/]*\.go$)
     # One semgrep process for all files: a single report and a single registry fetch of p/golang.
     require_serial: true

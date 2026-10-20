@@ -10,15 +10,14 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
-	"strings"
 
 	"gopkg.in/yaml.v3"
 
 	m "gooze.dev/pkg/gooze/internal/model"
 	"gooze.dev/pkg/gooze/pkg"
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
-
-const indexFileName = "_index.yaml"
 
 // LocalReportStore stores reports as YAML files on the local filesystem.
 type LocalReportStore struct{}
@@ -27,44 +26,6 @@ type LocalReportStore struct{}
 // be wired into the workflow.
 func NewReportStore() *LocalReportStore {
 	return &LocalReportStore{}
-}
-
-type reportYAML struct {
-	Source m.Source          `yaml:"source"`
-	Result []resultEntryYAML `yaml:"result"`
-	Diff   *[]byte           `yaml:"diff"`
-}
-
-type resultEntryYAML struct {
-	Name      string               `yaml:"name"`
-	Version   int                  `yaml:"version"`
-	Mutations []mutationResultYAML `yaml:"mutations"`
-}
-
-type mutationResultYAML struct {
-	MutationID string       `yaml:"mutationid"`
-	Status     m.TestStatus `yaml:"status"`
-	Err        string       `yaml:"err,omitempty"`
-}
-
-type mutationEntry struct {
-	MutationName    string   `yaml:"mutation_name"`
-	MutationReports []string `yaml:"mutation_reports"`
-}
-
-type resultEntry struct {
-	SourceHex string          `yaml:"source_hex"`
-	Mutations []mutationEntry `yaml:"mutations"`
-}
-
-type indexEntry struct {
-	TotalMutations      int           `yaml:"total_mutations"`
-	KilledMutations     int           `yaml:"killed_mutations"`
-	SurvivedMutations   int           `yaml:"survived_mutations"`
-	FailedMutations     int           `yaml:"failed_mutations"`
-	IgnoredMutations    int           `yaml:"ignored_mutations"`
-	NotCoveredMutations int           `yaml:"not_covered_mutations"`
-	Result              []resultEntry `yaml:"result"`
 }
 
 // SaveReports writes one YAML file per report from the filespill into the provided directory.
@@ -148,38 +109,13 @@ func (rs *LocalReportStore) reportsDirExists(dirPath string) (bool, error) {
 }
 
 func (rs *LocalReportStore) rangeReportsInDir(dirPath string, fn func(m.Report) error) error {
-	entries, err := os.ReadDir(dirPath)
-	if err != nil {
-		return fmt.Errorf("read reports directory: %w", err)
-	}
-
-	for _, entry := range entries {
-		if !rs.shouldLoadReportEntry(entry) {
-			continue
-		}
-
-		filePath := filepath.Join(dirPath, entry.Name())
-		// #nosec G304 -- filePath is built from a trusted reports directory listing
-		data, err := os.ReadFile(filePath)
-		if err != nil {
-			return fmt.Errorf("read report file %s: %w", filePath, err)
-		}
-
-		report, err := rs.unmarshalReport(data)
-		if err != nil {
-			return fmt.Errorf("unmarshal report file %s: %w", filePath, err)
-		}
-
-		if err := fn(report); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return rpt.WalkDir(dirPath, func(_ string, report rpt.Report) error {
+		return fn(decodeReport(report))
+	})
 }
 
 func (rs *LocalReportStore) writeIndex(dirPath string, builder *indexBuilder) error {
-	indexPath := filepath.Join(dirPath, indexFileName)
+	indexPath := filepath.Join(dirPath, rpt.IndexFileName)
 	if builder.count == 0 {
 		if err := os.Remove(indexPath); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("remove index file %s: %w", indexPath, err)
@@ -228,13 +164,13 @@ func (rs *LocalReportStore) LoadSpillReports(ctx context.Context, path m.Path) (
 }
 
 type storedSourceState struct {
-	source  m.Source
+	source  rpt.Source
 	mutator map[string]int
 }
 
 // CleanReports deletes stored report files that belong to the provided sources.
 // It is safe to call when the reports directory does not exist.
-func (rs *LocalReportStore) CleanReports(ctx context.Context, path m.Path, sources pkg.FileSpill[m.Source]) error {
+func (rs *LocalReportStore) CleanReports(ctx context.Context, path m.Path, sources pkg.FileSpill[rpt.Source]) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -266,49 +202,20 @@ func (rs *LocalReportStore) cleanReportsIn(dirPath string, toCleanPaths, toClean
 		return nil
 	}
 
-	entries, err := os.ReadDir(dirPath)
-	if err != nil {
-		return fmt.Errorf("read reports directory: %w", err)
-	}
-
-	for _, entry := range entries {
-		if err := rs.cleanReportFile(dirPath, entry, toCleanPaths, toCleanHashes); err != nil {
-			return err
+	return rpt.WalkDir(dirPath, func(filePath string, report rpt.Report) error {
+		if !rs.shouldCleanReport(report.Source, toCleanPaths, toCleanHashes) {
+			return nil
 		}
-	}
 
-	return nil
+		if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("remove report file %s: %w", filePath, err)
+		}
+
+		return nil
+	})
 }
 
-func (rs *LocalReportStore) cleanReportFile(dirPath string, entry os.DirEntry, toCleanPaths map[string]bool, toCleanHashes map[string]bool) error {
-	if !rs.shouldLoadReportEntry(entry) {
-		return nil
-	}
-
-	filePath := filepath.Join(dirPath, entry.Name())
-	// #nosec G304 -- filePath is built from a trusted reports directory listing
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return fmt.Errorf("read report file %s: %w", filePath, err)
-	}
-
-	report, err := rs.unmarshalReport(data)
-	if err != nil {
-		return fmt.Errorf("unmarshal report file %s: %w", filePath, err)
-	}
-
-	if !rs.shouldCleanReport(report.Source, toCleanPaths, toCleanHashes) {
-		return nil
-	}
-
-	if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("remove report file %s: %w", filePath, err)
-	}
-
-	return nil
-}
-
-func (rs *LocalReportStore) buildCleanMatchers(sources pkg.FileSpill[m.Source]) (map[string]bool, map[string]bool, error) {
+func (rs *LocalReportStore) buildCleanMatchers(sources pkg.FileSpill[rpt.Source]) (map[string]bool, map[string]bool, error) {
 	paths := make(map[string]bool)
 	hashes := make(map[string]bool)
 
@@ -316,7 +223,7 @@ func (rs *LocalReportStore) buildCleanMatchers(sources pkg.FileSpill[m.Source]) 
 		return paths, hashes, nil
 	}
 
-	err := sources.Range(func(_ uint64, src m.Source) error {
+	err := sources.Range(func(_ uint64, src rpt.Source) error {
 		if src.Origin == nil {
 			return nil
 		}
@@ -338,7 +245,7 @@ func (rs *LocalReportStore) buildCleanMatchers(sources pkg.FileSpill[m.Source]) 
 	return paths, hashes, nil
 }
 
-func (rs *LocalReportStore) shouldCleanReport(source m.Source, toCleanPaths map[string]bool, toCleanHashes map[string]bool) bool {
+func (rs *LocalReportStore) shouldCleanReport(source rpt.Source, toCleanPaths map[string]bool, toCleanHashes map[string]bool) bool {
 	if source.Origin == nil {
 		return false
 	}
@@ -360,7 +267,7 @@ func (rs *LocalReportStore) shouldCleanReport(source m.Source, toCleanPaths map[
 // sources whose files no longer exist. A source is re-tested when it has no
 // stored reports, its source or test hash changed, or the mutators that produced
 // its reports changed. Both returned spills must be closed by the caller.
-func (rs *LocalReportStore) CheckUpdates(ctx context.Context, path m.Path, sources pkg.FileSpill[m.Source]) (pkg.FileSpill[m.Source], pkg.FileSpill[m.Source], error) {
+func (rs *LocalReportStore) CheckUpdates(ctx context.Context, path m.Path, sources pkg.FileSpill[rpt.Source]) (pkg.FileSpill[rpt.Source], pkg.FileSpill[rpt.Source], error) {
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
 	}
@@ -389,20 +296,20 @@ func (rs *LocalReportStore) CheckUpdates(ctx context.Context, path m.Path, sourc
 	return rs.splitChangedAndDeleted(stored, sources)
 }
 
-func (rs *LocalReportStore) splitChangedAndDeleted(stored map[string]storedSourceState, sources pkg.FileSpill[m.Source]) (pkg.FileSpill[m.Source], pkg.FileSpill[m.Source], error) {
-	changed, err := pkg.NewFileSpill[m.Source]()
+func (rs *LocalReportStore) splitChangedAndDeleted(stored map[string]storedSourceState, sources pkg.FileSpill[rpt.Source]) (pkg.FileSpill[rpt.Source], pkg.FileSpill[rpt.Source], error) {
+	changed, err := pkg.NewFileSpill[rpt.Source]()
 	if err != nil {
 		return nil, nil, fmt.Errorf("create changed sources spill: %w", err)
 	}
 
-	deleted, err := pkg.NewFileSpill[m.Source]()
+	deleted, err := pkg.NewFileSpill[rpt.Source]()
 	if err != nil {
 		return nil, nil, errors.Join(fmt.Errorf("create deleted sources spill: %w", err), changed.Close())
 	}
 
 	visited := make(map[string]bool)
 
-	err = sources.Range(func(_ uint64, src m.Source) error {
+	err = sources.Range(func(_ uint64, src rpt.Source) error {
 		key := src.Key()
 		visited[key] = true
 
@@ -423,10 +330,10 @@ func (rs *LocalReportStore) splitChangedAndDeleted(stored map[string]storedSourc
 	return changed, deleted, nil
 }
 
-func appendDeleted(stored map[string]storedSourceState, visited map[string]bool, deleted pkg.FileSpill[m.Source]) error {
+func appendDeleted(stored map[string]storedSourceState, visited map[string]bool, deleted pkg.FileSpill[rpt.Source]) error {
 	keys := make([]string, 0, len(stored))
-	for key := range stored {
-		if !visited[key] {
+	for key, st := range stored {
+		if !visited[key] && !sourceFileExists(st.source) {
 			keys = append(keys, key)
 		}
 	}
@@ -442,7 +349,23 @@ func appendDeleted(stored map[string]storedSourceState, visited map[string]bool,
 	return nil
 }
 
-func (rs *LocalReportStore) isSourceChanged(stored map[string]storedSourceState, pathStr string, current m.Source) bool {
+// sourceFileExists reports whether the source's file is still on disk, by its
+// project-relative path from the working directory or by its absolute path.
+func sourceFileExists(source rpt.Source) bool {
+	if source.Origin == nil {
+		return false
+	}
+
+	for _, candidate := range []string{source.Origin.ShortPath, source.Origin.FullPath} {
+		if _, err := os.Stat(candidate); err == nil {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (rs *LocalReportStore) isSourceChanged(stored map[string]storedSourceState, pathStr string, current rpt.Source) bool {
 	st, ok := stored[pathStr]
 	if !ok {
 		return true
@@ -482,7 +405,7 @@ func (rs *LocalReportStore) addStoredReport(state map[string]storedSourceState, 
 	state[key] = st
 }
 
-func (rs *LocalReportStore) sourceHashChanged(stored m.Source, current m.Source) bool {
+func (rs *LocalReportStore) sourceHashChanged(stored rpt.Source, current rpt.Source) bool {
 	storedOriginHash := ""
 	currentOriginHash := ""
 
@@ -517,7 +440,7 @@ func (rs *LocalReportStore) sourceHashChanged(stored m.Source, current m.Source)
 }
 
 func (rs *LocalReportStore) mutatorsChanged(stored map[string]int) bool {
-	current := currentMutationVersions()
+	current := mgen.Versions()
 
 	// Check if any mutator versions changed for mutators that were stored
 	for name, storedVersion := range stored {
@@ -539,54 +462,28 @@ func (rs *LocalReportStore) mutatorsChanged(stored map[string]int) bool {
 	return false
 }
 
-func currentMutationVersions() map[string]int {
-	// Keep in sync with supported mutation types.
-	mutations := []m.MutationType{
-		m.MutationArithmetic,
-		m.MutationBoolean,
-		m.MutationNumbers,
-		m.MutationComparison,
-		m.MutationLogical,
-		m.MutationUnary,
-	}
-
-	out := make(map[string]int, len(mutations))
-	for _, mt := range mutations {
-		out[mt.Name] = mt.Version
-	}
-
-	return out
-}
-
 func (rs *LocalReportStore) marshalReport(report m.Report) ([]byte, error) {
-	encoded := reportYAML{
+	return yaml.Marshal(rpt.Report{
 		Source: report.Source,
 		Result: encodeResult(report.Result),
 		Diff:   report.Diff,
-	}
-
-	return yaml.Marshal(encoded)
+	})
 }
 
-func (rs *LocalReportStore) unmarshalReport(data []byte) (m.Report, error) {
-	var decoded reportYAML
-	if err := yaml.Unmarshal(data, &decoded); err != nil {
-		return m.Report{}, err
-	}
-
+func decodeReport(report rpt.Report) m.Report {
 	return m.Report{
-		Source: decoded.Source,
-		Result: decodeResult(decoded.Result),
-		Diff:   decoded.Diff,
-	}, nil
+		Source: report.Source,
+		Result: decodeResult(report.Result),
+		Diff:   report.Diff,
+	}
 }
 
-func encodeResult(result m.Result) []resultEntryYAML {
+func encodeResult(result m.Result) []rpt.Result {
 	if len(result) == 0 {
-		return []resultEntryYAML{}
+		return []rpt.Result{}
 	}
 
-	keys := make([]m.MutationType, 0, len(result))
+	keys := make([]mgen.Type, 0, len(result))
 	for mutationType := range result {
 		keys = append(keys, mutationType)
 	}
@@ -599,13 +496,13 @@ func encodeResult(result m.Result) []resultEntryYAML {
 		return keys[i].Version < keys[j].Version
 	})
 
-	entries := make([]resultEntryYAML, 0, len(keys))
+	entries := make([]rpt.Result, 0, len(keys))
 	for _, mutationType := range keys {
 		results := result[mutationType]
-		entry := resultEntryYAML{
+		entry := rpt.Result{
 			Name:      mutationType.Name,
 			Version:   mutationType.Version,
-			Mutations: make([]mutationResultYAML, 0, len(results)),
+			Mutations: make([]rpt.MutationResult, 0, len(results)),
 		}
 
 		for _, res := range results {
@@ -614,7 +511,7 @@ func encodeResult(result m.Result) []resultEntryYAML {
 				errString = res.Err.Error()
 			}
 
-			entry.Mutations = append(entry.Mutations, mutationResultYAML{
+			entry.Mutations = append(entry.Mutations, rpt.MutationResult{
 				MutationID: res.MutationID,
 				Status:     res.Status,
 				Err:        errString,
@@ -627,7 +524,7 @@ func encodeResult(result m.Result) []resultEntryYAML {
 	return entries
 }
 
-func decodeResult(entries []resultEntryYAML) m.Result {
+func decodeResult(entries []rpt.Result) m.Result {
 	if len(entries) == 0 {
 		return m.Result{}
 	}
@@ -635,17 +532,17 @@ func decodeResult(entries []resultEntryYAML) m.Result {
 	result := m.Result{}
 
 	for _, entry := range entries {
-		mutationType := m.MutationType{Name: entry.Name, Version: entry.Version}
+		mutationType := mgen.Type{Name: entry.Name, Version: entry.Version}
 		result[mutationType] = make([]struct {
 			MutationID string
-			Status     m.TestStatus
+			Status     rpt.TestStatus
 			Err        error
 		}, 0, len(entry.Mutations))
 
 		for _, mut := range entry.Mutations {
 			result[mutationType] = append(result[mutationType], struct {
 				MutationID string
-				Status     m.TestStatus
+				Status     rpt.TestStatus
 				Err        error
 			}{
 				MutationID: mut.MutationID,
@@ -659,12 +556,12 @@ func decodeResult(entries []resultEntryYAML) m.Result {
 }
 
 type indexState struct {
-	mutationsBySource map[string]map[string]*mutationEntry
+	mutationsBySource map[string]map[string]*rpt.IndexMutation
 }
 
 type indexBuilder struct {
 	rs    *LocalReportStore
-	index indexEntry
+	index rpt.Index
 	state indexState
 	count int
 }
@@ -672,7 +569,7 @@ type indexBuilder struct {
 func newIndexBuilder(rs *LocalReportStore) *indexBuilder {
 	return &indexBuilder{
 		rs:    rs,
-		state: indexState{mutationsBySource: make(map[string]map[string]*mutationEntry)},
+		state: indexState{mutationsBySource: make(map[string]map[string]*rpt.IndexMutation)},
 	}
 }
 
@@ -692,7 +589,7 @@ func (b *indexBuilder) add(report m.Report) {
 	}
 }
 
-func (b *indexBuilder) build() indexEntry {
+func (b *indexBuilder) build() rpt.Index {
 	for _, entries := range b.state.mutationsBySource {
 		for _, ent := range entries {
 			sort.Strings(ent.MutationReports)
@@ -712,20 +609,20 @@ func (rs *LocalReportStore) trackMutationForIndex(state *indexState, sourceHex s
 
 	entries := state.mutationsBySource[sourceHex]
 	if entries == nil {
-		entries = make(map[string]*mutationEntry)
+		entries = make(map[string]*rpt.IndexMutation)
 		state.mutationsBySource[sourceHex] = entries
 	}
 
 	entry, exists := entries[mutationName]
 	if !exists {
-		entry = &mutationEntry{MutationName: mutationName, MutationReports: []string{}}
+		entry = &rpt.IndexMutation{MutationName: mutationName, MutationReports: []string{}}
 		entries[mutationName] = entry
 	}
 
 	entry.MutationReports = append(entry.MutationReports, reportFile)
 }
 
-func (rs *LocalReportStore) buildIndexResults(state indexState) []resultEntry {
+func (rs *LocalReportStore) buildIndexResults(state indexState) []rpt.IndexResult {
 	sourceHexes := make([]string, 0, len(state.mutationsBySource))
 	for sourceHex := range state.mutationsBySource {
 		sourceHexes = append(sourceHexes, sourceHex)
@@ -733,7 +630,7 @@ func (rs *LocalReportStore) buildIndexResults(state indexState) []resultEntry {
 
 	sort.Strings(sourceHexes)
 
-	results := make([]resultEntry, 0, len(sourceHexes))
+	results := make([]rpt.IndexResult, 0, len(sourceHexes))
 	for _, sourceHex := range sourceHexes {
 		entries := state.mutationsBySource[sourceHex]
 
@@ -744,7 +641,7 @@ func (rs *LocalReportStore) buildIndexResults(state indexState) []resultEntry {
 
 		sort.Strings(names)
 
-		out := resultEntry{SourceHex: sourceHex, Mutations: make([]mutationEntry, 0, len(names))}
+		out := rpt.IndexResult{SourceHex: sourceHex, Mutations: make([]rpt.IndexMutation, 0, len(names))}
 		for _, name := range names {
 			out.Mutations = append(out.Mutations, *entries[name])
 		}
@@ -755,7 +652,7 @@ func (rs *LocalReportStore) buildIndexResults(state indexState) []resultEntry {
 	return results
 }
 
-func (rs *LocalReportStore) sourceHex(source m.Source) string {
+func (rs *LocalReportStore) sourceHex(source rpt.Source) string {
 	if source.Origin == nil {
 		return ""
 	}
@@ -763,17 +660,17 @@ func (rs *LocalReportStore) sourceHex(source m.Source) string {
 	return source.Origin.Hash
 }
 
-func (rs *LocalReportStore) incrementStatusCount(index *indexEntry, status m.TestStatus) {
+func (rs *LocalReportStore) incrementStatusCount(index *rpt.Index, status rpt.TestStatus) {
 	switch status {
-	case m.Killed:
+	case rpt.Killed:
 		index.KilledMutations++
-	case m.Survived:
+	case rpt.Survived:
 		index.SurvivedMutations++
-	case m.Error, m.Timeout:
+	case rpt.Error, rpt.Timeout:
 		index.FailedMutations++
-	case m.Skipped:
+	case rpt.Skipped:
 		index.IgnoredMutations++
-	case m.NotCovered:
+	case rpt.NotCovered:
 		index.NotCoveredMutations++
 	}
 }
@@ -793,19 +690,6 @@ func (rs *LocalReportStore) validateReportsDir(dirPath string) error {
 	}
 
 	return nil
-}
-
-func (rs *LocalReportStore) shouldLoadReportEntry(entry os.DirEntry) bool {
-	if entry.IsDir() {
-		return false
-	}
-
-	name := entry.Name()
-	if name == indexFileName {
-		return false
-	}
-
-	return strings.HasSuffix(name, ".yaml") || strings.HasSuffix(name, ".yml")
 }
 
 // computeReportHash generates a stable hash for a report based on its mutations.

@@ -7,6 +7,8 @@ import (
 	"go/token"
 
 	m "gooze.dev/pkg/gooze/internal/model"
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 const (
@@ -15,7 +17,7 @@ const (
 )
 
 // GenerateBooleanMutations generates boolean literal mutations for the given AST node.
-func GenerateBooleanMutations(n ast.Node, fset *token.FileSet, content []byte, source m.Source) []m.Mutation {
+func GenerateBooleanMutations(n ast.Node, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
 	ident, ok := n.(*ast.Ident)
 	if !ok {
 		return nil
@@ -40,7 +42,7 @@ func GenerateBooleanMutations(n ast.Node, fset *token.FileSet, content []byte, s
 	return []m.Mutation{{
 		ID:          id,
 		Source:      source,
-		Type:        m.MutationBoolean,
+		Type:        mgen.Boolean,
 		MutatedCode: mutatedCode,
 	}}
 }

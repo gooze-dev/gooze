@@ -7,7 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	m "gooze.dev/pkg/gooze/internal/model"
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 func TestGenerateBranchMutations_IfStatement(t *testing.T) {
@@ -26,8 +27,8 @@ func foo(x int) int {
 		t.Fatalf("failed to parse source: %v", err)
 	}
 
-	src := m.Source{
-		Origin: &m.File{FullPath: m.Path("test.go")},
+	src := rpt.Source{
+		Origin: &rpt.File{FullPath: "test.go"},
 	}
 
 	mutations := GenerateBranchMutations(file, fset, []byte(source), src)
@@ -44,7 +45,7 @@ func foo(x int) int {
 
 	// Check mutation types
 	for i, mutation := range mutations {
-		if mutation.Type != m.MutationBranch {
+		if mutation.Type != mgen.Branch {
 			t.Errorf("mutation %d: expected type MutationBranch, got %v", i, mutation.Type)
 		}
 		if len(mutation.ID) == 0 {
@@ -109,8 +110,8 @@ func bar() {
 		t.Fatalf("failed to parse source: %v", err)
 	}
 
-	src := m.Source{
-		Origin: &m.File{FullPath: m.Path("test.go")},
+	src := rpt.Source{
+		Origin: &rpt.File{FullPath: "test.go"},
 	}
 
 	mutations := GenerateBranchMutations(file, fset, []byte(source), src)
@@ -125,7 +126,7 @@ func bar() {
 	}
 
 	for i, mutation := range mutations {
-		if mutation.Type != m.MutationBranch {
+		if mutation.Type != mgen.Branch {
 			t.Errorf("mutation %d: expected type MutationBranch, got %v", i, mutation.Type)
 		}
 	}
@@ -154,8 +155,8 @@ func baz(a, b int) int {
 		t.Fatalf("failed to parse source: %v", err)
 	}
 
-	src := m.Source{
-		Origin: &m.File{FullPath: m.Path("test.go")},
+	src := rpt.Source{
+		Origin: &rpt.File{FullPath: "test.go"},
 	}
 
 	mutations := GenerateBranchMutations(file, fset, []byte(source), src)
@@ -166,7 +167,7 @@ func baz(a, b int) int {
 	}
 
 	for i, mutation := range mutations {
-		if mutation.Type != m.MutationBranch {
+		if mutation.Type != mgen.Branch {
 			t.Errorf("mutation %d: expected type MutationBranch, got %v", i, mutation.Type)
 		}
 	}
@@ -186,8 +187,8 @@ func simple() int {
 		t.Fatalf("failed to parse source: %v", err)
 	}
 
-	src := m.Source{
-		Origin: &m.File{FullPath: m.Path("test.go")},
+	src := rpt.Source{
+		Origin: &rpt.File{FullPath: "test.go"},
 	}
 
 	mutations := GenerateBranchMutations(file, fset, []byte(source), src)
@@ -213,8 +214,8 @@ func complex(x, y int) bool {
 		t.Fatalf("failed to parse source: %v", err)
 	}
 
-	src := m.Source{
-		Origin: &m.File{FullPath: m.Path("test.go")},
+	src := rpt.Source{
+		Origin: &rpt.File{FullPath: "test.go"},
 	}
 
 	mutations := GenerateBranchMutations(file, fset, []byte(source), src)
@@ -258,8 +259,8 @@ func test() {
 		t.Fatal("could not find if statement")
 	}
 
-	src := m.Source{
-		Origin: &m.File{FullPath: m.Path("test.go")},
+	src := rpt.Source{
+		Origin: &rpt.File{FullPath: "test.go"},
 	}
 
 	mutations := invertCondition(ifStmt.Cond, fset, []byte(source), src)
@@ -294,8 +295,8 @@ func test(x int) int {
 		t.Fatalf("failed to parse source: %v", err)
 	}
 
-	src := m.Source{
-		Origin: &m.File{FullPath: m.Path("test.go")},
+	src := rpt.Source{
+		Origin: &rpt.File{FullPath: "test.go"},
 	}
 
 	mutations := GenerateBranchMutations(file, fset, []byte(source), src)
@@ -350,8 +351,8 @@ func test(x int) string {
 		t.Fatalf("failed to parse source: %v", err)
 	}
 
-	src := m.Source{
-		Origin: &m.File{FullPath: m.Path("test.go")},
+	src := rpt.Source{
+		Origin: &rpt.File{FullPath: "test.go"},
 	}
 
 	mutations := GenerateBranchMutations(file, fset, []byte(source), src)
@@ -363,7 +364,7 @@ func test(x int) string {
 
 	// Verify all mutations are valid
 	for i, mutation := range mutations {
-		if mutation.Type != m.MutationBranch {
+		if mutation.Type != mgen.Branch {
 			t.Errorf("mutation %d: expected type MutationBranch", i)
 		}
 	}
@@ -389,8 +390,8 @@ func test(x int) string {
 		t.Fatalf("failed to parse source: %v", err)
 	}
 
-	src := m.Source{
-		Origin: &m.File{FullPath: m.Path("test.go")},
+	src := rpt.Source{
+		Origin: &rpt.File{FullPath: "test.go"},
 	}
 
 	mutations := GenerateBranchMutations(file, fset, []byte(source), src)
@@ -434,8 +435,8 @@ func test(x int) {
 		t.Fatalf("failed to parse source: %v", err)
 	}
 
-	src := m.Source{
-		Origin: &m.File{FullPath: m.Path("test.go")},
+	src := rpt.Source{
+		Origin: &rpt.File{FullPath: "test.go"},
 	}
 
 	mutations := GenerateBranchMutations(file, fset, []byte(source), src)
@@ -472,8 +473,8 @@ func test(a, b int) int {
 		t.Fatalf("failed to parse source: %v", err)
 	}
 
-	src := m.Source{
-		Origin: &m.File{FullPath: m.Path("test.go")},
+	src := rpt.Source{
+		Origin: &rpt.File{FullPath: "test.go"},
 	}
 
 	mutations := GenerateBranchMutations(file, fset, []byte(source), src)

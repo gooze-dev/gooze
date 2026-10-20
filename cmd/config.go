@@ -7,18 +7,14 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/spf13/viper"
 	"gopkg.in/natefinch/lumberjack.v2"
+
+	"gooze.dev/pkg/gooze/pkg/config"
 )
 
 const (
-	configVersionKey     = "version"
-	currentConfigVersion = 1
-
-	configBaseName   = "gooze"
-	configFileName   = configBaseName + ".yaml"
 	configFolderPath = "."
 
 	outputFlagName      = "output"
@@ -30,63 +26,22 @@ const (
 
 	coverageProfileFlagName = "coverage-profile"
 
-	runParallelConfigKey  = "run.parallel"
-	mutationTimeoutKey    = "run.mutation_timeout"
-	runCoverageProfileKey = "run.coverage_profile"
-	excludeConfigKey      = "paths.exclude"
-
-	defaultMutationTimeout = time.Minute * 2
-
-	defaultReportsDir  = ".gooze-reports"
-	defaultNoCache     = false
-	defaultRunParallel = 1
-
 	envPrefix = "GOOZE"
-
-	logFilenameKey   = "log.filename"
-	logLevelKey      = "log.level"
-	logVerboseKey    = "log.verbose"
-	logMaxSizeKey    = "log.max_size"
-	logMaxBackupsKey = "log.max_backups"
-	logMaxAgeKey     = "log.max_age"
-	logCompressKey   = "log.compress"
-
-	defaultLogFilename   = ".gooze.log"
-	defaultLogLevel      = int(slog.LevelInfo)
-	defaultLogVerbose    = false
-	defaultLogMaxSize    = 10
-	defaultLogMaxBackups = 3
-	defaultLogMaxAge     = 28
-	defaultLogCompress   = true
 )
 
 var globalLogger *slog.Logger
 
 func init() {
-	viper.SetConfigName(configBaseName)
 	viper.SetConfigType("yaml")
-	viper.AddConfigPath(configFolderPath)
-	viper.SetConfigFile(filepath.Join(configFolderPath, configFileName))
+	viper.SetConfigFile(filepath.Join(configFolderPath, config.FileName))
 	viper.AutomaticEnv()
 	viper.SetEnvPrefix(envPrefix)
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_", ".", "_"))
 
-	viper.SetDefault(configVersionKey, currentConfigVersion)
-	viper.SetDefault(outputFlagName, defaultReportsDir)
-	viper.SetDefault(noCacheFlagName, defaultNoCache)
-	viper.SetDefault(runParallelConfigKey, defaultRunParallel)
-	viper.SetDefault(mutationTimeoutKey, int64(defaultMutationTimeout.Seconds()))
-	viper.SetDefault(runCoverageProfileKey, "")
-	viper.SetDefault(excludeConfigKey, []string{})
-
-	// Logging defaults (used by config/env and as fallbacks for flags).
-	viper.SetDefault(logFilenameKey, defaultLogFilename)
-	viper.SetDefault(logLevelKey, defaultLogLevel)
-	viper.SetDefault(logVerboseKey, defaultLogVerbose)
-	viper.SetDefault(logMaxSizeKey, defaultLogMaxSize)
-	viper.SetDefault(logMaxBackupsKey, defaultLogMaxBackups)
-	viper.SetDefault(logMaxAgeKey, defaultLogMaxAge)
-	viper.SetDefault(logCompressKey, defaultLogCompress)
+	for _, key := range config.Keys() {
+		field, _ := config.Lookup(key)
+		viper.SetDefault(key, field.Default)
+	}
 
 	if err := viper.ReadInConfig(); err != nil {
 		var notFound viper.ConfigFileNotFoundError
@@ -129,26 +84,26 @@ func parseSlogLevel(value string, defaultLevel slog.Level) slog.Level {
 // By default it logs at Info; if verbose is true it logs at Debug.
 func configureLogger(logPath string, verbose bool) {
 	if strings.TrimSpace(logPath) == "" {
-		logPath = viper.GetString(logFilenameKey)
+		logPath = viper.GetString(config.KeyLogFilename)
 	}
 
 	if strings.TrimSpace(logPath) == "" {
-		logPath = defaultLogFilename
+		logPath = defaultLogFilename()
 	}
 
 	var logLevel slog.Level
 	if verbose {
 		logLevel = slog.LevelDebug
 	} else {
-		logLevel = parseSlogLevel(viper.GetString(logLevelKey), slog.LevelInfo)
+		logLevel = parseSlogLevel(viper.GetString(config.KeyLogLevel), slog.LevelInfo)
 	}
 
 	logWriter := &lumberjack.Logger{
 		Filename:   logPath,
-		MaxSize:    viper.GetInt(logMaxSizeKey),
-		MaxBackups: viper.GetInt(logMaxBackupsKey),
-		MaxAge:     viper.GetInt(logMaxAgeKey),
-		Compress:   viper.GetBool(logCompressKey),
+		MaxSize:    viper.GetInt(config.KeyLogMaxSize),
+		MaxBackups: viper.GetInt(config.KeyLogMaxBackups),
+		MaxAge:     viper.GetInt(config.KeyLogMaxAge),
+		Compress:   viper.GetBool(config.KeyLogCompress),
 	}
 
 	// Create a JSON handler that writes to the file
@@ -160,4 +115,11 @@ func configureLogger(logPath string, verbose bool) {
 	// Create a new logger with the file handler and set it as the global logger
 	globalLogger = slog.New(handler)
 	slog.SetDefault(globalLogger)
+}
+
+func defaultLogFilename() string {
+	field, _ := config.Lookup(config.KeyLogFilename)
+	name, _ := field.Default.(string)
+
+	return name
 }

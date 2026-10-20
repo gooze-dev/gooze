@@ -7,11 +7,13 @@ import (
 	"go/token"
 
 	m "gooze.dev/pkg/gooze/internal/model"
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 // GenerateLoopMutations generates loop mutations for the given AST node.
 // Loop mutations test loop boundaries, loop body execution, and control flow.
-func GenerateLoopMutations(n ast.Node, fset *token.FileSet, content []byte, source m.Source) []m.Mutation {
+func GenerateLoopMutations(n ast.Node, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
 	var mutations []m.Mutation
 
 	switch stmt := n.(type) {
@@ -32,7 +34,7 @@ func GenerateLoopMutations(n ast.Node, fset *token.FileSet, content []byte, sour
 }
 
 // mutateForLoop creates mutations for loops.
-func mutateForLoop(stmt *ast.ForStmt, fset *token.FileSet, content []byte, source m.Source) []m.Mutation {
+func mutateForLoop(stmt *ast.ForStmt, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
 	var mutations []m.Mutation
 
 	// Mutate loop boundary conditions
@@ -49,7 +51,7 @@ func mutateForLoop(stmt *ast.ForStmt, fset *token.FileSet, content []byte, sourc
 }
 
 // mutateRangeLoop creates mutations for range loops.
-func mutateRangeLoop(stmt *ast.RangeStmt, fset *token.FileSet, content []byte, source m.Source) []m.Mutation {
+func mutateRangeLoop(stmt *ast.RangeStmt, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
 	if stmt.Body == nil || len(stmt.Body.List) == 0 {
 		return nil
 	}
@@ -58,7 +60,7 @@ func mutateRangeLoop(stmt *ast.RangeStmt, fset *token.FileSet, content []byte, s
 }
 
 // mutateLoopBoundary mutates loop boundary conditions to test off-by-one errors.
-func mutateLoopBoundary(cond ast.Expr, fset *token.FileSet, content []byte, source m.Source) []m.Mutation {
+func mutateLoopBoundary(cond ast.Expr, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
 	binExpr, ok := cond.(*ast.BinaryExpr)
 	if !ok {
 		return nil
@@ -85,13 +87,13 @@ func mutateLoopBoundary(cond ast.Expr, fset *token.FileSet, content []byte, sour
 	for _, mutatedOp := range alternatives {
 		mutated := replaceRange(content, opStart, opEnd, mutatedOp.String())
 
-		h := sha256.Sum256([]byte(fmt.Sprintf("%s-%s-boundary-%d", source.Origin.FullPath, m.MutationLoop.Name, opStart)))
+		h := sha256.Sum256([]byte(fmt.Sprintf("%s-%s-boundary-%d", source.Origin.FullPath, mgen.Loop.Name, opStart)))
 		id := fmt.Sprintf("%x", h)[:16]
 
 		mutations = append(mutations, m.Mutation{
 			ID:          id,
 			Source:      source,
-			Type:        m.MutationLoop,
+			Type:        mgen.Loop,
 			MutatedCode: ensureTrailingNewline(mutated),
 		})
 	}
@@ -100,18 +102,18 @@ func mutateLoopBoundary(cond ast.Expr, fset *token.FileSet, content []byte, sour
 }
 
 // removeForLoopBody creates a mutation that removes the for loop body.
-func removeForLoopBody(stmt *ast.ForStmt, fset *token.FileSet, content []byte, source m.Source) []m.Mutation {
+func removeForLoopBody(stmt *ast.ForStmt, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
 	return removeLoopBody(stmt.Body, "body", fset, content, source)
 }
 
 // removeRangeLoopBody creates a mutation that removes the range loop body.
-func removeRangeLoopBody(stmt *ast.RangeStmt, fset *token.FileSet, content []byte, source m.Source) []m.Mutation {
+func removeRangeLoopBody(stmt *ast.RangeStmt, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
 	return removeLoopBody(stmt.Body, "range", fset, content, source)
 }
 
 // removeLoopBody creates a mutation that empties a loop body. tag distinguishes
 // the loop kind so generated mutation IDs stay stable and unique.
-func removeLoopBody(body *ast.BlockStmt, tag string, fset *token.FileSet, content []byte, source m.Source) []m.Mutation {
+func removeLoopBody(body *ast.BlockStmt, tag string, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
 	bodyStart, ok1 := offsetForPos(fset, body.Lbrace)
 	bodyEnd, ok2 := offsetForPos(fset, body.Rbrace)
 
@@ -121,19 +123,19 @@ func removeLoopBody(body *ast.BlockStmt, tag string, fset *token.FileSet, conten
 
 	mutated := replaceRange(content, bodyStart+1, bodyEnd, "")
 
-	h := sha256.Sum256([]byte(fmt.Sprintf("%s-%s-%s-%d", source.Origin.FullPath, m.MutationLoop.Name, tag, bodyStart)))
+	h := sha256.Sum256([]byte(fmt.Sprintf("%s-%s-%s-%d", source.Origin.FullPath, mgen.Loop.Name, tag, bodyStart)))
 	id := fmt.Sprintf("%x", h)[:16]
 
 	return []m.Mutation{{
 		ID:          id,
 		Source:      source,
-		Type:        m.MutationLoop,
+		Type:        mgen.Loop,
 		MutatedCode: ensureTrailingNewline(mutated),
 	}}
 }
 
 // removeBranchStatement creates a mutation that removes break or continue statements.
-func removeBranchStatement(stmt *ast.BranchStmt, fset *token.FileSet, content []byte, source m.Source) []m.Mutation {
+func removeBranchStatement(stmt *ast.BranchStmt, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
 	offset, ok1 := offsetForPos(fset, stmt.Pos())
 	endOffset, ok2 := offsetForPos(fset, stmt.End())
 
@@ -158,13 +160,13 @@ func removeBranchStatement(stmt *ast.BranchStmt, fset *token.FileSet, content []
 		branchType = "continue"
 	}
 
-	h := sha256.Sum256([]byte(fmt.Sprintf("%s-%s-%s-%d", source.Origin.FullPath, m.MutationLoop.Name, branchType, offset)))
+	h := sha256.Sum256([]byte(fmt.Sprintf("%s-%s-%s-%d", source.Origin.FullPath, mgen.Loop.Name, branchType, offset)))
 	id := fmt.Sprintf("%x", h)[:16]
 
 	return []m.Mutation{{
 		ID:          id,
 		Source:      source,
-		Type:        m.MutationLoop,
+		Type:        mgen.Loop,
 		MutatedCode: ensureTrailingNewline(mutated),
 	}}
 }
@@ -176,7 +178,7 @@ func isLoopBoundaryOp(op token.Token) bool {
 
 // getLoopBoundaryAlternatives returns alternative operators for boundary testing.
 func getLoopBoundaryAlternatives(original token.Token) []token.Token {
-	switch original { //nolint:exhaustive
+	switch original {
 	case token.LSS: // <
 		return []token.Token{token.LEQ} // <=
 	case token.LEQ: // <=
@@ -191,7 +193,7 @@ func getLoopBoundaryAlternatives(original token.Token) []token.Token {
 }
 
 // mutateRecursiveCalls finds and removes recursive calls in a function.
-func mutateRecursiveCalls(funcDecl *ast.FuncDecl, fset *token.FileSet, content []byte, source m.Source) []m.Mutation {
+func mutateRecursiveCalls(funcDecl *ast.FuncDecl, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
 	if funcDecl.Body == nil || funcDecl.Name == nil {
 		return nil
 	}
@@ -216,7 +218,7 @@ func mutateRecursiveCalls(funcDecl *ast.FuncDecl, fset *token.FileSet, content [
 }
 
 // findRecursiveInExpr finds recursive calls in an expression.
-func findRecursiveInExpr(expr ast.Expr, funcName string, fset *token.FileSet, content []byte, source m.Source) []m.Mutation {
+func findRecursiveInExpr(expr ast.Expr, funcName string, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
 	var mutations []m.Mutation
 
 	ast.Inspect(expr, func(n ast.Node) bool {
@@ -237,7 +239,7 @@ func findRecursiveInExpr(expr ast.Expr, funcName string, fset *token.FileSet, co
 }
 
 // removeRecursiveCallExpr creates a mutation that removes a recursive call expression.
-func removeRecursiveCallExpr(call *ast.CallExpr, fset *token.FileSet, content []byte, source m.Source) *m.Mutation {
+func removeRecursiveCallExpr(call *ast.CallExpr, fset *token.FileSet, content []byte, source rpt.Source) *m.Mutation {
 	offset, ok1 := offsetForPos(fset, call.Pos())
 	endOffset, ok2 := offsetForPos(fset, call.End())
 
@@ -248,13 +250,13 @@ func removeRecursiveCallExpr(call *ast.CallExpr, fset *token.FileSet, content []
 	// Replace the call with a default value (0 for simplicity)
 	mutated := replaceRange(content, offset, endOffset, "0")
 
-	h := sha256.Sum256([]byte(fmt.Sprintf("%s-%s-recursion-%d", source.Origin.FullPath, m.MutationLoop.Name, offset)))
+	h := sha256.Sum256([]byte(fmt.Sprintf("%s-%s-recursion-%d", source.Origin.FullPath, mgen.Loop.Name, offset)))
 	id := fmt.Sprintf("%x", h)[:16]
 
 	return &m.Mutation{
 		ID:          id,
 		Source:      source,
-		Type:        m.MutationLoop,
+		Type:        mgen.Loop,
 		MutatedCode: ensureTrailingNewline(mutated),
 	}
 }

@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	m "gooze.dev/pkg/gooze/internal/model"
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 func TestGenerateLogicalMutations(t *testing.T) {
@@ -14,37 +16,37 @@ func TestGenerateLogicalMutations(t *testing.T) {
 		name          string
 		code          string
 		expectedCount int
-		expectedType  m.MutationType
+		expectedType  mgen.Type
 	}{
 		{
 			name:          "logical AND operator",
 			code:          "package main\nfunc test() { x := true && false }",
 			expectedCount: 1,
-			expectedType:  m.MutationLogical,
+			expectedType:  mgen.Logical,
 		},
 		{
 			name:          "logical OR operator",
 			code:          "package main\nfunc test() { x := true || false }",
 			expectedCount: 1,
-			expectedType:  m.MutationLogical,
+			expectedType:  mgen.Logical,
 		},
 		{
 			name:          "multiple logical operators",
 			code:          "package main\nfunc test() { x := true && false || true }",
 			expectedCount: 2,
-			expectedType:  m.MutationLogical,
+			expectedType:  mgen.Logical,
 		},
 		{
 			name:          "logical with comparison",
 			code:          "package main\nfunc test() { x := (5 > 3) && (10 < 20) }",
 			expectedCount: 1,
-			expectedType:  m.MutationLogical,
+			expectedType:  mgen.Logical,
 		},
 		{
 			name:          "non-logical operator",
 			code:          "package main\nfunc test() { x := 5 + 10 }",
 			expectedCount: 0,
-			expectedType:  m.MutationLogical,
+			expectedType:  mgen.Logical,
 		},
 	}
 
@@ -57,8 +59,8 @@ func TestGenerateLogicalMutations(t *testing.T) {
 			}
 
 			content := []byte(tt.code)
-			source := m.Source{
-				Origin: &m.File{FullPath: "test.go"},
+			source := rpt.Source{
+				Origin: &rpt.File{FullPath: "test.go"},
 			}
 			mutations := []m.Mutation{}
 

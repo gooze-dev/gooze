@@ -1,0 +1,75 @@
+source:
+    origin:
+        shortpath: calc/add.go
+        fullpath: /repo/calc/add.go
+        hash: aaaa
+    test:
+        shortpath: calc/add_test.go
+        fullpath: /repo/calc/add_test.go
+        hash: bbbb
+    package: calc
+result:
+    - name: arithmetic
+      version: 1
+      mutations:
+        - mutationid: m1
+          status: 0
+        - mutationid: m2
+          status: 1
+    - name: boolean
+      version: 1
+      mutations:
+        - mutationid: m3
+          status: 4
+diff:
+    - 45
+    - 45
+    - 45
+    - 32
+    - 111
+    - 114
+    - 105
+    - 103
+    - 105
+    - 110
+    - 97
+    - 108
+    - 10
+    - 43
+    - 43
+    - 43
+    - 32
+    - 109
+    - 117
+    - 116
+    - 97
+    - 116
+    - 101
+    - 100
+    - 10
+    - 64
+    - 64
+    - 32
+    - 45
+    - 49
+    - 32
+    - 43
+    - 49
+    - 32
+    - 64
+    - 64
+    - 10
+    - 45
+    - 97
+    - 32
+    - 43
+    - 32
+    - 98
+    - 10
+    - 43
+    - 97
+    - 32
+    - 45
+    - 32
+    - 98
+    - 10

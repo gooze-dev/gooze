@@ -1,0 +1,18 @@
+source:
+    origin:
+        shortpath: calc/sub.go
+        fullpath: /repo/calc/sub.go
+        hash: cccc
+    test: null
+    package: null
+result:
+    - name: numbers
+      version: 1
+      mutations:
+        - mutationid: m4
+          status: 3
+        - mutationid: m5
+          status: 2
+        - mutationid: m6
+          status: 5
+diff: null
