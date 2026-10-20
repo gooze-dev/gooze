@@ -21,6 +21,10 @@ import (
 )
 
 const (
+	// registryUsernameEnv and registryPasswordEnv carry explicit registry
+	// credentials; when unset the Docker credential store is used.
+	registryUsernameEnv = "GOOZE_REGISTRY_USERNAME"
+	registryPasswordEnv = "GOOZE_REGISTRY_PASSWORD" //nolint:gosec // env var name, not a secret.
 	// reportsArtifactType identifies a Gooze reports artifact in a registry.
 	reportsArtifactType = "application/vnd.gooze.reports.v1+gzip"
 	// reportsBlobMediaType is the media type of the packaged reports blob.
@@ -51,9 +55,13 @@ func NewORASRegistry() *ORASRegistry {
 
 // Push packages dir into a gzip blob and pushes it to ref as an OCI artifact.
 func (r *ORASRegistry) Push(ctx context.Context, ref string, dir m.Path, opts RegistryOptions) error {
-	parsed, err := registry.ParseReference(ref)
+	parsed, err := parseTaggedReference(ref)
 	if err != nil {
-		return fmt.Errorf("parse reference %q: %w", ref, err)
+		return err
+	}
+
+	if err := validateReportsDir(string(dir)); err != nil {
+		return err
 	}
 
 	staging, err := os.MkdirTemp("", "gooze-oci-push-*")
@@ -95,9 +103,9 @@ func (r *ORASRegistry) Push(ctx context.Context, ref string, dir m.Path, opts Re
 
 // Pull fetches the artifact at ref and extracts its reports into dir.
 func (r *ORASRegistry) Pull(ctx context.Context, ref string, dir m.Path, opts RegistryOptions) error {
-	parsed, err := registry.ParseReference(ref)
+	parsed, err := parseReference(ref)
 	if err != nil {
-		return fmt.Errorf("parse reference %q: %w", ref, err)
+		return err
 	}
 
 	staging, err := os.MkdirTemp("", "gooze-oci-pull-*")
@@ -123,8 +131,67 @@ func (r *ORASRegistry) Pull(ctx context.Context, ref string, dir m.Path, opts Re
 		return fmt.Errorf("pull from %q: %w", ref, err)
 	}
 
-	if err := unTarGz(filepath.Join(staging, reportsBlobName), string(dir)); err != nil {
+	archivePath := filepath.Join(staging, reportsBlobName)
+	if _, err := os.Stat(archivePath); err != nil {
+		return fmt.Errorf("artifact at %q is not a gooze reports artifact (missing %s layer)", ref, reportsBlobName)
+	}
+
+	if err := unTarGz(archivePath, string(dir)); err != nil {
 		return fmt.Errorf("unpack reports: %w", err)
+	}
+
+	return nil
+}
+
+// parseReference parses ref and requires it to name a tag or a digest, since an
+// untagged reference can neither be pushed nor pulled.
+func parseReference(ref string) (registry.Reference, error) {
+	parsed, err := registry.ParseReference(ref)
+	if err != nil {
+		return registry.Reference{}, fmt.Errorf("parse reference %q: %w", ref, err)
+	}
+
+	if parsed.Reference == "" {
+		return registry.Reference{}, fmt.Errorf("reference %q must include a tag (for example %s:main)", ref, ref)
+	}
+
+	return parsed, nil
+}
+
+// parseTaggedReference is parseReference restricted to tags; a digest cannot
+// be the target of a push.
+func parseTaggedReference(ref string) (registry.Reference, error) {
+	parsed, err := parseReference(ref)
+	if err != nil {
+		return registry.Reference{}, err
+	}
+
+	if parsed.ValidateReferenceAsDigest() == nil {
+		return registry.Reference{}, fmt.Errorf("push requires a tag, got digest reference %q", ref)
+	}
+
+	return parsed, nil
+}
+
+// validateReportsDir checks that dir is a non-empty directory so an empty or
+// mistyped path cannot silently publish an empty archive.
+func validateReportsDir(dir string) error {
+	info, err := os.Stat(dir)
+	if err != nil {
+		return fmt.Errorf("reports dir %q: %w", dir, err)
+	}
+
+	if !info.IsDir() {
+		return fmt.Errorf("reports dir %q is not a directory", dir)
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return fmt.Errorf("reports dir %q: %w", dir, err)
+	}
+
+	if len(entries) == 0 {
+		return fmt.Errorf("reports dir %q is empty; nothing to push", dir)
 	}
 
 	return nil
@@ -191,11 +258,16 @@ func registryClient(host string, opts RegistryOptions) (*auth.Client, error) {
 }
 
 func registryCredential(host string) (auth.CredentialFunc, error) {
-	if user := os.Getenv("GOOZE_REGISTRY_USERNAME"); user != "" {
-		return auth.StaticCredential(host, auth.Credential{
-			Username: user,
-			Password: os.Getenv("GOOZE_REGISTRY_PASSWORD"),
-		}), nil
+	user, password := os.Getenv(registryUsernameEnv), os.Getenv(registryPasswordEnv)
+
+	switch {
+	case user != "" && password != "":
+		return auth.StaticCredential(host, auth.Credential{Username: user, Password: password}), nil
+	case user != "":
+		return nil, fmt.Errorf("%s is set but %s is empty", registryUsernameEnv, registryPasswordEnv)
+	case password != "":
+		// A token-only credential (common in CI) is sent as a bearer token.
+		return auth.StaticCredential(host, auth.Credential{AccessToken: password}), nil
 	}
 
 	store, err := credentials.NewStoreFromDocker(credentials.StoreOptions{})
@@ -206,10 +278,17 @@ func registryCredential(host string) (auth.CredentialFunc, error) {
 	return credentials.Credential(store), nil
 }
 
+// insecureRetryClient mirrors retry.DefaultClient but skips TLS verification.
+// It clones http.DefaultTransport so proxy settings and timeouts are kept.
 func insecureRetryClient() *http.Client {
-	return &http.Client{
-		Transport: retry.NewTransport(&http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // --insecure is an explicit opt-in.
-		}),
+	transport, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		transport = &http.Transport{}
+	} else {
+		transport = transport.Clone()
 	}
+
+	transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // --insecure is an explicit opt-in.
+
+	return &http.Client{Transport: retry.NewTransport(transport)}
 }
