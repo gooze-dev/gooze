@@ -236,11 +236,9 @@ func (w *workflow) finalizeReports(ctx context.Context, reportsDir m.Path, teste
 	slog.Info("Calculated mutation score", "score", score)
 	w.progress.DisplayMutationScore(ctx, score)
 
-	if tested.Len() > 0 {
-		if err := w.reports.CleanReports(ctx, reportsDir, tested); err != nil {
-			slog.Error("Failed to clean stale reports", "error", err, "path", reportsDir)
-			return fmt.Errorf("clean stale reports: %w", err)
-		}
+	if err := w.reports.CleanReports(ctx, reportsDir, tested); err != nil {
+		slog.Error("Failed to clean stale reports", "error", err, "path", reportsDir)
+		return fmt.Errorf("clean stale reports: %w", err)
 	}
 
 	if err := w.reports.SaveReports(ctx, reportsDir, reports); err != nil {
@@ -353,11 +351,6 @@ func (w *workflow) regenerateIndexAndScore(ctx context.Context, base m.Path) err
 
 func (w *workflow) displayScore(ctx context.Context, base m.Path) error {
 	reports, err := w.reports.LoadSpillReports(ctx, base)
-	if errors.Is(err, os.ErrNotExist) {
-		w.progress.DisplayMutationScore(ctx, mutationScore(0, 0))
-		return nil
-	}
-
 	if err != nil {
 		return fmt.Errorf("load reports from base: %w", err)
 	}
@@ -410,10 +403,8 @@ func (w *workflow) mergeReports(ctx context.Context, base m.Path, shardDirs []st
 
 	defer closeSpill("stale sources", stale)
 
-	if stale.Len() > 0 {
-		if err := w.reports.CleanReports(ctx, base, stale); err != nil {
-			return fmt.Errorf("clean superseded reports: %w", err)
-		}
+	if err := w.reports.CleanReports(ctx, base, stale); err != nil {
+		return fmt.Errorf("clean superseded reports: %w", err)
 	}
 
 	if err := w.reports.SaveReports(ctx, base, shardReports); err != nil {
