@@ -713,3 +713,38 @@ func FuzzByteSlice(f *testing.F) {
 		}
 	})
 }
+
+func TestFromSliceAndToSlice_RoundTrip(t *testing.T) {
+	items := []string{"a", "b", "c"}
+
+	spill, err := FromSlice(items)
+	require.NoError(t, err)
+
+	defer spill.Close()
+
+	require.Equal(t, uint64(3), spill.Len())
+
+	got, err := ToSlice(spill)
+	require.NoError(t, err)
+	require.Equal(t, items, got)
+}
+
+func TestFromSlice_Empty(t *testing.T) {
+	spill, err := FromSlice[int](nil)
+	require.NoError(t, err)
+
+	defer spill.Close()
+
+	got, err := ToSlice(spill)
+	require.NoError(t, err)
+	require.Empty(t, got)
+}
+
+func TestToSlice_ClosedSpillReturnsError(t *testing.T) {
+	spill, err := FromSlice([]int{1})
+	require.NoError(t, err)
+	require.NoError(t, spill.Close())
+
+	_, err = ToSlice(spill)
+	require.Error(t, err)
+}

@@ -23,19 +23,6 @@ func mutationScoreFromReports(reports pkg.FileSpill[m.Report]) (float64, error) 
 	return mutationScore(killed, total), nil
 }
 
-func mutationScoreFromReportSlice(reports []m.Report) float64 {
-	killed := 0
-	total := 0
-
-	for _, report := range reports {
-		k, t := countReport(report)
-		killed += k
-		total += t
-	}
-
-	return mutationScore(killed, total)
-}
-
 // countReport counts killed and scored mutations. Mutations that did not
 // compile (status error) are not viable and are left out of the total.
 func countReport(report m.Report) (killed, total int) {
