@@ -3,6 +3,7 @@ package pkg
 import (
 	"errors"
 	"math"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -13,7 +14,7 @@ func TestFileSpill(t *testing.T) {
 		path, err := NewFileSpill[int]()
 		require.NoError(t, err)
 		require.NotNil(t, path)
-		require.Contains(t, path.Path(), "/tmp/filespill")
+		require.Contains(t, path.Path(), "gooze-spill-")
 		defer path.Close()
 	})
 
@@ -126,10 +127,11 @@ func TestFileSpill(t *testing.T) {
 		err = spill.Close()
 		require.NoError(t, err)
 
-		// File is closed but data persists
-		val, err := spill.Get(0)
-		require.NoError(t, err)
-		require.Equal(t, 1, val)
+		_, err = os.Stat(spill.Path())
+		require.True(t, os.IsNotExist(err))
+
+		_, err = spill.Get(0)
+		require.Error(t, err)
 	})
 
 	t.Run("Generic types work with different types", func(t *testing.T) {

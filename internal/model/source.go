@@ -34,3 +34,17 @@ type Source struct {
 	Test    *File
 	Package *string
 }
+
+// Key identifies the origin file across machines: the project-relative
+// ShortPath when known, otherwise FullPath. Empty when there is no origin.
+func (s Source) Key() string {
+	if s.Origin == nil {
+		return ""
+	}
+
+	if s.Origin.ShortPath != "" {
+		return string(s.Origin.ShortPath)
+	}
+
+	return string(s.Origin.FullPath)
+}

@@ -95,7 +95,6 @@ func (rs *LocalReportStore) SaveReports(ctx context.Context, path m.Path, report
 		return fmt.Errorf("create reports directory: %w", err)
 	}
 
-	writtenReports := make([]m.Report, 0, len(reports))
 	for _, report := range reports {
 		reportHash := rs.computeReportHash(report.Result)
 		if reportHash == "" {
@@ -113,12 +112,6 @@ func (rs *LocalReportStore) SaveReports(ctx context.Context, path m.Path, report
 		if err := os.WriteFile(fullPath, data, 0o600); err != nil {
 			return fmt.Errorf("write report file %s: %w", fullPath, err)
 		}
-
-		writtenReports = append(writtenReports, report)
-	}
-
-	if len(writtenReports) == 0 {
-		return nil
 	}
 
 	return nil
@@ -396,8 +389,8 @@ func (rs *LocalReportStore) buildCleanMatchers(sources []m.Source) (map[string]b
 			continue
 		}
 
-		if src.Origin.FullPath != "" {
-			paths[string(src.Origin.FullPath)] = true
+		if key := src.Key(); key != "" {
+			paths[key] = true
 		}
 
 		if src.Origin.Hash != "" {
@@ -413,10 +406,8 @@ func (rs *LocalReportStore) shouldCleanReport(source m.Source, toCleanPaths map[
 		return false
 	}
 
-	if source.Origin.FullPath != "" {
-		if toCleanPaths[string(source.Origin.FullPath)] {
-			return true
-		}
+	if key := source.Key(); key != "" && toCleanPaths[key] {
+		return true
 	}
 
 	if source.Origin.Hash != "" {
@@ -468,11 +459,9 @@ func (rs *LocalReportStore) buildCurrentSourceMap(sources []m.Source) map[string
 	currentByPath := map[string]m.Source{}
 
 	for _, src := range sources {
-		if src.Origin == nil || src.Origin.FullPath == "" {
-			continue
+		if key := src.Key(); key != "" {
+			currentByPath[key] = src
 		}
-
-		currentByPath[string(src.Origin.FullPath)] = src
 	}
 
 	return currentByPath
@@ -516,11 +505,10 @@ func (rs *LocalReportStore) buildStoredSourceState(reports []m.Report) map[strin
 	state := make(map[string]storedSourceState)
 
 	for _, report := range reports {
-		if report.Source.Origin == nil || report.Source.Origin.FullPath == "" {
+		key := report.Source.Key()
+		if key == "" {
 			continue
 		}
-
-		key := string(report.Source.Origin.FullPath)
 
 		st, ok := state[key]
 		if !ok {
@@ -731,20 +719,18 @@ func (rs *LocalReportStore) buildIndexFromReports(reports []m.Report) indexEntry
 }
 
 type indexState struct {
-	globalMutationMap map[string]*mutationEntry
-	sourceToMutations map[string]map[string]bool
+	mutationsBySource map[string]map[string]*mutationEntry
 }
 
 func (rs *LocalReportStore) collectIndexState(reports []m.Report, index *indexEntry) indexState {
 	state := indexState{
-		globalMutationMap: make(map[string]*mutationEntry),
-		sourceToMutations: make(map[string]map[string]bool),
+		mutationsBySource: make(map[string]map[string]*mutationEntry),
 	}
 
 	for _, report := range reports {
 		sourceHex := rs.sourceHex(report.Source)
-		if sourceHex != "" && state.sourceToMutations[sourceHex] == nil {
-			state.sourceToMutations[sourceHex] = make(map[string]bool)
+		if sourceHex != "" && state.mutationsBySource[sourceHex] == nil {
+			state.mutationsBySource[sourceHex] = make(map[string]*mutationEntry)
 		}
 
 		reportHash := rs.computeReportHash(report.Result)
@@ -765,8 +751,10 @@ func (rs *LocalReportStore) collectIndexState(reports []m.Report, index *indexEn
 	}
 
 	// Stabilize order.
-	for _, ent := range state.globalMutationMap {
-		sort.Strings(ent.MutationReports)
+	for _, entries := range state.mutationsBySource {
+		for _, ent := range entries {
+			sort.Strings(ent.MutationReports)
+		}
 	}
 
 	return state
@@ -777,24 +765,26 @@ func (rs *LocalReportStore) trackMutationForIndex(state *indexState, sourceHex s
 		return
 	}
 
-	if state.sourceToMutations[sourceHex] == nil {
-		state.sourceToMutations[sourceHex] = make(map[string]bool)
+	entries := state.mutationsBySource[sourceHex]
+	if entries == nil {
+		entries = make(map[string]*mutationEntry)
+		state.mutationsBySource[sourceHex] = entries
 	}
 
-	state.sourceToMutations[sourceHex][mutationName] = true
-
-	if _, exists := state.globalMutationMap[mutationName]; !exists {
-		state.globalMutationMap[mutationName] = &mutationEntry{MutationName: mutationName, MutationReports: []string{}}
+	entry, exists := entries[mutationName]
+	if !exists {
+		entry = &mutationEntry{MutationName: mutationName, MutationReports: []string{}}
+		entries[mutationName] = entry
 	}
 
-	if !rs.reportFileExists(state.globalMutationMap[mutationName].MutationReports, reportFile) {
-		state.globalMutationMap[mutationName].MutationReports = append(state.globalMutationMap[mutationName].MutationReports, reportFile)
+	if !rs.reportFileExists(entry.MutationReports, reportFile) {
+		entry.MutationReports = append(entry.MutationReports, reportFile)
 	}
 }
 
 func (rs *LocalReportStore) buildIndexResults(state indexState) []resultEntry {
-	sourceHexes := make([]string, 0, len(state.sourceToMutations))
-	for sourceHex := range state.sourceToMutations {
+	sourceHexes := make([]string, 0, len(state.mutationsBySource))
+	for sourceHex := range state.mutationsBySource {
 		sourceHexes = append(sourceHexes, sourceHex)
 	}
 
@@ -802,10 +792,10 @@ func (rs *LocalReportStore) buildIndexResults(state indexState) []resultEntry {
 
 	results := make([]resultEntry, 0, len(sourceHexes))
 	for _, sourceHex := range sourceHexes {
-		mutationNames := state.sourceToMutations[sourceHex]
+		entries := state.mutationsBySource[sourceHex]
 
-		names := make([]string, 0, len(mutationNames))
-		for name := range mutationNames {
+		names := make([]string, 0, len(entries))
+		for name := range entries {
 			names = append(names, name)
 		}
 
@@ -813,11 +803,7 @@ func (rs *LocalReportStore) buildIndexResults(state indexState) []resultEntry {
 
 		out := resultEntry{SourceHex: sourceHex, Mutations: make([]mutationEntry, 0, len(names))}
 		for _, name := range names {
-			if state.globalMutationMap[name] == nil {
-				continue
-			}
-
-			out.Mutations = append(out.Mutations, *state.globalMutationMap[name])
+			out.Mutations = append(out.Mutations, *entries[name])
 		}
 
 		results = append(results, out)

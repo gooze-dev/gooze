@@ -65,14 +65,27 @@ func (f *fileSpillImpl[T]) Close() error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	if f.file != nil {
-		if err := f.file.Close(); err != nil {
-			slog.Error("failed to close file", "path", f.path, "error", err)
-			return err
-		}
-
-		slog.Debug("closed filespill", "path", f.path, "length", f.length)
+	if f.file == nil {
+		return nil
 	}
+
+	err := f.file.Close()
+	f.file = nil
+
+	if removeErr := os.Remove(f.path); removeErr != nil && !os.IsNotExist(removeErr) {
+		slog.Error("failed to remove spill file", "path", f.path, "error", removeErr)
+
+		if err == nil {
+			err = removeErr
+		}
+	}
+
+	if err != nil {
+		slog.Error("failed to close filespill", "path", f.path, "error", err)
+		return err
+	}
+
+	slog.Debug("closed filespill", "path", f.path, "length", f.length)
 
 	return nil
 }
@@ -171,15 +184,9 @@ func (f *fileSpillImpl[T]) Range(fn func(index uint64, item T) error) error {
 
 // NewFileSpill creates a new FileSpill for items of type T.
 func NewFileSpill[T any]() (FileSpill[T], error) {
-	tmpDir := "/tmp/filespill"
-	if err := os.MkdirAll(tmpDir, 0o750); err != nil {
-		slog.Error("failed to create temp directory", "path", tmpDir, "error", err)
-		return nil, fmt.Errorf("failed to create temp directory: %w", err)
-	}
-
-	file, err := os.CreateTemp(tmpDir, "spill-*.gob")
+	file, err := os.CreateTemp("", "gooze-spill-*.gob")
 	if err != nil {
-		slog.Error("failed to create temp file", "path", tmpDir, "error", err)
+		slog.Error("failed to create temp file", "error", err)
 		return nil, fmt.Errorf("failed to create temp file: %w", err)
 	}
 

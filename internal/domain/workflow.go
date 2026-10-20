@@ -122,10 +122,17 @@ func (w *workflow) Test(ctx context.Context, args TestArgs) error {
 
 		reportsDir := shardReportsDir(args.Reports, args.ShardIndex, args.TotalShardCount)
 
-		sources, err := w.changedSources(ctx, args.EstimateArgs)
+		sources, deleted, err := w.changedSources(ctx, args.EstimateArgs)
 		if err != nil {
 			slog.Error("Failed to resolve sources", "error", err)
 			return err
+		}
+
+		if len(deleted) > 0 {
+			if err := w.reports.CleanReports(ctx, args.Reports, deleted); err != nil {
+				slog.Error("Failed to clean reports for deleted sources", "error", err)
+				return fmt.Errorf("clean reports: %w", err)
+			}
 		}
 
 		inThisShard := func(mutation m.Mutation) bool {
@@ -158,13 +165,13 @@ func (w *workflow) Test(ctx context.Context, args TestArgs) error {
 
 		slog.Info("Completed mutation tests", "reportsCount", reports.Len())
 
-		return w.finalizeReports(ctx, reportsDir, reports)
+		return w.finalizeReports(ctx, reportsDir, sources, reports)
 	})
 }
 
-// finalizeReports computes the mutation score, persists the spilled reports, and
-// regenerates the reports index.
-func (w *workflow) finalizeReports(ctx context.Context, reportsDir m.Path, reports pkg.FileSpill[m.Report]) error {
+// finalizeReports computes the mutation score, replaces previous reports for
+// the tested sources with the spilled ones, and regenerates the reports index.
+func (w *workflow) finalizeReports(ctx context.Context, reportsDir m.Path, tested []m.Source, reports pkg.FileSpill[m.Report]) error {
 	score, err := mutationScoreFromReports(reports)
 	if err != nil {
 		return fmt.Errorf("calculate mutation score: %w", err)
@@ -172,6 +179,13 @@ func (w *workflow) finalizeReports(ctx context.Context, reportsDir m.Path, repor
 
 	slog.Info("Calculated mutation score", "score", score)
 	w.progress.DisplayMutationScore(ctx, score)
+
+	if len(tested) > 0 {
+		if err := w.reports.CleanReports(ctx, reportsDir, tested); err != nil {
+			slog.Error("Failed to clean stale reports", "error", err, "path", reportsDir)
+			return fmt.Errorf("clean stale reports: %w", err)
+		}
+	}
 
 	if err := w.reports.SaveSpillReports(ctx, reportsDir, reports); err != nil {
 		slog.Error("Failed to save reports", "error", err, "path", reportsDir)
@@ -213,6 +227,8 @@ func (w *workflow) View(ctx context.Context, args ViewArgs) error {
 			return fmt.Errorf("load reports: %w", err)
 		}
 
+		defer func() { _ = reports.Close() }()
+
 		mutations, results, err := viewItemsFromReports(reports)
 		if err != nil {
 			return fmt.Errorf("extract view items from reports: %w", err)
@@ -248,37 +264,54 @@ func (w *workflow) Merge(ctx context.Context, args MergeArgs) error {
 		return fmt.Errorf("reports directory path is required")
 	}
 
-	shardDirs, err := w.findShardDirs(base)
+	return w.withTestUI(ctx, func() error {
+		shardDirs, err := w.findShardDirs(base)
+		if err != nil {
+			slog.Error("Failed to find shard directories", "error", err, "basePath", base)
+			return err
+		}
+
+		if len(shardDirs) == 0 {
+			slog.Warn("No shard directories found; regenerating index only", "basePath", base)
+			return w.regenerateIndexAndScore(ctx, base)
+		}
+
+		merged, err := w.mergeReports(ctx, base, shardDirs)
+		if err != nil {
+			slog.Error("Failed to merge shard reports", "error", err, "basePath", base)
+			return err
+		}
+
+		slog.Info("Merged shard reports", "basePath", base)
+
+		if err := w.saveMergedReports(ctx, base, merged); err != nil {
+			return err
+		}
+
+		slog.Debug("Saved merged reports and regenerated index", "basePath", base)
+
+		if err := w.removeShardDirs(shardDirs); err != nil {
+			return err
+		}
+
+		// Report the combined score last, so `gooze report merge` ends with it.
+		w.progress.DisplayMutationScore(ctx, mutationScoreFromReportSlice(merged))
+
+		return nil
+	})
+}
+
+func (w *workflow) regenerateIndexAndScore(ctx context.Context, base m.Path) error {
+	if err := w.regenerateIndex(ctx, base); err != nil {
+		return err
+	}
+
+	existing, err := w.loadReportsIfExists(ctx, base)
 	if err != nil {
-		slog.Error("Failed to find shard directories", "error", err, "basePath", base)
-		return err
+		return fmt.Errorf("load reports from base: %w", err)
 	}
 
-	if len(shardDirs) == 0 {
-		slog.Debug("No shard directories found; regenerating index only", "basePath", base)
-		return w.regenerateIndex(ctx, base)
-	}
-
-	merged, err := w.mergeReports(ctx, base, shardDirs)
-	if err != nil {
-		slog.Error("Failed to merge shard reports", "error", err, "basePath", base)
-		return err
-	}
-
-	slog.Info("Merged shard reports", "basePath", base)
-
-	if err := w.saveMergedReports(ctx, base, merged); err != nil {
-		return err
-	}
-
-	slog.Debug("Saved merged reports and regenerated index", "basePath", base)
-
-	if err := w.removeShardDirs(shardDirs); err != nil {
-		return err
-	}
-
-	// Report the combined score last, so `gooze report merge` ends with it.
-	w.progress.DisplayMutationScore(ctx, mutationScoreFromReportSlice(merged))
+	w.progress.DisplayMutationScore(ctx, mutationScoreFromReportSlice(existing))
 
 	return nil
 }
@@ -301,18 +334,13 @@ func (w *workflow) regenerateIndex(ctx context.Context, base m.Path) error {
 	return nil
 }
 
+// mergeReports combines the baseline reports in base with the shard reports.
+// Shard reports supersede baseline reports for the same source, and baseline
+// reports for files that no longer exist are dropped when the merge runs
+// inside the project checkout.
 func (w *workflow) mergeReports(ctx context.Context, base m.Path, shardDirs []string) ([]m.Report, error) {
-	merged := make([]m.Report, 0)
+	shardReports := make([]m.Report, 0)
 
-	// First, load existing reports from base directory to preserve cache.
-	existingReports, err := w.loadReportsIfExists(ctx, base)
-	if err != nil {
-		return nil, fmt.Errorf("load existing reports from base: %w", err)
-	}
-
-	merged = append(merged, existingReports...)
-
-	// Then load and merge reports from all shards.
 	for _, shardDir := range shardDirs {
 		reports, err := w.reports.LoadReports(ctx, m.Path(shardDir))
 		if err != nil {
@@ -320,12 +348,86 @@ func (w *workflow) mergeReports(ctx context.Context, base m.Path, shardDirs []st
 			return nil, fmt.Errorf("load shard reports from %s: %w", shardDir, err)
 		}
 
-		merged = append(merged, reports...)
+		shardReports = append(shardReports, reports...)
 	}
 
-	slog.Debug("Merged reports from shards", "totalReports", len(merged))
+	existingReports, err := w.loadReportsIfExists(ctx, base)
+	if err != nil {
+		return nil, fmt.Errorf("load existing reports from base: %w", err)
+	}
+
+	merged := retainBaselineReports(existingReports, shardReports)
+	merged = append(merged, shardReports...)
+
+	slog.Debug("Merged reports from shards",
+		"baseline", len(existingReports), "shards", len(shardReports), "total", len(merged))
 
 	return merged, nil
+}
+
+func retainBaselineReports(existing, shardReports []m.Report) []m.Report {
+	retested := make(map[string]struct{}, len(shardReports))
+	for _, report := range shardReports {
+		if key := report.Source.Key(); key != "" {
+			retested[key] = struct{}{}
+		}
+	}
+
+	inProjectRoot := shardSourcesResolve(shardReports)
+	retained := make([]m.Report, 0, len(existing)+len(shardReports))
+
+	for _, report := range existing {
+		key := report.Source.Key()
+		if _, ok := retested[key]; ok {
+			continue
+		}
+
+		if inProjectRoot && key != "" && !sourceFileExists(report.Source) {
+			continue
+		}
+
+		retained = append(retained, report)
+	}
+
+	return retained
+}
+
+// shardSourcesResolve reports whether the shard reports' project-relative
+// paths resolve from the current directory, i.e. the merge runs in the checkout.
+func shardSourcesResolve(reports []m.Report) bool {
+	checked := false
+
+	for _, report := range reports {
+		if report.Source.Origin == nil || report.Source.Origin.ShortPath == "" {
+			continue
+		}
+
+		checked = true
+
+		if !sourceFileExists(report.Source) {
+			return false
+		}
+	}
+
+	return checked
+}
+
+func sourceFileExists(source m.Source) bool {
+	if source.Origin == nil {
+		return false
+	}
+
+	for _, candidate := range []m.Path{source.Origin.ShortPath, source.Origin.FullPath} {
+		if candidate == "" {
+			continue
+		}
+
+		if _, err := os.Stat(string(candidate)); err == nil {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (w *workflow) loadReportsIfExists(ctx context.Context, path m.Path) ([]m.Report, error) {
@@ -423,7 +525,7 @@ func viewItemsFromReports(reports pkg.FileSpill[m.Report]) ([]m.Mutation, []m.Re
 		for _, mutationType := range sortedResultTypes(report.Result) {
 			for _, entry := range report.Result[mutationType] {
 				mutation := m.Mutation{ID: entry.MutationID, Source: report.Source, Type: mutationType}
-				if entry.Status == m.Survived && report.Diff != nil {
+				if entry.Status != m.Killed && report.Diff != nil {
 					mutation.DiffCode = *report.Diff
 				}
 
@@ -461,34 +563,28 @@ func sortedResultTypes(result m.Result) []m.MutationType {
 	return types
 }
 
-// changedSources resolves the sources to operate on, applying incremental
-// caching (skipping unchanged files and cleaning reports for deleted ones) when
-// enabled. The scanner streams its results; they are collected into a slice
-// (sources are lightweight) so the count and test passes can both iterate them.
-func (w *workflow) changedSources(ctx context.Context, args EstimateArgs) ([]m.Source, error) {
+// changedSources resolves the sources to operate on. With caching enabled,
+// unchanged files are skipped and sources whose files are gone are returned
+// as deleted. The scanner streams its results; they are collected into a
+// slice so the count and test passes can both iterate them.
+func (w *workflow) changedSources(ctx context.Context, args EstimateArgs) (changed []m.Source, deleted []m.Source, err error) {
 	sources, err := w.scanSources(ctx, args)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if !args.UseCache || args.Reports == "" {
-		return sources, nil
+		return sources, nil, nil
 	}
 
-	changed, err := w.reports.CheckUpdates(ctx, args.Reports, sources)
+	updates, err := w.reports.CheckUpdates(ctx, args.Reports, sources)
 	if err != nil {
-		return nil, fmt.Errorf("check updates: %w", err)
+		return nil, nil, fmt.Errorf("check updates: %w", err)
 	}
 
-	deleted, changedExisting := w.separateDeletedAndChanged(changed, w.buildSourcePathMap(sources))
+	deleted, changed = w.separateDeletedAndChanged(updates, w.buildSourcePathMap(sources))
 
-	if len(deleted) > 0 {
-		if err := w.reports.CleanReports(ctx, args.Reports, deleted); err != nil {
-			return nil, fmt.Errorf("clean reports: %w", err)
-		}
-	}
-
-	return changedExisting, nil
+	return changed, deleted, nil
 }
 
 // scanSources drains the streaming scanner into a slice.
@@ -512,8 +608,8 @@ func (w *workflow) buildSourcePathMap(sources []m.Source) map[string]m.Source {
 	currentByPath := map[string]m.Source{}
 
 	for _, src := range sources {
-		if src.Origin != nil && src.Origin.FullPath != "" {
-			currentByPath[string(src.Origin.FullPath)] = src
+		if key := src.Key(); key != "" {
+			currentByPath[key] = src
 		}
 	}
 
@@ -525,11 +621,12 @@ func (w *workflow) separateDeletedAndChanged(changed []m.Source, currentByPath m
 	changedExisting := make([]m.Source, 0)
 
 	for _, src := range changed {
-		if src.Origin == nil || src.Origin.FullPath == "" {
+		key := src.Key()
+		if key == "" {
 			continue
 		}
 
-		if current, ok := currentByPath[string(src.Origin.FullPath)]; ok {
+		if current, ok := currentByPath[key]; ok {
 			changedExisting = append(changedExisting, current)
 		} else {
 			deleted = append(deleted, src)
@@ -542,7 +639,7 @@ func (w *workflow) separateDeletedAndChanged(changed []m.Source, currentByPath m
 // estimateMutations streams sources and mutations and returns per-file counts,
 // without ever holding the sources or mutations in memory all at once.
 func (w *workflow) estimateMutations(ctx context.Context, args EstimateArgs) (Estimation, error) {
-	sources, err := w.changedSources(ctx, args)
+	sources, _, err := w.changedSources(ctx, args)
 	if err != nil {
 		return Estimation{}, err
 	}
@@ -803,7 +900,7 @@ func (w *workflow) dispatchMutations(
 					return nil
 				}
 
-				if gate != nil && !gate.Covers(string(mutation.Source.Origin.ShortPath), mutation.Line) {
+				if gate != nil && gate.Uncovered(string(mutation.Source.Origin.ShortPath), mutation.Line) {
 					return sendOutcome(ctx, results, mutationOutcome{
 						mutation: mutation,
 						result:   resultForStatus(mutation, m.NotCovered),
