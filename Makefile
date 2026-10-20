@@ -4,14 +4,17 @@ bin := ./.bin
 COBRA_CLI_VERSION := v1.3.0
 GOLANGCI_LINT_VERSION := v2.8.0
 MOCKERY_VERSION := v2.53.5
+SEMGREP_VERSION := 1.181.0
 
 # Default benchtime for benchmarks run via `make test`.
 BENCHTIME ?= 100ms
 
 # Whitelisted packages (exclude examples explicitly)
 PKG_WHITELIST :=  ./cmd/... ./internal/... ./pkg/...
+# Same tree as PKG_WHITELIST, as plain paths for tools that do not understand `/...`.
+SEMGREP_TARGETS := ./cmd ./internal ./pkg main.go
 
-.PHONY: all install-tools build lint test clean run fmt mocks clean-mocks install-precommit
+.PHONY: all install-tools build lint test clean run fmt mocks clean-mocks install-precommit semgrep semgrep-arch install-semgrep
 
 all: install-precommit build
 
@@ -39,7 +42,11 @@ install-mockery: prepare-env
 	@echo "Installing mockery $(MOCKERY_VERSION)..."
 	@GOBIN=$(abspath $(bin)) go install github.com/vektra/mockery/v2@$(MOCKERY_VERSION)
 
-install-tools: install-cobra-cli install-precommit-tools install-golangci-lint install-mockery
+install-semgrep: prepare-env
+	@echo "Installing semgrep $(SEMGREP_VERSION)..."
+	@pip install --user semgrep==$(SEMGREP_VERSION) || pip3 install --user semgrep==$(SEMGREP_VERSION)
+
+install-tools: install-cobra-cli install-precommit-tools install-golangci-lint install-mockery install-semgrep
 	@echo "All tools installed."
 
 
@@ -50,6 +57,15 @@ build:
 lint:
 	@echo "Running golangci-lint..."
 	@$(bin)/golangci-lint run $(PKG_WHITELIST)
+
+semgrep:
+	@echo "Running semgrep..."
+	@semgrep scan --config .semgrep/security.yaml --config .semgrep/correctness.yaml --config p/golang --error --disable-version-check --quiet $(SEMGREP_TARGETS)
+
+# Architecture rules are informational: findings are printed but never fail the build.
+semgrep-arch:
+	@echo "Running semgrep (architecture, informational)..."
+	@semgrep scan --config .semgrep/architecture.yaml --disable-version-check --quiet $(SEMGREP_TARGETS)
 
 test:
 	@packages=$$(go list $(PKG_WHITELIST) | grep -v '/mocks$$' | grep -v '/examples/'); \

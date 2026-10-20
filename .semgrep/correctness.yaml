@@ -1,0 +1,100 @@
+---
+# Correctness and hygiene rules for gooze.
+#
+# Validate with:  semgrep --validate --config .semgrep/
+rules:
+- id: gooze-ignored-close-or-remove-error
+  languages: [go]
+  severity: WARNING
+  message: >-
+    Error from `$CALL` is discarded outside a `defer`. For files that were
+    written, `Close` reports flush failures and `Remove` reports leftover
+    state; check the error (or wrap the call in a `defer` if it is only a
+    best-effort cleanup).
+  metadata:
+    category: correctness
+    confidence: MEDIUM
+  paths:
+    exclude:
+    - '*_test.go'
+  patterns:
+  - pattern-either:
+    - pattern: _ = $CALL
+    - pattern: _, _ = $CALL
+  - metavariable-pattern:
+      metavariable: $CALL
+      pattern-either:
+      - pattern: $F.Close()
+      - pattern: os.Remove(...)
+      - pattern: os.RemoveAll(...)
+      - pattern: $R.Remove(...)
+      - pattern: $R.RemoveAll(...)
+  - pattern-not-inside: |
+      defer func() { ... }()
+  - pattern-not-inside: |
+      defer func(...) { ... }(...)
+
+- id: gooze-context-background-in-cobra-run
+  languages: [go]
+  severity: WARNING
+  message: >-
+    `context.Background()`/`context.TODO()` inside a Cobra run hook detaches
+    the work from the command's context, so Ctrl-C and `ExecuteContext`
+    cancellation are ignored. Use `cmd.Context()` instead.
+  metadata:
+    category: correctness
+    confidence: HIGH
+  paths:
+    include:
+    - cmd/
+  patterns:
+  - pattern-either:
+    - pattern: context.Background()
+    - pattern: context.TODO()
+  - pattern-either:
+    - pattern-inside: |
+        func($CMD *cobra.Command, ...) error { ... }
+    - pattern-inside: |
+        func($CMD *cobra.Command, ...) { ... }
+    - pattern-inside: |
+        func $FN($CMD *cobra.Command, ...) error { ... }
+    - pattern-inside: |
+        func $FN($CMD *cobra.Command, ...) { ... }
+
+- id: gooze-os-exit-outside-entrypoint
+  languages: [go]
+  severity: WARNING
+  message: >-
+    `os.Exit`/`log.Fatal*` terminates the process immediately, skipping deferred cleanup
+    (temp workspaces, open report files) and making the code untestable.
+    Return an error up to `main`/`Execute` and exit there.
+  metadata:
+    category: correctness
+    confidence: HIGH
+  patterns:
+  - pattern-either:
+    - pattern: os.Exit(...)
+    - pattern: log.Fatal(...)
+    - pattern: log.Fatalf(...)
+    - pattern: log.Fatalln(...)
+  - pattern-not-inside: |
+      func main() { ... }
+  - pattern-not-inside: |
+      func Execute() { ... }
+  - pattern-not-inside: |
+      func TestMain(...) { ... }
+
+- id: gooze-exec-command-without-context
+  languages: [go]
+  severity: WARNING
+  message: >-
+    `exec.Command` ignores cancellation. The test runner must stop the child
+    `go test` process when the user interrupts gooze; use
+    `exec.CommandContext(ctx, ...)`.
+  metadata:
+    category: correctness
+    confidence: HIGH
+  paths:
+    exclude:
+    - '*_test.go'
+  pattern: exec.Command(...)

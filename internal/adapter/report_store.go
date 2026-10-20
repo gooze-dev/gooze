@@ -228,7 +228,10 @@ func (rs *LocalReportStore) loadReportsFromDir(dirPath string) ([]m.Report, erro
 func (rs *LocalReportStore) writeIndexForReports(dirPath string, reports []m.Report) error {
 	indexPath := filepath.Join(dirPath, indexFileName)
 	if len(reports) == 0 {
-		_ = os.Remove(indexPath)
+		if err := os.Remove(indexPath); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("remove index file %s: %w", indexPath, err)
+		}
+
 		return nil
 	}
 
