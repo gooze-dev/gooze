@@ -11,7 +11,7 @@ func TestTypes(t *testing.T) {
 	assert.Equal(t, Type{Name: "arithmetic", Version: 1}, Arithmetic)
 	assert.Equal(t, Type{Name: "boolean", Version: 1}, Boolean)
 	assert.Equal(t, Type{Name: "numbers", Version: 1}, Numbers)
-	assert.Equal(t, Type{Name: "comparison", Version: 1}, Comparison)
+	assert.Equal(t, Type{Name: "comparison", Version: 2}, Comparison)
 	assert.Equal(t, Type{Name: "logical", Version: 1}, Logical)
 	assert.Equal(t, Type{Name: "unary", Version: 1}, Unary)
 	assert.Equal(t, Type{Name: "branch", Version: 1}, Branch)
@@ -54,7 +54,7 @@ func TestLookup(t *testing.T) {
 	mg, ok := Lookup("Comparison")
 	require.True(t, ok)
 	assert.Equal(t, Comparison, mg.Type)
-	assert.Equal(t, "Mutates comparison operators (<, >, <=, >=, ==, !=).", mg.Doc)
+	assert.Equal(t, `Mutates comparison operators (<, >, <=, >=, ==, !=), except the one equivalent mutant when an operand is "" or 0 compared with len or cap.`, mg.Doc)
 
 	mg, ok = Lookup(" LOOP ")
 	require.True(t, ok)
@@ -76,7 +76,7 @@ func TestIsValid(t *testing.T) {
 
 func TestVersions(t *testing.T) {
 	assert.Equal(t, map[string]int{
-		"arithmetic": 1, "boolean": 1, "numbers": 1, "comparison": 1, "logical": 1,
+		"arithmetic": 1, "boolean": 1, "numbers": 1, "comparison": 2, "logical": 1,
 		"unary": 1, "branch": 1, "statement": 1, "loop": 1,
 	}, Versions())
 }

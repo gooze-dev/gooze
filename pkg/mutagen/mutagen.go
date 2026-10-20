@@ -24,8 +24,10 @@ var (
 	Boolean = Type{Name: "boolean", Version: 1}
 	// Numbers mutates numeric literals (e.g. 5 -> 0, 5 -> 1).
 	Numbers = Type{Name: "numbers", Version: 1}
-	// Comparison mutates comparison operators (<, >, <=, >=, ==, !=).
-	Comparison = Type{Name: "comparison", Version: 1}
+	// Comparison mutates comparison operators (<, >, <=, >=, ==, !=). Version 2
+	// skips the mutant that is equivalent when one operand is a minimum of the
+	// other: v == "" is not mutated to v <= "", len(s) != 0 not to len(s) > 0.
+	Comparison = Type{Name: "comparison", Version: 2}
 	// Logical mutates logical operators (&&, ||).
 	Logical = Type{Name: "logical", Version: 1}
 	// Unary mutates unary operators (-, +, !, ^).
@@ -51,7 +53,7 @@ func All() []Mutagen {
 		{Type: Arithmetic, Doc: "Mutates arithmetic operators (+, -, *, /, %)."},
 		{Type: Boolean, Doc: "Mutates boolean literals (true <-> false)."},
 		{Type: Numbers, Doc: "Mutates numeric literals (e.g. 5 -> 0, 5 -> 1)."},
-		{Type: Comparison, Doc: "Mutates comparison operators (<, >, <=, >=, ==, !=)."},
+		{Type: Comparison, Doc: `Mutates comparison operators (<, >, <=, >=, ==, !=), except the one equivalent mutant when an operand is "" or 0 compared with len or cap.`},
 		{Type: Logical, Doc: "Mutates logical operators (&&, ||)."},
 		{Type: Unary, Doc: "Mutates unary operators (-, +, !, ^)."},
 		{Type: Branch, Doc: "Mutates branch and conditional expressions (if, for, switch conditions)."},

@@ -778,6 +778,32 @@ func TestLocalReportStore_CheckUpdates_MutatorVersionDiff_ReturnsSource(t *testi
 	}
 }
 
+func TestLocalReportStore_CheckUpdates_ComparisonV1ReportsAreRetested(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	rs := &LocalReportStore{}
+
+	// Reports written before comparison v2 still hold mutants it no longer generates.
+	source := rpt.Source{Origin: &rpt.File{FullPath: "/abs/a.go", Hash: "same"}}
+	comparisonV1 := mgen.Type{Name: mgen.Comparison.Name, Version: 1}
+	report := m.Report{Source: source, Result: m.Result{comparisonV1: {{MutationID: "m1", Status: rpt.Survived}}}}
+
+	if err := rs.SaveReports(context.Background(), m.Path(dir), reportSpill(t, report)); err != nil {
+		t.Fatalf("SaveReports returned error: %v", err)
+	}
+
+	changedSpill, deletedSpill, err := rs.CheckUpdates(context.Background(), m.Path(dir), sourceSpill(t, source))
+	if err != nil {
+		t.Fatalf("CheckUpdates returned error: %v", err)
+	}
+
+	_ = spillItems(t, deletedSpill)
+	if changed := spillItems(t, changedSpill); len(changed) != 1 {
+		t.Fatalf("expected the comparison v1 source to be re-tested, got %d changed sources", len(changed))
+	}
+}
+
 func TestLocalReportStore_RegenerateIndex_ListsReportsPerSource(t *testing.T) {
 	t.Parallel()
 
