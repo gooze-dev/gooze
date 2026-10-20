@@ -98,6 +98,11 @@ func TestGenerateComparisonMutations_SkipsEquivalentMutantsAgainstMinimum(t *tes
 		{x: "len(s)", op: "==", y: "1"},
 		{x: "len(s)", op: "!=", y: "-0"},
 		{x: "f(s)", op: "!=", y: "0"},
+		{x: "v", op: "==", y: `" "`},
+		{x: "v", op: "==", y: "`a`"},
+		{x: "len(s)", op: "==", y: "'a'"},
+		{x: "max(n, 1)", op: "==", y: "0"},
+		{x: "byteCount(s)", op: "==", y: "0"},
 	}
 
 	for _, tt := range tests {

@@ -17,7 +17,8 @@ func GenerateComparisonMutations(n ast.Node, fset *token.FileSet, content []byte
 	alternatives := getComparisonAlternatives
 
 	if expr, ok := n.(*ast.BinaryExpr); ok {
-		if skip := equivalentMutantOp(expr); skip != token.ILLEGAL {
+		// Equivalent mutants: token.ILLEGAL is the lowest token.
+		if skip := equivalentMutantOp(expr); skip != token.ILLEGAL { //gooze:ignore comparison
 			alternatives = func(op token.Token) []token.Token {
 				return slices.DeleteFunc(getComparisonAlternatives(op), func(alt token.Token) bool { return alt == skip })
 			}
@@ -105,7 +106,8 @@ func isMinimumOf(minimum, v ast.Expr) bool {
 	case token.STRING:
 		return lit.Value == `""` || lit.Value == "``"
 	case token.INT:
-		return lit.Value == "0" && isLenOrCapCall(v)
+		// Equivalent mutants: no integer literal sorts before "0".
+		return lit.Value == "0" && isLenOrCapCall(v) //gooze:ignore comparison
 	default:
 		return false
 	}

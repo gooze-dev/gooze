@@ -71,8 +71,7 @@ func (s *SimpleUI) DisplayEstimation(ctx context.Context, estimation domain.Esti
 	tableStr := renderEstimationTable(estimation)
 	s.printf("\n%s", tableStr)
 
-	// Equivalent mutants: no string sorts before "".
-	if hint := cachedEstimateHint(estimation); hint != "" { //gooze:ignore comparison
+	if hint := cachedEstimateHint(estimation); hint != "" {
 		s.printf("\n%s\n", hint)
 	}
 
