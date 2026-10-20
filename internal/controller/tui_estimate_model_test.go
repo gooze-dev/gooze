@@ -200,3 +200,29 @@ func TestEstimateDelegate_Render(t *testing.T) {
 		t.Fatalf("Update() returned cmd")
 	}
 }
+
+func TestEstimateModel_ViewFillsWindowHeight(t *testing.T) {
+	render := func(height int, hint string) int {
+		m := newEstimateModel()
+		m = m.handleEstimationMsg(estimationMsg{
+			total: 1, paths: 1, hint: hint,
+			fileStats: map[string]fileStat{"hash-a": {path: "a.go", count: 1}},
+		})
+		m.width, m.height = 80, height
+
+		return strings.Count(m.View(), "\n") + 1
+	}
+
+	for _, height := range []int{25, 40} {
+		for _, hint := range []string{"", "2 of 3 mutations are in cached files"} {
+			if got := render(height, hint); got != height {
+				t.Fatalf("View() with height %d and hint %q has %d lines, want %d", height, hint, got, height)
+			}
+		}
+	}
+
+	// Below the minimum list height of 5 rows, the view keeps 14 lines.
+	if got := render(5, ""); got != 14 {
+		t.Fatalf("View() with height 5 has %d lines, want 14", got)
+	}
+}

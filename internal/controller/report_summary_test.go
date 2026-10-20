@@ -71,6 +71,10 @@ func TestFormatSurvivor(t *testing.T) {
 			want:     "a.go:3: survived (statement): f() -> (line removed)",
 		},
 		{
+			survivor: domain.Survivor{Path: "a.go", Line: 1, Mutagen: "boolean", Status: rpt.Survived, Original: "var x = true", Mutated: "var x = false"},
+			want:     "a.go:1: survived (boolean): var x = true -> var x = false",
+		},
+		{
 			survivor: domain.Survivor{Path: "a.go", Mutagen: "boolean", Status: rpt.Skipped},
 			want:     "a.go: skipped (boolean)",
 		},

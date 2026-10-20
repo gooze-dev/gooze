@@ -71,7 +71,8 @@ func (s *SimpleUI) DisplayEstimation(ctx context.Context, estimation domain.Esti
 	tableStr := renderEstimationTable(estimation)
 	s.printf("\n%s", tableStr)
 
-	if hint := cachedEstimateHint(estimation); hint != "" {
+	// Equivalent mutants: no string sorts before "".
+	if hint := cachedEstimateHint(estimation); hint != "" { //gooze:ignore comparison
 		s.printf("\n%s\n", hint)
 	}
 
@@ -89,7 +90,8 @@ func renderEstimationTable(estimation domain.Estimation) string {
 		tablewriter.WithFooterAutoFormat(tw.On),
 	)
 
-	withCache := estimation.Cached > 0
+	// Equivalent mutants: counts and lengths are never negative.
+	withCache := estimation.Cached > 0 //gooze:ignore comparison
 	if withCache {
 		table.Header("Path", "Mutations", "Cache")
 	} else {

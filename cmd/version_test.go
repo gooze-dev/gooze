@@ -20,8 +20,9 @@ func TestVersionCmd_Output(t *testing.T) {
 	err := cmd.Execute()
 	require.NoError(t, err)
 
-	assert.Regexp(t, `^gooze \S.*\n$`, out.String())
-	assert.NotContains(t, out.String(), "\t")
+	info, ok := debug.ReadBuildInfo()
+	require.True(t, ok, "test binaries carry build info")
+	assert.Equal(t, versionLine(info)+"\n", out.String())
 }
 
 func TestVersionLine(t *testing.T) {

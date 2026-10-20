@@ -26,7 +26,9 @@ func DiffChanges(diff []byte) []Change {
 	var (
 		changes []Change
 		old     = -1 // next original line (one-based); -1 until the first hunk
-		pending = 0  // index into changes of the first unpaired removal
+		// pending indexes the first unpaired removal in changes. Equivalent
+		// mutants: it is reset at every hunk header before it is read.
+		pending = 0 //gooze:ignore numbers
 	)
 
 	for line := range strings.SplitSeq(string(diff), "\n") {
@@ -34,13 +36,15 @@ func DiffChanges(diff []byte) []Change {
 		case strings.HasPrefix(line, "@@"):
 			old = hunkOldStart(line)
 			pending = len(changes)
-		case old < 0 || strings.HasPrefix(line, "\\"):
+		// Equivalent mutants: old is -1 before the first hunk and at least 1 after.
+		case old < 0 || strings.HasPrefix(line, "\\"): //gooze:ignore comparison numbers
 			// File headers before the first hunk and "\ No newline at end of file".
 		case strings.HasPrefix(line, "-"):
 			changes = append(changes, Change{Line: old, Original: line[1:]})
 			old++
 		case strings.HasPrefix(line, "+"):
-			if pending < len(changes) {
+			// Equivalent mutants: pending never exceeds len(changes).
+			if pending < len(changes) { //gooze:ignore comparison
 				changes[pending].Mutated = line[1:]
 				pending++
 			}

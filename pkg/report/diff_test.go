@@ -32,6 +32,11 @@ func TestDiffChanges(t *testing.T) {
 			diff: "--- original\n+++ mutated\n@@ -5 +5 @@\n-x := 1\n+x := 0\n",
 			want: []Change{{Line: 5, Original: "x := 1", Mutated: "x := 0"}},
 		},
+		{
+			name: "added line without a removal",
+			diff: "--- original\n+++ mutated\n@@ -1,2 +1,3 @@\n a\n+inserted\n b\n",
+		},
+		{name: "hunk starting at line zero", diff: "--- original\n+++ mutated\n@@ -0,0 +1 @@\n-x\n+y\n"},
 		{name: "empty", diff: ""},
 		{name: "headers only", diff: "--- original\n+++ mutated\n"},
 		{name: "malformed hunk", diff: "@@ garbage @@\n-x\n"},

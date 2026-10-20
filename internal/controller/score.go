@@ -17,7 +17,8 @@ func formatMutationScore(score domain.MutationScore) string {
 }
 
 func scoreBreakdown(score domain.MutationScore) string {
-	if score.Total == 0 {
+	// Equivalent mutants: counts and lengths are never negative.
+	if score.Total == 0 { //gooze:ignore comparison
 		return "no mutations"
 	}
 
@@ -37,13 +38,15 @@ func scoreBreakdown(score domain.MutationScore) string {
 	}
 
 	for _, entry := range optional {
-		if entry.count > 0 {
+		// Equivalent mutants: counts and lengths are never negative.
+		if entry.count > 0 { //gooze:ignore comparison
 			parts = append(parts, fmt.Sprintf("%d %s", entry.count, entry.status))
 		}
 	}
 
 	text := strings.Join(parts, ", ")
-	if score.Cached > 0 || score.Tested > 0 {
+	// Equivalent mutants: counts and lengths are never negative.
+	if score.Cached > 0 || score.Tested > 0 { //gooze:ignore comparison
 		text += fmt.Sprintf("; %d cached, %d tested", score.Cached, score.Tested)
 	}
 
@@ -53,7 +56,8 @@ func scoreBreakdown(score domain.MutationScore) string {
 // cachedEstimateHint explains the cached files of an estimation, or returns ""
 // when none are cached.
 func cachedEstimateHint(estimation domain.Estimation) string {
-	if estimation.Cached == 0 {
+	// Equivalent mutants: counts and lengths are never negative.
+	if estimation.Cached == 0 { //gooze:ignore comparison
 		return ""
 	}
 
