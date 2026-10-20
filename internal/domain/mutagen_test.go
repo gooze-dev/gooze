@@ -3,6 +3,7 @@ package domain_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"sort"
@@ -241,4 +242,33 @@ func TestMutagen_AttributesLineNumbers(t *testing.T) {
 
 	// true@7, false@8, and true/false@18 in examples/boolean/main.go.
 	require.Equal(t, []int{7, 8, 18, 18}, lines)
+}
+
+type countingDiffer struct{ calls int }
+
+func (d *countingDiffer) Diff(original, mutated []byte) []byte {
+	d.calls++
+	return adapter.NewUnifiedDiffer().Diff(original, mutated)
+}
+
+func TestMutagen_StreamMutations_BuildsMutationsLazily(t *testing.T) {
+	differ := &countingDiffer{}
+	mg := domain.NewMutagen(adapter.NewLocalGoFileAdapter(), adapter.NewLocalSourceFSAdapter(), differ)
+	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "basic", "main.go"))
+
+	all, err := newTestMutagen().GenerateMutation(context.Background(), source, m.MutationArithmetic)
+	require.NoError(t, err)
+	require.Greater(t, len(all), 1, "fixture must produce several arithmetic mutations")
+
+	stop := errors.New("stop")
+	delivered := 0
+
+	err = mg.StreamMutations(context.Background(), source, func(m.Mutation) error {
+		delivered++
+		return stop
+	}, m.MutationArithmetic)
+
+	require.ErrorIs(t, err, stop)
+	require.Equal(t, 1, delivered)
+	require.Equal(t, 1, differ.calls, "diffs must only be computed for mutations handed to the caller")
 }
