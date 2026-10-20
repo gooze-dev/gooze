@@ -350,7 +350,7 @@ func main() {
 - [x] **Config File**: Support `.gooze.yml` for persistent configuration (Medium)
 
 ### Smart Test Execution
-- [x] Run only matching `*_test.go` files for each mutated source file
+- [x] Run the tests of the package that owns each mutated source file
 - [x] Reduces test execution time by running relevant tests only
 
 ### Performance & Scalability

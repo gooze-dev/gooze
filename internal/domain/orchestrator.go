@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"gooze.dev/pkg/gooze/internal/adapter"
 	m "gooze.dev/pkg/gooze/internal/model"
@@ -178,7 +179,8 @@ func (ws *workspace) applyMutation(ctx context.Context, path m.Path, mutatedCode
 
 	return func() {
 		if err := ws.writeFile(context.WithoutCancel(ctx), path, original); err != nil {
-			slog.Error("Failed to restore original file", "path", path, "error", err)
+			slog.Error("Failed to restore original file; discarding workspace copy", "path", path, "error", err)
+			ws.cleanup(context.WithoutCancel(ctx))
 		}
 	}, nil
 }
@@ -197,16 +199,25 @@ func (ws *workspace) runTests(ctx context.Context, testPath m.Path) m.TestStatus
 		return m.Timeout
 	}
 
-	_, testErr := ws.testAdapter.RunGoTest(ctx, string(ws.tmpDir), string(testPath))
+	output, testErr := ws.testAdapter.RunGoTest(ctx, string(ws.tmpDir), string(testPath))
 	if testErr != nil {
 		if ctx.Err() != nil {
 			return m.Timeout
+		}
+
+		if isBuildFailure(output) {
+			slog.Debug("Mutation did not compile", "test", testPath)
+			return m.Error
 		}
 
 		return m.Killed
 	}
 
 	return m.Survived
+}
+
+func isBuildFailure(output string) bool {
+	return strings.Contains(output, "[build failed]") || strings.Contains(output, "[setup failed]")
 }
 
 func (ws *workspace) cleanup(ctx context.Context) {

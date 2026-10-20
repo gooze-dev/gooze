@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -27,7 +26,7 @@ func newRunCmd() *cobra.Command {
 		Use:   "run [paths...]",
 		Short: "Run mutation testing",
 		Long:  runLongDescription,
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			// Default to scanning the current module recursively when no paths
 			// are given (equivalent to `gooze run ./...`).
 			if len(args) == 0 {
@@ -43,7 +42,7 @@ func newRunCmd() *cobra.Command {
 			}
 
 			if runEstimateFlag {
-				return workflow.Estimate(context.Background(), estimateArgs)
+				return workflow.Estimate(cmd.Context(), estimateArgs)
 			}
 
 			shardIndex, totalShards, err := parseShardFlag(runShardFlag)
@@ -53,7 +52,7 @@ func newRunCmd() *cobra.Command {
 
 			timeoutSeconds := viper.GetInt64(mutationTimeoutKey)
 
-			return workflow.Test(context.Background(), domain.TestArgs{
+			return workflow.Test(cmd.Context(), domain.TestArgs{
 				EstimateArgs:    estimateArgs,
 				Reports:         reportsPath,
 				Threads:         viper.GetInt(runParallelConfigKey),
@@ -87,9 +86,7 @@ func configureRunFlags(cmd *cobra.Command) {
 	bindFlagToConfig(cmd.Flags().Lookup(coverageProfileFlagName), runCoverageProfileKey)
 }
 
-// parseShardFlag parses INDEX/TOTAL. An empty value means no sharding. Any
-// other malformed value is an error rather than a silent fallback, because a
-// shard that quietly tests everything defeats the purpose of sharding in CI.
+// parseShardFlag parses INDEX/TOTAL; an empty value means no sharding.
 func parseShardFlag(shard string) (int, int, error) {
 	if shard == "" {
 		return 0, 1, nil

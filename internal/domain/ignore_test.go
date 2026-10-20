@@ -116,3 +116,41 @@ func TestBuildIgnoreIndex_FileFuncLineScopes(t *testing.T) {
 		t.Fatalf("expected 2 line-level ignore targets, got %d", len(seenTargets))
 	}
 }
+
+func TestParseIgnoreDirective_RequiresExactKeyword(t *testing.T) {
+	for _, text := range []string{"//gooze:ignored", "//gooze:ignore:arithmetic", "//gooze:ignores all"} {
+		if _, ok := parseIgnoreDirective(text); ok {
+			t.Fatalf("%q must not be treated as a directive", text)
+		}
+	}
+}
+
+func TestParseIgnoreDirective_SpaceSeparatedNames(t *testing.T) {
+	r, ok := parseIgnoreDirective("//gooze:ignore arithmetic comparison")
+	if !ok || r.all || len(r.names) != 2 {
+		t.Fatalf("expected two names, got ok=%v rule=%+v", ok, r)
+	}
+}
+
+func TestBuildIgnoreIndex_LeadingDirectiveWithFollowingCommentLine(t *testing.T) {
+	const src = "package p\n\n" +
+		"func f(a int) int {\n" +
+		"\t//gooze:ignore arithmetic\n" +
+		"\t// explains why the next line is exempt\n" +
+		"\t_ = a + 1\n" +
+		"\treturn a\n" +
+		"}\n"
+
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "p.go", src, parser.ParseComments)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	idx := buildIgnoreIndex(file, fset, []byte(src))
+
+	rule, ok := idx.line[6]
+	if !ok || !rule.ignores(m.MutationArithmetic) {
+		t.Fatalf("expected line 6 to ignore arithmetic, got %+v (ok=%v)", rule, ok)
+	}
+}

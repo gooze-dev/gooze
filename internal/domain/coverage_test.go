@@ -86,3 +86,26 @@ func TestParseCoverage_IgnoresEmptyPath(t *testing.T) {
 		t.Fatalf("expected no indexed files, got %v", idx.files)
 	}
 }
+
+func TestCoverageIndex_Uncovered_UnknownLinesAreNotUncovered(t *testing.T) {
+	idx, err := ParseCoverage([]byte("mode: set\nmod/a.go:10.1,12.5 2 1\nmod/a.go:14.1,15.5 1 0\n"))
+	if err != nil {
+		t.Fatalf("ParseCoverage() error = %v", err)
+	}
+
+	if idx.Uncovered("a.go", 11) {
+		t.Fatal("covered line reported uncovered")
+	}
+
+	if !idx.Uncovered("a.go", 14) {
+		t.Fatal("line in a zero-count block should be uncovered")
+	}
+
+	if idx.Uncovered("a.go", 3) {
+		t.Fatal("declaration line outside every block must not be uncovered")
+	}
+
+	if idx.Uncovered("other.go", 14) {
+		t.Fatal("file missing from the profile must not be uncovered")
+	}
+}

@@ -2,9 +2,12 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"log/slog"
 
@@ -164,7 +167,11 @@ func bindFlagToConfig(flag *pflag.Flag, key string) {
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
-	err := rootCmd.Execute()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	err := rootCmd.ExecuteContext(ctx)
+
+	stop()
+
 	if err != nil {
 		os.Exit(1)
 	}

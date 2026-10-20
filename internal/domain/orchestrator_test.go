@@ -153,3 +153,35 @@ func makeTestMutation() m.Mutation {
 		},
 	}
 }
+
+func TestOrchestrator_TestMutation_BuildFailureMarksError(t *testing.T) {
+	fsAdapter := adaptermocks.NewMockSourceFSAdapter(t)
+	trAdapter := adaptermocks.NewMockTestRunnerAdapter(t)
+	orch := NewOrchestrator(fsAdapter, trAdapter)
+	ctx := context.Background()
+	mutation := makeTestMutation()
+	projectRoot := m.Path("/project")
+	tmpDir := m.Path("/tmp/mut")
+	original := []byte("package main\nfunc main() { _ = 1 + 2 }\n")
+
+	fsAdapter.EXPECT().FindProjectRoot(ctx, mutation.Source.Origin.FullPath).Return(projectRoot, nil)
+	fsAdapter.EXPECT().CreateTempDir(ctx, "gooze-mutation-*").Return(tmpDir, nil)
+	fsAdapter.EXPECT().CopyDir(ctx, projectRoot, tmpDir).Return(nil)
+	fsAdapter.EXPECT().RelPath(ctx, projectRoot, mutation.Source.Origin.FullPath).Return(m.Path("main.go"), nil)
+	fsAdapter.EXPECT().JoinPath(ctx, string(tmpDir), "main.go").Return(m.Path("/tmp/mut/main.go"))
+	fsAdapter.EXPECT().RelPath(ctx, projectRoot, mutation.Source.Test.FullPath).Return(m.Path("main_test.go"), nil)
+	fsAdapter.EXPECT().JoinPath(ctx, string(tmpDir), "main_test.go").Return(m.Path("/tmp/mut/main_test.go"))
+	fsAdapter.EXPECT().ReadFile(ctx, m.Path("/tmp/mut/main.go")).Return(original, nil)
+	fsAdapter.EXPECT().WriteFile(ctx, m.Path("/tmp/mut/main.go"), mutation.MutatedCode, os.FileMode(0o600)).Return(nil)
+	trAdapter.EXPECT().RunGoTest(ctx, "/tmp/mut", "/tmp/mut/main_test.go").
+		Return("# example\n./main.go:2:1: syntax error\nFAIL\texample [build failed]\n", errors.New("exit status 1"))
+	fsAdapter.EXPECT().WriteFile(mock.Anything, m.Path("/tmp/mut/main.go"), original, os.FileMode(0o600)).Return(nil)
+	fsAdapter.EXPECT().RemoveAll(mock.Anything, tmpDir).Return(nil)
+
+	result, err := orch.TestMutation(ctx, mutation)
+	require.NoError(t, err)
+
+	entries := result[mutation.Type]
+	require.Len(t, entries, 1)
+	require.Equal(t, m.Error, entries[0].Status)
+}
