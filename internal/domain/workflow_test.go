@@ -1734,3 +1734,303 @@ func TestWorkflow_Test_GeneratesMutationsOncePerSource(t *testing.T) {
 	mockWorkspace.AssertExpectations(t)
 	mockReporter.AssertExpectations(t)
 }
+
+func TestWorkflow_View_DisplaysEveryMutationWithDiffsForNonKilled(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	diff := []byte("--- original\n+++ mutated\n")
+	source := m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "/p/a.go", Hash: "a"}}
+
+	writeReports(t, dir,
+		m.Report{Source: source, Result: m.Result{m.MutationArithmetic: {{MutationID: "killed-1", Status: m.Killed}}}, Diff: &diff},
+		m.Report{Source: source, Result: m.Result{m.MutationBoolean: {{MutationID: "survived-1", Status: m.Survived}}}, Diff: &diff},
+	)
+
+	reporter := new(domainmocks.MockReporter)
+	reporter.EXPECT().StartTest(ctx).Return(nil).Once()
+	reporter.EXPECT().Wait(ctx).Return().Once()
+	reporter.EXPECT().Close(ctx).Return().Once()
+	reporter.EXPECT().DisplayUpcomingTestsInfo(ctx, 2).Return().Once()
+	reporter.EXPECT().DisplayStartingTestInfo(ctx, mock.Anything, 0).Return().Times(2)
+
+	diffs := map[string]string{}
+
+	reporter.EXPECT().DisplayCompletedTestInfo(ctx, mock.Anything, mock.Anything).
+		Run(func(_ context.Context, mutation m.Mutation, _ m.Result) {
+			diffs[mutation.ID] = string(mutation.DiffCode)
+		}).
+		Return().Times(2)
+
+	var score float64
+
+	reporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Run(func(_ context.Context, s float64) { score = s }).Once()
+
+	wf := domain.NewWorkflow(nil, adapter.NewReportStore(), reporter, nil, nil)
+	require.NoError(t, wf.View(ctx, domain.ViewArgs{Reports: m.Path(dir)}))
+
+	assert.Equal(t, map[string]string{"killed-1": "", "survived-1": string(diff)}, diffs)
+	assert.InDelta(t, 0.5, score, 1e-9)
+	reporter.AssertExpectations(t)
+}
+
+func TestWorkflow_View_MissingReportsDirReturnsError(t *testing.T) {
+	ctx := context.Background()
+
+	reporter := new(domainmocks.MockReporter)
+	reporter.EXPECT().StartTest(ctx).Return(nil).Once()
+	reporter.EXPECT().Close(ctx).Return().Once()
+
+	wf := domain.NewWorkflow(nil, adapter.NewReportStore(), reporter, nil, nil)
+	require.ErrorContains(t, wf.View(ctx, domain.ViewArgs{Reports: m.Path(filepath.Join(t.TempDir(), "missing"))}), "load reports")
+}
+
+func TestWorkflow_Merge_WithoutBaselineDeduplicatesShardSources(t *testing.T) {
+	ctx := context.Background()
+	base := t.TempDir()
+	source := m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "/new/a.go", Hash: "a2"}}
+
+	writeReports(t, filepath.Join(base, domain.ShardDirPrefix+"0"),
+		m.Report{Source: source, Result: m.Result{m.MutationArithmetic: {{MutationID: "m1", Status: m.Killed}}}})
+	writeReports(t, filepath.Join(base, domain.ShardDirPrefix+"1"),
+		m.Report{Source: source, Result: m.Result{m.MutationArithmetic: {{MutationID: "m2", Status: m.Survived}}}})
+
+	var score float64
+
+	wf := domain.NewWorkflow(nil, adapter.NewReportStore(), mergeReporter(ctx, &score), nil, nil)
+	require.NoError(t, wf.Merge(ctx, domain.MergeArgs{Reports: m.Path(base)}))
+
+	assert.Equal(t, []string{"a2", "a2"}, reportHashes(t, base))
+	assert.InDelta(t, 0.5, score, 1e-9)
+}
+
+func TestWorkflow_Merge_NoShardsReportsBaseScore(t *testing.T) {
+	ctx := context.Background()
+	base := t.TempDir()
+
+	writeReports(t, base, m.Report{
+		Source: m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "/p/a.go", Hash: "a"}},
+		Result: m.Result{m.MutationArithmetic: {{MutationID: "m1", Status: m.Survived}}},
+	})
+
+	var score float64
+
+	wf := domain.NewWorkflow(nil, adapter.NewReportStore(), mergeReporter(ctx, &score), nil, nil)
+	require.NoError(t, wf.Merge(ctx, domain.MergeArgs{Reports: m.Path(base)}))
+	assert.InDelta(t, 0.0, score, 1e-9)
+}
+
+func TestWorkflow_Merge_CorruptReportsReturnError(t *testing.T) {
+	ctx := context.Background()
+
+	newReporter := func() *domainmocks.MockReporter {
+		reporter := new(domainmocks.MockReporter)
+		reporter.EXPECT().StartTest(ctx).Return(nil).Once()
+		reporter.EXPECT().Close(ctx).Return().Once()
+
+		return reporter
+	}
+
+	t.Run("corrupt shard", func(t *testing.T) {
+		base := t.TempDir()
+		shard := filepath.Join(base, domain.ShardDirPrefix+"0")
+		require.NoError(t, os.MkdirAll(shard, 0o750))
+		require.NoError(t, os.WriteFile(filepath.Join(shard, "bad.yaml"), []byte("source: [\n"), 0o600))
+
+		wf := domain.NewWorkflow(nil, adapter.NewReportStore(), newReporter(), nil, nil)
+		require.ErrorContains(t, wf.Merge(ctx, domain.MergeArgs{Reports: m.Path(base)}), "load shard reports")
+	})
+
+	t.Run("corrupt baseline inside checkout", func(t *testing.T) {
+		checkout := t.TempDir()
+		t.Chdir(checkout)
+		require.NoError(t, os.WriteFile(filepath.Join(checkout, "a.go"), []byte("package p\n"), 0o600))
+
+		base := filepath.Join(checkout, "reports")
+		writeReports(t, filepath.Join(base, domain.ShardDirPrefix+"0"), m.Report{
+			Source: m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "/new/a.go", Hash: "a2"}},
+			Result: m.Result{m.MutationArithmetic: {{MutationID: "m2", Status: m.Killed}}},
+		})
+		require.NoError(t, os.WriteFile(filepath.Join(base, "bad.yaml"), []byte("source: [\n"), 0o600))
+
+		wf := domain.NewWorkflow(nil, adapter.NewReportStore(), newReporter(), nil, nil)
+		require.ErrorContains(t, wf.Merge(ctx, domain.MergeArgs{Reports: m.Path(base)}), "load existing reports from base")
+	})
+}
+
+func TestWorkflow_Test_ShardedRunRebuildsBaseIndexAfterCleaningDeleted(t *testing.T) {
+	ctx := context.Background()
+	mockFSAdapter := new(domainmocks.MockSourceFSAdapter)
+	mockReportStore := new(domainmocks.MockReportStore)
+	mockReporter := new(domainmocks.MockReporter)
+	mockMutagen := new(domainmocks.MockMutagen)
+	mockOrchestrator := new(domainmocks.MockOrchestrator)
+	mockWorkspace := new(domainmocks.MockWorkspace)
+	mockOrchestrator.EXPECT().NewWorkspace().Return(mockWorkspace).Maybe()
+	mockWorkspace.EXPECT().Close(mock.Anything).Return().Maybe()
+
+	gone := m.Source{Origin: &m.File{FullPath: "/p/gone.go", ShortPath: "gone.go", Hash: "g"}}
+	shardDir := m.Path(filepath.Join("reports", domain.ShardDirPrefix+"1"))
+
+	mockReporter.EXPECT().StartTest(ctx).Return(nil).Once()
+	mockReporter.EXPECT().Wait(ctx).Return().Once()
+	mockReporter.EXPECT().Close(ctx).Return().Once()
+	mockReporter.EXPECT().DisplayConcurrencyInfo(ctx, mock.Anything, mock.Anything, mock.Anything).Return()
+	mockReporter.EXPECT().DisplayUpcomingTestsInfo(ctx, 0).Return()
+	mockReporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Return()
+
+	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources(nil))
+	mockReportStore.EXPECT().CheckUpdates(ctx, m.Path("reports"), mock.Anything).Return(spillOf[m.Source](t), spillOf(t, gone), nil)
+	mockReportStore.EXPECT().CleanReports(ctx, m.Path("reports"), mock.Anything).Return(nil).Once()
+	mockReportStore.EXPECT().RegenerateIndex(ctx, m.Path("reports")).Return(nil).Once()
+	mockReportStore.EXPECT().SaveReports(ctx, shardDir, mock.Anything).Return(nil).Once()
+	mockReportStore.EXPECT().RegenerateIndex(ctx, shardDir).Return(nil).Once()
+
+	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockReporter, mockOrchestrator, mockMutagen)
+	require.NoError(t, wf.Test(ctx, domain.TestArgs{
+		EstimateArgs:    domain.EstimateArgs{Paths: []m.Path{"."}, UseCache: true, Reports: "reports"},
+		Reports:         "reports",
+		Threads:         1,
+		ShardIndex:      1,
+		TotalShardCount: 2,
+	}))
+	mockReportStore.AssertExpectations(t)
+}
+
+func TestWorkflow_Test_ErrorsAreReturned(t *testing.T) {
+	ctx := context.Background()
+	boom := errors.New("boom")
+
+	setup := func() (*domainmocks.MockSourceFSAdapter, *domainmocks.MockReportStore, *domainmocks.MockReporter, *domainmocks.MockMutagen) {
+		fs := new(domainmocks.MockSourceFSAdapter)
+		store := new(domainmocks.MockReportStore)
+		reporter := new(domainmocks.MockReporter)
+		mutagen := new(domainmocks.MockMutagen)
+
+		reporter.EXPECT().StartTest(ctx).Return(nil).Once()
+		reporter.EXPECT().Close(ctx).Return().Once()
+		reporter.EXPECT().DisplayConcurrencyInfo(ctx, mock.Anything, mock.Anything, mock.Anything).Return()
+		reporter.EXPECT().DisplayUpcomingTestsInfo(ctx, mock.Anything).Return().Maybe()
+		fs.EXPECT().Stream(ctx, mock.Anything).Return(streamSources(nil))
+
+		return fs, store, reporter, mutagen
+	}
+
+	cached := domain.TestArgs{
+		EstimateArgs:    domain.EstimateArgs{Paths: []m.Path{"."}, UseCache: true, Reports: "reports"},
+		Reports:         "reports",
+		Threads:         1,
+		TotalShardCount: 1,
+	}
+
+	t.Run("check updates", func(t *testing.T) {
+		fs, store, reporter, mutagen := setup()
+		store.EXPECT().CheckUpdates(ctx, mock.Anything, mock.Anything).Return(nil, nil, boom)
+
+		err := domain.NewWorkflow(fs, store, reporter, nil, mutagen).Test(ctx, cached)
+		require.ErrorIs(t, err, boom)
+	})
+
+	t.Run("clean deleted", func(t *testing.T) {
+		fs, store, reporter, mutagen := setup()
+		gone := m.Source{Origin: &m.File{ShortPath: "gone.go", Hash: "g"}}
+		store.EXPECT().CheckUpdates(ctx, mock.Anything, mock.Anything).Return(spillOf[m.Source](t), spillOf(t, gone), nil)
+		store.EXPECT().CleanReports(ctx, mock.Anything, mock.Anything).Return(boom)
+
+		err := domain.NewWorkflow(fs, store, reporter, nil, mutagen).Test(ctx, cached)
+		require.ErrorIs(t, err, boom)
+	})
+
+	t.Run("coverage profile", func(t *testing.T) {
+		fs, store, reporter, mutagen := setup()
+		fs.EXPECT().ReadFile(ctx, m.Path("cover.out")).Return(nil, boom)
+
+		args := domain.TestArgs{EstimateArgs: domain.EstimateArgs{Paths: []m.Path{"."}}, Reports: "reports", Threads: 1, TotalShardCount: 1, CoverageProfile: "cover.out"}
+		err := domain.NewWorkflow(fs, store, reporter, nil, mutagen).Test(ctx, args)
+		require.ErrorIs(t, err, boom)
+	})
+}
+
+func TestWorkflow_Estimate_StreamMutationsErrorIsReturned(t *testing.T) {
+	ctx := context.Background()
+	boom := errors.New("boom")
+
+	fs := new(domainmocks.MockSourceFSAdapter)
+	reporter := new(domainmocks.MockReporter)
+	mutagen := new(domainmocks.MockMutagen)
+
+	reporter.EXPECT().StartEstimate(ctx).Return(nil).Once()
+	reporter.EXPECT().Close(ctx).Return().Once()
+	fs.EXPECT().Stream(ctx, mock.Anything).Return(streamSources([]m.Source{{Origin: &m.File{ShortPath: "a.go", FullPath: "/p/a.go"}}}))
+	mutagen.EXPECT().
+		StreamMutations(ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(boom)
+
+	err := domain.NewWorkflow(fs, nil, reporter, nil, mutagen).Estimate(ctx, domain.EstimateArgs{Paths: []m.Path{"."}})
+	require.ErrorIs(t, err, boom)
+}
+
+func TestWorkflow_Merge_StoreErrorsAreReturned(t *testing.T) {
+	ctx := context.Background()
+	boom := errors.New("boom")
+
+	run := func(t *testing.T, configure func(store *domainmocks.MockReportStore)) error {
+		t.Helper()
+
+		base := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(base, domain.ShardDirPrefix+"0"), 0o750))
+
+		shard := spillOf(t,
+			m.Report{Source: m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "/p/a.go", Hash: "a"}},
+				Result: m.Result{m.MutationArithmetic: {{MutationID: "m1", Status: m.Killed}}}},
+			m.Report{Result: m.Result{m.MutationArithmetic: {{MutationID: "m0", Status: m.Killed}}}},
+		)
+
+		store := new(domainmocks.MockReportStore)
+		store.EXPECT().LoadSpillReports(ctx, m.Path(filepath.Join(base, domain.ShardDirPrefix+"0"))).Return(shard, nil)
+		configure(store)
+
+		reporter := new(domainmocks.MockReporter)
+		reporter.EXPECT().StartTest(ctx).Return(nil).Once()
+		reporter.EXPECT().Close(ctx).Return().Once()
+
+		return domain.NewWorkflow(nil, store, reporter, nil, nil).Merge(ctx, domain.MergeArgs{Reports: m.Path(base)})
+	}
+
+	t.Run("clean superseded", func(t *testing.T) {
+		err := run(t, func(store *domainmocks.MockReportStore) {
+			store.EXPECT().CleanReports(ctx, mock.Anything, mock.MatchedBy(func(sources pkg.FileSpill[m.Source]) bool {
+				return assert.ObjectsAreEqual([]string{"a.go"}, spillKeys(sources))
+			})).Return(boom)
+		})
+		require.ErrorIs(t, err, boom)
+	})
+
+	t.Run("save merged", func(t *testing.T) {
+		err := run(t, func(store *domainmocks.MockReportStore) {
+			store.EXPECT().CleanReports(ctx, mock.Anything, mock.Anything).Return(nil)
+			store.EXPECT().SaveReports(ctx, mock.Anything, mock.Anything).Return(boom)
+		})
+		require.ErrorIs(t, err, boom)
+	})
+}
+
+func TestWorkflow_Test_SourceSpillCreationErrorIsReturned(t *testing.T) {
+	ctx := context.Background()
+
+	fs := new(domainmocks.MockSourceFSAdapter)
+	reporter := new(domainmocks.MockReporter)
+	reporter.EXPECT().StartTest(ctx).Return(nil).Once()
+	reporter.EXPECT().Close(ctx).Return().Once()
+	reporter.EXPECT().DisplayConcurrencyInfo(ctx, mock.Anything, mock.Anything, mock.Anything).Return()
+	fs.EXPECT().Stream(ctx, mock.Anything).Return(streamSources([]m.Source{{Origin: &m.File{ShortPath: "a.go"}}}))
+
+	t.Setenv("TMPDIR", filepath.Join(t.TempDir(), "missing"))
+
+	err := domain.NewWorkflow(fs, nil, reporter, nil, nil).Test(ctx, domain.TestArgs{
+		EstimateArgs:    domain.EstimateArgs{Paths: []m.Path{"."}},
+		Reports:         "reports",
+		Threads:         1,
+		TotalShardCount: 1,
+	})
+	require.ErrorContains(t, err, "create sources spill")
+}
