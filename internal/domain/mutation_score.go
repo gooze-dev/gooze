@@ -36,9 +36,15 @@ func mutationScoreFromReportSlice(reports []m.Report) float64 {
 	return mutationScore(killed, total)
 }
 
+// countReport counts killed and scored mutations. Mutations that did not
+// compile (status error) are not viable and are left out of the total.
 func countReport(report m.Report) (killed, total int) {
 	for _, entries := range report.Result {
 		for _, entry := range entries {
+			if entry.Status == m.Error {
+				continue
+			}
+
 			total++
 
 			if entry.Status == m.Killed {

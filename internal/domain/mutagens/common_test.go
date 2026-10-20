@@ -161,3 +161,30 @@ func TestEnsureTrailingNewline(t *testing.T) {
 		})
 	}
 }
+
+func TestViableOps_NilAndStringOperands(t *testing.T) {
+	parse := func(src string) *ast.BinaryExpr {
+		t.Helper()
+
+		expr, err := parser.ParseExpr(src)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		return expr.(*ast.BinaryExpr)
+	}
+
+	alternatives := []token.Token{token.LSS, token.GTR, token.LEQ, token.GEQ, token.EQL}
+	if got := viableOps(parse("err != nil"), alternatives); len(got) != 1 || got[0] != token.EQL {
+		t.Fatalf("nil comparison alternatives = %v, want [==]", got)
+	}
+
+	arith := []token.Token{token.SUB, token.MUL, token.QUO, token.REM}
+	if got := viableOps(parse(`name + ".yaml"`), arith); len(got) != 0 {
+		t.Fatalf("string concatenation alternatives = %v, want none", got)
+	}
+
+	if got := viableOps(parse("a + b"), arith); len(got) != len(arith) {
+		t.Fatalf("plain arithmetic alternatives = %v, want all", got)
+	}
+}
