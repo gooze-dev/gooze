@@ -1081,6 +1081,18 @@ func TestLocalReportStore_AddStoredReport_MarksAnyVersionMismatch(t *testing.T) 
 	require.True(t, rs.isSourceChanged(state, "a.go", source))
 }
 
+func TestLocalReportStore_AddStoredReport_MarksMismatchInEitherOrder(t *testing.T) {
+	rs := &LocalReportStore{}
+	source := m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "/abs/a.go", Hash: "h"}}
+	older := m.MutationType{Name: m.MutationBoolean.Name, Version: m.MutationBoolean.Version - 1}
+
+	state := make(map[string]storedSourceState)
+	rs.addStoredReport(state, m.Report{Source: source, Result: m.Result{older: {{MutationID: "b2", Status: m.Killed}}}})
+	rs.addStoredReport(state, m.Report{Source: source, Result: m.Result{m.MutationBoolean: {{MutationID: "b1", Status: m.Killed}}}})
+
+	require.Equal(t, -1, state["a.go"].mutator[m.MutationBoolean.Name])
+}
+
 func TestLocalReportStore_LoadSpillReports_ReturnsErrorWhenReportUnreadable(t *testing.T) {
 	rs := &LocalReportStore{}
 	dir := t.TempDir()
