@@ -179,11 +179,11 @@ func walkMutations(
 			mutation.DiffCode = differ.Diff(content, mutation.MutatedCode)
 
 			if walkErr = fn(mutation); walkErr != nil {
-				return false
+				break
 			}
 		}
 
-		return true
+		return descend && walkErr == nil
 	})
 
 	return walkErr
