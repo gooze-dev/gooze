@@ -118,3 +118,28 @@ func TestWorkflow_Merge_MissingReportsDirReturnsError(t *testing.T) {
 	wf := domain.NewWorkflow(nil, adapter.NewReportStore(), reporter, nil, nil)
 	require.ErrorContains(t, wf.Merge(ctx, domain.MergeArgs{Reports: m.Path(missing)}), "no reports directory at "+missing)
 }
+
+func TestWorkflow_View_EmptyReportsDirWithoutPathsDisplaysEmptySummary(t *testing.T) {
+	summary := viewSummary(t, domain.ViewArgs{Reports: m.Path(t.TempDir())})
+
+	assert.Equal(t, domain.ReportSummary{}, summary)
+}
+
+func TestWorkflow_View_SinglePathWithoutMatchReturnsError(t *testing.T) {
+	dir := viewFixture(t)
+
+	wf := domain.NewWorkflow(nil, adapter.NewReportStore(), new(domainmocks.MockReporter), nil, nil)
+	require.EqualError(t, wf.View(context.Background(), domain.ViewArgs{Reports: m.Path(dir), Paths: []m.Path{"x.go"}}),
+		"no reports in "+dir+" match x.go")
+}
+
+func TestWorkflow_View_SurvivorWithoutChangedLineHasNoLocation(t *testing.T) {
+	dir := t.TempDir()
+	headersOnly := []byte("--- original\n+++ mutated\n")
+	source := rpt.Source{Origin: &rpt.File{ShortPath: "a.go", Hash: "a"}}
+
+	writeReports(t, dir, m.Report{Source: source, Result: m.Result{mgen.Boolean: {{MutationID: "a-1", Status: rpt.Survived}}}, Diff: &headersOnly})
+
+	summary := viewSummary(t, domain.ViewArgs{Reports: m.Path(dir)})
+	assert.Equal(t, []domain.Survivor{{Path: "a.go", Mutagen: "boolean", Status: rpt.Survived}}, summary.Survivors)
+}

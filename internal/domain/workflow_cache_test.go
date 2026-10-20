@@ -183,3 +183,55 @@ func TestWorkflow_Estimate_ListsCachedFiles(t *testing.T) {
 		},
 	}, estimation)
 }
+
+func TestWorkflow_Test_UnsetShardCountScoresLikeAnUnshardedRun(t *testing.T) {
+	fx := newCacheFixture(t)
+
+	var (
+		score      domain.MutationScore
+		estimation domain.Estimation
+	)
+
+	wf := cachedRunWorkflow(t, []rpt.Source{fx.a}, nil, &score, &estimation)
+
+	args := cachedTestArgs(fx.reports)
+	args.TotalShardCount = 0
+	require.NoError(t, wf.Test(context.Background(), args))
+
+	assert.Equal(t, domain.MutationScore{Total: 3, Killed: 2, Survived: 1, Cached: 3}, score)
+}
+
+func TestWorkflow_Test_CachedRunWithEveryFileChangedHasNoCachedResults(t *testing.T) {
+	fx := newCacheFixture(t)
+	changedA := fx.a
+	changedA.Origin = &rpt.File{ShortPath: "a.go", FullPath: "/p/a.go", Hash: "a2"}
+
+	var (
+		score      domain.MutationScore
+		estimation domain.Estimation
+	)
+
+	mutations := map[string][]m.Mutation{"a.go": {{ID: "a-9", Source: changedA, Type: mgen.Arithmetic}}}
+	wf := cachedRunWorkflow(t, []rpt.Source{changedA}, mutations, &score, &estimation)
+	require.NoError(t, wf.Test(context.Background(), cachedTestArgs(fx.reports)))
+
+	assert.Equal(t, domain.MutationScore{Total: 1, Survived: 1, Tested: 1}, score)
+}
+
+func TestWorkflow_Estimate_WithoutCacheMarksNothingCached(t *testing.T) {
+	fx := newCacheFixture(t)
+
+	var (
+		score      domain.MutationScore
+		estimation domain.Estimation
+	)
+
+	mutations := map[string][]m.Mutation{"a.go": {{ID: "a-1", Source: fx.a}}}
+	wf := cachedRunWorkflow(t, []rpt.Source{fx.a}, mutations, &score, &estimation)
+
+	args := cachedTestArgs(fx.reports).EstimateArgs
+	args.UseCache = false
+	require.NoError(t, wf.Estimate(context.Background(), args))
+
+	assert.Equal(t, domain.Estimation{Total: 1, Files: []domain.FileEstimate{{Path: "a.go", Count: 1}}}, estimation)
+}

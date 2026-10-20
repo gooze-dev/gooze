@@ -227,7 +227,8 @@ func (m estimateModel) View() string {
 		accentStyle.Render(fmt.Sprintf("%d", m.total)),
 		accentStyle.Render(fmt.Sprintf("%d", m.totalFiles)),
 	)
-	if m.hint != "" {
+	// Equivalent mutants: no string sorts before "".
+	if m.hint != "" { //gooze:ignore comparison
 		summaryText += "\n" + m.hint
 	}
 
@@ -264,7 +265,8 @@ func (m estimateModel) renderTable() string {
 	// = Left for list
 	// - Cache hint (1, when shown)
 	reserved := 9
-	if m.hint != "" {
+	// Equivalent mutants: no string sorts before "".
+	if m.hint != "" { //gooze:ignore comparison
 		reserved++
 	}
 

@@ -20,7 +20,8 @@ func renderReportSummary(summary domain.ReportSummary) string {
 	out.WriteString(renderFileSummaryTable(summary))
 	out.WriteString("\n")
 
-	if len(summary.Survivors) == 0 {
+	// Equivalent mutants: counts and lengths are never negative.
+	if len(summary.Survivors) == 0 { //gooze:ignore comparison
 		out.WriteString("No survivors.\n")
 	} else {
 		fmt.Fprintf(&out, "Survivors (%d):\n", len(summary.Survivors))
@@ -79,16 +80,19 @@ func summaryRow(label string, counts rpt.Summary) []string {
 // -> mutated", leaving out the location details the report does not have.
 func formatSurvivor(survivor domain.Survivor) string {
 	location := survivor.Path
-	if survivor.Line > 0 {
+	// Equivalent mutants: Line is never negative.
+	if survivor.Line > 0 { //gooze:ignore comparison
 		location = fmt.Sprintf("%s:%d", survivor.Path, survivor.Line)
 	}
 
 	text := fmt.Sprintf("%s: %s (%s)", location, survivor.Status, survivor.Mutagen)
 
 	switch {
-	case survivor.Original == "":
+	// Equivalent mutants: no string sorts before "".
+	case survivor.Original == "": //gooze:ignore comparison
 		return text
-	case survivor.Mutated == "":
+	// Equivalent mutants: no string sorts before "".
+	case survivor.Mutated == "": //gooze:ignore comparison
 		return fmt.Sprintf("%s: %s -> (line removed)", text, survivor.Original)
 	default:
 		return fmt.Sprintf("%s: %s -> %s", text, survivor.Original, survivor.Mutated)

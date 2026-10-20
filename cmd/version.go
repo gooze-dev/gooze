@@ -27,7 +27,8 @@ func newVersionCmd() *cobra.Command {
 // versionLine formats build info as "gooze v1.2.3 (go1.27.3)".
 func versionLine(info *debug.BuildInfo) string {
 	version := info.Main.Version
-	if version == "" {
+	// Equivalent mutants: no string sorts before "".
+	if version == "" { //gooze:ignore comparison
 		version = "(unknown version)"
 	}
 

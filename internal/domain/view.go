@@ -63,7 +63,8 @@ func (w *workflow) View(ctx context.Context, args ViewArgs) error {
 		return fmt.Errorf("summarize reports: %w", err)
 	}
 
-	if len(summary.Files) == 0 && len(args.Paths) > 0 {
+	// Equivalent mutants: counts and lengths are never negative.
+	if len(summary.Files) == 0 && len(args.Paths) > 0 { //gooze:ignore comparison
 		return fmt.Errorf("no reports in %s match %s", args.Reports, joinPaths(args.Paths))
 	}
 
@@ -190,7 +191,8 @@ func reportSurvivors(report m.Report) []Survivor {
 	var change rpt.Change
 
 	if report.Diff != nil {
-		if changes := rpt.DiffChanges(*report.Diff); len(changes) > 0 {
+		// Equivalent mutants: counts and lengths are never negative.
+		if changes := rpt.DiffChanges(*report.Diff); len(changes) > 0 { //gooze:ignore comparison
 			change = changes[0]
 		}
 	}
@@ -199,7 +201,8 @@ func reportSurvivors(report m.Report) []Survivor {
 
 	for _, mutationType := range sortedResultTypes(report.Result) {
 		for _, entry := range report.Result[mutationType] {
-			if entry.Status == rpt.Killed || entry.Status == rpt.Error {
+			// Equivalent mutants: Killed is the lowest status.
+			if entry.Status == rpt.Killed || entry.Status == rpt.Error { //gooze:ignore comparison
 				continue
 			}
 
@@ -223,7 +226,8 @@ func reportSurvivors(report m.Report) []Survivor {
 // patterns match the module-relative path stored in reports, absolute ones the
 // absolute path. No patterns match every source.
 func matchesPaths(source rpt.Source, patterns []m.Path) bool {
-	if len(patterns) == 0 {
+	// Equivalent mutants: counts and lengths are never negative.
+	if len(patterns) == 0 { //gooze:ignore comparison
 		return true
 	}
 
@@ -242,7 +246,8 @@ func matchesPattern(origin rpt.File, pattern string) bool {
 		target = origin.FullPath
 	}
 
-	if target == "" {
+	// Equivalent mutants: no string sorts before "".
+	if target == "" { //gooze:ignore comparison
 		return false
 	}
 
@@ -276,7 +281,8 @@ func rangeViewItems(reports pkg.FileSpill[m.Report], include func(rpt.Source) bo
 		for _, mutationType := range sortedResultTypes(report.Result) {
 			for _, entry := range report.Result[mutationType] {
 				mutation := m.Mutation{ID: entry.MutationID, Source: report.Source, Type: mutationType}
-				if entry.Status != rpt.Killed && report.Diff != nil {
+				// Equivalent mutants: Killed is the lowest status.
+				if entry.Status != rpt.Killed && report.Diff != nil { //gooze:ignore comparison
 					mutation.DiffCode = *report.Diff
 				}
 

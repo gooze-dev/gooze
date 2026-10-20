@@ -404,3 +404,16 @@ func TestTestExecutionModel_CompletedMutationsAppendToListInOrder(t *testing.T) 
 		}
 	}
 }
+
+func TestTestExecutionModel_DiffMaxLines(t *testing.T) {
+	cases := map[int]int{0: 6, 18: 6, 21: 7, 45: 15, 60: 20, 300: 20}
+
+	for height, want := range cases {
+		m := newTestExecutionModel()
+		m.height = height
+
+		if got := m.diffMaxLines(); got != want {
+			t.Fatalf("diffMaxLines() with height %d = %d, want %d", height, got, want)
+		}
+	}
+}

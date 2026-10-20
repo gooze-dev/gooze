@@ -32,6 +32,16 @@ func TestFormatMutationScore(t *testing.T) {
 			want: "87.50% (14 killed, 2 survived; 16 cached, 0 tested)",
 		},
 		{
+			name:  "uncached run",
+			score: domain.MutationScore{Summary: rpt.Summary{Total: 1, Killed: 1}, Tested: 1},
+			want:  "100.00% (1 killed, 0 survived; 0 cached, 1 tested)",
+		},
+		{
+			name:  "one cached result",
+			score: domain.MutationScore{Summary: rpt.Summary{Total: 1, Survived: 1}, Cached: 1},
+			want:  "0.00% (0 killed, 1 survived; 1 cached, 0 tested)",
+		},
+		{
 			name: "other statuses when present",
 			score: domain.MutationScore{
 				Summary: rpt.Summary{Total: 8, Killed: 2, Survived: 1, NotCovered: 1, Timeout: 1, Skipped: 1, Error: 2},

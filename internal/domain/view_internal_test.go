@@ -38,5 +38,14 @@ func TestMatchesPaths(t *testing.T) {
 	}
 
 	assert.False(t, matchesPaths(rpt.Source{}, []m.Path{"./..."}), "a source without origin matches only without patterns")
+
+	root := rpt.Source{Origin: &rpt.File{ShortPath: "main.go"}}
+	assert.True(t, matchesPaths(root, []m.Path{"."}), "\".\" matches files in the module root")
+	assert.False(t, matchesPaths(source, []m.Path{"."}), "\".\" is not recursive")
+	assert.False(t, matchesPaths(source, []m.Path{"-x/..."}), "a directory sorting before \".\" is not the root")
+
+	absoluteOnly := rpt.Source{Origin: &rpt.File{FullPath: "/elsewhere/a.go"}}
+	assert.False(t, matchesPaths(absoluteOnly, []m.Path{"./..."}), "relative patterns need a module-relative path")
+	assert.True(t, matchesPaths(absoluteOnly, []m.Path{"/elsewhere/..."}))
 	assert.True(t, matchesPaths(rpt.Source{}, nil))
 }

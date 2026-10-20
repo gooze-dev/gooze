@@ -98,8 +98,42 @@ func TestSimpleUI_DisplayEstimation_NoCacheColumnWithoutCachedFiles(t *testing.T
 		t.Fatalf("DisplayEstimation() error = %v", err)
 	}
 
-	if output := buf.String(); strings.Contains(strings.ToLower(output), "cache") {
+	output := buf.String()
+	if strings.Contains(strings.ToLower(output), "cache") {
 		t.Fatalf("output mentions the cache\noutput:\n%s", output)
+	}
+
+	if want := "\n" + renderEstimationTable(estimation); output != want {
+		t.Fatalf("output = %q, want only the table %q", output, want)
+	}
+}
+
+func TestSimpleUI_DisplayEstimation_OneCachedMutation(t *testing.T) {
+	estimation := domain.Estimation{Total: 2, Cached: 1, Files: []domain.FileEstimate{
+		{Path: "a.go", Count: 1, Cached: true},
+		{Path: "b.go", Count: 1},
+	}}
+
+	if table := renderEstimationTable(estimation); !strings.Contains(table, "1 CACHED") {
+		t.Fatalf("table missing cache column\n%s", table)
+	}
+}
+
+func TestEstimationRow(t *testing.T) {
+	cases := []struct {
+		file      domain.FileEstimate
+		withCache bool
+		want      []string
+	}{
+		{file: domain.FileEstimate{Path: "a.go", Count: 2, Cached: true}, withCache: false, want: []string{"a.go", "2"}},
+		{file: domain.FileEstimate{Path: "a.go", Count: 2, Cached: true}, withCache: true, want: []string{"a.go", "2", "cached"}},
+		{file: domain.FileEstimate{Path: "b.go", Count: 1}, withCache: true, want: []string{"b.go", "1", ""}},
+	}
+
+	for _, tc := range cases {
+		if got := estimationRow(tc.file, tc.withCache); strings.Join(got, "|") != strings.Join(tc.want, "|") || len(got) != len(tc.want) {
+			t.Fatalf("estimationRow(%+v, %v) = %q, want %q", tc.file, tc.withCache, got, tc.want)
+		}
 	}
 }
 

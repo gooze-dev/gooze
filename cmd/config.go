@@ -60,7 +60,8 @@ func init() {
 func validateConfig() error {
 	for _, key := range config.Keys() {
 		field, _ := config.Lookup(key)
-		if field.Kind != config.KindInt || (field.Min == nil && field.Max == nil) {
+		// Equivalent mutants: only KindInt fields declare bounds, and CheckInt accepts any value without them.
+		if field.Kind != config.KindInt || (field.Min == nil && field.Max == nil) { //gooze:ignore comparison logical
 			continue
 		}
 

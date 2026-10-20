@@ -151,6 +151,7 @@ func TestField_CheckInt(t *testing.T) {
 		{name: "above max", field: Field{Max: new(3)}, value: 4, wantErr: "4 is out of range: must be at most 3"},
 		{name: "inside range", field: Field{Min: new(1), Max: new(3)}, value: 2},
 		{name: "outside range", field: Field{Min: new(1), Max: new(3)}, value: 9, wantErr: "9 is out of range: must be between 1 and 3"},
+		{name: "inverted bounds", field: Field{Min: new(3), Max: new(1)}, value: 2, wantErr: "2 is out of range: must be between 3 and 1"},
 		{name: "single value", field: Field{Min: new(1), Max: new(1)}, value: 2, wantErr: "2 is out of range: must be 1"},
 	}
 
