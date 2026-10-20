@@ -63,8 +63,7 @@ func (w *workflow) View(ctx context.Context, args ViewArgs) error {
 		return fmt.Errorf("summarize reports: %w", err)
 	}
 
-	// Equivalent mutants: counts and lengths are never negative.
-	if len(summary.Files) == 0 && len(args.Paths) > 0 { //gooze:ignore comparison
+	if len(summary.Files) == 0 && len(args.Paths) > 0 {
 		return fmt.Errorf("no reports in %s match %s", args.Reports, joinPaths(args.Paths))
 	}
 
@@ -191,8 +190,7 @@ func reportSurvivors(report m.Report) []Survivor {
 	var change rpt.Change
 
 	if report.Diff != nil {
-		// Equivalent mutants: counts and lengths are never negative.
-		if changes := rpt.DiffChanges(*report.Diff); len(changes) > 0 { //gooze:ignore comparison
+		if changes := rpt.DiffChanges(*report.Diff); len(changes) > 0 {
 			change = changes[0]
 		}
 	}
@@ -226,8 +224,7 @@ func reportSurvivors(report m.Report) []Survivor {
 // patterns match the module-relative path stored in reports, absolute ones the
 // absolute path. No patterns match every source.
 func matchesPaths(source rpt.Source, patterns []m.Path) bool {
-	// Equivalent mutants: counts and lengths are never negative.
-	if len(patterns) == 0 { //gooze:ignore comparison
+	if len(patterns) == 0 {
 		return true
 	}
 
@@ -246,8 +243,7 @@ func matchesPattern(origin rpt.File, pattern string) bool {
 		target = origin.FullPath
 	}
 
-	// Equivalent mutants: no string sorts before "".
-	if target == "" { //gooze:ignore comparison
+	if target == "" {
 		return false
 	}
 

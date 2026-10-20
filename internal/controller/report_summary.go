@@ -20,8 +20,7 @@ func renderReportSummary(summary domain.ReportSummary) string {
 	out.WriteString(renderFileSummaryTable(summary))
 	out.WriteString("\n")
 
-	// Equivalent mutants: counts and lengths are never negative.
-	if len(summary.Survivors) == 0 { //gooze:ignore comparison
+	if len(summary.Survivors) == 0 {
 		out.WriteString("No survivors.\n")
 	} else {
 		fmt.Fprintf(&out, "Survivors (%d):\n", len(summary.Survivors))
@@ -88,11 +87,9 @@ func formatSurvivor(survivor domain.Survivor) string {
 	text := fmt.Sprintf("%s: %s (%s)", location, survivor.Status, survivor.Mutagen)
 
 	switch {
-	// Equivalent mutants: no string sorts before "".
-	case survivor.Original == "": //gooze:ignore comparison
+	case survivor.Original == "":
 		return text
-	// Equivalent mutants: no string sorts before "".
-	case survivor.Mutated == "": //gooze:ignore comparison
+	case survivor.Mutated == "":
 		return fmt.Sprintf("%s: %s -> (line removed)", text, survivor.Original)
 	default:
 		return fmt.Sprintf("%s: %s -> %s", text, survivor.Original, survivor.Mutated)
