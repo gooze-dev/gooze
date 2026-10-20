@@ -71,11 +71,11 @@ func (mg *mutagen) StreamMutations(ctx context.Context, source m.Source, fn func
 		return err
 	}
 
+	ignore := buildIgnoreIndex(file, fset, content)
+
 	for _, mutationType := range mutationTypes {
-		for _, mutation := range collectMutations(mutationType, file, fset, content, source, mg.differ) {
-			if err := fn(mutation); err != nil {
-				return err
-			}
+		if err := walkMutations(mutationType, file, fset, content, source, ignore, mg.differ, fn); err != nil {
+			return err
 		}
 	}
 
@@ -128,46 +128,64 @@ func (mg *mutagen) loadSourceAST(ctx context.Context, source m.Source) ([]byte, 
 	return content, fset, file, nil
 }
 
-func collectMutations(mutationType m.MutationType, file *ast.File, fset *token.FileSet, content []byte, source m.Source, differ Differ) []m.Mutation {
-	ignore := buildIgnoreIndex(file, fset, content)
+// skips reports whether n is excluded from mutationType by an ignore
+// directive, and if so whether its children should still be visited.
+func (ix ignoreIndex) skips(n ast.Node, fset *token.FileSet, mutationType m.MutationType) (skip, descend bool) {
+	if fd, ok := n.(*ast.FuncDecl); ok {
+		if rule, ok := ix.funcByPos[fd.Pos()]; ok && rule.ignores(mutationType) {
+			return true, false
+		}
+	}
+
+	line := fset.PositionFor(n.Pos(), true).Line
+	if rule, ok := ix.line[line]; ok && rule.ignores(mutationType) {
+		return true, true
+	}
+
+	return false, false
+}
+
+// walkMutations visits the file once for mutationType and hands each mutation
+// to fn as soon as it is generated, completing its line and diff only then.
+// The walk stops at the first error fn returns.
+func walkMutations(
+	mutationType m.MutationType,
+	file *ast.File,
+	fset *token.FileSet,
+	content []byte,
+	source m.Source,
+	ignore ignoreIndex,
+	differ Differ,
+	fn func(m.Mutation) error,
+) error {
 	if ignore.file.ignores(mutationType) {
 		return nil
 	}
 
-	mutations := make([]m.Mutation, 0)
+	var walkErr error
 
 	ast.Inspect(file, func(n ast.Node) bool {
-		if n == nil {
-			return true
+		if n == nil || walkErr != nil {
+			return false
 		}
 
-		// Function-level ignore: if the annotation is directly above the func decl,
-		// skip traversing the function body entirely.
-		if fd, ok := n.(*ast.FuncDecl); ok {
-			if rule, ok := ignore.funcByPos[fd.Pos()]; ok && rule.ignores(mutationType) {
+		if skip, descend := ignore.skips(n, fset, mutationType); skip {
+			return descend
+		}
+
+		for _, mutation := range generateMutationsForNode(mutationType, n, fset, content, source) {
+			mutation.Line = lineForOffset(content, firstDifference(content, mutation.MutatedCode))
+			mutation.DiffCode = differ.Diff(content, mutation.MutatedCode)
+
+			if walkErr = fn(mutation); walkErr != nil {
 				return false
 			}
 		}
 
-		// Line-level ignore: if the annotation is on the same line (trailing) or
-		// on the line above (leading), skip generating mutations for this node.
-		line := fset.PositionFor(n.Pos(), true).Line
-		if rule, ok := ignore.line[line]; ok && rule.ignores(mutationType) {
-			return true
-		}
-
-		nodeMutations := generateMutationsForNode(mutationType, n, fset, content, source)
-		for i := range nodeMutations {
-			nodeMutations[i].Line = lineForOffset(content, firstDifference(content, nodeMutations[i].MutatedCode))
-			nodeMutations[i].DiffCode = differ.Diff(content, nodeMutations[i].MutatedCode)
-		}
-
-		mutations = append(mutations, nodeMutations...)
-
 		return true
 	})
 
-	return mutations
+	return walkErr
 }
 
 // firstDifference returns the index of the first byte that differs between a and
