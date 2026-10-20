@@ -107,7 +107,11 @@ func baseRootCmd() *cobra.Command {
 		Use:   "gooze",
 		Short: "Go mutation testing tool",
 		Long:  rootLongDescription,
-		PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
+		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
+			// Flags and arguments are valid by now: a later error is a runtime
+			// failure, so print only the error, not the usage.
+			cmd.Root().SilenceUsage = true
+
 			logPath := strings.TrimSpace(logOutputFlag)
 			if logPath == "" {
 				logPath = viper.GetString(config.KeyLogFilename)

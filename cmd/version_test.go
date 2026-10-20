@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"bytes"
-	"strings"
+	"runtime/debug"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -20,12 +20,31 @@ func TestVersionCmd_Output(t *testing.T) {
 	err := cmd.Execute()
 	require.NoError(t, err)
 
-	output := out.String()
-	if strings.Contains(output, "version: unknown") {
-		assert.Contains(t, output, "version: unknown")
-		return
+	assert.Regexp(t, `^gooze \S.*\n$`, out.String())
+	assert.NotContains(t, out.String(), "\t")
+}
+
+func TestVersionLine(t *testing.T) {
+	tests := []struct {
+		name string
+		info debug.BuildInfo
+		want string
+	}{
+		{
+			name: "release",
+			info: debug.BuildInfo{GoVersion: "go1.27.3", Main: debug.Module{Version: "v1.1.1"}},
+			want: "gooze v1.1.1 (go1.27.3)",
+		},
+		{
+			name: "no module version",
+			info: debug.BuildInfo{GoVersion: "go1.27.3"},
+			want: "gooze (unknown version) (go1.27.3)",
+		},
 	}
 
-	assert.Contains(t, output, "tool version")
-	assert.Contains(t, output, "go version")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, versionLine(&tt.info))
+		})
+	}
 }
