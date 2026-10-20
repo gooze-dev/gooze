@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -45,7 +46,11 @@ func newRunCmd() *cobra.Command {
 				return workflow.Estimate(context.Background(), estimateArgs)
 			}
 
-			shardIndex, totalShards := parseShardFlag(runShardFlag)
+			shardIndex, totalShards, err := parseShardFlag(runShardFlag)
+			if err != nil {
+				return err
+			}
+
 			timeoutSeconds := viper.GetInt64(mutationTimeoutKey)
 
 			return workflow.Test(context.Background(), domain.TestArgs{
@@ -82,17 +87,24 @@ func configureRunFlags(cmd *cobra.Command) {
 	bindFlagToConfig(cmd.Flags().Lookup(coverageProfileFlagName), runCoverageProfileKey)
 }
 
-func parseShardFlag(shard string) (int, int) {
+// parseShardFlag parses INDEX/TOTAL. An empty value means no sharding. Any
+// other malformed value is an error rather than a silent fallback, because a
+// shard that quietly tests everything defeats the purpose of sharding in CI.
+func parseShardFlag(shard string) (int, int, error) {
 	if shard == "" {
-		return 0, 1
+		return 0, 1, nil
 	}
 
 	var index, total int
 
-	_, err := fmt.Sscanf(shard, "%d/%d", &index, &total)
-	if err != nil || total <= 0 || index < 0 || index >= total {
-		return 0, 1
+	n, err := fmt.Sscanf(shard, "%d/%d", &index, &total)
+	if err != nil || n != 2 || fmt.Sprintf("%d/%d", index, total) != strings.TrimSpace(shard) {
+		return 0, 0, fmt.Errorf("invalid --shard %q: expected INDEX/TOTAL (e.g. 0/3)", shard)
 	}
 
-	return index, total
+	if total <= 0 || index < 0 || index >= total {
+		return 0, 0, fmt.Errorf("invalid --shard %q: index must satisfy 0 <= INDEX < TOTAL", shard)
+	}
+
+	return index, total, nil
 }
