@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
@@ -222,11 +221,7 @@ func (rs *LocalReportStore) LoadSpillReports(ctx context.Context, path m.Path) (
 	}
 
 	if err := rs.rangeReportsInDir(dirPath, spill.Append); err != nil {
-		if closeErr := spill.Close(); closeErr != nil {
-			slog.Error("failed to close spill after load error", "error", closeErr)
-		}
-
-		return nil, fmt.Errorf("load reports into spill: %w", err)
+		return nil, errors.Join(fmt.Errorf("load reports into spill: %w", err), spill.Close())
 	}
 
 	return spill, nil
@@ -409,11 +404,9 @@ func (rs *LocalReportStore) splitChangedAndDeleted(stored map[string]storedSourc
 
 	err = sources.Range(func(_ uint64, src m.Source) error {
 		key := src.Key()
-		if key != "" {
-			visited[key] = true
-		}
+		visited[key] = true
 
-		if key == "" || rs.isSourceChanged(stored, key, src) {
+		if rs.isSourceChanged(stored, key, src) {
 			return changed.Append(src)
 		}
 
@@ -679,7 +672,6 @@ type indexBuilder struct {
 func newIndexBuilder(rs *LocalReportStore) *indexBuilder {
 	return &indexBuilder{
 		rs:    rs,
-		index: indexEntry{Result: make([]resultEntry, 0)},
 		state: indexState{mutationsBySource: make(map[string]map[string]*mutationEntry)},
 	}
 }
@@ -688,16 +680,7 @@ func (b *indexBuilder) add(report m.Report) {
 	b.count++
 
 	sourceHex := b.rs.sourceHex(report.Source)
-	if sourceHex != "" && b.state.mutationsBySource[sourceHex] == nil {
-		b.state.mutationsBySource[sourceHex] = make(map[string]*mutationEntry)
-	}
-
-	reportHash := b.rs.computeReportHash(report.Result)
-	if reportHash == "" {
-		return
-	}
-
-	reportFile := reportHash + ".yaml"
+	reportFile := b.rs.computeReportHash(report.Result) + ".yaml"
 
 	for mutationType, results := range report.Result {
 		for _, result := range results {
