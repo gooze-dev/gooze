@@ -235,3 +235,23 @@ func TestWorkflow_Estimate_WithoutCacheMarksNothingCached(t *testing.T) {
 
 	assert.Equal(t, domain.Estimation{Total: 1, Files: []domain.FileEstimate{{Path: "a.go", Count: 1}}}, estimation)
 }
+
+func TestWorkflow_Test_UnsetShardCountSavesReportsInTheBaseDir(t *testing.T) {
+	fx := newCacheFixture(t)
+	c := rpt.Source{Origin: &rpt.File{ShortPath: "c.go", FullPath: "/p/c.go", Hash: "c1"}}
+
+	var (
+		score      domain.MutationScore
+		estimation domain.Estimation
+	)
+
+	mutations := map[string][]m.Mutation{"c.go": {{ID: "c-1", Source: c, Type: mgen.Arithmetic}}}
+	wf := cachedRunWorkflow(t, []rpt.Source{fx.a, c}, mutations, &score, &estimation)
+
+	args := cachedTestArgs(fx.reports)
+	args.TotalShardCount = 0
+	require.NoError(t, wf.Test(context.Background(), args))
+
+	assert.Equal(t, domain.MutationScore{Total: 4, Killed: 2, Survived: 2, Cached: 3, Tested: 1}, score)
+	assert.NoDirExists(t, filepath.Join(fx.reports, domain.ShardDirPrefix+"0"))
+}
