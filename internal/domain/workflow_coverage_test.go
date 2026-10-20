@@ -20,6 +20,7 @@ func TestWorkflow_Test_CoverageGateSkipsUncovered(t *testing.T) {
 
 	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
 	mockReportStore := new(adaptermocks.MockReportStore)
+	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
 	mockWorkspace := new(domainmocks.MockWorkspace)
@@ -33,7 +34,7 @@ func TestWorkflow_Test_CoverageGateSkipsUncovered(t *testing.T) {
 	covered := m.Mutation{ID: "covered", Source: source, Type: m.MutationArithmetic, Line: 10}
 	uncovered := m.Mutation{ID: "uncovered", Source: source, Type: m.MutationArithmetic, Line: 20}
 
-	profile := []byte("mode: set\nmod/pkg/foo.go:10.1,10.20 1 1\n")
+	profile := []byte("mode: set\nmod/pkg/foo.go:10.1,10.20 1 1\nmod/pkg/foo.go:20.1,20.20 1 0\n")
 
 	mockReporter.EXPECT().StartTest(ctx).Return(nil).Once()
 	mockReporter.EXPECT().Wait(ctx).Return().Once()

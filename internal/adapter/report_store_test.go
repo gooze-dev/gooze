@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
 	m "gooze.dev/pkg/gooze/internal/model"
@@ -731,5 +732,43 @@ func TestLocalReportStore_CheckUpdates_MutatorVersionDiff_ReturnsSource(t *testi
 	}
 	if len(changed) != 1 {
 		t.Fatalf("expected 1 changed source due to mutator version diff, got %d", len(changed))
+	}
+}
+
+func TestLocalReportStore_RegenerateIndex_ListsReportsPerSource(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	rs := &LocalReportStore{}
+
+	reports := []m.Report{
+		{
+			Source: m.Source{Origin: &m.File{FullPath: "/abs/a.go", Hash: "sourceA"}},
+			Result: m.Result{m.MutationBoolean: {{MutationID: "a1", Status: m.Killed}}},
+		},
+		{
+			Source: m.Source{Origin: &m.File{FullPath: "/abs/b.go", Hash: "sourceB"}},
+			Result: m.Result{m.MutationBoolean: {{MutationID: "b1", Status: m.Survived}}},
+		},
+	}
+
+	require.NoError(t, rs.SaveReports(context.Background(), m.Path(dir), reports))
+	require.NoError(t, rs.RegenerateIndex(context.Background(), m.Path(dir)))
+
+	data, err := os.ReadFile(filepath.Join(dir, "_index.yaml"))
+	require.NoError(t, err)
+
+	var idx indexEntry
+	require.NoError(t, yaml.Unmarshal(data, &idx))
+	require.Len(t, idx.Result, 2)
+
+	for i, report := range reports {
+		entry := idx.Result[i]
+		if entry.SourceHex != report.Source.Origin.Hash {
+			entry = idx.Result[1-i]
+		}
+
+		require.Len(t, entry.Mutations, 1)
+		require.Equal(t, []string{rs.computeReportHash(report.Result) + ".yaml"}, entry.Mutations[0].MutationReports)
 	}
 }
