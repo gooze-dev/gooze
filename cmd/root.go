@@ -149,18 +149,18 @@ func configureRootFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().
 		StringVarP(
 			&reportsOutputDirFlag, outputFlagName, "o",
-			viper.GetString(config.KeyOutput),
+			schemaDefault[string](config.KeyOutput),
 			"output directory for mutation testing reports",
 		)
 	bindFlagToConfig(cmd.PersistentFlags().Lookup(outputFlagName), config.KeyOutput)
 
-	cmd.PersistentFlags().BoolVar(&noCacheFlag, noCacheFlagName, viper.GetBool(config.KeyNoCache), "disable cached incremental runs (re-test everything)")
+	cmd.PersistentFlags().BoolVar(&noCacheFlag, noCacheFlagName, schemaDefault[bool](config.KeyNoCache), "disable cached incremental runs (re-test everything)")
 	bindFlagToConfig(cmd.PersistentFlags().Lookup(noCacheFlagName), config.KeyNoCache)
 
-	cmd.PersistentFlags().BoolVar(&noUpdateCheckFlagValue, noUpdateCheckFlag, viper.GetBool(config.KeyNoUpdateCheck), "skip checking for a newer gooze release")
+	cmd.PersistentFlags().BoolVar(&noUpdateCheckFlagValue, noUpdateCheckFlag, schemaDefault[bool](config.KeyNoUpdateCheck), "skip checking for a newer gooze release")
 	bindFlagToConfig(cmd.PersistentFlags().Lookup(noUpdateCheckFlag), config.KeyNoUpdateCheck)
 
-	cmd.PersistentFlags().StringArrayVarP(&excludePatterns, excludeFlagName, "x", viper.GetStringSlice(config.KeyPathsExclude), "exclude files matching regex (can be repeated)")
+	cmd.PersistentFlags().StringArrayVarP(&excludePatterns, excludeFlagName, "x", schemaDefault[[]string](config.KeyPathsExclude), "exclude files matching regex (can be repeated)")
 	bindFlagToConfig(cmd.PersistentFlags().Lookup(excludeFlagName), config.KeyPathsExclude)
 
 	// Add verbose and log output flags (handled directly; not bound to Viper).

@@ -166,8 +166,12 @@ func configureLogger(logPath string, verbose bool) {
 }
 
 func defaultLogFilename() string {
-	field, _ := config.Lookup(config.KeyLogFilename)
-	name, _ := field.Default.(string)
+	return schemaDefault[string](config.KeyLogFilename)
+}
 
-	return name
+func schemaDefault[T any](key string) T {
+	field, _ := config.Lookup(key)
+	value, _ := field.Default.(T)
+
+	return value
 }

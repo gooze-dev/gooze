@@ -100,26 +100,26 @@ func init() {
 // configureRunFlags adds run's flags and returns its threshold flags: the
 // plain ones, and the ones for --diff runs.
 func configureRunFlags(cmd *cobra.Command) (report.ThresholdFlags, report.ThresholdFlags) {
-	cmd.Flags().Int64Var(&mutationTimeoutFlag, mutationTimeoutFlagName, viper.GetInt64(config.KeyRunMutationTimeout), "timeout duration for testing a mutation in seconds")
+	cmd.Flags().Int64Var(&mutationTimeoutFlag, mutationTimeoutFlagName, int64(schemaDefault[int](config.KeyRunMutationTimeout)), "timeout duration for testing a mutation in seconds")
 	bindFlagToConfig(cmd.Flags().Lookup(mutationTimeoutFlagName), config.KeyRunMutationTimeout)
 
-	cmd.Flags().IntVarP(&runParallelFlag, runParallelFlagName, "p", viper.GetInt(config.KeyRunParallel), "number of parallel workers for mutation testing")
+	cmd.Flags().IntVarP(&runParallelFlag, runParallelFlagName, "p", schemaDefault[int](config.KeyRunParallel), "number of parallel workers for mutation testing")
 	bindFlagToConfig(cmd.Flags().Lookup(runParallelFlagName), config.KeyRunParallel)
 	cmd.Flags().StringVarP(&runShardFlag, "shard", "s", "", "shard index and total shard count in the format INDEX/TOTAL (e.g., 0/3)")
 	cmd.Flags().BoolVar(&runEstimateFlag, "estimate", false, "list source files and applicable mutation counts without running tests")
 
-	cmd.Flags().StringVar(&runCoverageProfileFlag, coverageProfileFlagName, viper.GetString(config.KeyRunCoverageProfile), "path to a Go coverage profile; mutations on uncovered lines are reported as not_covered without running tests")
+	cmd.Flags().StringVar(&runCoverageProfileFlag, coverageProfileFlagName, schemaDefault[string](config.KeyRunCoverageProfile), "path to a Go coverage profile; mutations on uncovered lines are reported as not_covered without running tests")
 	bindFlagToConfig(cmd.Flags().Lookup(coverageProfileFlagName), config.KeyRunCoverageProfile)
 
-	cmd.Flags().StringVar(&runDiffFlag, diffFlagName, viper.GetString(config.KeyRunDiff), "git ref to diff against; mutate only lines changed since its merge base with HEAD (requires git)")
+	cmd.Flags().StringVar(&runDiffFlag, diffFlagName, schemaDefault[string](config.KeyRunDiff), "git ref to diff against; mutate only lines changed since its merge base with HEAD (requires git)")
 	bindFlagToConfig(cmd.Flags().Lookup(diffFlagName), config.KeyRunDiff)
 
 	cmd.Flags().StringVar(&runPatternFlag, runFlagName, "", "mutate only functions matching this regular expression, as for go test -run (matches Name, or Type.Name for methods)")
 
-	cmd.Flags().StringSliceVar(&runMutagensFlag, mutagensFlagName, viper.GetStringSlice(config.KeyRunMutagens), "mutagens to run, comma-separated: "+strings.Join(mgen.Names(), ", ")+" (default all but branch, statement and loop)")
+	cmd.Flags().StringSliceVar(&runMutagensFlag, mutagensFlagName, schemaDefault[[]string](config.KeyRunMutagens), "mutagens to run, comma-separated: "+strings.Join(mgen.Names(), ", ")+" (default all but branch, statement and loop)")
 	bindFlagToConfig(cmd.Flags().Lookup(mutagensFlagName), config.KeyRunMutagens)
 
-	cmd.Flags().StringVar(&runWorkspaceFlag, workspaceFlagName, viper.GetString(config.KeyRunWorkspace), "how mutants are built: overlay (go test -overlay in the project) or deep-copy (a copy of the project per worker, for tests that build the code in a subprocess or read source files)")
+	cmd.Flags().StringVar(&runWorkspaceFlag, workspaceFlagName, schemaDefault[string](config.KeyRunWorkspace), "how mutants are built: overlay (go test -overlay in the project) or deep-copy (a copy of the project per worker, for tests that build the code in a subprocess or read source files)")
 	bindFlagToConfig(cmd.Flags().Lookup(workspaceFlagName), config.KeyRunWorkspace)
 
 	return report.AddThresholdFlags(cmd, "threshold", "threshold"),

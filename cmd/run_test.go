@@ -3,9 +3,11 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -522,4 +524,90 @@ func TestRunCmd_BadThresholdIsAUsageError(t *testing.T) {
 	require.EqualError(t, err, "invalid --threshold-diff-total: 120 is out of range: must be between 0 and 100")
 	assert.Equal(t, m.ExitUsage, exitCode(context.Background(), err, false))
 	mockWorkflow.AssertNotCalled(t, "Test", mock.Anything, mock.Anything)
+}
+
+func TestRunCmd_FlagDefaultsMatchSchema(t *testing.T) {
+	t.Setenv("GOOZE_RUN_WORKSPACE", "deep-copy")
+	t.Setenv("GOOZE_RUN_DIFF", "origin/main")
+	t.Setenv("GOOZE_RUN_MUTAGENS", "comparison")
+
+	for _, cmd := range []*cobra.Command{runCmd, newRunCmd()} {
+		assert.Equal(t, "1", cmd.Flags().Lookup(runParallelFlagName).DefValue)
+		assert.Equal(t, "120", cmd.Flags().Lookup(mutationTimeoutFlagName).DefValue)
+		assert.Empty(t, cmd.Flags().Lookup(coverageProfileFlagName).DefValue)
+		assert.Empty(t, cmd.Flags().Lookup(diffFlagName).DefValue)
+		assert.Equal(t, "[]", cmd.Flags().Lookup(mutagensFlagName).DefValue)
+		assert.Equal(t, "overlay", cmd.Flags().Lookup(workspaceFlagName).DefValue)
+	}
+}
+
+func TestRunCmd_HelpShowsSchemaDefaults(t *testing.T) {
+	t.Setenv("GOOZE_RUN_PARALLEL", "7")
+	t.Setenv("GOOZE_RUN_MUTATION_TIMEOUT", "9")
+	t.Setenv("GOOZE_RUN_COVERAGE_PROFILE", "env.out")
+	t.Setenv("GOOZE_OUTPUT", "env-reports")
+
+	cmd := newRootCmd()
+	cmd.AddCommand(newRunCmd())
+
+	output := &bytes.Buffer{}
+	cmd.SetOut(output)
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{"run", "--help"})
+	require.NoError(t, cmd.Execute())
+
+	assert.Regexp(t, `--parallel int\s+number of parallel workers for mutation testing \(default 1\)`, output.String())
+	assert.Regexp(t, `--mutation-timeout int\s+timeout duration for testing a mutation in seconds \(default 120\)`, output.String())
+	assert.Regexp(t, `--workspace string\s+how mutants are built: .*\(default "overlay"\)`, output.String())
+	assert.Regexp(t, `--output string\s+output directory for mutation testing reports \(default "\.gooze-reports"\)`, output.String())
+	assert.NotContains(t, output.String(), "env.out")
+	assert.NotContains(t, output.String(), "env-reports")
+}
+
+func TestRunCmd_ParallelPrecedence(t *testing.T) {
+	tests := []struct {
+		name string
+		yaml string
+		env  string
+		args []string
+		want int
+	}{
+		{"default", "", "", nil, 1},
+		{"yaml over default", "run:\n  parallel: 3\n", "", nil, 3},
+		{"env over yaml", "run:\n  parallel: 3\n", "5", nil, 5},
+		{"flag over env", "run:\n  parallel: 3\n", "5", []string{"--parallel", "7"}, 7},
+	}
+
+	t.Cleanup(func() { newRunCmd() })
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.NoError(t, viper.ReadConfig(strings.NewReader(tt.yaml)))
+			defer func() { require.NoError(t, viper.ReadConfig(strings.NewReader(""))) }()
+
+			if tt.env != "" {
+				t.Setenv("GOOZE_RUN_PARALLEL", tt.env)
+			}
+
+			mockWorkflow := domainmocks.NewMockWorkflow(t)
+
+			cmd := newRootCmd()
+			cmd.AddCommand(newRunCmd())
+			cmd.SetOut(&bytes.Buffer{})
+			cmd.SetErr(&bytes.Buffer{})
+
+			originalWorkflow := workflow
+			workflow = mockWorkflow
+			defer func() { workflow = originalWorkflow }()
+
+			mockWorkflow.On("Test", mock.Anything, mock.MatchedBy(func(args domain.TestArgs) bool {
+				return args.Threads == tt.want
+			})).Return(nil)
+
+			cmd.SetArgs(append(append([]string{"run"}, tt.args...), "./..."))
+			require.NoError(t, cmd.Execute())
+
+			mockWorkflow.AssertExpectations(t)
+		})
+	}
 }
