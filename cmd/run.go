@@ -28,6 +28,10 @@ func newRunCmd() *cobra.Command {
 		Short: "Run mutation testing",
 		Long:  runLongDescription,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := validateConfig(); err != nil {
+				return err
+			}
+
 			// Default to scanning the current module recursively when no paths
 			// are given (equivalent to `gooze run ./...`).
 			if len(args) == 0 {

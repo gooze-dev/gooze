@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"maps"
 	"slices"
 	"testing"
@@ -35,7 +36,7 @@ func TestConfigDefaults(t *testing.T) {
 		"run.mutation_timeout": 120,
 		"run.coverage_profile": "",
 		"log.filename":         ".gooze.log",
-		"log.level":            0,
+		"log.level":            "info",
 		"log.verbose":          false,
 		"log.max_size":         10,
 		"log.max_backups":      3,
@@ -58,4 +59,39 @@ func TestConfigSchemaCoversViperKeys(t *testing.T) {
 		require.True(t, ok, key)
 		assert.Equal(t, field.Default, viper.Get(key), key)
 	}
+}
+
+func TestValidateConfig(t *testing.T) {
+	tests := []struct {
+		key     string
+		value   any
+		wantErr string
+	}{
+		{key: config.KeyRunParallel, value: 4},
+		{key: config.KeyRunParallel, value: 0, wantErr: "invalid run.parallel: 0 is out of range: must be at least 1"},
+		{key: config.KeyRunMutationTimeout, value: 0, wantErr: "invalid run.mutation_timeout: 0 is out of range: must be at least 1"},
+		{key: config.KeyVersion, value: 2, wantErr: "invalid version: 2 is out of range: must be 1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%s=%v", tt.key, tt.value), func(t *testing.T) {
+			// A default, unlike viper.Set, does not shadow flags in later tests.
+			field, _ := config.Lookup(tt.key)
+			viper.SetDefault(tt.key, tt.value)
+
+			t.Cleanup(func() { viper.SetDefault(tt.key, field.Default) })
+
+			err := validateConfig()
+			if tt.wantErr == "" {
+				assert.NoError(t, err)
+				return
+			}
+
+			assert.EqualError(t, err, tt.wantErr)
+		})
+	}
+}
+
+func TestValidateConfig_Defaults(t *testing.T) {
+	assert.NoError(t, validateConfig())
 }

@@ -1,9 +1,11 @@
 // Package config describes the schema of gooze's configuration file: every key
-// gooze reads, its kind, default value and documentation. It reads no files;
-// tools such as editors use it to complete and validate gooze.yaml.
+// gooze reads, its kind, default value, accepted range and documentation. It
+// reads no files; tools such as editors use it to complete and validate
+// gooze.yaml.
 package config
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 )
@@ -23,6 +25,10 @@ type Field struct {
 	Enum []string
 	// IntEnum reports whether a KindEnum field also accepts an integer.
 	IntEnum bool
+	// Min and Max, when non-nil, are the inclusive bounds of a KindInt field's
+	// value. CheckInt validates a value against them.
+	Min *int
+	Max *int
 	// Children are the keys of a KindObject field.
 	Children []Field
 }
@@ -31,7 +37,7 @@ type Field struct {
 // gooze documents them. Each call returns a new copy.
 func Schema() []Field {
 	return []Field{
-		{Name: KeyVersion, Kind: KindInt, Default: 1, Doc: "Config schema version."},
+		{Name: KeyVersion, Kind: KindInt, Default: 1, Min: new(1), Max: new(1), Doc: "Config schema version."},
 		{Name: KeyOutput, Kind: KindString, Default: DefaultReportsDir, Doc: "Directory where mutation reports are written."},
 		{Name: KeyNoCache, Kind: KindBool, Default: false, Doc: "Disable incremental caching and force a full re-run."},
 		pathsField(),
@@ -48,8 +54,8 @@ func pathsField() Field {
 
 func runField() Field {
 	return Field{Name: "run", Kind: KindObject, Doc: "Mutation run settings.", Children: []Field{
-		{Name: "parallel", Kind: KindInt, Default: 1, Doc: "Number of concurrent mutation workers."},
-		{Name: "mutation_timeout", Kind: KindInt, Default: 120, Doc: "Per-mutation timeout in seconds."},
+		{Name: "parallel", Kind: KindInt, Default: 1, Min: new(1), Doc: "Number of concurrent mutation workers."},
+		{Name: "mutation_timeout", Kind: KindInt, Default: 120, Min: new(1), Doc: "Per-mutation timeout in seconds."},
 		{Name: "coverage_profile", Kind: KindString, Default: "", Doc: "Go coverage profile; mutations on uncovered lines are reported as not_covered without running tests."},
 	}}
 }
@@ -58,9 +64,9 @@ func logField() Field {
 	return Field{Name: "log", Kind: KindObject, Doc: "Logging settings.", Children: []Field{
 		{Name: "filename", Kind: KindString, Default: ".gooze.log", Doc: "Log file path."},
 		{
-			Name: "level", Kind: KindEnum, Default: 0, IntEnum: true,
+			Name: "level", Kind: KindEnum, Default: "info", IntEnum: true,
 			Enum: []string{"debug", "info", "warn", "warning", "error"},
-			Doc:  "Log severity: debug, info, warn or error, or a numeric slog level (0 is info).",
+			Doc:  "Log severity: debug, info, warn or error, or a numeric slog level (-4 debug, 0 info, 4 warn, 8 error).",
 		},
 		{Name: "verbose", Kind: KindBool, Default: false, Doc: "Enable debug-level logging."},
 		{Name: "max_size", Kind: KindInt, Default: 10, Doc: "Max log size in MiB before rotation."},
@@ -68,6 +74,30 @@ func logField() Field {
 		{Name: "max_age", Kind: KindInt, Default: 28, Doc: "Days to keep rotated logs."},
 		{Name: "compress", Kind: KindBool, Default: true, Doc: "Gzip rotated logs."},
 	}}
+}
+
+// CheckInt returns an error describing the violated bound when n is outside
+// the field's Min and Max, e.g. "0 is out of range: must be at least 1", and nil
+// otherwise or when the field has no bounds.
+func (f Field) CheckInt(n int) error {
+	if (f.Min == nil || n >= *f.Min) && (f.Max == nil || n <= *f.Max) {
+		return nil
+	}
+
+	return fmt.Errorf("%d is out of range: %s", n, f.boundText())
+}
+
+func (f Field) boundText() string {
+	switch {
+	case f.Min != nil && f.Max != nil && *f.Min == *f.Max:
+		return fmt.Sprintf("must be %d", *f.Min)
+	case f.Min != nil && f.Max != nil:
+		return fmt.Sprintf("must be between %d and %d", *f.Min, *f.Max)
+	case f.Min != nil:
+		return fmt.Sprintf("must be at least %d", *f.Min)
+	default:
+		return fmt.Sprintf("must be at most %d", *f.Max)
+	}
 }
 
 // Lookup returns the field at a dotted key such as "run.parallel".

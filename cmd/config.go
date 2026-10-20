@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -52,6 +53,23 @@ func init() {
 
 		slog.Warn("failed to read config file", "error", err)
 	}
+}
+
+// validateConfig checks the effective value of every bounded key (from flags,
+// environment, gooze.yaml or defaults) against the schema.
+func validateConfig() error {
+	for _, key := range config.Keys() {
+		field, _ := config.Lookup(key)
+		if field.Kind != config.KindInt || (field.Min == nil && field.Max == nil) {
+			continue
+		}
+
+		if err := field.CheckInt(viper.GetInt(key)); err != nil {
+			return fmt.Errorf("invalid %s: %w", key, err)
+		}
+	}
+
+	return nil
 }
 
 func parseSlogLevel(value string, defaultLevel slog.Level) slog.Level {
