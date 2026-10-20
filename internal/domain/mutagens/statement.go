@@ -61,7 +61,6 @@ func deleteStatement(stmt ast.Stmt, fset *token.FileSet, content []byte, source 
 	}
 
 	mutated := replaceRange(content, offset, lineEnd, "")
-	diff := diffCode(content, mutated)
 
 	h := sha256.Sum256([]byte(fmt.Sprintf("%s-%s-delete-%d", source.Origin.FullPath, m.MutationStatement.Name, offset)))
 	id := fmt.Sprintf("%x", h)[:16]
@@ -71,6 +70,5 @@ func deleteStatement(stmt ast.Stmt, fset *token.FileSet, content []byte, source 
 		Source:      source,
 		Type:        m.MutationStatement,
 		MutatedCode: ensureTrailingNewline(mutated),
-		DiffCode:    diff,
 	}}
 }

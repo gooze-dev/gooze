@@ -5,6 +5,7 @@ package mocks
 import (
 	context "context"
 	ast "go/ast"
+
 	token "go/token"
 
 	mock "github.com/stretchr/testify/mock"

@@ -8,15 +8,14 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"gooze.dev/pkg/gooze/internal/adapter"
-	adaptermocks "gooze.dev/pkg/gooze/internal/adapter/mocks"
 	domain "gooze.dev/pkg/gooze/internal/domain"
+	domainmocks "gooze.dev/pkg/gooze/internal/domain/mocks"
 	m "gooze.dev/pkg/gooze/internal/model"
 )
 
 func TestReportPublisher_Push(t *testing.T) {
-	reg := adaptermocks.NewMockOCIRegistry(t)
-	reg.On("Push", mock.Anything, "ref:tag", m.Path("/r"), adapter.RegistryOptions{PlainHTTP: true}).Return(nil)
+	reg := domainmocks.NewMockOCIRegistry(t)
+	reg.On("Push", mock.Anything, "ref:tag", m.Path("/r"), domain.RegistryOptions{PlainHTTP: true}).Return(nil)
 
 	pub := domain.NewReportPublisher(reg)
 
@@ -25,8 +24,8 @@ func TestReportPublisher_Push(t *testing.T) {
 }
 
 func TestReportPublisher_Pull(t *testing.T) {
-	reg := adaptermocks.NewMockOCIRegistry(t)
-	reg.On("Pull", mock.Anything, "ref:tag", m.Path("/r"), adapter.RegistryOptions{Insecure: true}).Return(nil)
+	reg := domainmocks.NewMockOCIRegistry(t)
+	reg.On("Pull", mock.Anything, "ref:tag", m.Path("/r"), domain.RegistryOptions{Insecure: true}).Return(nil)
 
 	pub := domain.NewReportPublisher(reg)
 
@@ -35,7 +34,7 @@ func TestReportPublisher_Pull(t *testing.T) {
 }
 
 func TestReportPublisher_Validation(t *testing.T) {
-	pub := domain.NewReportPublisher(adaptermocks.NewMockOCIRegistry(t))
+	pub := domain.NewReportPublisher(domainmocks.NewMockOCIRegistry(t))
 
 	require.Error(t, pub.Push(context.Background(), domain.PushArgs{Reports: "/r"})) // missing ref
 	require.Error(t, pub.Push(context.Background(), domain.PushArgs{Ref: "x"}))      // missing reports
@@ -43,7 +42,7 @@ func TestReportPublisher_Validation(t *testing.T) {
 }
 
 func TestReportPublisher_PropagatesError(t *testing.T) {
-	reg := adaptermocks.NewMockOCIRegistry(t)
+	reg := domainmocks.NewMockOCIRegistry(t)
 	boom := errors.New("boom")
 	reg.On("Push", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(boom)
 

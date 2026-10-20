@@ -1,14 +1,18 @@
-package domain
+package domain_test
 
 import (
 	"bytes"
 	"context"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"gooze.dev/pkg/gooze/internal/adapter"
+	domain "gooze.dev/pkg/gooze/internal/domain"
 	m "gooze.dev/pkg/gooze/internal/model"
 )
 
@@ -215,6 +219,26 @@ func readFileBytes(t *testing.T, path m.Path) []byte {
 	return content
 }
 
-func newTestMutagen() Mutagen {
-	return NewMutagen(adapter.NewLocalGoFileAdapter(), adapter.NewLocalSourceFSAdapter())
+func newTestMutagen() domain.Mutagen {
+	return domain.NewMutagen(adapter.NewLocalGoFileAdapter(), adapter.NewLocalSourceFSAdapter(), adapter.NewUnifiedDiffer())
+}
+
+func TestMutagen_AttributesLineNumbers(t *testing.T) {
+	mg := newTestMutagen()
+
+	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "boolean", "main.go"))
+
+	mutations, err := mg.GenerateMutation(context.Background(), source, m.MutationBoolean)
+	require.NoError(t, err)
+	require.Len(t, mutations, 4)
+
+	lines := make([]int, 0, len(mutations))
+	for _, mut := range mutations {
+		require.Positive(t, mut.Line, "mutation should have a 1-based line number")
+		lines = append(lines, mut.Line)
+	}
+	sort.Ints(lines)
+
+	// true@7, false@8, and true/false@18 in examples/boolean/main.go.
+	require.Equal(t, []int{7, 8, 18, 18}, lines)
 }

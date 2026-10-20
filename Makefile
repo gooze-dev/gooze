@@ -14,7 +14,7 @@ PKG_WHITELIST :=  ./cmd/... ./internal/... ./pkg/...
 # Same tree as PKG_WHITELIST, as plain paths for tools that do not understand `/...`.
 SEMGREP_TARGETS := ./cmd ./internal ./pkg main.go
 
-.PHONY: all install-tools build lint test clean run fmt mocks clean-mocks install-precommit semgrep semgrep-arch install-semgrep
+.PHONY: all install-tools build lint test clean run fmt mocks clean-mocks install-precommit semgrep install-semgrep
 
 all: install-precommit build
 
@@ -60,12 +60,7 @@ lint:
 
 semgrep:
 	@echo "Running semgrep..."
-	@semgrep scan --config .semgrep/security.yaml --config .semgrep/correctness.yaml --config p/golang --error --disable-version-check --quiet $(SEMGREP_TARGETS)
-
-# Architecture rules are informational: findings are printed but never fail the build.
-semgrep-arch:
-	@echo "Running semgrep (architecture, informational)..."
-	@semgrep scan --config .semgrep/architecture.yaml --disable-version-check --quiet $(SEMGREP_TARGETS)
+	@semgrep scan --config .semgrep/ --config p/golang --error --disable-version-check --quiet $(SEMGREP_TARGETS)
 
 test:
 	@packages=$$(go list $(PKG_WHITELIST) | grep -v '/mocks$$' | grep -v '/examples/'); \

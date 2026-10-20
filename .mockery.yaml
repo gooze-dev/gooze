@@ -14,16 +14,12 @@ packages:
       Reporter:
       Workspace:
       ReportPublisher:
-  gooze.dev/pkg/gooze/internal/adapter:
-    config:
-      dir: internal/adapter/mocks
-      outpkg: mocks
-    interfaces:
       GoFileAdapter:
       SourceFSAdapter:
       TestRunnerAdapter:
       ReportStore:
       OCIRegistry:
+      Differ:
   gooze.dev/pkg/gooze/internal/controller:
     config:
       dir: internal/controller/mocks

@@ -8,7 +8,6 @@ import (
 	"go/token"
 	"strings"
 
-	"github.com/pmezard/go-difflib/difflib"
 	m "gooze.dev/pkg/gooze/internal/model"
 )
 
@@ -32,27 +31,6 @@ func replaceRange(content []byte, start, end int, replacement string) []byte {
 	mutated = append(mutated, content[end:]...)
 
 	return mutated
-}
-
-func diffCode(original []byte, mutated []byte) []byte {
-	if len(original) == 0 && len(mutated) == 0 {
-		return nil
-	}
-
-	ud := difflib.UnifiedDiff{
-		FromFile: "original",
-		ToFile:   "mutated",
-		Context:  3,
-		A:        difflib.SplitLines(string(ensureTrailingNewline(original))),
-		B:        difflib.SplitLines(string(ensureTrailingNewline(mutated))),
-	}
-
-	text, err := difflib.GetUnifiedDiffString(ud)
-	if err != nil {
-		return nil
-	}
-
-	return []byte(text)
 }
 
 func ensureTrailingNewline(content []byte) []byte {
@@ -94,7 +72,6 @@ func generateBinaryExprMutations(
 
 	for _, mutatedOp := range viableOps(binExpr, getAlternatives(binExpr.Op)) {
 		mutatedCode := replaceRange(content, start, end, mutatedOp.String())
-		diff := diffCode(content, mutatedCode)
 		h := sha256.Sum256(mutatedCode)
 		id := fmt.Sprintf("%x", h)
 		mutations = append(mutations, m.Mutation{
@@ -102,7 +79,6 @@ func generateBinaryExprMutations(
 			Source:      source,
 			Type:        mutationType,
 			MutatedCode: mutatedCode,
-			DiffCode:    diff,
 		})
 	}
 

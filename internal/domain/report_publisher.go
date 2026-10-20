@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 
-	"gooze.dev/pkg/gooze/internal/adapter"
 	m "gooze.dev/pkg/gooze/internal/model"
 )
 
@@ -32,11 +31,11 @@ type ReportPublisher interface {
 }
 
 type reportPublisher struct {
-	registry adapter.OCIRegistry
+	registry OCIRegistry
 }
 
 // NewReportPublisher creates a ReportPublisher backed by the given registry.
-func NewReportPublisher(registry adapter.OCIRegistry) ReportPublisher {
+func NewReportPublisher(registry OCIRegistry) ReportPublisher {
 	return &reportPublisher{registry: registry}
 }
 
@@ -47,7 +46,7 @@ func (p *reportPublisher) Push(ctx context.Context, args PushArgs) error {
 
 	slog.Info("Pushing reports", "ref", args.Ref, "reports", args.Reports)
 
-	opts := adapter.RegistryOptions{PlainHTTP: args.PlainHTTP, Insecure: args.Insecure}
+	opts := RegistryOptions{PlainHTTP: args.PlainHTTP, Insecure: args.Insecure}
 	if err := p.registry.Push(ctx, args.Ref, args.Reports, opts); err != nil {
 		return fmt.Errorf("push reports: %w", err)
 	}
@@ -62,7 +61,7 @@ func (p *reportPublisher) Pull(ctx context.Context, args PullArgs) error {
 
 	slog.Info("Pulling reports", "ref", args.Ref, "reports", args.Reports)
 
-	opts := adapter.RegistryOptions{PlainHTTP: args.PlainHTTP, Insecure: args.Insecure}
+	opts := RegistryOptions{PlainHTTP: args.PlainHTTP, Insecure: args.Insecure}
 	if err := p.registry.Pull(ctx, args.Ref, args.Reports, opts); err != nil {
 		return fmt.Errorf("pull reports: %w", err)
 	}

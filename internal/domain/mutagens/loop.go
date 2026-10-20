@@ -84,7 +84,6 @@ func mutateLoopBoundary(cond ast.Expr, fset *token.FileSet, content []byte, sour
 	mutations := make([]m.Mutation, 0, len(alternatives))
 	for _, mutatedOp := range alternatives {
 		mutated := replaceRange(content, opStart, opEnd, mutatedOp.String())
-		diff := diffCode(content, mutated)
 
 		h := sha256.Sum256([]byte(fmt.Sprintf("%s-%s-boundary-%d", source.Origin.FullPath, m.MutationLoop.Name, opStart)))
 		id := fmt.Sprintf("%x", h)[:16]
@@ -94,7 +93,6 @@ func mutateLoopBoundary(cond ast.Expr, fset *token.FileSet, content []byte, sour
 			Source:      source,
 			Type:        m.MutationLoop,
 			MutatedCode: ensureTrailingNewline(mutated),
-			DiffCode:    diff,
 		})
 	}
 
@@ -122,7 +120,6 @@ func removeLoopBody(body *ast.BlockStmt, tag string, fset *token.FileSet, conten
 	}
 
 	mutated := replaceRange(content, bodyStart+1, bodyEnd, "")
-	diff := diffCode(content, mutated)
 
 	h := sha256.Sum256([]byte(fmt.Sprintf("%s-%s-%s-%d", source.Origin.FullPath, m.MutationLoop.Name, tag, bodyStart)))
 	id := fmt.Sprintf("%x", h)[:16]
@@ -132,7 +129,6 @@ func removeLoopBody(body *ast.BlockStmt, tag string, fset *token.FileSet, conten
 		Source:      source,
 		Type:        m.MutationLoop,
 		MutatedCode: ensureTrailingNewline(mutated),
-		DiffCode:    diff,
 	}}
 }
 
@@ -156,7 +152,6 @@ func removeBranchStatement(stmt *ast.BranchStmt, fset *token.FileSet, content []
 	}
 
 	mutated := replaceRange(content, offset, lineEnd, "")
-	diff := diffCode(content, mutated)
 
 	branchType := "break"
 	if stmt.Tok == token.CONTINUE {
@@ -171,7 +166,6 @@ func removeBranchStatement(stmt *ast.BranchStmt, fset *token.FileSet, content []
 		Source:      source,
 		Type:        m.MutationLoop,
 		MutatedCode: ensureTrailingNewline(mutated),
-		DiffCode:    diff,
 	}}
 }
 
@@ -253,7 +247,6 @@ func removeRecursiveCallExpr(call *ast.CallExpr, fset *token.FileSet, content []
 
 	// Replace the call with a default value (0 for simplicity)
 	mutated := replaceRange(content, offset, endOffset, "0")
-	diff := diffCode(content, mutated)
 
 	h := sha256.Sum256([]byte(fmt.Sprintf("%s-%s-recursion-%d", source.Origin.FullPath, m.MutationLoop.Name, offset)))
 	id := fmt.Sprintf("%x", h)[:16]
@@ -263,6 +256,5 @@ func removeRecursiveCallExpr(call *ast.CallExpr, fset *token.FileSet, content []
 		Source:      source,
 		Type:        m.MutationLoop,
 		MutatedCode: ensureTrailingNewline(mutated),
-		DiffCode:    diff,
 	}
 }

@@ -20,25 +20,12 @@ import (
 
 const indexFileName = "_index.yaml"
 
-// ReportStore persists and retrieves mutation reports.
-type ReportStore interface {
-	SaveReports(ctx context.Context, path m.Path, reports []m.Report) error
-	SaveSpillReports(ctx context.Context, path m.Path, reports pkg.FileSpill[m.Report]) error
-	RegenerateIndex(ctx context.Context, path m.Path) error
-	LoadReports(ctx context.Context, path m.Path) ([]m.Report, error)
-	LoadSpillReports(ctx context.Context, path m.Path) (pkg.FileSpill[m.Report], error)
-	CheckUpdates(ctx context.Context, path m.Path, sources []m.Source) ([]m.Source, error)
-	CleanReports(ctx context.Context, path m.Path, sources []m.Source) error
-}
-
-// LocalReportStore is the concrete implementation that will back the
-// ReportStore interface. It currently returns nil for LoadReports so tests
-// can drive the actual logic.
+// LocalReportStore stores reports as YAML files on the local filesystem.
 type LocalReportStore struct{}
 
 // NewReportStore constructs a LocalReportStore instance ready to
 // be wired into the workflow.
-func NewReportStore() ReportStore {
+func NewReportStore() *LocalReportStore {
 	return &LocalReportStore{}
 }
 

@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"strings"
 
-	"gooze.dev/pkg/gooze/internal/adapter"
 	m "gooze.dev/pkg/gooze/internal/model"
 )
 
@@ -32,13 +31,13 @@ type Workspace interface {
 }
 
 type orchestrator struct {
-	fsAdapter   adapter.SourceFSAdapter
-	testAdapter adapter.TestRunnerAdapter
+	fsAdapter   SourceFSAdapter
+	testAdapter TestRunnerAdapter
 }
 
 // NewOrchestrator constructs an Orchestrator backed by the provided
 // filesystem and test runner adapters.
-func NewOrchestrator(fsAdapter adapter.SourceFSAdapter, testAdapter adapter.TestRunnerAdapter) Orchestrator {
+func NewOrchestrator(fsAdapter SourceFSAdapter, testAdapter TestRunnerAdapter) Orchestrator {
 	return &orchestrator{
 		fsAdapter:   fsAdapter,
 		testAdapter: testAdapter,
@@ -62,8 +61,8 @@ func (to *orchestrator) TestMutation(ctx context.Context, mutation m.Mutation) (
 }
 
 type workspace struct {
-	fsAdapter   adapter.SourceFSAdapter
-	testAdapter adapter.TestRunnerAdapter
+	fsAdapter   SourceFSAdapter
+	testAdapter TestRunnerAdapter
 
 	projectRoot m.Path
 	tmpDir      m.Path

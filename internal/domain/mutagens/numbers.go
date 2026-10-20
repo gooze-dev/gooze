@@ -40,7 +40,6 @@ func GenerateNumberMutations(n ast.Node, fset *token.FileSet, content []byte, so
 	mutations := make([]m.Mutation, 0, len(alternatives))
 	for _, alt := range alternatives {
 		mutatedCode := replaceRange(content, start, end, alt)
-		diff := diffCode(content, mutatedCode)
 		h := sha256.Sum256(mutatedCode)
 		id := fmt.Sprintf("%x", h)
 		mutations = append(mutations, m.Mutation{
@@ -48,7 +47,6 @@ func GenerateNumberMutations(n ast.Node, fset *token.FileSet, content []byte, so
 			Source:      source,
 			Type:        m.MutationNumbers,
 			MutatedCode: mutatedCode,
-			DiffCode:    diff,
 		})
 	}
 
