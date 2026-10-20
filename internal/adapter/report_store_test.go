@@ -1067,3 +1067,40 @@ func TestLocalReportStore_RegenerateIndex_SkipsSourcesWithoutHash(t *testing.T) 
 	require.Equal(t, 1, idx.TotalMutations)
 	require.Empty(t, idx.Result)
 }
+
+func TestLocalReportStore_AddStoredReport_MarksAnyVersionMismatch(t *testing.T) {
+	rs := &LocalReportStore{}
+	source := m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "/abs/a.go", Hash: "h"}}
+	older := m.MutationType{Name: m.MutationBoolean.Name, Version: m.MutationBoolean.Version - 1}
+
+	state := make(map[string]storedSourceState)
+	rs.addStoredReport(state, m.Report{Source: source, Result: m.Result{m.MutationBoolean: {{MutationID: "b1", Status: m.Killed}}}})
+	rs.addStoredReport(state, m.Report{Source: source, Result: m.Result{older: {{MutationID: "b2", Status: m.Killed}}}})
+
+	require.Equal(t, -1, state["a.go"].mutator[m.MutationBoolean.Name])
+	require.True(t, rs.isSourceChanged(state, "a.go", source))
+}
+
+func TestLocalReportStore_LoadSpillReports_ReturnsErrorWhenReportUnreadable(t *testing.T) {
+	rs := &LocalReportStore{}
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "bad.yaml"), []byte("source: [\n"), 0o600))
+
+	_, err := rs.LoadSpillReports(context.Background(), m.Path(dir))
+	require.ErrorContains(t, err, "load reports into spill")
+}
+
+func TestLocalReportStore_RegenerateIndex_OmitsReportsWithoutResults(t *testing.T) {
+	rs := &LocalReportStore{}
+	builder := newIndexBuilder(rs)
+
+	builder.add(m.Report{Source: m.Source{Origin: &m.File{FullPath: "/abs/empty.go", Hash: "empty"}}, Result: m.Result{}})
+	builder.add(m.Report{
+		Source: m.Source{Origin: &m.File{FullPath: "/abs/a.go", Hash: "a"}},
+		Result: m.Result{m.MutationBoolean: {{MutationID: "b1", Status: m.Killed}}},
+	})
+
+	index := builder.build()
+	require.Len(t, index.Result, 1)
+	require.Equal(t, "a", index.Result[0].SourceHex)
+}
