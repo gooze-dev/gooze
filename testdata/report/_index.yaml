@@ -1,0 +1,20 @@
+total_mutations: 6
+killed_mutations: 1
+survived_mutations: 1
+failed_mutations: 2
+ignored_mutations: 1
+not_covered_mutations: 1
+result:
+    - source_hex: aaaa
+      mutations:
+        - mutation_name: arithmetic
+          mutation_reports:
+            - c8efb49977c64ef4.yaml
+        - mutation_name: boolean
+          mutation_reports:
+            - c8efb49977c64ef4.yaml
+    - source_hex: cccc
+      mutations:
+        - mutation_name: numbers
+          mutation_reports:
+            - 8b88429ad4e88cf8.yaml

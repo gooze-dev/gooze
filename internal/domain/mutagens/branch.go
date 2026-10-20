@@ -7,11 +7,13 @@ import (
 	"go/token"
 
 	m "gooze.dev/pkg/gooze/internal/model"
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 // GenerateBranchMutations generates branch mutations for the given AST node.
 // Branch mutations modify conditional statements to test boundary behavior.
-func GenerateBranchMutations(n ast.Node, fset *token.FileSet, content []byte, source m.Source) []m.Mutation {
+func GenerateBranchMutations(n ast.Node, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
 	if n == nil {
 		return nil
 	}
@@ -44,7 +46,7 @@ func GenerateBranchMutations(n ast.Node, fset *token.FileSet, content []byte, so
 }
 
 // mutateIfStatement creates comprehensive mutations for if statements.
-func mutateIfStatement(stmt *ast.IfStmt, fset *token.FileSet, content []byte, source m.Source) []m.Mutation {
+func mutateIfStatement(stmt *ast.IfStmt, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
 	var mutations []m.Mutation
 
 	// 1. Mutate the condition (invert, force true, force false)
@@ -64,7 +66,7 @@ func mutateIfStatement(stmt *ast.IfStmt, fset *token.FileSet, content []byte, so
 }
 
 // removeIfBlock creates a mutation that removes the if block, keeping the else block if present.
-func removeIfBlock(stmt *ast.IfStmt, fset *token.FileSet, content []byte, source m.Source) []m.Mutation {
+func removeIfBlock(stmt *ast.IfStmt, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
 	offset, ok := offsetForPos(fset, stmt.Pos())
 	if !ok {
 		return nil
@@ -129,20 +131,20 @@ func extractBlockBody(block *ast.BlockStmt, fset *token.FileSet, content []byte)
 }
 
 // createIfRemovalMutation creates a mutation for removing an if block.
-func createIfRemovalMutation(mutated []byte, source m.Source, offset int) m.Mutation {
-	h := sha256.Sum256([]byte(fmt.Sprintf("%s-%s-%d", source.Origin.FullPath, m.MutationBranch.Name, offset+1000)))
+func createIfRemovalMutation(mutated []byte, source rpt.Source, offset int) m.Mutation {
+	h := sha256.Sum256([]byte(fmt.Sprintf("%s-%s-%d", source.Origin.FullPath, mgen.Branch.Name, offset+1000)))
 	id := fmt.Sprintf("%x", h)[:16]
 
 	return m.Mutation{
 		ID:          id,
 		Source:      source,
-		Type:        m.MutationBranch,
+		Type:        mgen.Branch,
 		MutatedCode: ensureTrailingNewline(mutated),
 	}
 }
 
 // removeElseBlock creates a mutation that removes the else block.
-func removeElseBlock(stmt *ast.IfStmt, fset *token.FileSet, content []byte, source m.Source) []m.Mutation {
+func removeElseBlock(stmt *ast.IfStmt, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
 	mutations := make([]m.Mutation, 0, 1)
 
 	if stmt.Else == nil {
@@ -171,13 +173,13 @@ func removeElseBlock(stmt *ast.IfStmt, fset *token.FileSet, content []byte, sour
 
 	mutated := replaceRange(content, elseKeywordStart, elseEndOffset, "")
 
-	h := sha256.Sum256([]byte(fmt.Sprintf("%s-%s-%d", source.Origin.FullPath, m.MutationBranch.Name, elseStartOffset+2000)))
+	h := sha256.Sum256([]byte(fmt.Sprintf("%s-%s-%d", source.Origin.FullPath, mgen.Branch.Name, elseStartOffset+2000)))
 	id := fmt.Sprintf("%x", h)[:16]
 
 	mutation := m.Mutation{
 		ID:          id,
 		Source:      source,
-		Type:        m.MutationBranch,
+		Type:        mgen.Branch,
 		MutatedCode: ensureTrailingNewline(mutated),
 	}
 
@@ -187,7 +189,7 @@ func removeElseBlock(stmt *ast.IfStmt, fset *token.FileSet, content []byte, sour
 }
 
 // mutateSwitchStatement creates mutations for switch statements and their cases.
-func mutateSwitchStatement(stmt *ast.SwitchStmt, fset *token.FileSet, content []byte, source m.Source) []m.Mutation {
+func mutateSwitchStatement(stmt *ast.SwitchStmt, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
 	var mutations []m.Mutation
 
 	// Mutate switch tag if present
@@ -208,7 +210,7 @@ func mutateSwitchStatement(stmt *ast.SwitchStmt, fset *token.FileSet, content []
 }
 
 // mutateCaseClause creates mutations for individual case clauses.
-func mutateCaseClause(clause *ast.CaseClause, fset *token.FileSet, content []byte, source m.Source) []m.Mutation {
+func mutateCaseClause(clause *ast.CaseClause, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
 	var mutations []m.Mutation
 
 	// Remove the entire case clause (body)
@@ -223,7 +225,7 @@ func mutateCaseClause(clause *ast.CaseClause, fset *token.FileSet, content []byt
 }
 
 // removeCaseBody creates a mutation that removes the case body.
-func removeCaseBody(clause *ast.CaseClause, fset *token.FileSet, content []byte, source m.Source) []m.Mutation {
+func removeCaseBody(clause *ast.CaseClause, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
 	mutations := make([]m.Mutation, 0, 1)
 
 	if len(clause.Body) == 0 {
@@ -249,13 +251,13 @@ func removeCaseBody(clause *ast.CaseClause, fset *token.FileSet, content []byte,
 
 	mutated := replaceRange(content, bodyStart, endOffset, "")
 
-	h := sha256.Sum256([]byte(fmt.Sprintf("%s-%s-%d", source.Origin.FullPath, m.MutationBranch.Name, colonOffset+3000)))
+	h := sha256.Sum256([]byte(fmt.Sprintf("%s-%s-%d", source.Origin.FullPath, mgen.Branch.Name, colonOffset+3000)))
 	id := fmt.Sprintf("%x", h)[:16]
 
 	mutation := m.Mutation{
 		ID:          id,
 		Source:      source,
-		Type:        m.MutationBranch,
+		Type:        mgen.Branch,
 		MutatedCode: ensureTrailingNewline(mutated),
 	}
 
@@ -265,7 +267,7 @@ func removeCaseBody(clause *ast.CaseClause, fset *token.FileSet, content []byte,
 }
 
 // invertCondition inverts a boolean condition expression.
-func invertCondition(cond ast.Expr, fset *token.FileSet, content []byte, source m.Source) []m.Mutation {
+func invertCondition(cond ast.Expr, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
 	mutations := make([]m.Mutation, 0, 3)
 
 	offset, ok1 := offsetForPos(fset, cond.Pos())
@@ -290,22 +292,22 @@ func invertCondition(cond ast.Expr, fset *token.FileSet, content []byte, source 
 }
 
 // createConditionMutation creates a single condition mutation.
-func createConditionMutation(content []byte, offset, endOffset int, replacement string, source m.Source, idOffset int) m.Mutation {
+func createConditionMutation(content []byte, offset, endOffset int, replacement string, source rpt.Source, idOffset int) m.Mutation {
 	mutated := replaceRange(content, offset, endOffset, replacement)
 
-	h := sha256.Sum256([]byte(fmt.Sprintf("%s-%s-%d", source.Origin.FullPath, m.MutationBranch.Name, idOffset)))
+	h := sha256.Sum256([]byte(fmt.Sprintf("%s-%s-%d", source.Origin.FullPath, mgen.Branch.Name, idOffset)))
 	id := fmt.Sprintf("%x", h)[:16]
 
 	return m.Mutation{
 		ID:          id,
 		Source:      source,
-		Type:        m.MutationBranch,
+		Type:        mgen.Branch,
 		MutatedCode: ensureTrailingNewline(mutated),
 	}
 }
 
 // mutateSwitchTag creates mutations for switch statement tags.
-func mutateSwitchTag(_ ast.Expr, _ *token.FileSet, _ []byte, _ m.Source) []m.Mutation {
+func mutateSwitchTag(_ ast.Expr, _ *token.FileSet, _ []byte, _ rpt.Source) []m.Mutation {
 	// For now, we'll skip switch tag mutations as they're complex
 	// and require type analysis
 	return nil

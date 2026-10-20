@@ -26,3 +26,30 @@ packages:
       outpkg: mocks
     interfaces:
       UI:
+  gooze.dev/pkg/gooze/pkg:
+    config:
+      inpackage: true
+      dir: '{{.InterfaceDir}}'
+      outpkg: '{{.PackageName}}'
+      filename: mock_{{.InterfaceName}}.go
+      mockname: Mock{{.InterfaceName}}
+    interfaces:
+      FileSpill:
+  gooze.dev/pkg/gooze/pkg/config:
+    config:
+      inpackage: true
+      dir: '{{.InterfaceDir}}'
+      outpkg: '{{.PackageName}}'
+      filename: mock_{{.InterfaceName}}.go
+      mockname: Mock{{.InterfaceName}}
+    interfaces:
+      Registry:
+  gooze.dev/pkg/gooze/pkg/report:
+    config:
+      inpackage: true
+      dir: '{{.InterfaceDir}}'
+      outpkg: '{{.PackageName}}'
+      filename: mock_{{.InterfaceName}}.go
+      mockname: Mock{{.InterfaceName}}
+    interfaces:
+      Reader:

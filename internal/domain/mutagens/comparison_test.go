@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	m "gooze.dev/pkg/gooze/internal/model"
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 func TestGenerateComparisonMutations(t *testing.T) {
@@ -14,55 +16,55 @@ func TestGenerateComparisonMutations(t *testing.T) {
 		name          string
 		code          string
 		expectedCount int
-		expectedType  m.MutationType
+		expectedType  mgen.Type
 	}{
 		{
 			name:          "less than operator",
 			code:          "package main\nfunc test() { x := 5 < 10 }",
 			expectedCount: 5, // <, >, <=, >=, ==, != minus original <
-			expectedType:  m.MutationComparison,
+			expectedType:  mgen.Comparison,
 		},
 		{
 			name:          "greater than operator",
 			code:          "package main\nfunc test() { x := 5 > 10 }",
 			expectedCount: 5,
-			expectedType:  m.MutationComparison,
+			expectedType:  mgen.Comparison,
 		},
 		{
 			name:          "less than or equal operator",
 			code:          "package main\nfunc test() { x := 5 <= 10 }",
 			expectedCount: 5,
-			expectedType:  m.MutationComparison,
+			expectedType:  mgen.Comparison,
 		},
 		{
 			name:          "greater than or equal operator",
 			code:          "package main\nfunc test() { x := 5 >= 10 }",
 			expectedCount: 5,
-			expectedType:  m.MutationComparison,
+			expectedType:  mgen.Comparison,
 		},
 		{
 			name:          "equal operator",
 			code:          "package main\nfunc test() { x := 5 == 10 }",
 			expectedCount: 5,
-			expectedType:  m.MutationComparison,
+			expectedType:  mgen.Comparison,
 		},
 		{
 			name:          "not equal operator",
 			code:          "package main\nfunc test() { x := 5 != 10 }",
 			expectedCount: 5,
-			expectedType:  m.MutationComparison,
+			expectedType:  mgen.Comparison,
 		},
 		{
 			name:          "non-comparison operator",
 			code:          "package main\nfunc test() { x := 5 + 10 }",
 			expectedCount: 0,
-			expectedType:  m.MutationComparison,
+			expectedType:  mgen.Comparison,
 		},
 		{
 			name:          "multiple comparison operators",
 			code:          "package main\nfunc test() { x := 5 < 10 && 20 > 15 }",
 			expectedCount: 10, // 5 mutations for each operator
-			expectedType:  m.MutationComparison,
+			expectedType:  mgen.Comparison,
 		},
 	}
 
@@ -75,8 +77,8 @@ func TestGenerateComparisonMutations(t *testing.T) {
 			}
 
 			content := []byte(tt.code)
-			source := m.Source{
-				Origin: &m.File{FullPath: "test.go"},
+			source := rpt.Source{
+				Origin: &rpt.File{FullPath: "test.go"},
 			}
 			mutations := []m.Mutation{}
 

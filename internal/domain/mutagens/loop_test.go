@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	m "gooze.dev/pkg/gooze/internal/model"
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 func TestGenerateLoopMutations_BoundaryCondition(t *testing.T) {
@@ -29,8 +31,8 @@ func foo(n int) int {
 		t.Fatalf("failed to parse source: %v", err)
 	}
 
-	src := m.Source{
-		Origin: &m.File{FullPath: m.Path("test.go")},
+	src := rpt.Source{
+		Origin: &rpt.File{FullPath: "test.go"},
 	}
 
 	var mutations []m.Mutation
@@ -51,7 +53,7 @@ func foo(n int) int {
 	// Check that we have a boundary mutation
 	foundBoundaryMutation := false
 	for _, mutation := range mutations {
-		if mutation.Type != m.MutationLoop {
+		if mutation.Type != mgen.Loop {
 			t.Errorf("expected type MutationLoop, got %v", mutation.Type)
 		}
 		if strings.Contains(string(mutation.MutatedCode), "i <= n") {
@@ -77,8 +79,8 @@ func TestGenerateLoopMutations_RangeLoopBodyRemoval(t *testing.T) {
 		t.Fatalf("failed to parse source: %v", err)
 	}
 
-	src := m.Source{
-		Origin: &m.File{FullPath: m.Path(examplePath)},
+	src := rpt.Source{
+		Origin: &rpt.File{FullPath: examplePath},
 	}
 
 	var mutations []m.Mutation
@@ -117,8 +119,8 @@ func TestGenerateLoopMutations_BreakRemoval(t *testing.T) {
 		t.Fatalf("failed to parse source: %v", err)
 	}
 
-	src := m.Source{
-		Origin: &m.File{FullPath: m.Path(examplePath)},
+	src := rpt.Source{
+		Origin: &rpt.File{FullPath: examplePath},
 	}
 
 	var mutations []m.Mutation
@@ -158,8 +160,8 @@ func TestGenerateLoopMutations_ContinueRemoval(t *testing.T) {
 		t.Fatalf("failed to parse source: %v", err)
 	}
 
-	src := m.Source{
-		Origin: &m.File{FullPath: m.Path(examplePath)},
+	src := rpt.Source{
+		Origin: &rpt.File{FullPath: examplePath},
 	}
 
 	var mutations []m.Mutation
@@ -204,8 +206,8 @@ func bar() int {
 		t.Fatalf("failed to parse source: %v", err)
 	}
 
-	src := m.Source{
-		Origin: &m.File{FullPath: m.Path("test.go")},
+	src := rpt.Source{
+		Origin: &rpt.File{FullPath: "test.go"},
 	}
 
 	var mutations []m.Mutation
@@ -251,8 +253,8 @@ func nested(n int) int {
 		t.Fatalf("failed to parse source: %v", err)
 	}
 
-	src := m.Source{
-		Origin: &m.File{FullPath: m.Path("test.go")},
+	src := rpt.Source{
+		Origin: &rpt.File{FullPath: "test.go"},
 	}
 
 	var mutations []m.Mutation
@@ -296,8 +298,8 @@ func TestGenerateLoopMutations_RecursiveCallRemoval(t *testing.T) {
 		t.Fatalf("failed to parse source: %v", err)
 	}
 
-	src := m.Source{
-		Origin: &m.File{FullPath: m.Path(examplePath)},
+	src := rpt.Source{
+		Origin: &rpt.File{FullPath: examplePath},
 	}
 
 	var mutations []m.Mutation

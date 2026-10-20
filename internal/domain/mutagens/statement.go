@@ -7,6 +7,8 @@ import (
 	"go/token"
 
 	m "gooze.dev/pkg/gooze/internal/model"
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 // GenerateStatementMutations generates statement deletion mutations for the given AST node.
@@ -17,7 +19,7 @@ import (
 // - Defer statements
 // - Go statements (goroutine launches)
 // - Send statements (channel sends).
-func GenerateStatementMutations(n ast.Node, fset *token.FileSet, content []byte, source m.Source) []m.Mutation {
+func GenerateStatementMutations(n ast.Node, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
 	switch stmt := n.(type) {
 	case *ast.AssignStmt:
 		return deleteStatement(stmt, fset, content, source)
@@ -39,7 +41,7 @@ func GenerateStatementMutations(n ast.Node, fset *token.FileSet, content []byte,
 }
 
 // deleteStatement creates a mutation that removes the entire statement.
-func deleteStatement(stmt ast.Stmt, fset *token.FileSet, content []byte, source m.Source) []m.Mutation {
+func deleteStatement(stmt ast.Stmt, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
 	offset, ok := offsetForPos(fset, stmt.Pos())
 	if !ok {
 		return nil
@@ -62,13 +64,13 @@ func deleteStatement(stmt ast.Stmt, fset *token.FileSet, content []byte, source 
 
 	mutated := replaceRange(content, offset, lineEnd, "")
 
-	h := sha256.Sum256([]byte(fmt.Sprintf("%s-%s-delete-%d", source.Origin.FullPath, m.MutationStatement.Name, offset)))
+	h := sha256.Sum256([]byte(fmt.Sprintf("%s-%s-delete-%d", source.Origin.FullPath, mgen.Statement.Name, offset)))
 	id := fmt.Sprintf("%x", h)[:16]
 
 	return []m.Mutation{{
 		ID:          id,
 		Source:      source,
-		Type:        m.MutationStatement,
+		Type:        mgen.Statement,
 		MutatedCode: ensureTrailingNewline(mutated),
 	}}
 }

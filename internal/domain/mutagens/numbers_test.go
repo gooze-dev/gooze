@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	m "gooze.dev/pkg/gooze/internal/model"
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 func TestGenerateNumberMutations(t *testing.T) {
@@ -55,7 +57,7 @@ func TestGenerateNumberMutations(t *testing.T) {
 				t.Fatalf("failed to parse code: %v", err)
 			}
 
-			source := m.Source{Origin: &m.File{FullPath: "test.go"}}
+			source := rpt.Source{Origin: &rpt.File{FullPath: "test.go"}}
 
 			var mutations []m.Mutation
 			ast.Inspect(file, func(n ast.Node) bool {
@@ -68,8 +70,8 @@ func TestGenerateNumberMutations(t *testing.T) {
 			}
 
 			for _, mut := range mutations {
-				if mut.Type != m.MutationNumbers {
-					t.Fatalf("expected mutation type %v, got %v", m.MutationNumbers, mut.Type)
+				if mut.Type != mgen.Numbers {
+					t.Fatalf("expected mutation type %v, got %v", mgen.Numbers, mut.Type)
 				}
 				if len(mut.ID) == 0 {
 					t.Fatalf("expected non-empty mutation ID")

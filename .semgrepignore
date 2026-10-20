@@ -6,6 +6,7 @@ examples/
 
 # Generated mockery output.
 **/mocks/
+pkg/**/mock_*.go
 
 # Local tool binaries and run artefacts.
 .bin/

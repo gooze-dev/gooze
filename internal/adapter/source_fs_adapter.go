@@ -20,6 +20,7 @@ import (
 
 	"gooze.dev/pkg/gooze/internal/domain"
 	m "gooze.dev/pkg/gooze/internal/model"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 // LocalSourceFSAdapter is the concrete implementation that will back the
@@ -34,10 +35,10 @@ func NewLocalSourceFSAdapter() *LocalSourceFSAdapter {
 }
 
 // Get collects Go source files for the provided roots and returns SourceV2 entries.
-func (a *LocalSourceFSAdapter) Get(ctx context.Context, roots []m.Path, ignore ...string) ([]m.Source, error) {
-	sources := make([]m.Source, 0, len(roots))
+func (a *LocalSourceFSAdapter) Get(ctx context.Context, roots []m.Path, ignore ...string) ([]rpt.Source, error) {
+	sources := make([]rpt.Source, 0, len(roots))
 
-	err := a.eachSource(ctx, roots, ignore, func(source m.Source) error {
+	err := a.eachSource(ctx, roots, ignore, func(source rpt.Source) error {
 		sources = append(sources, source)
 		return nil
 	})
@@ -49,15 +50,15 @@ func (a *LocalSourceFSAdapter) Get(ctx context.Context, roots []m.Path, ignore .
 }
 
 // Stream scans the roots and emits sources on a channel as they are discovered.
-func (a *LocalSourceFSAdapter) Stream(ctx context.Context, roots []m.Path, ignore ...string) (<-chan m.Source, <-chan error) {
-	out := make(chan m.Source)
+func (a *LocalSourceFSAdapter) Stream(ctx context.Context, roots []m.Path, ignore ...string) (<-chan rpt.Source, <-chan error) {
+	out := make(chan rpt.Source)
 	errc := make(chan error, 1)
 
 	go func() {
 		defer close(out)
 		defer close(errc)
 
-		err := a.eachSource(ctx, roots, ignore, func(source m.Source) error {
+		err := a.eachSource(ctx, roots, ignore, func(source rpt.Source) error {
 			select {
 			case out <- source:
 				return nil
@@ -75,7 +76,7 @@ func (a *LocalSourceFSAdapter) Stream(ctx context.Context, roots []m.Path, ignor
 
 // eachSource walks the roots and invokes emit once for each unique source. It is
 // the shared core behind both Get (buffering) and Stream (channeling).
-func (a *LocalSourceFSAdapter) eachSource(ctx context.Context, roots []m.Path, ignore []string, emit func(m.Source) error) error {
+func (a *LocalSourceFSAdapter) eachSource(ctx context.Context, roots []m.Path, ignore []string, emit func(rpt.Source) error) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -100,7 +101,7 @@ func (a *LocalSourceFSAdapter) eachSource(ctx context.Context, roots []m.Path, i
 	return nil
 }
 
-func (a *LocalSourceFSAdapter) collectSourcesFromRoot(ctx context.Context, root m.Path, ignoreRegexps []*regexp.Regexp, emit func(m.Source) error) error {
+func (a *LocalSourceFSAdapter) collectSourcesFromRoot(ctx context.Context, root m.Path, ignoreRegexps []*regexp.Regexp, emit func(rpt.Source) error) error {
 	rootPath, recursive, err := normalizeRootPath(string(root))
 	if err != nil {
 		return err
@@ -120,8 +121,8 @@ func (a *LocalSourceFSAdapter) collectSourcesFromRoot(ctx context.Context, root 
 
 // emitFileSource emits the source for a single file path, skipping files that
 // are not valid mutation sources.
-func (a *LocalSourceFSAdapter) emitFileSource(ctx context.Context, path string, ignoreRegexps []*regexp.Regexp, emit func(m.Source) error) error {
-	source, ok, err := a.processFilePath(ctx, path, ignoreRegexps)
+func (a *LocalSourceFSAdapter) emitFileSource(ctx context.Context, path string, ignoreRegexps []*regexp.Regexp, emit func(rpt.Source) error) error {
+	source, err := a.processFilePath(ctx, path, ignoreRegexps)
 	if err != nil {
 		if isInvalidSourceErr(err) {
 			slog.Warn("Skipping source file that could not be parsed", "path", path, "error", err)
@@ -129,10 +130,6 @@ func (a *LocalSourceFSAdapter) emitFileSource(ctx context.Context, path string, 
 		}
 
 		return err
-	}
-
-	if !ok {
-		return nil
 	}
 
 	return emit(source)
@@ -400,23 +397,23 @@ func (a *LocalSourceFSAdapter) JoinPath(ctx context.Context, elem ...string) m.P
 }
 
 // dedupEmit wraps emit so each unique source (by origin path) is emitted once.
-func dedupEmit(seen map[string]struct{}, emit func(m.Source) error) func(m.Source) error {
-	return func(source m.Source) error {
+func dedupEmit(seen map[string]struct{}, emit func(rpt.Source) error) func(rpt.Source) error {
+	return func(source rpt.Source) error {
 		if source.Origin == nil {
 			return nil
 		}
 
-		if _, exists := seen[string(source.Origin.FullPath)]; exists {
+		if _, exists := seen[source.Origin.FullPath]; exists {
 			return nil
 		}
 
-		seen[string(source.Origin.FullPath)] = struct{}{}
+		seen[source.Origin.FullPath] = struct{}{}
 
 		return emit(source)
 	}
 }
 
-func (a *LocalSourceFSAdapter) collectSourcesFromDir(ctx context.Context, rootPath string, recursive bool, ignoreRegexps []*regexp.Regexp, emit func(m.Source) error) error {
+func (a *LocalSourceFSAdapter) collectSourcesFromDir(ctx context.Context, rootPath string, recursive bool, ignoreRegexps []*regexp.Regexp, emit func(rpt.Source) error) error {
 	return a.Walk(ctx, m.Path(rootPath), recursive, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -426,7 +423,7 @@ func (a *LocalSourceFSAdapter) collectSourcesFromDir(ctx context.Context, rootPa
 			return nil
 		}
 
-		source, ok, err := a.processFilePath(ctx, path, ignoreRegexps)
+		source, err := a.processFilePath(ctx, path, ignoreRegexps)
 		if err != nil {
 			if isInvalidSourceErr(err) {
 				slog.Warn("Skipping source file that could not be parsed", "path", path, "error", err)
@@ -435,10 +432,6 @@ func (a *LocalSourceFSAdapter) collectSourcesFromDir(ctx context.Context, rootPa
 			}
 
 			return err
-		}
-
-		if !ok {
-			return nil
 		}
 
 		return emit(source)
@@ -479,9 +472,11 @@ func parseRootPath(rootStr string) (path string, recursive bool) {
 	return rootStr, false
 }
 
-func (a *LocalSourceFSAdapter) processFilePath(ctx context.Context, path string, ignoreRegexps []*regexp.Regexp) (m.Source, bool, error) {
+// processFilePath builds the source for path, or returns a source without an
+// origin when path is not a mutation candidate.
+func (a *LocalSourceFSAdapter) processFilePath(ctx context.Context, path string, ignoreRegexps []*regexp.Regexp) (rpt.Source, error) {
 	if !isCandidateSourcePath(path, ignoreRegexps) {
-		return m.Source{}, false, nil
+		return rpt.Source{}, nil
 	}
 
 	return a.buildSourceFromPath(ctx, path, ignoreRegexps)
@@ -499,33 +494,33 @@ func isCandidateSourcePath(path string, ignoreRegexps []*regexp.Regexp) bool {
 	return !shouldIgnorePath(path, ignoreRegexps)
 }
 
-func (a *LocalSourceFSAdapter) buildSourceFromPath(ctx context.Context, path string, ignoreRegexps []*regexp.Regexp) (m.Source, bool, error) {
+func (a *LocalSourceFSAdapter) buildSourceFromPath(ctx context.Context, path string, ignoreRegexps []*regexp.Regexp) (rpt.Source, error) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
-		return m.Source{}, false, err
+		return rpt.Source{}, err
 	}
 
 	projectRoot, rootErr := a.FindProjectRoot(ctx, m.Path(absPath))
 
 	file, err := a.readAndParseSource(ctx, absPath)
 	if err != nil {
-		return m.Source{}, false, err
+		return rpt.Source{}, err
 	}
 
 	origin, err := a.buildOriginFile(ctx, absPath, projectRoot, rootErr)
 	if err != nil {
-		return m.Source{}, false, err
+		return rpt.Source{}, err
 	}
 
 	testFile := a.detectTestFile(ctx, m.Path(absPath), projectRoot, ignoreRegexps)
 
 	packageName := file.Name.Name
 
-	return m.Source{
+	return rpt.Source{
 		Origin:  origin,
 		Test:    testFile,
 		Package: &packageName,
-	}, true, nil
+	}, nil
 }
 
 func (a *LocalSourceFSAdapter) readAndParseSource(ctx context.Context, absPath string) (*ast.File, error) {
@@ -548,23 +543,23 @@ func (a *LocalSourceFSAdapter) readAndParseSource(ctx context.Context, absPath s
 	return file, nil
 }
 
-func (a *LocalSourceFSAdapter) buildOriginFile(ctx context.Context, absPath string, projectRoot m.Path, rootErr error) (*m.File, error) {
+func (a *LocalSourceFSAdapter) buildOriginFile(ctx context.Context, absPath string, projectRoot m.Path, rootErr error) (*rpt.File, error) {
 	originHash, err := a.HashFile(ctx, m.Path(absPath))
 	if err != nil {
 		return nil, err
 	}
 
-	origin := &m.File{FullPath: m.Path(absPath), Hash: originHash}
+	origin := &rpt.File{FullPath: absPath, Hash: originHash}
 	if rootErr == nil {
 		if relPath, err := a.RelPath(ctx, projectRoot, m.Path(absPath)); err == nil {
-			origin.ShortPath = relPath
+			origin.ShortPath = string(relPath)
 		}
 	}
 
 	return origin, nil
 }
 
-func (a *LocalSourceFSAdapter) detectTestFile(ctx context.Context, sourcePath m.Path, projectRoot m.Path, ignoreRegexps []*regexp.Regexp) *m.File {
+func (a *LocalSourceFSAdapter) detectTestFile(ctx context.Context, sourcePath m.Path, projectRoot m.Path, ignoreRegexps []*regexp.Regexp) *rpt.File {
 	testPath := a.resolveTestPath(ctx, sourcePath, ignoreRegexps)
 	if testPath == "" {
 		return nil
@@ -591,7 +586,7 @@ func (a *LocalSourceFSAdapter) resolveTestPath(ctx context.Context, sourcePath m
 	return testPath
 }
 
-func (a *LocalSourceFSAdapter) buildTestFile(ctx context.Context, testPath m.Path, projectRoot m.Path) (*m.File, error) {
+func (a *LocalSourceFSAdapter) buildTestFile(ctx context.Context, testPath m.Path, projectRoot m.Path) (*rpt.File, error) {
 	if err := a.validateGoFile(ctx, testPath); err != nil {
 		return nil, err
 	}
@@ -601,10 +596,10 @@ func (a *LocalSourceFSAdapter) buildTestFile(ctx context.Context, testPath m.Pat
 		return nil, err
 	}
 
-	file := &m.File{FullPath: testPath, Hash: testHash}
+	file := &rpt.File{FullPath: string(testPath), Hash: testHash}
 	if projectRoot != "" {
 		if relPath, err := a.RelPath(ctx, projectRoot, testPath); err == nil {
-			file.ShortPath = relPath
+			file.ShortPath = string(relPath)
 		}
 	}
 

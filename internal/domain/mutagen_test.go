@@ -15,15 +15,17 @@ import (
 	"gooze.dev/pkg/gooze/internal/adapter"
 	domain "gooze.dev/pkg/gooze/internal/domain"
 	m "gooze.dev/pkg/gooze/internal/model"
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 func TestMutagen_GenerateMutation_ArithmeticBasic(t *testing.T) {
 	mg := newTestMutagen()
 
 	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "basic", "main.go"))
-	original := readFileBytes(t, source.Origin.FullPath)
+	original := readFileBytes(t, m.Path(source.Origin.FullPath))
 
-	mutations, err := mg.GenerateMutation(context.Background(), source, m.MutationArithmetic)
+	mutations, err := mg.GenerateMutation(context.Background(), source, mgen.Arithmetic)
 	if err != nil {
 		t.Fatalf("GenerateMutation failed: %v", err)
 	}
@@ -38,7 +40,7 @@ func TestMutagen_GenerateMutation_ArithmeticBasic(t *testing.T) {
 		if len(mutation.ID) == 0 {
 			t.Fatalf("expected non-empty mutation ID for mutation %d", i)
 		}
-		if mutation.Type != m.MutationArithmetic {
+		if mutation.Type != mgen.Arithmetic {
 			t.Fatalf("expected arithmetic mutation, got %v", mutation.Type)
 		}
 		if bytes.Equal(mutation.MutatedCode, original) {
@@ -64,9 +66,9 @@ func TestMutagen_GenerateMutation_BooleanLiterals(t *testing.T) {
 	mg := newTestMutagen()
 
 	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "boolean", "main.go"))
-	original := readFileBytes(t, source.Origin.FullPath)
+	original := readFileBytes(t, m.Path(source.Origin.FullPath))
 
-	mutations, err := mg.GenerateMutation(context.Background(), source, m.MutationBoolean)
+	mutations, err := mg.GenerateMutation(context.Background(), source, mgen.Boolean)
 	if err != nil {
 		t.Fatalf("GenerateMutation failed: %v", err)
 	}
@@ -86,7 +88,7 @@ func TestMutagen_GenerateMutation_BooleanLiterals(t *testing.T) {
 		if len(mutation.ID) == 0 {
 			t.Fatalf("expected non-empty mutation ID for mutation %d", i)
 		}
-		if mutation.Type != m.MutationBoolean {
+		if mutation.Type != mgen.Boolean {
 			t.Fatalf("expected boolean mutation, got %v", mutation.Type)
 		}
 		if bytes.Equal(mutation.MutatedCode, original) {
@@ -126,7 +128,7 @@ func TestMutagen_GenerateMutation_InvalidType(t *testing.T) {
 	mg := newTestMutagen()
 
 	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "basic", "main.go"))
-	_, err := mg.GenerateMutation(context.Background(), source, m.MutationType{Name: "invalid", Version: 1})
+	_, err := mg.GenerateMutation(context.Background(), source, mgen.Type{Name: "invalid", Version: 1})
 	if err == nil {
 		t.Fatalf("expected error for invalid mutation type")
 	}
@@ -135,7 +137,7 @@ func TestMutagen_GenerateMutation_InvalidType(t *testing.T) {
 func TestMutagen_GenerateMutation_InvalidSource(t *testing.T) {
 	mg := newTestMutagen()
 
-	_, err := mg.GenerateMutation(context.Background(), m.Source{}, m.MutationArithmetic)
+	_, err := mg.GenerateMutation(context.Background(), rpt.Source{}, mgen.Arithmetic)
 	if err == nil {
 		t.Fatalf("expected error for missing source origin")
 	}
@@ -146,7 +148,7 @@ func TestMutagen_GenerateMutation_Ignore_FileLevel_ByMutagenName(t *testing.T) {
 
 	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "ignore", "file_ignore.go"))
 
-	mutationsArithmetic, err := mg.GenerateMutation(context.Background(), source, m.MutationArithmetic)
+	mutationsArithmetic, err := mg.GenerateMutation(context.Background(), source, mgen.Arithmetic)
 	if err != nil {
 		t.Fatalf("GenerateMutation(arithmetic) failed: %v", err)
 	}
@@ -154,7 +156,7 @@ func TestMutagen_GenerateMutation_Ignore_FileLevel_ByMutagenName(t *testing.T) {
 		t.Fatalf("expected 0 arithmetic mutations due to file-level ignore, got %d", len(mutationsArithmetic))
 	}
 
-	mutationsNumbers, err := mg.GenerateMutation(context.Background(), source, m.MutationNumbers)
+	mutationsNumbers, err := mg.GenerateMutation(context.Background(), source, mgen.Numbers)
 	if err != nil {
 		t.Fatalf("GenerateMutation(numbers) failed: %v", err)
 	}
@@ -168,7 +170,7 @@ func TestMutagen_GenerateMutation_Ignore_FunctionLevel_AllMutagens(t *testing.T)
 
 	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "ignore", "func_ignore.go"))
 
-	mutations, err := mg.GenerateMutation(context.Background(), source, m.MutationArithmetic)
+	mutations, err := mg.GenerateMutation(context.Background(), source, mgen.Arithmetic)
 	if err != nil {
 		t.Fatalf("GenerateMutation failed: %v", err)
 	}
@@ -185,7 +187,7 @@ func TestMutagen_GenerateMutation_Ignore_LineLevel_TrailingComment_ByMutagenName
 
 	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "ignore", "line_ignore.go"))
 
-	mutations, err := mg.GenerateMutation(context.Background(), source, m.MutationArithmetic)
+	mutations, err := mg.GenerateMutation(context.Background(), source, mgen.Arithmetic)
 	if err != nil {
 		t.Fatalf("GenerateMutation failed: %v", err)
 	}
@@ -196,7 +198,7 @@ func TestMutagen_GenerateMutation_Ignore_LineLevel_TrailingComment_ByMutagenName
 	}
 }
 
-func makeSourceV2(t *testing.T, path string) m.Source {
+func makeSourceV2(t *testing.T, path string) rpt.Source {
 	t.Helper()
 
 	abs, err := filepath.Abs(path)
@@ -204,8 +206,8 @@ func makeSourceV2(t *testing.T, path string) m.Source {
 		t.Fatalf("failed to resolve path: %v", err)
 	}
 
-	return m.Source{
-		Origin: &m.File{FullPath: m.Path(abs)},
+	return rpt.Source{
+		Origin: &rpt.File{FullPath: abs},
 	}
 }
 
@@ -229,7 +231,7 @@ func TestMutagen_AttributesLineNumbers(t *testing.T) {
 
 	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "boolean", "main.go"))
 
-	mutations, err := mg.GenerateMutation(context.Background(), source, m.MutationBoolean)
+	mutations, err := mg.GenerateMutation(context.Background(), source, mgen.Boolean)
 	require.NoError(t, err)
 	require.Len(t, mutations, 4)
 
@@ -256,7 +258,7 @@ func TestMutagen_StreamMutations_BuildsMutationsLazily(t *testing.T) {
 	mg := domain.NewMutagen(adapter.NewLocalGoFileAdapter(), adapter.NewLocalSourceFSAdapter(), differ)
 	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "basic", "main.go"))
 
-	all, err := newTestMutagen().GenerateMutation(context.Background(), source, m.MutationArithmetic)
+	all, err := newTestMutagen().GenerateMutation(context.Background(), source, mgen.Arithmetic)
 	require.NoError(t, err)
 	require.Greater(t, len(all), 1, "fixture must produce several arithmetic mutations")
 
@@ -266,14 +268,14 @@ func TestMutagen_StreamMutations_BuildsMutationsLazily(t *testing.T) {
 	err = mg.StreamMutations(context.Background(), source, func(m.Mutation) error {
 		delivered++
 		return stop
-	}, m.MutationArithmetic)
+	}, mgen.Arithmetic)
 
 	require.ErrorIs(t, err, stop)
 	require.Equal(t, 1, delivered)
 	require.Equal(t, 1, differ.calls, "diffs must only be computed for mutations handed to the caller")
 }
 
-func streamTypesFromSource(t *testing.T, src string, mutationType m.MutationType) []m.Mutation {
+func streamTypesFromSource(t *testing.T, src string, mutationType mgen.Type) []m.Mutation {
 	t.Helper()
 
 	path := filepath.Join(t.TempDir(), "p.go")
@@ -304,7 +306,7 @@ func TestMutagen_IgnoreDirectiveForOtherMutatorDoesNotSkip(t *testing.T) {
 		"\treturn a + a //gooze:ignore numbers\n" +
 		"}\n"
 
-	lines := linesOf(streamTypesFromSource(t, src, m.MutationArithmetic))
+	lines := linesOf(streamTypesFromSource(t, src, mgen.Arithmetic))
 	require.Contains(t, lines, 5, "a function ignore for another mutator must not hide arithmetic mutations")
 	require.Contains(t, lines, 9, "a line ignore for another mutator must not hide arithmetic mutations")
 }
@@ -317,7 +319,7 @@ func TestMutagen_LineIgnoreStillVisitsNestedLines(t *testing.T) {
 		"\t}()\n" +
 		"}\n"
 
-	require.Contains(t, linesOf(streamTypesFromSource(t, src, m.MutationArithmetic)), 5,
+	require.Contains(t, linesOf(streamTypesFromSource(t, src, mgen.Arithmetic)), 5,
 		"a line ignore must not hide mutations on the following lines of a nested node")
 }
 
@@ -328,5 +330,5 @@ func TestMutagen_LineIgnoreHonoursLineDirectives(t *testing.T) {
 		"\treturn a + a //gooze:ignore arithmetic\n" +
 		"}\n"
 
-	require.Empty(t, streamTypesFromSource(t, src, m.MutationArithmetic))
+	require.Empty(t, streamTypesFromSource(t, src, mgen.Arithmetic))
 }

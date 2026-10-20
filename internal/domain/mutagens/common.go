@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	m "gooze.dev/pkg/gooze/internal/model"
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 func offsetForPos(fset *token.FileSet, pos token.Pos) (int, bool) {
@@ -46,8 +48,8 @@ func generateBinaryExprMutations(
 	n ast.Node,
 	fset *token.FileSet,
 	content []byte,
-	source m.Source,
-	mutationType m.MutationType,
+	source rpt.Source,
+	mutationType mgen.Type,
 	isValidOp func(token.Token) bool,
 	getAlternatives func(token.Token) []token.Token,
 ) []m.Mutation {

@@ -5,11 +5,13 @@ import (
 	"go/token"
 
 	m "gooze.dev/pkg/gooze/internal/model"
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 // GenerateComparisonMutations generates comparison operator mutations for the given AST node.
-func GenerateComparisonMutations(n ast.Node, fset *token.FileSet, content []byte, source m.Source) []m.Mutation {
-	return generateBinaryExprMutations(n, fset, content, source, m.MutationComparison, isComparisonOp, getComparisonAlternatives)
+func GenerateComparisonMutations(n ast.Node, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
+	return generateBinaryExprMutations(n, fset, content, source, mgen.Comparison, isComparisonOp, getComparisonAlternatives)
 }
 
 func isComparisonOp(op token.Token) bool {

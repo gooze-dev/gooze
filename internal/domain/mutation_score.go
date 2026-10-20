@@ -3,52 +3,33 @@ package domain
 import (
 	m "gooze.dev/pkg/gooze/internal/model"
 	pkg "gooze.dev/pkg/gooze/pkg"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
+// mutationScoreFromReports returns the killed/scored ratio in the 0..1 range
+// the reporters expect (they render it as a percentage), see rpt.Score.
 func mutationScoreFromReports(reports pkg.FileSpill[m.Report]) (float64, error) {
-	killed := 0
-	total := 0
+	var summary rpt.Summary
 
 	err := reports.Range(func(_ uint64, report m.Report) error {
-		k, t := countReport(report)
-		killed += k
-		total += t
-
+		summary.Merge(summarizeReport(report))
 		return nil
 	})
 	if err != nil {
 		return 0.0, err
 	}
 
-	return mutationScore(killed, total), nil
+	return summary.Score(), nil
 }
 
-// countReport counts killed and scored mutations. Mutations that did not
-// compile (status error) are not viable and are left out of the total.
-func countReport(report m.Report) (killed, total int) {
+func summarizeReport(report m.Report) rpt.Summary {
+	var summary rpt.Summary
+
 	for _, entries := range report.Result {
 		for _, entry := range entries {
-			if entry.Status == m.Error {
-				continue
-			}
-
-			total++
-
-			if entry.Status == m.Killed {
-				killed++
-			}
+			summary.Add(entry.Status)
 		}
 	}
 
-	return killed, total
-}
-
-// mutationScore returns the killed/total ratio in the 0..1 range the reporters
-// expect (they render it as a percentage). An empty set scores a full 1.0.
-func mutationScore(killed, total int) float64 {
-	if total == 0 {
-		return 1.0
-	}
-
-	return float64(killed) / float64(total)
+	return summary
 }

@@ -72,6 +72,8 @@ linters:
   - usestdlibvars
   - wastedassign
   settings:
+    exhaustive:
+      default-signifies-exhaustive: true
     funlen:
       lines: 50
       statements: 30

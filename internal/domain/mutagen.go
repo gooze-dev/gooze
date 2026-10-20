@@ -10,16 +10,18 @@ import (
 
 	"gooze.dev/pkg/gooze/internal/domain/mutagens"
 	m "gooze.dev/pkg/gooze/internal/model"
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 // Mutagen defines the interface for mutation generation.
 type Mutagen interface {
 	// GenerateMutation returns every mutation for a source as a slice.
-	GenerateMutation(ctx context.Context, source m.Source, mutationTypes ...m.MutationType) ([]m.Mutation, error)
+	GenerateMutation(ctx context.Context, source rpt.Source, mutationTypes ...mgen.Type) ([]m.Mutation, error)
 	// StreamMutations invokes fn for each generated mutation without retaining
 	// them, so callers can process mutations one at a time. If fn returns an
 	// error, streaming stops and that error is returned.
-	StreamMutations(ctx context.Context, source m.Source, fn func(m.Mutation) error, mutationTypes ...m.MutationType) error
+	StreamMutations(ctx context.Context, source rpt.Source, fn func(m.Mutation) error, mutationTypes ...mgen.Type) error
 }
 
 // mutagen handles pure mutation generation logic.
@@ -38,7 +40,7 @@ func NewMutagen(goFileAdapter GoFileAdapter, sourceFSAdapter SourceFSAdapter, di
 	}
 }
 
-func (mg *mutagen) GenerateMutation(ctx context.Context, source m.Source, mutationTypes ...m.MutationType) ([]m.Mutation, error) {
+func (mg *mutagen) GenerateMutation(ctx context.Context, source rpt.Source, mutationTypes ...mgen.Type) ([]m.Mutation, error) {
 	mutations := make([]m.Mutation, 0)
 
 	err := mg.StreamMutations(ctx, source, func(mutation m.Mutation) error {
@@ -52,7 +54,7 @@ func (mg *mutagen) GenerateMutation(ctx context.Context, source m.Source, mutati
 	return mutations, nil
 }
 
-func (mg *mutagen) StreamMutations(ctx context.Context, source m.Source, fn func(m.Mutation) error, mutationTypes ...m.MutationType) error {
+func (mg *mutagen) StreamMutations(ctx context.Context, source rpt.Source, fn func(m.Mutation) error, mutationTypes ...mgen.Type) error {
 	if err := validateSource(source); err != nil {
 		return err
 	}
@@ -82,7 +84,7 @@ func (mg *mutagen) StreamMutations(ctx context.Context, source m.Source, fn func
 	return nil
 }
 
-func validateSource(source m.Source) error {
+func validateSource(source rpt.Source) error {
 	if source.Origin == nil || source.Origin.FullPath == "" {
 		return fmt.Errorf("missing source origin")
 	}
@@ -98,13 +100,13 @@ func validateAdapters(mg *mutagen) error {
 	return nil
 }
 
-func resolveMutationTypes(mutationTypes []m.MutationType) ([]m.MutationType, error) {
+func resolveMutationTypes(mutationTypes []mgen.Type) ([]mgen.Type, error) {
 	if len(mutationTypes) == 0 {
-		return []m.MutationType{m.MutationArithmetic, m.MutationBoolean, m.MutationNumbers, m.MutationComparison, m.MutationLogical, m.MutationUnary, m.MutationBranch}, nil
+		return []mgen.Type{mgen.Arithmetic, mgen.Boolean, mgen.Numbers, mgen.Comparison, mgen.Logical, mgen.Unary, mgen.Branch}, nil
 	}
 
 	for _, mutationType := range mutationTypes {
-		if mutationType != m.MutationArithmetic && mutationType != m.MutationBoolean && mutationType != m.MutationNumbers && mutationType != m.MutationComparison && mutationType != m.MutationLogical && mutationType != m.MutationUnary && mutationType != m.MutationBranch {
+		if mutationType != mgen.Arithmetic && mutationType != mgen.Boolean && mutationType != mgen.Numbers && mutationType != mgen.Comparison && mutationType != mgen.Logical && mutationType != mgen.Unary && mutationType != mgen.Branch {
 			return nil, fmt.Errorf("unsupported mutation type: %s", mutationType.Name)
 		}
 	}
@@ -112,15 +114,15 @@ func resolveMutationTypes(mutationTypes []m.MutationType) ([]m.MutationType, err
 	return mutationTypes, nil
 }
 
-func (mg *mutagen) loadSourceAST(ctx context.Context, source m.Source) ([]byte, *token.FileSet, *ast.File, error) {
-	content, err := mg.ReadFile(ctx, source.Origin.FullPath)
+func (mg *mutagen) loadSourceAST(ctx context.Context, source rpt.Source) ([]byte, *token.FileSet, *ast.File, error) {
+	content, err := mg.ReadFile(ctx, m.Path(source.Origin.FullPath))
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to read %s: %w", source.Origin.FullPath, err)
 	}
 
 	fset := token.NewFileSet()
 
-	file, err := mg.Parse(ctx, fset, string(source.Origin.FullPath), content)
+	file, err := mg.Parse(ctx, fset, source.Origin.FullPath, content)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to parse %s: %w", source.Origin.FullPath, err)
 	}
@@ -130,7 +132,7 @@ func (mg *mutagen) loadSourceAST(ctx context.Context, source m.Source) ([]byte, 
 
 // visit decides, from the ignore directives, whether n is mutated for
 // mutationType and whether its children are visited.
-func (ix ignoreIndex) visit(n ast.Node, fset *token.FileSet, mutationType m.MutationType) (mutate, descend bool) {
+func (ix ignoreIndex) visit(n ast.Node, fset *token.FileSet, mutationType mgen.Type) (mutate, descend bool) {
 	if fd, ok := n.(*ast.FuncDecl); ok {
 		if rule, ok := ix.funcByPos[fd.Pos()]; ok && rule.ignores(mutationType) {
 			return false, false
@@ -149,11 +151,11 @@ func (ix ignoreIndex) visit(n ast.Node, fset *token.FileSet, mutationType m.Muta
 // to fn as soon as it is generated, completing its line and diff only then.
 // The walk stops at the first error fn returns.
 func walkMutations(
-	mutationType m.MutationType,
+	mutationType mgen.Type,
 	file *ast.File,
 	fset *token.FileSet,
 	content []byte,
-	source m.Source,
+	source rpt.Source,
 	ignore ignoreIndex,
 	differ Differ,
 	fn func(m.Mutation) error,
@@ -222,24 +224,24 @@ func lineForOffset(content []byte, offset int) int {
 	return 1 + bytes.Count(content[:offset], []byte{'\n'})
 }
 
-var mutationGenerators = map[m.MutationType]func(ast.Node, *token.FileSet, []byte, m.Source) []m.Mutation{
-	m.MutationArithmetic: mutagens.GenerateArithmeticMutations,
-	m.MutationBoolean:    mutagens.GenerateBooleanMutations,
-	m.MutationNumbers:    mutagens.GenerateNumberMutations,
-	m.MutationComparison: mutagens.GenerateComparisonMutations,
-	m.MutationLogical:    mutagens.GenerateLogicalMutations,
-	m.MutationUnary:      mutagens.GenerateUnaryMutations,
-	m.MutationBranch:     mutagens.GenerateBranchMutations,
-	m.MutationStatement:  mutagens.GenerateStatementMutations,
-	m.MutationLoop:       mutagens.GenerateLoopMutations,
+var mutationGenerators = map[mgen.Type]func(ast.Node, *token.FileSet, []byte, rpt.Source) []m.Mutation{
+	mgen.Arithmetic: mutagens.GenerateArithmeticMutations,
+	mgen.Boolean:    mutagens.GenerateBooleanMutations,
+	mgen.Numbers:    mutagens.GenerateNumberMutations,
+	mgen.Comparison: mutagens.GenerateComparisonMutations,
+	mgen.Logical:    mutagens.GenerateLogicalMutations,
+	mgen.Unary:      mutagens.GenerateUnaryMutations,
+	mgen.Branch:     mutagens.GenerateBranchMutations,
+	mgen.Statement:  mutagens.GenerateStatementMutations,
+	mgen.Loop:       mutagens.GenerateLoopMutations,
 }
 
 func generateMutationsForNode(
-	mutationType m.MutationType,
+	mutationType mgen.Type,
 	n ast.Node,
 	fset *token.FileSet,
 	content []byte,
-	source m.Source,
+	source rpt.Source,
 ) []m.Mutation {
 	gen, ok := mutationGenerators[mutationType]
 	if !ok {

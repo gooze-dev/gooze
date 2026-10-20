@@ -8,6 +8,7 @@ import (
 
 	m "gooze.dev/pkg/gooze/internal/model"
 	pkg "gooze.dev/pkg/gooze/pkg"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 // SourceFSAdapter abstracts filesystem-specific operations that the domain layer
@@ -16,14 +17,14 @@ import (
 //
 //nolint:interfacebloat // A richer interface keeps workflow logic decoupled from os/fs.
 type SourceFSAdapter interface {
-	Get(ctx context.Context, roots []m.Path, ignore ...string) ([]m.Source, error)
+	Get(ctx context.Context, roots []m.Path, ignore ...string) ([]rpt.Source, error)
 
 	// Stream scans the provided roots and emits each discovered source on the
 	// returned channel as it is found, instead of buffering them all. The source
 	// channel is closed when the scan finishes; the error channel then yields a
 	// single error (or nothing on success). Callers should cancel ctx if they
 	// stop reading early so the scanning goroutine can exit.
-	Stream(ctx context.Context, roots []m.Path, ignore ...string) (<-chan m.Source, <-chan error)
+	Stream(ctx context.Context, roots []m.Path, ignore ...string) (<-chan rpt.Source, <-chan error)
 
 	// Walk traverses the provided root path. When recursive is false the
 	// implementation should limit itself to the root directory (no sub-dirs).
@@ -89,8 +90,8 @@ type ReportStore interface {
 	SaveReports(ctx context.Context, path m.Path, reports pkg.FileSpill[m.Report]) error
 	RegenerateIndex(ctx context.Context, path m.Path) error
 	LoadSpillReports(ctx context.Context, path m.Path) (pkg.FileSpill[m.Report], error)
-	CheckUpdates(ctx context.Context, path m.Path, sources pkg.FileSpill[m.Source]) (changed, deleted pkg.FileSpill[m.Source], err error)
-	CleanReports(ctx context.Context, path m.Path, sources pkg.FileSpill[m.Source]) error
+	CheckUpdates(ctx context.Context, path m.Path, sources pkg.FileSpill[rpt.Source]) (changed, deleted pkg.FileSpill[rpt.Source], err error)
+	CleanReports(ctx context.Context, path m.Path, sources pkg.FileSpill[rpt.Source]) error
 }
 
 // RegistryOptions tweaks how the registry is contacted.

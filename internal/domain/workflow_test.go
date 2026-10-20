@@ -18,12 +18,14 @@ import (
 	domainmocks "gooze.dev/pkg/gooze/internal/domain/mocks"
 	m "gooze.dev/pkg/gooze/internal/model"
 	pkg "gooze.dev/pkg/gooze/pkg"
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 // streamSources returns closed channels that yield the given sources and no
 // error, mimicking SourceFSAdapter.Stream for a successful scan.
-func streamSources(sources []m.Source) (<-chan m.Source, <-chan error) {
-	out := make(chan m.Source, len(sources))
+func streamSources(sources []rpt.Source) (<-chan rpt.Source, <-chan error) {
+	out := make(chan rpt.Source, len(sources))
 	for _, source := range sources {
 		out <- source
 	}
@@ -37,8 +39,8 @@ func streamSources(sources []m.Source) (<-chan m.Source, <-chan error) {
 }
 
 // streamSourcesErr returns channels mimicking a scan that failed with err.
-func streamSourcesErr(err error) (<-chan m.Source, <-chan error) {
-	out := make(chan m.Source)
+func streamSourcesErr(err error) (<-chan rpt.Source, <-chan error) {
+	out := make(chan rpt.Source)
 	close(out)
 
 	errc := make(chan error, 1)
@@ -71,8 +73,8 @@ func spillReportsIfOpen(reports pkg.FileSpill[m.Report]) []m.Report {
 // streamMutationsFn returns a RunAndReturn callback that streams the given
 // mutations through the StreamMutations fn argument. It is safe to invoke
 // multiple times (the Test flow streams twice: once to count, once to run).
-func streamMutationsFn(mutations []m.Mutation) func(context.Context, m.Source, func(m.Mutation) error, ...m.MutationType) error {
-	return func(_ context.Context, _ m.Source, fn func(m.Mutation) error, _ ...m.MutationType) error {
+func streamMutationsFn(mutations []m.Mutation) func(context.Context, rpt.Source, func(m.Mutation) error, ...mgen.Type) error {
+	return func(_ context.Context, _ rpt.Source, fn func(m.Mutation) error, _ ...mgen.Type) error {
 		for _, mut := range mutations {
 			if err := fn(mut); err != nil {
 				return err
@@ -96,15 +98,15 @@ func TestWorkflow_Test_Success(t *testing.T) {
 	mockWorkspace := new(domainmocks.MockWorkspace)
 	mockMutagen := new(domainmocks.MockMutagen)
 
-	sources := []m.Source{
+	sources := []rpt.Source{
 		{
-			Origin: &m.File{FullPath: "test.go", Hash: "hash1"},
-			Test:   &m.File{FullPath: "test_test.go", Hash: "test_hash1"},
+			Origin: &rpt.File{FullPath: "test.go", Hash: "hash1"},
+			Test:   &rpt.File{FullPath: "test_test.go", Hash: "test_hash1"},
 		},
 	}
 
 	mutations := []m.Mutation{
-		{ID: "hash-1", Source: sources[0], Type: m.MutationArithmetic},
+		{ID: "hash-1", Source: sources[0], Type: mgen.Arithmetic},
 	}
 
 	mockReporter.EXPECT().StartTest(ctx).Return(nil).Once()
@@ -191,8 +193,8 @@ func TestWorkflow_Test_GenerateMutationsError(t *testing.T) {
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
 	mockMutagen := new(domainmocks.MockMutagen)
 
-	sources := []m.Source{
-		{Origin: &m.File{FullPath: "test.go", Hash: "hash1"}},
+	sources := []rpt.Source{
+		{Origin: &rpt.File{FullPath: "test.go", Hash: "hash1"}},
 	}
 
 	testErr := errors.New("failed to generate mutations")
@@ -234,8 +236,8 @@ func TestWorkflow_Test_TestMutationError(t *testing.T) {
 	mockWorkspace := new(domainmocks.MockWorkspace)
 	mockMutagen := new(domainmocks.MockMutagen)
 
-	sources := []m.Source{
-		{Origin: &m.File{FullPath: "test.go", Hash: "hash1"}},
+	sources := []rpt.Source{
+		{Origin: &rpt.File{FullPath: "test.go", Hash: "hash1"}},
 	}
 
 	mutations := []m.Mutation{
@@ -286,8 +288,8 @@ func TestWorkflow_Test_SaveReportsError(t *testing.T) {
 	mockWorkspace := new(domainmocks.MockWorkspace)
 	mockMutagen := new(domainmocks.MockMutagen)
 
-	sources := []m.Source{
-		{Origin: &m.File{FullPath: "test.go", Hash: "hash1"}},
+	sources := []rpt.Source{
+		{Origin: &rpt.File{FullPath: "test.go", Hash: "hash1"}},
 	}
 
 	mutations := []m.Mutation{
@@ -341,8 +343,8 @@ func TestWorkflow_Test_NoMutations(t *testing.T) {
 	mockWorkspace := new(domainmocks.MockWorkspace)
 	mockMutagen := new(domainmocks.MockMutagen)
 
-	sources := []m.Source{
-		{Origin: &m.File{FullPath: "test.go", Hash: "hash1"}},
+	sources := []rpt.Source{
+		{Origin: &rpt.File{FullPath: "test.go", Hash: "hash1"}},
 	}
 
 	// No mutations generated
@@ -394,10 +396,10 @@ func TestWorkflow_Test_MultipleThreads(t *testing.T) {
 	mockWorkspace := new(domainmocks.MockWorkspace)
 	mockMutagen := new(domainmocks.MockMutagen)
 
-	source := m.Source{
-		Origin: &m.File{FullPath: "test.go", Hash: "hash1"},
+	source := rpt.Source{
+		Origin: &rpt.File{FullPath: "test.go", Hash: "hash1"},
 	}
-	sources := []m.Source{source}
+	sources := []rpt.Source{source}
 
 	mutations := []m.Mutation{
 		{ID: "hash-0", Source: source},
@@ -456,8 +458,8 @@ func TestWorkflow_Test_WithSharding(t *testing.T) {
 	baseReportsDir := m.Path("reports")
 	expectedShardDir := m.Path(filepath.Join(string(baseReportsDir), domain.ShardDirPrefix+"0"))
 
-	source := m.Source{
-		Origin: &m.File{FullPath: "test.go", Hash: "hash1"},
+	source := rpt.Source{
+		Origin: &rpt.File{FullPath: "test.go", Hash: "hash1"},
 	}
 
 	// 6 mutations total
@@ -477,7 +479,7 @@ func TestWorkflow_Test_WithSharding(t *testing.T) {
 	mockReporter.EXPECT().DisplayUpcomingTestsInfo(ctx, mock.Anything).Return()
 	mockReporter.EXPECT().DisplayStartingTestInfo(ctx, mock.Anything, mock.Anything).Return().Maybe()
 	mockReporter.EXPECT().DisplayCompletedTestInfo(ctx, mock.Anything, mock.Anything).Return().Maybe()
-	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources([]m.Source{source}))
+	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources([]rpt.Source{source}))
 	mockMutagen.EXPECT().
 		StreamMutations(ctx, mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).
 		RunAndReturn(streamMutationsFn(mutations))
@@ -521,12 +523,12 @@ func TestWorkflow_TestThreadsZeroDoesNotPanic(t *testing.T) {
 	mockWorkspace := new(domainmocks.MockWorkspace)
 	mockMutagen := new(domainmocks.MockMutagen)
 
-	source := m.Source{
-		Origin: &m.File{FullPath: "test.go", Hash: "hash1"},
+	source := rpt.Source{
+		Origin: &rpt.File{FullPath: "test.go", Hash: "hash1"},
 	}
 
 	mutations := []m.Mutation{
-		{ID: "hash-0", Source: source, Type: m.MutationArithmetic},
+		{ID: "hash-0", Source: source, Type: mgen.Arithmetic},
 	}
 
 	mockReporter.EXPECT().StartTest(ctx).Return(nil).Once()
@@ -536,7 +538,7 @@ func TestWorkflow_TestThreadsZeroDoesNotPanic(t *testing.T) {
 	mockReporter.EXPECT().DisplayUpcomingTestsInfo(ctx, mock.Anything).Return()
 	mockReporter.EXPECT().DisplayStartingTestInfo(ctx, mutations[0], 0).Return().Once()
 	mockReporter.EXPECT().DisplayCompletedTestInfo(ctx, mutations[0], mock.Anything).Return().Once()
-	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources([]m.Source{source}))
+	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources([]rpt.Source{source}))
 	mockMutagen.EXPECT().
 		StreamMutations(ctx, mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).
 		RunAndReturn(streamMutationsFn(mutations))
@@ -573,13 +575,13 @@ func TestWorkflow_TestThreadIDWithinBounds(t *testing.T) {
 	mockWorkspace := new(domainmocks.MockWorkspace)
 	mockMutagen := new(domainmocks.MockMutagen)
 
-	source := m.Source{
-		Origin: &m.File{FullPath: "test.go", Hash: "hash1"},
+	source := rpt.Source{
+		Origin: &rpt.File{FullPath: "test.go", Hash: "hash1"},
 	}
 
 	mutations := []m.Mutation{
-		{ID: "hash-0", Source: source, Type: m.MutationArithmetic},
-		{ID: "hash-1", Source: source, Type: m.MutationArithmetic},
+		{ID: "hash-0", Source: source, Type: mgen.Arithmetic},
+		{ID: "hash-1", Source: source, Type: mgen.Arithmetic},
 	}
 
 	mockReporter.EXPECT().StartTest(ctx).Return(nil).Once()
@@ -591,7 +593,7 @@ func TestWorkflow_TestThreadIDWithinBounds(t *testing.T) {
 		return id >= 0 && id < 2
 	})).Return().Times(2)
 	mockReporter.EXPECT().DisplayCompletedTestInfo(ctx, mock.Anything, mock.Anything).Return().Times(2)
-	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources([]m.Source{source}))
+	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources([]rpt.Source{source}))
 	mockMutagen.EXPECT().
 		StreamMutations(ctx, mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).
 		RunAndReturn(streamMutationsFn(mutations))
@@ -631,13 +633,13 @@ func TestWorkflow_TestThreadIDIsUniqueForThreadsTwo(t *testing.T) {
 	mockWorkspace := new(domainmocks.MockWorkspace)
 	mockMutagen := new(domainmocks.MockMutagen)
 
-	source := m.Source{
-		Origin: &m.File{FullPath: "test.go", Hash: "hash1"},
+	source := rpt.Source{
+		Origin: &rpt.File{FullPath: "test.go", Hash: "hash1"},
 	}
 
 	mutations := []m.Mutation{
-		{ID: "hash-0", Source: source, Type: m.MutationArithmetic},
-		{ID: "hash-1", Source: source, Type: m.MutationArithmetic},
+		{ID: "hash-0", Source: source, Type: mgen.Arithmetic},
+		{ID: "hash-1", Source: source, Type: mgen.Arithmetic},
 	}
 
 	var threadIDsMu sync.Mutex
@@ -659,7 +661,7 @@ func TestWorkflow_TestThreadIDIsUniqueForThreadsTwo(t *testing.T) {
 		threadIDsMu.Unlock()
 	}).Return().Times(2)
 	mockReporter.EXPECT().DisplayCompletedTestInfo(ctx, mock.Anything, mock.Anything).Return().Times(2)
-	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources([]m.Source{source}))
+	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources([]rpt.Source{source}))
 	mockMutagen.EXPECT().
 		StreamMutations(ctx, mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).
 		RunAndReturn(streamMutationsFn(mutations))
@@ -711,10 +713,10 @@ func TestWorkflow_TestWithSkippedMutation(t *testing.T) {
 
 	diffCode := []byte("--- original\n+++ mutated\n@@ -1,1 +1,1 @@\n-\treturn 3 + 5\n+\treturn 3 - 5\n")
 
-	sources := []m.Source{
+	sources := []rpt.Source{
 		{
-			Origin: &m.File{FullPath: "test.go", Hash: "hash1"},
-			Test:   &m.File{FullPath: "test_test.go", Hash: "test_hash1"},
+			Origin: &rpt.File{FullPath: "test.go", Hash: "hash1"},
+			Test:   &rpt.File{FullPath: "test_test.go", Hash: "test_hash1"},
 		},
 	}
 
@@ -722,17 +724,17 @@ func TestWorkflow_TestWithSkippedMutation(t *testing.T) {
 		{
 			ID:       "hash-0",
 			Source:   sources[0],
-			Type:     m.MutationArithmetic,
+			Type:     mgen.Arithmetic,
 			DiffCode: diffCode,
 		},
 	}
 
 	skippedResult := m.Result{
-		m.MutationArithmetic: []struct {
+		mgen.Arithmetic: []struct {
 			MutationID string
-			Status     m.TestStatus
+			Status     rpt.TestStatus
 			Err        error
-		}{{MutationID: "hash-0", Status: m.Skipped}},
+		}{{MutationID: "hash-0", Status: rpt.Skipped}},
 	}
 
 	mockReporter.EXPECT().StartTest(ctx).Return(nil).Once()
@@ -790,10 +792,10 @@ func TestWorkflow_TestMutationIDExactMatchDoesNotUseHigherID(t *testing.T) {
 
 	diffCode := []byte("--- original\n+++ mutated\n@@ -1,1 +1,1 @@\n-\treturn 3 + 5\n+\treturn 3 - 5\n")
 
-	sources := []m.Source{
+	sources := []rpt.Source{
 		{
-			Origin: &m.File{FullPath: "test.go", Hash: "hash1"},
-			Test:   &m.File{FullPath: "test_test.go", Hash: "test_hash1"},
+			Origin: &rpt.File{FullPath: "test.go", Hash: "hash1"},
+			Test:   &rpt.File{FullPath: "test_test.go", Hash: "test_hash1"},
 		},
 	}
 
@@ -801,19 +803,19 @@ func TestWorkflow_TestMutationIDExactMatchDoesNotUseHigherID(t *testing.T) {
 		{
 			ID:       "hash-2",
 			Source:   sources[0],
-			Type:     m.MutationArithmetic,
+			Type:     mgen.Arithmetic,
 			DiffCode: diffCode,
 		},
 	}
 
 	result := m.Result{
-		m.MutationArithmetic: []struct {
+		mgen.Arithmetic: []struct {
 			MutationID string
-			Status     m.TestStatus
+			Status     rpt.TestStatus
 			Err        error
 		}{
-			{MutationID: "hash-1", Status: m.Killed},
-			{MutationID: "hash-3", Status: m.Survived},
+			{MutationID: "hash-1", Status: rpt.Killed},
+			{MutationID: "hash-3", Status: rpt.Survived},
 		},
 	}
 
@@ -872,10 +874,10 @@ func TestWorkflow_TestEmptyResultEntriesReturnsError(t *testing.T) {
 
 	diffCode := []byte("--- original\n+++ mutated\n@@ -1,1 +1,1 @@\n-\treturn 3 + 5\n+\treturn 3 - 5\n")
 
-	sources := []m.Source{
+	sources := []rpt.Source{
 		{
-			Origin: &m.File{FullPath: "test.go", Hash: "hash1"},
-			Test:   &m.File{FullPath: "test_test.go", Hash: "test_hash1"},
+			Origin: &rpt.File{FullPath: "test.go", Hash: "hash1"},
+			Test:   &rpt.File{FullPath: "test_test.go", Hash: "test_hash1"},
 		},
 	}
 
@@ -883,15 +885,15 @@ func TestWorkflow_TestEmptyResultEntriesReturnsError(t *testing.T) {
 		{
 			ID:       "hash-0",
 			Source:   sources[0],
-			Type:     m.MutationArithmetic,
+			Type:     mgen.Arithmetic,
 			DiffCode: diffCode,
 		},
 	}
 
 	result := m.Result{
-		m.MutationArithmetic: []struct {
+		mgen.Arithmetic: []struct {
 			MutationID string
-			Status     m.TestStatus
+			Status     rpt.TestStatus
 			Err        error
 		}{},
 	}
@@ -949,11 +951,11 @@ func TestWorkflow_Test_MultipleSources(t *testing.T) {
 	mockWorkspace := new(domainmocks.MockWorkspace)
 	mockMutagen := new(domainmocks.MockMutagen)
 
-	source1 := m.Source{
-		Origin: &m.File{FullPath: "file1.go", Hash: "hash1"},
+	source1 := rpt.Source{
+		Origin: &rpt.File{FullPath: "file1.go", Hash: "hash1"},
 	}
-	source2 := m.Source{
-		Origin: &m.File{FullPath: "file2.go", Hash: "hash2"},
+	source2 := rpt.Source{
+		Origin: &rpt.File{FullPath: "file2.go", Hash: "hash2"},
 	}
 
 	mutations1 := []m.Mutation{
@@ -971,7 +973,7 @@ func TestWorkflow_Test_MultipleSources(t *testing.T) {
 	mockReporter.EXPECT().DisplayUpcomingTestsInfo(ctx, mock.Anything).Return()
 	mockReporter.EXPECT().DisplayStartingTestInfo(ctx, mock.Anything, mock.Anything).Return().Times(3)
 	mockReporter.EXPECT().DisplayCompletedTestInfo(ctx, mock.Anything, mock.Anything).Return().Times(3)
-	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources([]m.Source{source1, source2}))
+	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources([]rpt.Source{source1, source2}))
 	mockMutagen.EXPECT().
 		StreamMutations(ctx, source1, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).
 		RunAndReturn(streamMutationsFn(mutations1))
@@ -1040,10 +1042,10 @@ func TestWorkflow_TestWithSurvivedMutation(t *testing.T) {
 
 	diffCode := []byte("--- original\n+++ mutated\n@@ -1,1 +1,1 @@\n-\treturn 3 + 5\n+\treturn 3 - 5\n")
 
-	sources := []m.Source{
+	sources := []rpt.Source{
 		{
-			Origin: &m.File{FullPath: "test.go", Hash: "hash1"},
-			Test:   &m.File{FullPath: "test_test.go", Hash: "test_hash1"},
+			Origin: &rpt.File{FullPath: "test.go", Hash: "hash1"},
+			Test:   &rpt.File{FullPath: "test_test.go", Hash: "test_hash1"},
 		},
 	}
 
@@ -1051,18 +1053,18 @@ func TestWorkflow_TestWithSurvivedMutation(t *testing.T) {
 		{
 			ID:       "hash-0",
 			Source:   sources[0],
-			Type:     m.MutationArithmetic,
+			Type:     mgen.Arithmetic,
 			DiffCode: diffCode,
 		},
 	}
 
 	// Mock a survived mutation result
 	survivedResult := m.Result{
-		m.MutationArithmetic: []struct {
+		mgen.Arithmetic: []struct {
 			MutationID string
-			Status     m.TestStatus
+			Status     rpt.TestStatus
 			Err        error
-		}{{MutationID: "hash-0", Status: m.Survived}},
+		}{{MutationID: "hash-0", Status: rpt.Survived}},
 	}
 
 	mockReporter.EXPECT().StartTest(ctx).Return(nil).Once()
@@ -1127,10 +1129,10 @@ func TestWorkflow_TestWithKilledMutation(t *testing.T) {
 
 	diffCode := []byte("--- original\n+++ mutated\n@@ -1,1 +1,1 @@\n-\treturn 3 + 5\n+\treturn 3 - 5\n")
 
-	sources := []m.Source{
+	sources := []rpt.Source{
 		{
-			Origin: &m.File{FullPath: "test.go", Hash: "hash1"},
-			Test:   &m.File{FullPath: "test_test.go", Hash: "test_hash1"},
+			Origin: &rpt.File{FullPath: "test.go", Hash: "hash1"},
+			Test:   &rpt.File{FullPath: "test_test.go", Hash: "test_hash1"},
 		},
 	}
 
@@ -1138,18 +1140,18 @@ func TestWorkflow_TestWithKilledMutation(t *testing.T) {
 		{
 			ID:       "hash-0",
 			Source:   sources[0],
-			Type:     m.MutationArithmetic,
+			Type:     mgen.Arithmetic,
 			DiffCode: diffCode,
 		},
 	}
 
 	// Mock a killed mutation result
 	killedResult := m.Result{
-		m.MutationArithmetic: []struct {
+		mgen.Arithmetic: []struct {
 			MutationID string
-			Status     m.TestStatus
+			Status     rpt.TestStatus
 			Err        error
-		}{{MutationID: "hash-0", Status: m.Killed}},
+		}{{MutationID: "hash-0", Status: rpt.Killed}},
 	}
 
 	mockReporter.EXPECT().StartTest(ctx).Return(nil).Once()
@@ -1211,12 +1213,12 @@ func TestWorkflow_Estimate_Success(t *testing.T) {
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
 	mockMutagen := new(domainmocks.MockMutagen)
 
-	sources := []m.Source{
-		{Origin: &m.File{FullPath: "test.go", Hash: "hash1"}},
+	sources := []rpt.Source{
+		{Origin: &rpt.File{FullPath: "test.go", Hash: "hash1"}},
 	}
 
 	mutations := []m.Mutation{
-		{ID: "hash-0", Source: sources[0], Type: m.MutationArithmetic},
+		{ID: "hash-0", Source: sources[0], Type: mgen.Arithmetic},
 	}
 
 	mockReporter.EXPECT().StartEstimate(ctx).Return(nil).Once()
@@ -1305,12 +1307,12 @@ func TestWorkflow_Estimate_DisplayError(t *testing.T) {
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
 	mockMutagen := new(domainmocks.MockMutagen)
 
-	sources := []m.Source{
-		{Origin: &m.File{FullPath: "test.go", Hash: "hash1"}},
+	sources := []rpt.Source{
+		{Origin: &rpt.File{FullPath: "test.go", Hash: "hash1"}},
 	}
 
 	mutations := []m.Mutation{
-		{ID: "hash-0", Source: sources[0], Type: m.MutationArithmetic},
+		{ID: "hash-0", Source: sources[0], Type: mgen.Arithmetic},
 	}
 
 	displayErr := errors.New("display failed")
@@ -1347,12 +1349,12 @@ func TestWorkflow_TestThreadIDStartsAtZero(t *testing.T) {
 	mockWorkspace := new(domainmocks.MockWorkspace)
 	mockMutagen := new(domainmocks.MockMutagen)
 
-	source := m.Source{
-		Origin: &m.File{FullPath: "test.go", Hash: "hash1"},
+	source := rpt.Source{
+		Origin: &rpt.File{FullPath: "test.go", Hash: "hash1"},
 	}
 
 	mutations := []m.Mutation{
-		{ID: "hash-0", Source: source, Type: m.MutationArithmetic},
+		{ID: "hash-0", Source: source, Type: mgen.Arithmetic},
 	}
 
 	mockReporter.EXPECT().StartTest(ctx).Return(nil).Once()
@@ -1366,7 +1368,7 @@ func TestWorkflow_TestThreadIDStartsAtZero(t *testing.T) {
 		return id >= 0 && id < 3
 	})).Return().Once()
 	mockReporter.EXPECT().DisplayCompletedTestInfo(ctx, mutations[0], mock.Anything).Return().Once()
-	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources([]m.Source{source}))
+	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources([]rpt.Source{source}))
 	mockMutagen.EXPECT().
 		StreamMutations(ctx, mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).
 		RunAndReturn(streamMutationsFn(mutations))
@@ -1406,10 +1408,10 @@ func TestWorkflow_TestExactMutationIDMatch(t *testing.T) {
 
 	diffCode := []byte("--- original\n+++ mutated\n@@ -1,1 +1,1 @@\n-\treturn 3 + 5\n+\treturn 3 - 5\n")
 
-	sources := []m.Source{
+	sources := []rpt.Source{
 		{
-			Origin: &m.File{FullPath: "test.go", Hash: "hash1"},
-			Test:   &m.File{FullPath: "test_test.go", Hash: "test_hash1"},
+			Origin: &rpt.File{FullPath: "test.go", Hash: "hash1"},
+			Test:   &rpt.File{FullPath: "test_test.go", Hash: "test_hash1"},
 		},
 	}
 
@@ -1417,19 +1419,19 @@ func TestWorkflow_TestExactMutationIDMatch(t *testing.T) {
 		{
 			ID:       "hash-1",
 			Source:   sources[0],
-			Type:     m.MutationArithmetic,
+			Type:     mgen.Arithmetic,
 			DiffCode: diffCode,
 		},
 	}
 
 	result := m.Result{
-		m.MutationArithmetic: []struct {
+		mgen.Arithmetic: []struct {
 			MutationID string
-			Status     m.TestStatus
+			Status     rpt.TestStatus
 			Err        error
 		}{
-			{MutationID: "hash-0", Status: m.Killed},
-			{MutationID: "hash-1", Status: m.Survived},
+			{MutationID: "hash-0", Status: rpt.Killed},
+			{MutationID: "hash-1", Status: rpt.Survived},
 		},
 	}
 
@@ -1482,7 +1484,7 @@ func spillOf[T any](t *testing.T, items ...T) pkg.FileSpill[T] {
 	return spill
 }
 
-func spillKeys(spill pkg.FileSpill[m.Source]) []string {
+func spillKeys(spill pkg.FileSpill[rpt.Source]) []string {
 	sources, err := pkg.ToSlice(spill)
 	if err != nil {
 		return nil
@@ -1539,14 +1541,14 @@ func TestWorkflow_Merge_RemovesSupersededBaselineReportsFromDisk(t *testing.T) {
 	shardDir := filepath.Join(base, domain.ShardDirPrefix+"0")
 
 	writeReports(t, base,
-		m.Report{Source: m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "/old/a.go", Hash: "a1"}},
-			Result: m.Result{m.MutationArithmetic: {{MutationID: "m1", Status: m.Survived}}}},
-		m.Report{Source: m.Source{Origin: &m.File{ShortPath: "b.go", FullPath: "/old/b.go", Hash: "b1"}},
-			Result: m.Result{m.MutationArithmetic: {{MutationID: "mb", Status: m.Killed}}}},
+		m.Report{Source: rpt.Source{Origin: &rpt.File{ShortPath: "a.go", FullPath: "/old/a.go", Hash: "a1"}},
+			Result: m.Result{mgen.Arithmetic: {{MutationID: "m1", Status: rpt.Survived}}}},
+		m.Report{Source: rpt.Source{Origin: &rpt.File{ShortPath: "b.go", FullPath: "/old/b.go", Hash: "b1"}},
+			Result: m.Result{mgen.Arithmetic: {{MutationID: "mb", Status: rpt.Killed}}}},
 	)
 	writeReports(t, shardDir,
-		m.Report{Source: m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "/new/a.go", Hash: "a2"}},
-			Result: m.Result{m.MutationArithmetic: {{MutationID: "m2", Status: m.Killed}}}},
+		m.Report{Source: rpt.Source{Origin: &rpt.File{ShortPath: "a.go", FullPath: "/new/a.go", Hash: "a2"}},
+			Result: m.Result{mgen.Arithmetic: {{MutationID: "m2", Status: rpt.Killed}}}},
 	)
 
 	var score float64
@@ -1571,12 +1573,12 @@ func TestWorkflow_Merge_DropsDeletedSourcesInsideCheckout(t *testing.T) {
 	shardDir := filepath.Join(base, domain.ShardDirPrefix+"0")
 
 	writeReports(t, base,
-		m.Report{Source: m.Source{Origin: &m.File{ShortPath: "gone.go", FullPath: "/old/gone.go", Hash: "g1"}},
-			Result: m.Result{m.MutationArithmetic: {{MutationID: "mg", Status: m.Survived}}}},
+		m.Report{Source: rpt.Source{Origin: &rpt.File{ShortPath: "gone.go", FullPath: "/old/gone.go", Hash: "g1"}},
+			Result: m.Result{mgen.Arithmetic: {{MutationID: "mg", Status: rpt.Survived}}}},
 	)
 	writeReports(t, shardDir,
-		m.Report{Source: m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "/new/a.go", Hash: "a2"}},
-			Result: m.Result{m.MutationArithmetic: {{MutationID: "m2", Status: m.Killed}}}},
+		m.Report{Source: rpt.Source{Origin: &rpt.File{ShortPath: "a.go", FullPath: "/new/a.go", Hash: "a2"}},
+			Result: m.Result{mgen.Arithmetic: {{MutationID: "m2", Status: rpt.Killed}}}},
 	)
 
 	var score float64
@@ -1596,12 +1598,12 @@ func TestWorkflow_Test_CleansStaleReportsForTestedSources(t *testing.T) {
 	mockWorkspace := new(domainmocks.MockWorkspace)
 	mockMutagen := new(domainmocks.MockMutagen)
 
-	source := m.Source{
-		Origin: &m.File{FullPath: "/p/a.go", ShortPath: "a.go", Hash: "h2"},
-		Test:   &m.File{FullPath: "/p/a_test.go", Hash: "t"},
+	source := rpt.Source{
+		Origin: &rpt.File{FullPath: "/p/a.go", ShortPath: "a.go", Hash: "h2"},
+		Test:   &rpt.File{FullPath: "/p/a_test.go", Hash: "t"},
 	}
-	gone := m.Source{Origin: &m.File{FullPath: "/p/gone.go", ShortPath: "gone.go", Hash: "g"}}
-	mutation := m.Mutation{ID: "m2", Source: source, Type: m.MutationArithmetic}
+	gone := rpt.Source{Origin: &rpt.File{FullPath: "/p/gone.go", ShortPath: "gone.go", Hash: "g"}}
+	mutation := m.Mutation{ID: "m2", Source: source, Type: mgen.Arithmetic}
 
 	mockReporter.EXPECT().StartTest(ctx).Return(nil).Once()
 	mockReporter.EXPECT().Wait(ctx).Return().Once()
@@ -1612,17 +1614,17 @@ func TestWorkflow_Test_CleansStaleReportsForTestedSources(t *testing.T) {
 	mockReporter.EXPECT().DisplayStartingTestInfo(ctx, mock.Anything, mock.Anything).Return()
 	mockReporter.EXPECT().DisplayCompletedTestInfo(ctx, mock.Anything, mock.Anything).Return()
 
-	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources([]m.Source{source}))
+	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources([]rpt.Source{source}))
 	mockMutagen.EXPECT().
 		StreamMutations(ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		RunAndReturn(streamMutationsFn([]m.Mutation{mutation}))
 	mockOrchestrator.EXPECT().NewWorkspace().Return(mockWorkspace).Maybe()
 	mockWorkspace.EXPECT().Close(mock.Anything).Return().Maybe()
 	mockWorkspace.EXPECT().Run(mock.Anything, mutation).
-		Return(m.Result{m.MutationArithmetic: {{MutationID: "m2", Status: m.Killed}}}, nil)
+		Return(m.Result{mgen.Arithmetic: {{MutationID: "m2", Status: rpt.Killed}}}, nil)
 
 	mockReportStore.EXPECT().
-		CheckUpdates(ctx, m.Path("reports"), mock.MatchedBy(func(sources pkg.FileSpill[m.Source]) bool {
+		CheckUpdates(ctx, m.Path("reports"), mock.MatchedBy(func(sources pkg.FileSpill[rpt.Source]) bool {
 			return assert.ObjectsAreEqual([]string{"a.go"}, spillKeys(sources))
 		})).
 		Return(spillOf(t, source), spillOf(t, gone), nil)
@@ -1630,18 +1632,18 @@ func TestWorkflow_Test_CleansStaleReportsForTestedSources(t *testing.T) {
 	var order []string
 
 	mockReportStore.EXPECT().
-		CleanReports(ctx, m.Path("reports"), mock.MatchedBy(func(sources pkg.FileSpill[m.Source]) bool {
+		CleanReports(ctx, m.Path("reports"), mock.MatchedBy(func(sources pkg.FileSpill[rpt.Source]) bool {
 			return assert.ObjectsAreEqual([]string{"gone.go"}, spillKeys(sources))
 		})).
-		RunAndReturn(func(context.Context, m.Path, pkg.FileSpill[m.Source]) error {
+		RunAndReturn(func(context.Context, m.Path, pkg.FileSpill[rpt.Source]) error {
 			order = append(order, "clean-deleted")
 			return nil
 		}).Once()
 	mockReportStore.EXPECT().
-		CleanReports(ctx, m.Path("reports"), mock.MatchedBy(func(sources pkg.FileSpill[m.Source]) bool {
+		CleanReports(ctx, m.Path("reports"), mock.MatchedBy(func(sources pkg.FileSpill[rpt.Source]) bool {
 			return assert.ObjectsAreEqual([]string{"a.go"}, spillKeys(sources))
 		})).
-		RunAndReturn(func(context.Context, m.Path, pkg.FileSpill[m.Source]) error {
+		RunAndReturn(func(context.Context, m.Path, pkg.FileSpill[rpt.Source]) error {
 			order = append(order, "clean-tested")
 			return nil
 		}).Once()
@@ -1677,11 +1679,11 @@ func TestWorkflow_Test_GeneratesMutationsOncePerSource(t *testing.T) {
 	mockWorkspace := new(domainmocks.MockWorkspace)
 	mockMutagen := new(domainmocks.MockMutagen)
 
-	source := m.Source{
-		Origin: &m.File{FullPath: "/p/a.go", ShortPath: "a.go", Hash: "h"},
-		Test:   &m.File{FullPath: "/p/a_test.go", Hash: "t"},
+	source := rpt.Source{
+		Origin: &rpt.File{FullPath: "/p/a.go", ShortPath: "a.go", Hash: "h"},
+		Test:   &rpt.File{FullPath: "/p/a_test.go", Hash: "t"},
 	}
-	mutation := m.Mutation{ID: "m1", Source: source, Type: m.MutationArithmetic, MutatedCode: []byte("package p\n")}
+	mutation := m.Mutation{ID: "m1", Source: source, Type: mgen.Arithmetic, MutatedCode: []byte("package p\n")}
 
 	mockReporter.EXPECT().StartTest(ctx).Return(nil).Once()
 	mockReporter.EXPECT().Wait(ctx).Return().Once()
@@ -1694,7 +1696,7 @@ func TestWorkflow_Test_GeneratesMutationsOncePerSource(t *testing.T) {
 		DisplayCompletedTestInfo(ctx, mock.MatchedBy(func(done m.Mutation) bool { return done.MutatedCode == nil }), mock.Anything).
 		Return().Once()
 
-	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources([]m.Source{source}))
+	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources([]rpt.Source{source}))
 	mockMutagen.EXPECT().
 		StreamMutations(ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		RunAndReturn(streamMutationsFn([]m.Mutation{mutation})).Once()
@@ -1702,7 +1704,7 @@ func TestWorkflow_Test_GeneratesMutationsOncePerSource(t *testing.T) {
 	mockWorkspace.EXPECT().Close(mock.Anything).Return().Maybe()
 	mockWorkspace.EXPECT().
 		Run(mock.Anything, mock.MatchedBy(func(run m.Mutation) bool { return string(run.MutatedCode) == "package p\n" })).
-		Return(m.Result{m.MutationArithmetic: {{MutationID: "m1", Status: m.Survived}}}, nil).Once()
+		Return(m.Result{mgen.Arithmetic: {{MutationID: "m1", Status: rpt.Survived}}}, nil).Once()
 	mockReportStore.EXPECT().CleanReports(ctx, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().SaveReports(ctx, mock.Anything, mock.Anything).Return(nil)
 	mockReportStore.EXPECT().RegenerateIndex(ctx, mock.Anything).Return(nil)
@@ -1724,11 +1726,11 @@ func TestWorkflow_View_DisplaysEveryMutationWithDiffsForNonKilled(t *testing.T) 
 	ctx := context.Background()
 	dir := t.TempDir()
 	diff := []byte("--- original\n+++ mutated\n")
-	source := m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "/p/a.go", Hash: "a"}}
+	source := rpt.Source{Origin: &rpt.File{ShortPath: "a.go", FullPath: "/p/a.go", Hash: "a"}}
 
 	writeReports(t, dir,
-		m.Report{Source: source, Result: m.Result{m.MutationArithmetic: {{MutationID: "killed-1", Status: m.Killed}}}, Diff: &diff},
-		m.Report{Source: source, Result: m.Result{m.MutationBoolean: {{MutationID: "survived-1", Status: m.Survived}}}, Diff: &diff},
+		m.Report{Source: source, Result: m.Result{mgen.Arithmetic: {{MutationID: "killed-1", Status: rpt.Killed}}}, Diff: &diff},
+		m.Report{Source: source, Result: m.Result{mgen.Boolean: {{MutationID: "survived-1", Status: rpt.Survived}}}, Diff: &diff},
 	)
 
 	reporter := new(domainmocks.MockReporter)
@@ -1772,12 +1774,12 @@ func TestWorkflow_View_MissingReportsDirReturnsError(t *testing.T) {
 func TestWorkflow_Merge_WithoutBaselineDeduplicatesShardSources(t *testing.T) {
 	ctx := context.Background()
 	base := t.TempDir()
-	source := m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "/new/a.go", Hash: "a2"}}
+	source := rpt.Source{Origin: &rpt.File{ShortPath: "a.go", FullPath: "/new/a.go", Hash: "a2"}}
 
 	writeReports(t, filepath.Join(base, domain.ShardDirPrefix+"0"),
-		m.Report{Source: source, Result: m.Result{m.MutationArithmetic: {{MutationID: "m1", Status: m.Killed}}}})
+		m.Report{Source: source, Result: m.Result{mgen.Arithmetic: {{MutationID: "m1", Status: rpt.Killed}}}})
 	writeReports(t, filepath.Join(base, domain.ShardDirPrefix+"1"),
-		m.Report{Source: source, Result: m.Result{m.MutationArithmetic: {{MutationID: "m2", Status: m.Survived}}}})
+		m.Report{Source: source, Result: m.Result{mgen.Arithmetic: {{MutationID: "m2", Status: rpt.Survived}}}})
 
 	var score float64
 
@@ -1793,8 +1795,8 @@ func TestWorkflow_Merge_NoShardsReportsBaseScore(t *testing.T) {
 	base := t.TempDir()
 
 	writeReports(t, base, m.Report{
-		Source: m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "/p/a.go", Hash: "a"}},
-		Result: m.Result{m.MutationArithmetic: {{MutationID: "m1", Status: m.Survived}}},
+		Source: rpt.Source{Origin: &rpt.File{ShortPath: "a.go", FullPath: "/p/a.go", Hash: "a"}},
+		Result: m.Result{mgen.Arithmetic: {{MutationID: "m1", Status: rpt.Survived}}},
 	})
 
 	var score float64
@@ -1832,8 +1834,8 @@ func TestWorkflow_Merge_CorruptReportsReturnError(t *testing.T) {
 
 		base := filepath.Join(checkout, "reports")
 		writeReports(t, filepath.Join(base, domain.ShardDirPrefix+"0"), m.Report{
-			Source: m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "/new/a.go", Hash: "a2"}},
-			Result: m.Result{m.MutationArithmetic: {{MutationID: "m2", Status: m.Killed}}},
+			Source: rpt.Source{Origin: &rpt.File{ShortPath: "a.go", FullPath: "/new/a.go", Hash: "a2"}},
+			Result: m.Result{mgen.Arithmetic: {{MutationID: "m2", Status: rpt.Killed}}},
 		})
 		require.NoError(t, os.WriteFile(filepath.Join(base, "bad.yaml"), []byte("source: [\n"), 0o600))
 
@@ -1853,7 +1855,7 @@ func TestWorkflow_Test_ShardedRunRebuildsBaseIndexAfterCleaningDeleted(t *testin
 	mockOrchestrator.EXPECT().NewWorkspace().Return(mockWorkspace).Maybe()
 	mockWorkspace.EXPECT().Close(mock.Anything).Return().Maybe()
 
-	gone := m.Source{Origin: &m.File{FullPath: "/p/gone.go", ShortPath: "gone.go", Hash: "g"}}
+	gone := rpt.Source{Origin: &rpt.File{FullPath: "/p/gone.go", ShortPath: "gone.go", Hash: "g"}}
 	shardDir := m.Path(filepath.Join("reports", domain.ShardDirPrefix+"1"))
 
 	mockReporter.EXPECT().StartTest(ctx).Return(nil).Once()
@@ -1864,7 +1866,7 @@ func TestWorkflow_Test_ShardedRunRebuildsBaseIndexAfterCleaningDeleted(t *testin
 	mockReporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Return()
 
 	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources(nil))
-	mockReportStore.EXPECT().CheckUpdates(ctx, m.Path("reports"), mock.Anything).Return(spillOf[m.Source](t), spillOf(t, gone), nil)
+	mockReportStore.EXPECT().CheckUpdates(ctx, m.Path("reports"), mock.Anything).Return(spillOf[rpt.Source](t), spillOf(t, gone), nil)
 	mockReportStore.EXPECT().CleanReports(ctx, m.Path("reports"), mock.Anything).Return(nil).Once()
 	mockReportStore.EXPECT().RegenerateIndex(ctx, m.Path("reports")).Return(nil).Once()
 	mockReportStore.EXPECT().CleanReports(ctx, shardDir, mock.Anything).Return(nil).Maybe()
@@ -1918,8 +1920,8 @@ func TestWorkflow_Test_ErrorsAreReturned(t *testing.T) {
 
 	t.Run("clean deleted", func(t *testing.T) {
 		fs, store, reporter, mutagen := setup()
-		gone := m.Source{Origin: &m.File{ShortPath: "gone.go", Hash: "g"}}
-		store.EXPECT().CheckUpdates(ctx, mock.Anything, mock.Anything).Return(spillOf[m.Source](t), spillOf(t, gone), nil)
+		gone := rpt.Source{Origin: &rpt.File{ShortPath: "gone.go", Hash: "g"}}
+		store.EXPECT().CheckUpdates(ctx, mock.Anything, mock.Anything).Return(spillOf[rpt.Source](t), spillOf(t, gone), nil)
 		store.EXPECT().CleanReports(ctx, mock.Anything, mock.Anything).Return(boom)
 
 		err := domain.NewWorkflow(fs, store, reporter, nil, mutagen).Test(ctx, cached)
@@ -1946,7 +1948,7 @@ func TestWorkflow_Estimate_StreamMutationsErrorIsReturned(t *testing.T) {
 
 	reporter.EXPECT().StartEstimate(ctx).Return(nil).Once()
 	reporter.EXPECT().Close(ctx).Return().Once()
-	fs.EXPECT().Stream(ctx, mock.Anything).Return(streamSources([]m.Source{{Origin: &m.File{ShortPath: "a.go", FullPath: "/p/a.go"}}}))
+	fs.EXPECT().Stream(ctx, mock.Anything).Return(streamSources([]rpt.Source{{Origin: &rpt.File{ShortPath: "a.go", FullPath: "/p/a.go"}}}))
 	mutagen.EXPECT().
 		StreamMutations(ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(boom)
@@ -1966,9 +1968,9 @@ func TestWorkflow_Merge_StoreErrorsAreReturned(t *testing.T) {
 		require.NoError(t, os.MkdirAll(filepath.Join(base, domain.ShardDirPrefix+"0"), 0o750))
 
 		shard := spillOf(t,
-			m.Report{Source: m.Source{Origin: &m.File{ShortPath: "a.go", FullPath: "/p/a.go", Hash: "a"}},
-				Result: m.Result{m.MutationArithmetic: {{MutationID: "m1", Status: m.Killed}}}},
-			m.Report{Result: m.Result{m.MutationArithmetic: {{MutationID: "m0", Status: m.Killed}}}},
+			m.Report{Source: rpt.Source{Origin: &rpt.File{ShortPath: "a.go", FullPath: "/p/a.go", Hash: "a"}},
+				Result: m.Result{mgen.Arithmetic: {{MutationID: "m1", Status: rpt.Killed}}}},
+			m.Report{Result: m.Result{mgen.Arithmetic: {{MutationID: "m0", Status: rpt.Killed}}}},
 		)
 
 		store := new(domainmocks.MockReportStore)
@@ -1984,7 +1986,7 @@ func TestWorkflow_Merge_StoreErrorsAreReturned(t *testing.T) {
 
 	t.Run("clean superseded", func(t *testing.T) {
 		err := run(t, func(store *domainmocks.MockReportStore) {
-			store.EXPECT().CleanReports(ctx, mock.Anything, mock.MatchedBy(func(sources pkg.FileSpill[m.Source]) bool {
+			store.EXPECT().CleanReports(ctx, mock.Anything, mock.MatchedBy(func(sources pkg.FileSpill[rpt.Source]) bool {
 				return assert.ObjectsAreEqual([]string{"a.go"}, spillKeys(sources))
 			})).Return(boom)
 		})
@@ -2008,7 +2010,7 @@ func TestWorkflow_Test_SourceSpillCreationErrorIsReturned(t *testing.T) {
 	reporter.EXPECT().StartTest(ctx).Return(nil).Once()
 	reporter.EXPECT().Close(ctx).Return().Once()
 	reporter.EXPECT().DisplayConcurrencyInfo(ctx, mock.Anything, mock.Anything, mock.Anything).Return()
-	fs.EXPECT().Stream(ctx, mock.Anything).Return(streamSources([]m.Source{{Origin: &m.File{ShortPath: "a.go"}}}))
+	fs.EXPECT().Stream(ctx, mock.Anything).Return(streamSources([]rpt.Source{{Origin: &rpt.File{ShortPath: "a.go"}}}))
 
 	t.Setenv("TMPDIR", filepath.Join(t.TempDir(), "missing"))
 
@@ -2041,7 +2043,7 @@ func TestWorkflow_Test_ShardedRunWithoutDeletedSourcesLeavesBaseUntouched(t *tes
 	mockReporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Return()
 
 	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources(nil))
-	mockReportStore.EXPECT().CheckUpdates(ctx, m.Path("reports"), mock.Anything).Return(spillOf[m.Source](t), spillOf[m.Source](t), nil)
+	mockReportStore.EXPECT().CheckUpdates(ctx, m.Path("reports"), mock.Anything).Return(spillOf[rpt.Source](t), spillOf[rpt.Source](t), nil)
 	mockReportStore.EXPECT().CleanReports(ctx, shardDir, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().SaveReports(ctx, shardDir, mock.Anything).Return(nil).Once()
 	mockReportStore.EXPECT().RegenerateIndex(ctx, shardDir).Return(nil).Once()
@@ -2066,12 +2068,12 @@ func TestWorkflow_Merge_KeepsBaselineWhenShardPathsAreNotRelative(t *testing.T) 
 	base := "reports"
 
 	writeReports(t, base, m.Report{
-		Source: m.Source{Origin: &m.File{ShortPath: "elsewhere.go", FullPath: "/old/elsewhere.go", Hash: "e"}},
-		Result: m.Result{m.MutationArithmetic: {{MutationID: "me", Status: m.Survived}}},
+		Source: rpt.Source{Origin: &rpt.File{ShortPath: "elsewhere.go", FullPath: "/old/elsewhere.go", Hash: "e"}},
+		Result: m.Result{mgen.Arithmetic: {{MutationID: "me", Status: rpt.Survived}}},
 	})
 	writeReports(t, filepath.Join(base, domain.ShardDirPrefix+"0"), m.Report{
-		Source: m.Source{Origin: &m.File{FullPath: "/new/a.go", Hash: "a2"}},
-		Result: m.Result{m.MutationArithmetic: {{MutationID: "m2", Status: m.Killed}}},
+		Source: rpt.Source{Origin: &rpt.File{FullPath: "/new/a.go", Hash: "a2"}},
+		Result: m.Result{mgen.Arithmetic: {{MutationID: "m2", Status: rpt.Killed}}},
 	})
 
 	var score float64
@@ -2091,11 +2093,11 @@ func TestWorkflow_Test_ShardFilterExcludesOtherShardsMutations(t *testing.T) {
 	mockWorkspace := new(domainmocks.MockWorkspace)
 	mockMutagen := new(domainmocks.MockMutagen)
 
-	source := m.Source{Origin: &m.File{FullPath: "/p/a.go", ShortPath: "a.go", Hash: "h"}, Test: &m.File{FullPath: "/p/a_test.go", Hash: "t"}}
+	source := rpt.Source{Origin: &rpt.File{FullPath: "/p/a.go", ShortPath: "a.go", Hash: "h"}, Test: &rpt.File{FullPath: "/p/a_test.go", Hash: "t"}}
 	mutations := make([]m.Mutation, 0, 20)
 
 	for i := range 20 {
-		mutations = append(mutations, m.Mutation{ID: fmt.Sprintf("id-%02d", i), Source: source, Type: m.MutationArithmetic})
+		mutations = append(mutations, m.Mutation{ID: fmt.Sprintf("id-%02d", i), Source: source, Type: mgen.Arithmetic})
 	}
 
 	ran := 0
@@ -2108,7 +2110,7 @@ func TestWorkflow_Test_ShardFilterExcludesOtherShardsMutations(t *testing.T) {
 	mockReporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Return()
 	mockReporter.EXPECT().DisplayStartingTestInfo(ctx, mock.Anything, mock.Anything).Return()
 	mockReporter.EXPECT().DisplayCompletedTestInfo(ctx, mock.Anything, mock.Anything).Return()
-	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources([]m.Source{source}))
+	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources([]rpt.Source{source}))
 	mockMutagen.EXPECT().
 		StreamMutations(ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		RunAndReturn(streamMutationsFn(mutations))
@@ -2117,7 +2119,7 @@ func TestWorkflow_Test_ShardFilterExcludesOtherShardsMutations(t *testing.T) {
 	mockWorkspace.EXPECT().Run(mock.Anything, mock.Anything).
 		RunAndReturn(func(_ context.Context, mutation m.Mutation) (m.Result, error) {
 			ran++
-			return m.Result{m.MutationArithmetic: {{MutationID: mutation.ID, Status: m.Killed}}}, nil
+			return m.Result{mgen.Arithmetic: {{MutationID: mutation.ID, Status: rpt.Killed}}}, nil
 		})
 	mockReportStore.EXPECT().CleanReports(ctx, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().SaveReports(ctx, mock.Anything, mock.Anything).Return(nil)

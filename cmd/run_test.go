@@ -12,6 +12,7 @@ import (
 	"gooze.dev/pkg/gooze/internal/domain"
 	domainmocks "gooze.dev/pkg/gooze/internal/domain/mocks"
 	m "gooze.dev/pkg/gooze/internal/model"
+	"gooze.dev/pkg/gooze/pkg/config"
 )
 
 func TestRunCmd_TestMode(t *testing.T) {
@@ -52,7 +53,7 @@ func TestRunCmd_CoverageProfileFlag(t *testing.T) {
 	originalWorkflow := workflow
 	workflow = mockWorkflow
 	defer func() { workflow = originalWorkflow }()
-	defer viper.Set(runCoverageProfileKey, "")
+	defer viper.Set(config.KeyRunCoverageProfile, "")
 
 	mockWorkflow.On("Test", mock.Anything, mock.MatchedBy(func(args domain.TestArgs) bool {
 		return args.CoverageProfile == m.Path("coverage.out")

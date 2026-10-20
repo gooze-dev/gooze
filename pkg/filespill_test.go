@@ -761,3 +761,54 @@ func TestFromSlice_TempDirUnavailableReturnsError(t *testing.T) {
 	_, err := FromSlice([]int{1})
 	require.Error(t, err)
 }
+
+func TestMockFileSpill_FakesFileSpill(t *testing.T) {
+	mock := NewMockFileSpill[string](t)
+	mock.EXPECT().Len().Return(uint64(2))
+	mock.EXPECT().Get(uint64(1)).Return("b", nil)
+
+	var spill FileSpill[string] = mock
+
+	require.Equal(t, uint64(2), spill.Len())
+
+	item, err := spill.Get(1)
+	require.NoError(t, err)
+	require.Equal(t, "b", item)
+}
+
+func TestFileSpill_GetAtOrBeyondLengthIsOutOfBounds(t *testing.T) {
+	spill, err := FromSlice([]int{1, 2})
+	require.NoError(t, err)
+
+	defer spill.Close()
+
+	_, err = spill.Get(2)
+	require.ErrorContains(t, err, "out of bounds")
+
+	_, err = spill.Get(3)
+	require.ErrorContains(t, err, "out of bounds")
+}
+
+func TestFileSpill_CloseAfterFileRemovedSucceeds(t *testing.T) {
+	spill, err := FromSlice([]int{1})
+	require.NoError(t, err)
+	require.NoError(t, os.Remove(spill.Path()))
+
+	require.NoError(t, spill.Close())
+}
+
+func TestFileSpill_CloseReportsRemoveError(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root can remove files from read-only directories")
+	}
+
+	dir := t.TempDir()
+	t.Setenv("TMPDIR", dir)
+
+	spill, err := FromSlice([]int{1})
+	require.NoError(t, err)
+	require.NoError(t, os.Chmod(dir, 0o500))
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+
+	require.Error(t, spill.Close())
+}

@@ -7,10 +7,12 @@ import (
 	"go/token"
 
 	m "gooze.dev/pkg/gooze/internal/model"
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 // GenerateUnaryMutations generates unary operator mutations for the given AST node.
-func GenerateUnaryMutations(n ast.Node, fset *token.FileSet, content []byte, source m.Source) []m.Mutation {
+func GenerateUnaryMutations(n ast.Node, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
 	unaryExpr, ok := n.(*ast.UnaryExpr)
 	if !ok {
 		return nil
@@ -37,7 +39,7 @@ func GenerateUnaryMutations(n ast.Node, fset *token.FileSet, content []byte, sou
 		mutations = append(mutations, m.Mutation{
 			ID:          id,
 			Source:      source,
-			Type:        m.MutationUnary,
+			Type:        mgen.Unary,
 			MutatedCode: mutatedCode,
 		})
 	}
@@ -49,7 +51,7 @@ func GenerateUnaryMutations(n ast.Node, fset *token.FileSet, content []byte, sou
 	mutations = append(mutations, m.Mutation{
 		ID:          id,
 		Source:      source,
-		Type:        m.MutationUnary,
+		Type:        mgen.Unary,
 		MutatedCode: mutatedCode,
 	})
 
@@ -61,7 +63,7 @@ func isUnaryOp(op token.Token) bool {
 }
 
 func getUnaryAlternatives(original token.Token) []token.Token {
-	switch original { //nolint:exhaustive
+	switch original {
 	case token.SUB: // -x
 		return []token.Token{token.ADD} // +x
 	case token.ADD: // +x

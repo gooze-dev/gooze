@@ -10,6 +10,7 @@ import (
 
 	"gooze.dev/pkg/gooze/internal/domain"
 	m "gooze.dev/pkg/gooze/internal/model"
+	"gooze.dev/pkg/gooze/pkg/config"
 )
 
 var mutationTimeoutFlag int64
@@ -33,11 +34,11 @@ func newRunCmd() *cobra.Command {
 				args = []string{"./..."}
 			}
 
-			reportsPath := m.Path(viper.GetString(outputFlagName))
+			reportsPath := m.Path(viper.GetString(config.KeyOutput))
 			estimateArgs := domain.EstimateArgs{
 				Paths:    parsePaths(args),
-				Exclude:  viper.GetStringSlice(excludeConfigKey),
-				UseCache: !viper.GetBool(noCacheFlagName),
+				Exclude:  viper.GetStringSlice(config.KeyPathsExclude),
+				UseCache: !viper.GetBool(config.KeyNoCache),
 				Reports:  reportsPath,
 			}
 
@@ -50,16 +51,16 @@ func newRunCmd() *cobra.Command {
 				return err
 			}
 
-			timeoutSeconds := viper.GetInt64(mutationTimeoutKey)
+			timeoutSeconds := viper.GetInt64(config.KeyRunMutationTimeout)
 
 			return workflow.Test(cmd.Context(), domain.TestArgs{
 				EstimateArgs:    estimateArgs,
 				Reports:         reportsPath,
-				Threads:         viper.GetInt(runParallelConfigKey),
+				Threads:         viper.GetInt(config.KeyRunParallel),
 				ShardIndex:      shardIndex,
 				TotalShardCount: totalShards,
 				MutationTimeout: time.Duration(timeoutSeconds) * time.Second,
-				CoverageProfile: m.Path(viper.GetString(runCoverageProfileKey)),
+				CoverageProfile: m.Path(viper.GetString(config.KeyRunCoverageProfile)),
 			})
 		},
 	}
@@ -74,16 +75,16 @@ func init() {
 }
 
 func configureRunFlags(cmd *cobra.Command) {
-	cmd.Flags().Int64Var(&mutationTimeoutFlag, mutationTimeoutFlagName, viper.GetInt64(mutationTimeoutKey), "timeout duration for testing a mutation in seconds")
-	bindFlagToConfig(cmd.Flags().Lookup(mutationTimeoutFlagName), mutationTimeoutKey)
+	cmd.Flags().Int64Var(&mutationTimeoutFlag, mutationTimeoutFlagName, viper.GetInt64(config.KeyRunMutationTimeout), "timeout duration for testing a mutation in seconds")
+	bindFlagToConfig(cmd.Flags().Lookup(mutationTimeoutFlagName), config.KeyRunMutationTimeout)
 
-	cmd.Flags().IntVarP(&runParallelFlag, runParallelFlagName, "p", viper.GetInt(runParallelConfigKey), "number of parallel workers for mutation testing")
-	bindFlagToConfig(cmd.Flags().Lookup(runParallelFlagName), runParallelConfigKey)
+	cmd.Flags().IntVarP(&runParallelFlag, runParallelFlagName, "p", viper.GetInt(config.KeyRunParallel), "number of parallel workers for mutation testing")
+	bindFlagToConfig(cmd.Flags().Lookup(runParallelFlagName), config.KeyRunParallel)
 	cmd.Flags().StringVarP(&runShardFlag, "shard", "s", "", "shard index and total shard count in the format INDEX/TOTAL (e.g., 0/3)")
 	cmd.Flags().BoolVar(&runEstimateFlag, "estimate", false, "list source files and applicable mutation counts without running tests")
 
-	cmd.Flags().StringVar(&runCoverageProfileFlag, coverageProfileFlagName, viper.GetString(runCoverageProfileKey), "path to a Go coverage profile; mutations on uncovered lines are reported as not_covered without running tests")
-	bindFlagToConfig(cmd.Flags().Lookup(coverageProfileFlagName), runCoverageProfileKey)
+	cmd.Flags().StringVar(&runCoverageProfileFlag, coverageProfileFlagName, viper.GetString(config.KeyRunCoverageProfile), "path to a Go coverage profile; mutations on uncovered lines are reported as not_covered without running tests")
+	bindFlagToConfig(cmd.Flags().Lookup(coverageProfileFlagName), config.KeyRunCoverageProfile)
 }
 
 // parseShardFlag parses INDEX/TOTAL; an empty value means no sharding.

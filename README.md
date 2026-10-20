@@ -58,6 +58,17 @@ complex expression, slice, map, pointer & memory, interface / type assertion,
 function signature / parameter, type system & interfaces, global state &
 initialization, Go-specific error handling, concurrency & channels.
 
+## Go packages
+
+Tools that work with gooze (editors, language servers, CI) can import its file
+formats instead of re-implementing them. These packages depend only on the
+standard library and `gopkg.in/yaml.v3`:
+
+- [`gooze.dev/pkg/gooze/pkg/config`](https://pkg.go.dev/gooze.dev/pkg/gooze/pkg/config): the `gooze.yaml` schema (keys, kinds, defaults, docs) and the config file name.
+- [`gooze.dev/pkg/gooze/pkg/report`](https://pkg.go.dev/gooze.dev/pkg/gooze/pkg/report): report and `_index.yaml` files, test statuses, and the mutation score.
+- [`gooze.dev/pkg/gooze/pkg/directive`](https://pkg.go.dev/gooze.dev/pkg/gooze/pkg/directive): the `//gooze:ignore` parser, with byte offsets.
+- [`gooze.dev/pkg/gooze/pkg/mutagen`](https://pkg.go.dev/gooze.dev/pkg/gooze/pkg/mutagen): the mutagen registry (names, versions, docs).
+
 ## Development
 
 ```bash

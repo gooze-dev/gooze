@@ -6,7 +6,8 @@ import (
 	"strings"
 	"unicode"
 
-	m "gooze.dev/pkg/gooze/internal/model"
+	"gooze.dev/pkg/gooze/pkg/directive"
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
 )
 
 type ignoreRule struct {
@@ -14,7 +15,7 @@ type ignoreRule struct {
 	names map[string]struct{}
 }
 
-func (r ignoreRule) ignores(mutationType m.MutationType) bool {
+func (r ignoreRule) ignores(mutationType mgen.Type) bool {
 	if r.all {
 		return true
 	}
@@ -50,34 +51,18 @@ func mergeIgnoreRule(dst *ignoreRule, src ignoreRule) {
 }
 
 func parseIgnoreDirective(commentText string) (ignoreRule, bool) {
-	s := strings.TrimSpace(commentText)
-	if after, ok := strings.CutPrefix(s, "//"); ok {
-		s = strings.TrimSpace(after)
-	} else if after, ok := strings.CutPrefix(s, "/*"); ok {
-		s = strings.TrimSpace(after)
-		s = strings.TrimSpace(strings.TrimSuffix(s, "*/"))
-	}
-
-	rest, ok := strings.CutPrefix(s, "gooze:ignore")
-	if !ok || (rest != "" && !unicode.IsSpace(rune(rest[0]))) {
+	d, ok := directive.Parse(commentText)
+	if !ok {
 		return ignoreRule{}, false
 	}
 
-	rest = strings.TrimSpace(rest)
-	if rest == "" {
+	if d.IgnoresAll() {
 		return ignoreRule{all: true}, true
 	}
 
-	parts := strings.FieldsFunc(rest, func(r rune) bool { return r == ',' || unicode.IsSpace(r) })
-	rule := ignoreRule{names: make(map[string]struct{}, len(parts))}
-
-	for _, part := range parts {
-		rule.names[strings.ToLower(part)] = struct{}{}
-	}
-
-	if len(rule.names) == 0 {
-		rule.all = true
-		rule.names = nil
+	rule := ignoreRule{names: make(map[string]struct{}, len(d.Names))}
+	for _, name := range d.Names {
+		rule.names[strings.ToLower(name.Text)] = struct{}{}
 	}
 
 	return rule, true

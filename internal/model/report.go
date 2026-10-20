@@ -1,53 +1,20 @@
 package model
 
-// TestStatus represents the status of a mutation test.
-type TestStatus int
-
-const (
-	// Killed indicates the mutation was detected by tests.
-	Killed TestStatus = iota
-	// Survived indicates the mutation was not detected by tests.
-	Survived
-	// Skipped indicates the mutation was skipped.
-	Skipped
-	// Timeout indicates the mutation test timed out.
-	Timeout
-	// Error indicates an error occurred during testing.
-	Error
-	// NotCovered indicates the mutated line is not exercised by any test, so the
-	// mutation survives without running tests.
-	NotCovered
+import (
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
-func (t TestStatus) String() string {
-	switch t {
-	case Killed:
-		return "killed"
-	case Survived:
-		return "survived"
-	case Skipped:
-		return "skipped"
-	case Error:
-		return "error"
-	case Timeout:
-		return "timeout"
-	case NotCovered:
-		return "not_covered"
-	default:
-		return "unknown"
-	}
-}
-
 // Result represents the test results for mutations grouped by type.
-type Result map[MutationType][]struct {
+type Result map[mgen.Type][]struct {
 	MutationID string
-	Status     TestStatus
+	Status     rpt.TestStatus
 	Err        error
 }
 
 // Report represents the result of testing a mutation source file.
 type Report struct {
-	Source Source
+	Source rpt.Source
 	Result Result
 	Diff   *[]byte
 }

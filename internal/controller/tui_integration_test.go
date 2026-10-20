@@ -8,7 +8,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
-	m "gooze.dev/pkg/gooze/internal/model"
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
 )
 
 // TestEstimateModelIntegration tests the full lifecycle of estimateModel with Bubble Tea
@@ -116,7 +116,7 @@ func TestTestExecutionModelIntegration(t *testing.T) {
 	}
 
 	// Complete the mutation
-	completeMsg := completedMutationMsg{id: "hash-1", kind: m.MutationArithmetic, fileHash: "hash-test", displayPath: "test.go", status: "killed"}
+	completeMsg := completedMutationMsg{id: "hash-1", kind: mgen.Arithmetic, fileHash: "hash-test", displayPath: "test.go", status: "killed"}
 	updated, _ = model.Update(completeMsg)
 	model = updated.(testExecutionModel)
 
@@ -134,7 +134,7 @@ func TestTestExecutionModelIntegration(t *testing.T) {
 
 	// Complete remaining mutations to finish
 	for i := 2; i <= 10; i++ {
-		completeMsg := completedMutationMsg{id: fmt.Sprintf("hash-%d", i), kind: m.MutationBoolean, fileHash: "hash-test", displayPath: "test.go", status: "survived"}
+		completeMsg := completedMutationMsg{id: fmt.Sprintf("hash-%d", i), kind: mgen.Boolean, fileHash: "hash-test", displayPath: "test.go", status: "survived"}
 		updated, _ = model.Update(completeMsg)
 		model = updated.(testExecutionModel)
 	}

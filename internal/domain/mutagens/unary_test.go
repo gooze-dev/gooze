@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	m "gooze.dev/pkg/gooze/internal/model"
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 func TestGenerateUnaryMutations(t *testing.T) {
@@ -50,8 +52,8 @@ func TestGenerateUnaryMutations(t *testing.T) {
 				t.Fatalf("failed to parse code: %v", err)
 			}
 
-			source := m.Source{
-				Origin: &m.File{
+			source := rpt.Source{
+				Origin: &rpt.File{
 					FullPath: "test.go",
 				},
 			}
@@ -69,8 +71,8 @@ func TestGenerateUnaryMutations(t *testing.T) {
 
 			// Verify mutation type
 			for _, mut := range mutations {
-				if mut.Type != m.MutationUnary {
-					t.Errorf("expected mutation type %v, got %v", m.MutationUnary, mut.Type)
+				if mut.Type != mgen.Unary {
+					t.Errorf("expected mutation type %v, got %v", mgen.Unary, mut.Type)
 				}
 			}
 		})

@@ -6,11 +6,13 @@ import (
 	"go/token"
 
 	m "gooze.dev/pkg/gooze/internal/model"
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 // GenerateArithmeticMutations generates arithmetic mutations for the given AST node.
-func GenerateArithmeticMutations(n ast.Node, fset *token.FileSet, content []byte, source m.Source) []m.Mutation {
-	return generateBinaryExprMutations(n, fset, content, source, m.MutationArithmetic, isArithmeticOp, getArithmeticAlternatives)
+func GenerateArithmeticMutations(n ast.Node, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
+	return generateBinaryExprMutations(n, fset, content, source, mgen.Arithmetic, isArithmeticOp, getArithmeticAlternatives)
 }
 
 func isArithmeticOp(op token.Token) bool {
