@@ -128,21 +128,21 @@ func (mg *mutagen) loadSourceAST(ctx context.Context, source m.Source) ([]byte, 
 	return content, fset, file, nil
 }
 
-// skips reports whether n is excluded from mutationType by an ignore
-// directive, and if so whether its children should still be visited.
-func (ix ignoreIndex) skips(n ast.Node, fset *token.FileSet, mutationType m.MutationType) (skip, descend bool) {
+// visit decides, from the ignore directives, whether n is mutated for
+// mutationType and whether its children are visited.
+func (ix ignoreIndex) visit(n ast.Node, fset *token.FileSet, mutationType m.MutationType) (mutate, descend bool) {
 	if fd, ok := n.(*ast.FuncDecl); ok {
 		if rule, ok := ix.funcByPos[fd.Pos()]; ok && rule.ignores(mutationType) {
-			return true, false
+			return false, false
 		}
 	}
 
 	line := fset.PositionFor(n.Pos(), true).Line
 	if rule, ok := ix.line[line]; ok && rule.ignores(mutationType) {
-		return true, true
+		return false, true
 	}
 
-	return false, false
+	return true, true
 }
 
 // walkMutations visits the file once for mutationType and hands each mutation
@@ -169,7 +169,8 @@ func walkMutations(
 			return false
 		}
 
-		if skip, descend := ignore.skips(n, fset, mutationType); skip {
+		mutate, descend := ignore.visit(n, fset, mutationType)
+		if !mutate {
 			return descend
 		}
 

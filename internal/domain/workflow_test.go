@@ -3,6 +3,7 @@ package domain_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -1882,6 +1883,7 @@ func TestWorkflow_Test_ShardedRunRebuildsBaseIndexAfterCleaningDeleted(t *testin
 	mockReportStore.EXPECT().CheckUpdates(ctx, m.Path("reports"), mock.Anything).Return(spillOf[m.Source](t), spillOf(t, gone), nil)
 	mockReportStore.EXPECT().CleanReports(ctx, m.Path("reports"), mock.Anything).Return(nil).Once()
 	mockReportStore.EXPECT().RegenerateIndex(ctx, m.Path("reports")).Return(nil).Once()
+	mockReportStore.EXPECT().CleanReports(ctx, shardDir, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().SaveReports(ctx, shardDir, mock.Anything).Return(nil).Once()
 	mockReportStore.EXPECT().RegenerateIndex(ctx, shardDir).Return(nil).Once()
 
@@ -2033,4 +2035,119 @@ func TestWorkflow_Test_SourceSpillCreationErrorIsReturned(t *testing.T) {
 		TotalShardCount: 1,
 	})
 	require.ErrorContains(t, err, "create sources spill")
+}
+
+func TestWorkflow_Test_ShardedRunWithoutDeletedSourcesLeavesBaseUntouched(t *testing.T) {
+	ctx := context.Background()
+	mockFSAdapter := new(domainmocks.MockSourceFSAdapter)
+	mockReportStore := new(domainmocks.MockReportStore)
+	mockReporter := new(domainmocks.MockReporter)
+	mockOrchestrator := new(domainmocks.MockOrchestrator)
+	mockWorkspace := new(domainmocks.MockWorkspace)
+	mockOrchestrator.EXPECT().NewWorkspace().Return(mockWorkspace).Maybe()
+	mockWorkspace.EXPECT().Close(mock.Anything).Return().Maybe()
+
+	shardDir := m.Path(filepath.Join("reports", domain.ShardDirPrefix+"1"))
+
+	mockReporter.EXPECT().StartTest(ctx).Return(nil).Once()
+	mockReporter.EXPECT().Wait(ctx).Return().Once()
+	mockReporter.EXPECT().Close(ctx).Return().Once()
+	mockReporter.EXPECT().DisplayConcurrencyInfo(ctx, mock.Anything, mock.Anything, mock.Anything).Return()
+	mockReporter.EXPECT().DisplayUpcomingTestsInfo(ctx, 0).Return()
+	mockReporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Return()
+
+	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources(nil))
+	mockReportStore.EXPECT().CheckUpdates(ctx, m.Path("reports"), mock.Anything).Return(spillOf[m.Source](t), spillOf[m.Source](t), nil)
+	mockReportStore.EXPECT().CleanReports(ctx, shardDir, mock.Anything).Return(nil).Maybe()
+	mockReportStore.EXPECT().SaveReports(ctx, shardDir, mock.Anything).Return(nil).Once()
+	mockReportStore.EXPECT().RegenerateIndex(ctx, shardDir).Return(nil).Once()
+
+	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockReporter, mockOrchestrator, new(domainmocks.MockMutagen))
+	require.NoError(t, wf.Test(ctx, domain.TestArgs{
+		EstimateArgs:    domain.EstimateArgs{Paths: []m.Path{"."}, UseCache: true, Reports: "reports"},
+		Reports:         "reports",
+		Threads:         1,
+		ShardIndex:      1,
+		TotalShardCount: 2,
+	}))
+
+	mockReportStore.AssertNotCalled(t, "CleanReports", ctx, m.Path("reports"), mock.Anything)
+	mockReportStore.AssertNotCalled(t, "RegenerateIndex", ctx, m.Path("reports"))
+}
+
+func TestWorkflow_Merge_KeepsBaselineWhenShardPathsAreNotRelative(t *testing.T) {
+	ctx := context.Background()
+	t.Chdir(t.TempDir())
+
+	base := "reports"
+
+	writeReports(t, base, m.Report{
+		Source: m.Source{Origin: &m.File{ShortPath: "elsewhere.go", FullPath: "/old/elsewhere.go", Hash: "e"}},
+		Result: m.Result{m.MutationArithmetic: {{MutationID: "me", Status: m.Survived}}},
+	})
+	writeReports(t, filepath.Join(base, domain.ShardDirPrefix+"0"), m.Report{
+		Source: m.Source{Origin: &m.File{FullPath: "/new/a.go", Hash: "a2"}},
+		Result: m.Result{m.MutationArithmetic: {{MutationID: "m2", Status: m.Killed}}},
+	})
+
+	var score float64
+
+	wf := domain.NewWorkflow(nil, adapter.NewReportStore(), mergeReporter(ctx, &score), nil, nil)
+	require.NoError(t, wf.Merge(ctx, domain.MergeArgs{Reports: m.Path(base)}))
+
+	assert.ElementsMatch(t, []string{"a2", "e"}, reportHashes(t, base))
+}
+
+func TestWorkflow_Test_ShardFilterExcludesOtherShardsMutations(t *testing.T) {
+	ctx := context.Background()
+	mockFSAdapter := new(domainmocks.MockSourceFSAdapter)
+	mockReportStore := new(domainmocks.MockReportStore)
+	mockReporter := new(domainmocks.MockReporter)
+	mockOrchestrator := new(domainmocks.MockOrchestrator)
+	mockWorkspace := new(domainmocks.MockWorkspace)
+	mockMutagen := new(domainmocks.MockMutagen)
+
+	source := m.Source{Origin: &m.File{FullPath: "/p/a.go", ShortPath: "a.go", Hash: "h"}, Test: &m.File{FullPath: "/p/a_test.go", Hash: "t"}}
+	mutations := make([]m.Mutation, 0, 20)
+
+	for i := range 20 {
+		mutations = append(mutations, m.Mutation{ID: fmt.Sprintf("id-%02d", i), Source: source, Type: m.MutationArithmetic})
+	}
+
+	ran := 0
+
+	mockReporter.EXPECT().StartTest(ctx).Return(nil).Once()
+	mockReporter.EXPECT().Wait(ctx).Return().Once()
+	mockReporter.EXPECT().Close(ctx).Return().Once()
+	mockReporter.EXPECT().DisplayConcurrencyInfo(ctx, mock.Anything, mock.Anything, mock.Anything).Return()
+	mockReporter.EXPECT().DisplayUpcomingTestsInfo(ctx, mock.Anything).Return()
+	mockReporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Return()
+	mockReporter.EXPECT().DisplayStartingTestInfo(ctx, mock.Anything, mock.Anything).Return()
+	mockReporter.EXPECT().DisplayCompletedTestInfo(ctx, mock.Anything, mock.Anything).Return()
+	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources([]m.Source{source}))
+	mockMutagen.EXPECT().
+		StreamMutations(ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		RunAndReturn(streamMutationsFn(mutations))
+	mockOrchestrator.EXPECT().NewWorkspace().Return(mockWorkspace).Maybe()
+	mockWorkspace.EXPECT().Close(mock.Anything).Return().Maybe()
+	mockWorkspace.EXPECT().Run(mock.Anything, mock.Anything).
+		RunAndReturn(func(_ context.Context, mutation m.Mutation) (m.Result, error) {
+			ran++
+			return m.Result{m.MutationArithmetic: {{MutationID: mutation.ID, Status: m.Killed}}}, nil
+		})
+	mockReportStore.EXPECT().CleanReports(ctx, mock.Anything, mock.Anything).Return(nil).Maybe()
+	mockReportStore.EXPECT().SaveReports(ctx, mock.Anything, mock.Anything).Return(nil)
+	mockReportStore.EXPECT().RegenerateIndex(ctx, mock.Anything).Return(nil)
+
+	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockReporter, mockOrchestrator, mockMutagen)
+	require.NoError(t, wf.Test(ctx, domain.TestArgs{
+		EstimateArgs:    domain.EstimateArgs{Paths: []m.Path{"."}},
+		Reports:         "reports",
+		Threads:         1,
+		ShardIndex:      0,
+		TotalShardCount: 4,
+	}))
+
+	require.Positive(t, ran)
+	require.Less(t, ran, len(mutations), "shard 0 of 4 must not run every mutation")
 }

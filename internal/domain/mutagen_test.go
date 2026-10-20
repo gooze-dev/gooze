@@ -272,3 +272,61 @@ func TestMutagen_StreamMutations_BuildsMutationsLazily(t *testing.T) {
 	require.Equal(t, 1, delivered)
 	require.Equal(t, 1, differ.calls, "diffs must only be computed for mutations handed to the caller")
 }
+
+func streamTypesFromSource(t *testing.T, src string, mutationType m.MutationType) []m.Mutation {
+	t.Helper()
+
+	path := filepath.Join(t.TempDir(), "p.go")
+	require.NoError(t, os.WriteFile(path, []byte(src), 0o600))
+
+	mutations, err := newTestMutagen().GenerateMutation(context.Background(), makeSourceV2(t, path), mutationType)
+	require.NoError(t, err)
+
+	return mutations
+}
+
+func linesOf(mutations []m.Mutation) []int {
+	lines := make([]int, 0, len(mutations))
+	for _, mutation := range mutations {
+		lines = append(lines, mutation.Line)
+	}
+
+	return lines
+}
+
+func TestMutagen_IgnoreDirectiveForOtherMutatorDoesNotSkip(t *testing.T) {
+	const src = "package p\n\n" +
+		"//gooze:ignore numbers\n" +
+		"func f(a int) int {\n" +
+		"\treturn a + a\n" +
+		"}\n\n" +
+		"func g(a int) int {\n" +
+		"\treturn a + a //gooze:ignore numbers\n" +
+		"}\n"
+
+	lines := linesOf(streamTypesFromSource(t, src, m.MutationArithmetic))
+	require.Contains(t, lines, 5, "a function ignore for another mutator must not hide arithmetic mutations")
+	require.Contains(t, lines, 9, "a line ignore for another mutator must not hide arithmetic mutations")
+}
+
+func TestMutagen_LineIgnoreStillVisitsNestedLines(t *testing.T) {
+	const src = "package p\n\n" +
+		"func f(a int) int {\n" +
+		"\treturn func() int { //gooze:ignore arithmetic\n" +
+		"\t\treturn a + a\n" +
+		"\t}()\n" +
+		"}\n"
+
+	require.Contains(t, linesOf(streamTypesFromSource(t, src, m.MutationArithmetic)), 5,
+		"a line ignore must not hide mutations on the following lines of a nested node")
+}
+
+func TestMutagen_LineIgnoreHonoursLineDirectives(t *testing.T) {
+	const src = "package p\n\n" +
+		"//line other.go:100\n" +
+		"func f(a int) int {\n" +
+		"\treturn a + a //gooze:ignore arithmetic\n" +
+		"}\n"
+
+	require.Empty(t, streamTypesFromSource(t, src, m.MutationArithmetic))
+}
