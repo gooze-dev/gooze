@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"sync"
 
@@ -240,6 +241,16 @@ func (t *TUI) DisplayMutationScore(ctx context.Context, score domain.MutationSco
 
 	t.ensureStarted(ctx)
 	t.send(mutationScoreMsg{score: score})
+}
+
+// DisplayReportSummary prints a per-file summary of stored reports as plain
+// text: it is static output, so the interactive program is not started.
+func (t *TUI) DisplayReportSummary(ctx context.Context, summary domain.ReportSummary) {
+	if err := ctx.Err(); err != nil {
+		return
+	}
+
+	_, _ = fmt.Fprint(t.output, renderReportSummary(summary))
 }
 
 func (t *TUI) ensureStarted(ctx context.Context) {

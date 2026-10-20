@@ -23,8 +23,29 @@ serves a `go-import` meta tag pointing at this repository.
 ```bash
 gooze run --estimate ./...   # preview files and mutation counts, no tests run
 gooze run ./...              # run mutation testing
-gooze report view            # view the last run's reports
+gooze report view            # per-file scores and surviving mutations
 ```
+
+`gooze report view [paths...]` summarizes the stored reports: one row per file,
+then one line per mutation that counts against the score, then the score:
+
+```text
+ PATH          │ MUTATIONS │ KILLED │ SURVIVED │ NOT COVERED │  SCORE
+───────────────┼───────────┼────────┼──────────┼─────────────┼────────
+ calc.go       │        16 │     14 │        2 │           0 │ 87.50%
+───────────────┼───────────┼────────┼──────────┼─────────────┼────────
+ TOTAL FILES 1 │        16 │     14 │        2 │           0 │ 87.50%
+
+Survivors (2):
+calc.go:10: survived (comparison): if n < lo { -> if n <= lo {
+calc.go:13: survived (comparison): if n > hi { -> if n >= hi {
+
+Mutation score: 87.50% (14 killed, 2 survived)
+```
+
+Paths filter the files like `gooze run` arguments, relative to the module root
+(`./internal/...`, `./cmd`, `./cmd/run.go`). `--all` lists every mutation with its
+status and diff instead.
 
 ## Documentation
 

@@ -1,6 +1,7 @@
 // Package report defines the files gooze writes to its reports directory: one
 // YAML file per tested mutation batch and an `_index.yaml` summary. It reads
-// them back and computes the mutation score the way gooze does.
+// them back, locates the changes in their diffs and computes the mutation score
+// the way gooze does.
 package report
 
 import "cmp"

@@ -1,17 +1,14 @@
 package domain
 
 import (
-	"cmp"
 	"context"
 	"crypto/sha256"
 	"errors"
 	"fmt"
 	"log/slog"
-	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
-	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -51,6 +48,11 @@ type TestArgs struct {
 // ViewArgs contains the arguments for viewing mutation test reports.
 type ViewArgs struct {
 	Reports m.Path
+	// Paths limits the view to matching sources, see matchesPaths. Empty means
+	// every source.
+	Paths []m.Path
+	// All lists every mutation with its status instead of a per-file summary.
+	All bool
 }
 
 // MergeArgs contains the arguments for merging sharded mutation test reports.
@@ -313,47 +315,6 @@ func shardReportsDir(base m.Path, shardIndex int, totalShardCount int) m.Path {
 	return m.Path(filepath.Join(string(base), fmt.Sprintf("%s%d", ShardDirPrefix, shardIndex)))
 }
 
-func (w *workflow) View(ctx context.Context, args ViewArgs) error {
-	return w.withTestUI(ctx, func() error {
-		slog.Info("Loading mutation test reports", "path", args.Reports)
-
-		reports, err := w.reports.LoadSpillReports(ctx, args.Reports)
-		if err != nil {
-			slog.Error("Failed to load reports", "error", err, "path", args.Reports)
-			return fmt.Errorf("load reports: %w", err)
-		}
-
-		defer closeSpill("reports", reports)
-
-		total := 0
-
-		if err := rangeViewItems(reports, func(m.Mutation, m.Result) { total++ }); err != nil {
-			return fmt.Errorf("count view items: %w", err)
-		}
-
-		summary, err := summarizeReports(reports, nil)
-		if err != nil {
-			return fmt.Errorf("calculate mutation score: %w", err)
-		}
-
-		score := MutationScore{Summary: summary}
-
-		slog.Info("Calculated mutation score", "score", score.Score(), "reportsCount", reports.Len(), "mutationsCount", total)
-		w.progress.DisplayUpcomingTestsInfo(ctx, total)
-
-		if err := rangeViewItems(reports, func(mutation m.Mutation, result m.Result) {
-			w.progress.DisplayStartingTestInfo(ctx, mutation, 0)
-			w.progress.DisplayCompletedTestInfo(ctx, mutation, result)
-		}); err != nil {
-			return fmt.Errorf("display view items: %w", err)
-		}
-
-		w.progress.DisplayMutationScore(ctx, score)
-
-		return nil
-	})
-}
-
 func (w *workflow) Merge(ctx context.Context, args MergeArgs) error {
 	base := args.Reports
 	slog.Info("Merging sharded mutation test reports", "basePath", base)
@@ -418,6 +379,10 @@ func (w *workflow) displayScore(ctx context.Context, base m.Path) error {
 
 func (w *workflow) findShardDirs(base m.Path) ([]string, error) {
 	shardDirs, err := findShardDirs(string(base))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, noReportsError(base)
+	}
+
 	if err != nil {
 		slog.Error("Failed to find shard directories", "error", err, "basePath", base)
 		return nil, fmt.Errorf("find shard directories: %w", err)
@@ -660,33 +625,6 @@ func (w *workflow) withTestUI(ctx context.Context, fn func() error) error {
 	w.progress.Wait(ctx)
 
 	return nil
-}
-
-// rangeViewItems calls fn with one mutation and its result for every entry in
-// the reports, in a deterministic order, without collecting them.
-func rangeViewItems(reports pkg.FileSpill[m.Report], fn func(m.Mutation, m.Result)) error {
-	return reports.Range(func(_ uint64, report m.Report) error {
-		for _, mutationType := range sortedResultTypes(report.Result) {
-			for _, entry := range report.Result[mutationType] {
-				mutation := m.Mutation{ID: entry.MutationID, Source: report.Source, Type: mutationType}
-				if entry.Status != rpt.Killed && report.Diff != nil {
-					mutation.DiffCode = *report.Diff
-				}
-
-				fn(mutation, m.Result{mutationType: {entry}})
-			}
-		}
-
-		return nil
-	})
-}
-
-// sortedResultTypes returns the mutation types in a result, ordered by name then
-// version, so view output is deterministic.
-func sortedResultTypes(result m.Result) []mgen.Type {
-	return slices.SortedFunc(maps.Keys(result), func(a, b mgen.Type) int {
-		return cmp.Or(cmp.Compare(a.Name, b.Name), cmp.Compare(a.Version, b.Version))
-	})
 }
 
 // sourceSet holds the sources a run or an estimate operates on. Without

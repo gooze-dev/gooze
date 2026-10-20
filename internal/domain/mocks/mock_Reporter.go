@@ -210,6 +210,40 @@ func (_c *MockReporter_DisplayMutationScore_Call) RunAndReturn(run func(context.
 	return _c
 }
 
+// DisplayReportSummary provides a mock function with given fields: ctx, summary
+func (_m *MockReporter) DisplayReportSummary(ctx context.Context, summary domain.ReportSummary) {
+	_m.Called(ctx, summary)
+}
+
+// MockReporter_DisplayReportSummary_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DisplayReportSummary'
+type MockReporter_DisplayReportSummary_Call struct {
+	*mock.Call
+}
+
+// DisplayReportSummary is a helper method to define mock.On call
+//   - ctx context.Context
+//   - summary domain.ReportSummary
+func (_e *MockReporter_Expecter) DisplayReportSummary(ctx interface{}, summary interface{}) *MockReporter_DisplayReportSummary_Call {
+	return &MockReporter_DisplayReportSummary_Call{Call: _e.mock.On("DisplayReportSummary", ctx, summary)}
+}
+
+func (_c *MockReporter_DisplayReportSummary_Call) Run(run func(ctx context.Context, summary domain.ReportSummary)) *MockReporter_DisplayReportSummary_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(domain.ReportSummary))
+	})
+	return _c
+}
+
+func (_c *MockReporter_DisplayReportSummary_Call) Return() *MockReporter_DisplayReportSummary_Call {
+	_c.Call.Return()
+	return _c
+}
+
+func (_c *MockReporter_DisplayReportSummary_Call) RunAndReturn(run func(context.Context, domain.ReportSummary)) *MockReporter_DisplayReportSummary_Call {
+	_c.Run(run)
+	return _c
+}
+
 // DisplayStartingTestInfo provides a mock function with given fields: ctx, mutation, threadID
 func (_m *MockReporter) DisplayStartingTestInfo(ctx context.Context, mutation model.Mutation, threadID int) {
 	_m.Called(ctx, mutation, threadID)

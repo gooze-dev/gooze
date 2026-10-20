@@ -121,7 +121,7 @@ func TestWorkflow_Test_FullyCachedRunScoresStoredResultsInScope(t *testing.T) {
 	require.NoError(t, wf.Test(context.Background(), cachedTestArgs(fx.reports)))
 
 	// b.go is outside the scanned scope, so its survivor does not count.
-	assert.Equal(t, domain.MutationScore{Summary: rpt.Summary{Total: 3, Killed: 2, Survived: 1}, Cached: 3}, score)
+	assert.Equal(t, domain.MutationScore{Total: 3, Killed: 2, Survived: 1, Cached: 3}, score)
 }
 
 func TestWorkflow_Test_IncrementalRunScoresCachedAndTestedResults(t *testing.T) {
@@ -137,7 +137,7 @@ func TestWorkflow_Test_IncrementalRunScoresCachedAndTestedResults(t *testing.T) 
 	wf := cachedRunWorkflow(t, []rpt.Source{fx.a, c}, mutations, &score, &estimation)
 	require.NoError(t, wf.Test(context.Background(), cachedTestArgs(fx.reports)))
 
-	assert.Equal(t, domain.MutationScore{Summary: rpt.Summary{Total: 4, Killed: 2, Survived: 2}, Cached: 3, Tested: 1}, score)
+	assert.Equal(t, domain.MutationScore{Total: 4, Killed: 2, Survived: 2, Cached: 3, Tested: 1}, score)
 }
 
 func TestWorkflow_Test_UncachedRunScoresTestedResultsOnly(t *testing.T) {
@@ -155,7 +155,7 @@ func TestWorkflow_Test_UncachedRunScoresTestedResultsOnly(t *testing.T) {
 	args.UseCache = false
 	require.NoError(t, wf.Test(context.Background(), args))
 
-	assert.Equal(t, domain.MutationScore{Summary: rpt.Summary{Total: 1, Survived: 1}, Tested: 1}, score)
+	assert.Equal(t, domain.MutationScore{Total: 1, Survived: 1, Tested: 1}, score)
 }
 
 func TestWorkflow_Estimate_ListsCachedFiles(t *testing.T) {

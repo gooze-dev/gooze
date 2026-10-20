@@ -1724,7 +1724,7 @@ func TestWorkflow_Test_GeneratesMutationsOncePerSource(t *testing.T) {
 	mockReporter.AssertExpectations(t)
 }
 
-func TestWorkflow_View_DisplaysEveryMutationWithDiffsForNonKilled(t *testing.T) {
+func TestWorkflow_ViewAll_DisplaysEveryMutationWithDiffsForNonKilled(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
 	diff := []byte("--- original\n+++ mutated\n")
@@ -1755,7 +1755,7 @@ func TestWorkflow_View_DisplaysEveryMutationWithDiffsForNonKilled(t *testing.T) 
 	reporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Run(func(_ context.Context, s domain.MutationScore) { score = s.Score() }).Once()
 
 	wf := domain.NewWorkflow(nil, adapter.NewReportStore(), reporter, nil, nil)
-	require.NoError(t, wf.View(ctx, domain.ViewArgs{Reports: m.Path(dir)}))
+	require.NoError(t, wf.View(ctx, domain.ViewArgs{Reports: m.Path(dir), All: true}))
 
 	assert.Equal(t, map[string]string{"killed-1": "", "survived-1": string(diff)}, diffs)
 	assert.InDelta(t, 0.5, score, 1e-9)
@@ -1765,12 +1765,10 @@ func TestWorkflow_View_DisplaysEveryMutationWithDiffsForNonKilled(t *testing.T) 
 func TestWorkflow_View_MissingReportsDirReturnsError(t *testing.T) {
 	ctx := context.Background()
 
-	reporter := new(domainmocks.MockReporter)
-	reporter.EXPECT().StartTest(ctx).Return(nil).Once()
-	reporter.EXPECT().Close(ctx).Return().Once()
-
-	wf := domain.NewWorkflow(nil, adapter.NewReportStore(), reporter, nil, nil)
-	require.ErrorContains(t, wf.View(ctx, domain.ViewArgs{Reports: m.Path(filepath.Join(t.TempDir(), "missing"))}), "load reports")
+	missing := filepath.Join(t.TempDir(), "missing")
+	wf := domain.NewWorkflow(nil, adapter.NewReportStore(), new(domainmocks.MockReporter), nil, nil)
+	require.EqualError(t, wf.View(ctx, domain.ViewArgs{Reports: m.Path(missing)}),
+		"no reports directory at "+missing+"; run `gooze run` first, or pass -o with the reports directory")
 }
 
 func TestWorkflow_Merge_WithoutBaselineDeduplicatesShardSources(t *testing.T) {
