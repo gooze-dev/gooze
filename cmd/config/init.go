@@ -20,8 +20,7 @@ overwritten.`,
 			targetPath := filepath.Join(deps.Dir, deps.FileName)
 
 			if err := viper.SafeWriteConfigAs(targetPath); err != nil {
-				var exists viper.ConfigFileAlreadyExistsError
-				if errors.As(err, &exists) {
+				if _, ok := errors.AsType[viper.ConfigFileAlreadyExistsError](err); ok {
 					return fmt.Errorf("%s already exists; edit it or remove it first", targetPath)
 				}
 

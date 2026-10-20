@@ -596,11 +596,7 @@ func (m *testExecutionModel) toggleSelectedDiff() {
 }
 
 func (m testExecutionModel) diffMaxLines() int {
-	maxLines := max(m.height/3, 6)
-
-	if maxLines > 20 {
-		maxLines = 20
-	}
+	maxLines := min(max(m.height/3, 6), 20)
 
 	return maxLines
 }
