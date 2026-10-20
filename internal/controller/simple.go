@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/olekukonko/tablewriter"
+	"github.com/olekukonko/tablewriter/tw"
 	"github.com/spf13/cobra"
 	"gooze.dev/pkg/gooze/internal/domain"
 	m "gooze.dev/pkg/gooze/internal/model"
@@ -75,22 +76,29 @@ func (s *SimpleUI) DisplayEstimation(ctx context.Context, estimation domain.Esti
 func renderEstimationTable(estimation domain.Estimation) string {
 	var tableBuffer bytes.Buffer
 
-	table := tablewriter.NewWriter(&tableBuffer)
-	table.SetHeader([]string{"Path", "Mutations"})
-	table.SetBorder(false)
-	table.SetCenterSeparator("")
-	table.SetColumnAlignment([]int{tablewriter.ALIGN_LEFT, tablewriter.ALIGN_CENTER})
+	table := tablewriter.NewTable(&tableBuffer,
+		tablewriter.WithRendition(tw.Rendition{
+			Borders: tw.Border{Left: tw.Off, Right: tw.Off, Top: tw.Off, Bottom: tw.Off},
+		}),
+		tablewriter.WithAlignment(tw.Alignment{tw.AlignLeft, tw.AlignCenter}),
+		tablewriter.WithFooterAutoFormat(tw.On),
+	)
+	table.Header("Path", "Mutations")
 
 	for _, file := range estimation.Files {
-		table.Append([]string{file.Path, fmt.Sprintf("%d", file.Count)})
+		if err := table.Append(file.Path, fmt.Sprintf("%d", file.Count)); err != nil {
+			return fmt.Sprintf("failed to render estimation table: %v\n", err)
+		}
 	}
 
-	table.SetFooter([]string{
+	table.Footer(
 		fmt.Sprintf("Total Files %d", len(estimation.Files)),
 		fmt.Sprintf("%d", estimation.Total),
-	})
+	)
 
-	table.Render()
+	if err := table.Render(); err != nil {
+		return fmt.Sprintf("failed to render estimation table: %v\n", err)
+	}
 
 	return tableBuffer.String()
 }
