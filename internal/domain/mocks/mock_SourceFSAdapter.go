@@ -7,7 +7,7 @@ import (
 	fs "io/fs"
 
 	mock "github.com/stretchr/testify/mock"
-	adapter "gooze.dev/pkg/gooze/internal/adapter"
+	domain "gooze.dev/pkg/gooze/internal/domain"
 	model "gooze.dev/pkg/gooze/internal/model"
 )
 
@@ -735,7 +735,7 @@ func (_c *MockSourceFSAdapter_Stream_Call) RunAndReturn(run func(context.Context
 }
 
 // Walk provides a mock function with given fields: ctx, root, recursive, fn
-func (_m *MockSourceFSAdapter) Walk(ctx context.Context, root model.Path, recursive bool, fn adapter.FilepathWalkFunc) error {
+func (_m *MockSourceFSAdapter) Walk(ctx context.Context, root model.Path, recursive bool, fn domain.FilepathWalkFunc) error {
 	ret := _m.Called(ctx, root, recursive, fn)
 
 	if len(ret) == 0 {
@@ -743,7 +743,7 @@ func (_m *MockSourceFSAdapter) Walk(ctx context.Context, root model.Path, recurs
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, model.Path, bool, adapter.FilepathWalkFunc) error); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, model.Path, bool, domain.FilepathWalkFunc) error); ok {
 		r0 = rf(ctx, root, recursive, fn)
 	} else {
 		r0 = ret.Error(0)
@@ -761,14 +761,14 @@ type MockSourceFSAdapter_Walk_Call struct {
 //   - ctx context.Context
 //   - root model.Path
 //   - recursive bool
-//   - fn adapter.FilepathWalkFunc
+//   - fn domain.FilepathWalkFunc
 func (_e *MockSourceFSAdapter_Expecter) Walk(ctx interface{}, root interface{}, recursive interface{}, fn interface{}) *MockSourceFSAdapter_Walk_Call {
 	return &MockSourceFSAdapter_Walk_Call{Call: _e.mock.On("Walk", ctx, root, recursive, fn)}
 }
 
-func (_c *MockSourceFSAdapter_Walk_Call) Run(run func(ctx context.Context, root model.Path, recursive bool, fn adapter.FilepathWalkFunc)) *MockSourceFSAdapter_Walk_Call {
+func (_c *MockSourceFSAdapter_Walk_Call) Run(run func(ctx context.Context, root model.Path, recursive bool, fn domain.FilepathWalkFunc)) *MockSourceFSAdapter_Walk_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(model.Path), args[2].(bool), args[3].(adapter.FilepathWalkFunc))
+		run(args[0].(context.Context), args[1].(model.Path), args[2].(bool), args[3].(domain.FilepathWalkFunc))
 	})
 	return _c
 }
@@ -778,7 +778,7 @@ func (_c *MockSourceFSAdapter_Walk_Call) Return(_a0 error) *MockSourceFSAdapter_
 	return _c
 }
 
-func (_c *MockSourceFSAdapter_Walk_Call) RunAndReturn(run func(context.Context, model.Path, bool, adapter.FilepathWalkFunc) error) *MockSourceFSAdapter_Walk_Call {
+func (_c *MockSourceFSAdapter_Walk_Call) RunAndReturn(run func(context.Context, model.Path, bool, domain.FilepathWalkFunc) error) *MockSourceFSAdapter_Walk_Call {
 	_c.Call.Return(run)
 	return _c
 }

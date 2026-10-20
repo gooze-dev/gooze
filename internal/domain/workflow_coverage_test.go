@@ -8,8 +8,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	adaptermocks "gooze.dev/pkg/gooze/internal/adapter/mocks"
-	"gooze.dev/pkg/gooze/internal/domain"
+	domain "gooze.dev/pkg/gooze/internal/domain"
 	domainmocks "gooze.dev/pkg/gooze/internal/domain/mocks"
 	m "gooze.dev/pkg/gooze/internal/model"
 	pkg "gooze.dev/pkg/gooze/pkg"
@@ -18,8 +17,8 @@ import (
 func TestWorkflow_Test_CoverageGateSkipsUncovered(t *testing.T) {
 	ctx := context.Background()
 
-	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
-	mockReportStore := new(adaptermocks.MockReportStore)
+	mockFSAdapter := new(domainmocks.MockSourceFSAdapter)
+	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
 	mockOrchestrator := new(domainmocks.MockOrchestrator)

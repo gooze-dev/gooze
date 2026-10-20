@@ -22,11 +22,11 @@ import (
 	m "gooze.dev/pkg/gooze/internal/model"
 )
 
-var goFileAdapter adapter.GoFileAdapter
-var sourceFSAdapter adapter.SourceFSAdapter
-var reportStore adapter.ReportStore
-var testAdapter adapter.TestRunnerAdapter
-var ociRegistry adapter.OCIRegistry
+var goFileAdapter domain.GoFileAdapter
+var sourceFSAdapter domain.SourceFSAdapter
+var reportStore domain.ReportStore
+var testAdapter domain.TestRunnerAdapter
+var ociRegistry domain.OCIRegistry
 var orchestrator domain.Orchestrator
 var mutagen domain.Mutagen
 var workflow domain.Workflow
@@ -57,7 +57,7 @@ func init() {
 	testAdapter = adapter.NewLocalTestRunnerAdapter()
 	ociRegistry = adapter.NewORASRegistry()
 	orchestrator = domain.NewOrchestrator(sourceFSAdapter, testAdapter)
-	mutagen = domain.NewMutagen(goFileAdapter, sourceFSAdapter)
+	mutagen = domain.NewMutagen(goFileAdapter, sourceFSAdapter, adapter.NewUnifiedDiffer())
 	workflow = domain.NewWorkflow(
 		sourceFSAdapter,
 		reportStore,

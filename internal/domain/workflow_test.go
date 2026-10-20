@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	adaptermocks "gooze.dev/pkg/gooze/internal/adapter/mocks"
 	domain "gooze.dev/pkg/gooze/internal/domain"
 	domainmocks "gooze.dev/pkg/gooze/internal/domain/mocks"
 	m "gooze.dev/pkg/gooze/internal/model"
@@ -93,8 +92,8 @@ func streamMutationsFn(mutations []m.Mutation) func(context.Context, m.Source, f
 func TestWorkflow_Test_Success(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
-	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
-	mockReportStore := new(adaptermocks.MockReportStore)
+	mockFSAdapter := new(domainmocks.MockSourceFSAdapter)
+	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
@@ -156,8 +155,8 @@ func TestWorkflow_Test_Success(t *testing.T) {
 func TestWorkflow_Test_GetSourcesError(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
-	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
-	mockReportStore := new(adaptermocks.MockReportStore)
+	mockFSAdapter := new(domainmocks.MockSourceFSAdapter)
+	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
@@ -193,8 +192,8 @@ func TestWorkflow_Test_GetSourcesError(t *testing.T) {
 func TestWorkflow_Test_GenerateMutationsError(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
-	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
-	mockReportStore := new(adaptermocks.MockReportStore)
+	mockFSAdapter := new(domainmocks.MockSourceFSAdapter)
+	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
@@ -237,8 +236,8 @@ func TestWorkflow_Test_GenerateMutationsError(t *testing.T) {
 func TestWorkflow_Test_TestMutationError(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
-	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
-	mockReportStore := new(adaptermocks.MockReportStore)
+	mockFSAdapter := new(domainmocks.MockSourceFSAdapter)
+	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(ctx, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
@@ -291,8 +290,8 @@ func TestWorkflow_Test_TestMutationError(t *testing.T) {
 func TestWorkflow_Test_SaveReportsError(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
-	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
-	mockReportStore := new(adaptermocks.MockReportStore)
+	mockFSAdapter := new(domainmocks.MockSourceFSAdapter)
+	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(ctx, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
@@ -348,8 +347,8 @@ func TestWorkflow_Test_SaveReportsError(t *testing.T) {
 func TestWorkflow_Test_NoMutations(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
-	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
-	mockReportStore := new(adaptermocks.MockReportStore)
+	mockFSAdapter := new(domainmocks.MockSourceFSAdapter)
+	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
@@ -403,8 +402,8 @@ func TestWorkflow_Test_NoMutations(t *testing.T) {
 func TestWorkflow_Test_MultipleThreads(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
-	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
-	mockReportStore := new(adaptermocks.MockReportStore)
+	mockFSAdapter := new(domainmocks.MockSourceFSAdapter)
+	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(ctx, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
@@ -465,8 +464,8 @@ func TestWorkflow_Test_MultipleThreads(t *testing.T) {
 func TestWorkflow_Test_WithSharding(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
-	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
-	mockReportStore := new(adaptermocks.MockReportStore)
+	mockFSAdapter := new(domainmocks.MockSourceFSAdapter)
+	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
 	mockReporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Return().Maybe()
@@ -534,8 +533,8 @@ func TestWorkflow_Test_WithSharding(t *testing.T) {
 func TestWorkflow_TestThreadsZeroDoesNotPanic(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
-	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
-	mockReportStore := new(adaptermocks.MockReportStore)
+	mockFSAdapter := new(domainmocks.MockSourceFSAdapter)
+	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(ctx, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
@@ -586,8 +585,8 @@ func TestWorkflow_TestThreadsZeroDoesNotPanic(t *testing.T) {
 func TestWorkflow_TestThreadIDWithinBounds(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
-	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
-	mockReportStore := new(adaptermocks.MockReportStore)
+	mockFSAdapter := new(domainmocks.MockSourceFSAdapter)
+	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
@@ -644,8 +643,8 @@ func TestWorkflow_TestThreadIDWithinBounds(t *testing.T) {
 func TestWorkflow_TestThreadIDIsUniqueForThreadsTwo(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
-	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
-	mockReportStore := new(adaptermocks.MockReportStore)
+	mockFSAdapter := new(domainmocks.MockSourceFSAdapter)
+	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
@@ -722,8 +721,8 @@ func TestWorkflow_TestThreadIDIsUniqueForThreadsTwo(t *testing.T) {
 func TestWorkflow_TestWithSkippedMutation(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
-	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
-	mockReportStore := new(adaptermocks.MockReportStore)
+	mockFSAdapter := new(domainmocks.MockSourceFSAdapter)
+	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
@@ -801,8 +800,8 @@ func TestWorkflow_TestWithSkippedMutation(t *testing.T) {
 func TestWorkflow_TestMutationIDExactMatchDoesNotUseHigherID(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
-	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
-	mockReportStore := new(adaptermocks.MockReportStore)
+	mockFSAdapter := new(domainmocks.MockSourceFSAdapter)
+	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
@@ -883,8 +882,8 @@ func TestWorkflow_TestMutationIDExactMatchDoesNotUseHigherID(t *testing.T) {
 func TestWorkflow_TestEmptyResultEntriesReturnsError(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
-	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
-	mockReportStore := new(adaptermocks.MockReportStore)
+	mockFSAdapter := new(domainmocks.MockSourceFSAdapter)
+	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
@@ -962,8 +961,8 @@ func TestWorkflow_TestEmptyResultEntriesReturnsError(t *testing.T) {
 func TestWorkflow_Test_MultipleSources(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
-	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
-	mockReportStore := new(adaptermocks.MockReportStore)
+	mockFSAdapter := new(domainmocks.MockSourceFSAdapter)
+	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
@@ -1031,8 +1030,8 @@ func TestWorkflow_Test_MultipleSources(t *testing.T) {
 func TestWorkflow_NewWorkflowV2(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
-	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
-	mockReportStore := new(adaptermocks.MockReportStore)
+	mockFSAdapter := new(domainmocks.MockSourceFSAdapter)
+	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
@@ -1051,8 +1050,8 @@ func TestWorkflow_NewWorkflowV2(t *testing.T) {
 func TestWorkflow_TestWithSurvivedMutation(t *testing.T) {
 	// Arrange - This test specifically checks that survived mutations include diff data
 	ctx := context.Background()
-	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
-	mockReportStore := new(adaptermocks.MockReportStore)
+	mockFSAdapter := new(domainmocks.MockSourceFSAdapter)
+	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
@@ -1138,8 +1137,8 @@ func TestWorkflow_TestWithSurvivedMutation(t *testing.T) {
 func TestWorkflow_TestWithKilledMutation(t *testing.T) {
 	// Arrange - This test checks that killed mutations do NOT include diff data
 	ctx := context.Background()
-	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
-	mockReportStore := new(adaptermocks.MockReportStore)
+	mockFSAdapter := new(domainmocks.MockSourceFSAdapter)
+	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
@@ -1225,8 +1224,8 @@ func TestWorkflow_TestWithKilledMutation(t *testing.T) {
 func TestWorkflow_Estimate_Success(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
-	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
-	mockReportStore := new(adaptermocks.MockReportStore)
+	mockFSAdapter := new(domainmocks.MockSourceFSAdapter)
+	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
@@ -1266,8 +1265,8 @@ func TestWorkflow_Estimate_Success(t *testing.T) {
 func TestWorkflow_Estimate_StartError(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
-	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
-	mockReportStore := new(adaptermocks.MockReportStore)
+	mockFSAdapter := new(domainmocks.MockSourceFSAdapter)
+	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
@@ -1291,8 +1290,8 @@ func TestWorkflow_Estimate_GetMutationsError(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
 
-	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
-	mockReportStore := new(adaptermocks.MockReportStore)
+	mockFSAdapter := new(domainmocks.MockSourceFSAdapter)
+	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
@@ -1319,8 +1318,8 @@ func TestWorkflow_Estimate_GetMutationsError(t *testing.T) {
 func TestWorkflow_Estimate_DisplayError(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
-	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
-	mockReportStore := new(adaptermocks.MockReportStore)
+	mockFSAdapter := new(domainmocks.MockSourceFSAdapter)
+	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
@@ -1360,8 +1359,8 @@ func TestWorkflow_Estimate_DisplayError(t *testing.T) {
 func TestWorkflow_TestThreadIDStartsAtZero(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
-	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
-	mockReportStore := new(adaptermocks.MockReportStore)
+	mockFSAdapter := new(domainmocks.MockSourceFSAdapter)
+	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
@@ -1417,8 +1416,8 @@ func TestWorkflow_TestThreadIDStartsAtZero(t *testing.T) {
 func TestWorkflow_TestExactMutationIDMatch(t *testing.T) {
 	// Arrange
 	ctx := context.Background()
-	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
-	mockReportStore := new(adaptermocks.MockReportStore)
+	mockFSAdapter := new(domainmocks.MockSourceFSAdapter)
+	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
@@ -1513,7 +1512,7 @@ func TestWorkflow_Merge_ReplacesSupersededBaselineReports(t *testing.T) {
 			Result: m.Result{m.MutationArithmetic: {{MutationID: "m2", Status: m.Killed}}}},
 	}
 
-	mockReportStore := new(adaptermocks.MockReportStore)
+	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().LoadReports(ctx, m.Path(shardDir)).Return(fromShard, nil)
 	mockReportStore.EXPECT().LoadReports(ctx, m.Path(base)).Return(baseline, nil)
 
@@ -1565,7 +1564,7 @@ func TestWorkflow_Merge_DropsDeletedSourcesInsideCheckout(t *testing.T) {
 			Result: m.Result{m.MutationArithmetic: {{MutationID: "m2", Status: m.Killed}}}},
 	}
 
-	mockReportStore := new(adaptermocks.MockReportStore)
+	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().LoadReports(ctx, m.Path(shardDir)).Return(fromShard, nil)
 	mockReportStore.EXPECT().LoadReports(ctx, m.Path(base)).Return(baseline, nil)
 
@@ -1592,8 +1591,8 @@ func TestWorkflow_Merge_DropsDeletedSourcesInsideCheckout(t *testing.T) {
 
 func TestWorkflow_Test_CleansStaleReportsForTestedSources(t *testing.T) {
 	ctx := context.Background()
-	mockFSAdapter := new(adaptermocks.MockSourceFSAdapter)
-	mockReportStore := new(adaptermocks.MockReportStore)
+	mockFSAdapter := new(domainmocks.MockSourceFSAdapter)
+	mockReportStore := new(domainmocks.MockReportStore)
 	mockReporter := new(domainmocks.MockReporter)
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
 	mockWorkspace := new(domainmocks.MockWorkspace)

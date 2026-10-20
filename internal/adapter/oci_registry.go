@@ -17,6 +17,7 @@ import (
 	"oras.land/oras-go/v2/registry/remote/credentials"
 	"oras.land/oras-go/v2/registry/remote/retry"
 
+	"gooze.dev/pkg/gooze/internal/domain"
 	m "gooze.dev/pkg/gooze/internal/model"
 )
 
@@ -31,18 +32,6 @@ const (
 	reportsBlobName = "gooze-reports.tgz"
 )
 
-// RegistryOptions tweaks how the registry is contacted.
-type RegistryOptions struct {
-	PlainHTTP bool // use http instead of https
-	Insecure  bool // skip TLS certificate verification
-}
-
-// OCIRegistry stores and retrieves a reports directory as an OCI artifact.
-type OCIRegistry interface {
-	Push(ctx context.Context, ref string, dir m.Path, opts RegistryOptions) error
-	Pull(ctx context.Context, ref string, dir m.Path, opts RegistryOptions) error
-}
-
 // ORASRegistry implements OCIRegistry using oras-go against any OCI registry.
 type ORASRegistry struct{}
 
@@ -52,7 +41,7 @@ func NewORASRegistry() *ORASRegistry {
 }
 
 // Push packages dir into a gzip blob and pushes it to ref as an OCI artifact.
-func (r *ORASRegistry) Push(ctx context.Context, ref string, dir m.Path, opts RegistryOptions) error {
+func (r *ORASRegistry) Push(ctx context.Context, ref string, dir m.Path, opts domain.RegistryOptions) error {
 	parsed, err := parseTaggedReference(ref)
 	if err != nil {
 		return err
@@ -100,7 +89,7 @@ func (r *ORASRegistry) Push(ctx context.Context, ref string, dir m.Path, opts Re
 }
 
 // Pull fetches the artifact at ref and extracts its reports into dir.
-func (r *ORASRegistry) Pull(ctx context.Context, ref string, dir m.Path, opts RegistryOptions) error {
+func (r *ORASRegistry) Pull(ctx context.Context, ref string, dir m.Path, opts domain.RegistryOptions) error {
 	parsed, err := parseReference(ref)
 	if err != nil {
 		return err
@@ -214,7 +203,7 @@ func (r *ORASRegistry) pack(ctx context.Context, store *file.Store, archivePath,
 }
 
 // repository builds an authenticated remote repository client for ref.
-func (r *ORASRegistry) repository(ref registry.Reference, opts RegistryOptions) (*remote.Repository, error) {
+func (r *ORASRegistry) repository(ref registry.Reference, opts domain.RegistryOptions) (*remote.Repository, error) {
 	repo, err := remote.NewRepository(fmt.Sprintf("%s/%s", ref.Registry, ref.Repository))
 	if err != nil {
 		return nil, fmt.Errorf("create repository client: %w", err)
@@ -234,7 +223,7 @@ func (r *ORASRegistry) repository(ref registry.Reference, opts RegistryOptions) 
 
 // registryClient returns an auth client using env credentials when set, falling
 // back to the Docker credential store.
-func registryClient(host string, opts RegistryOptions) (*auth.Client, error) {
+func registryClient(host string, opts domain.RegistryOptions) (*auth.Client, error) {
 	httpClient := retry.DefaultClient
 	if opts.Insecure {
 		httpClient = insecureRetryClient()

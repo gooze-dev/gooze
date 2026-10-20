@@ -86,7 +86,7 @@ func removeIfBlock(stmt *ast.IfStmt, fset *token.FileSet, content []byte, source
 		return nil
 	}
 
-	return []m.Mutation{createIfRemovalMutation(content, mutated, source, offset)}
+	return []m.Mutation{createIfRemovalMutation(mutated, source, offset)}
 }
 
 // replaceIfWithElse replaces an if statement with its else block content.
@@ -129,8 +129,7 @@ func extractBlockBody(block *ast.BlockStmt, fset *token.FileSet, content []byte)
 }
 
 // createIfRemovalMutation creates a mutation for removing an if block.
-func createIfRemovalMutation(content, mutated []byte, source m.Source, offset int) m.Mutation {
-	diff := diffCode(content, mutated)
+func createIfRemovalMutation(mutated []byte, source m.Source, offset int) m.Mutation {
 	h := sha256.Sum256([]byte(fmt.Sprintf("%s-%s-%d", source.Origin.FullPath, m.MutationBranch.Name, offset+1000)))
 	id := fmt.Sprintf("%x", h)[:16]
 
@@ -139,7 +138,6 @@ func createIfRemovalMutation(content, mutated []byte, source m.Source, offset in
 		Source:      source,
 		Type:        m.MutationBranch,
 		MutatedCode: ensureTrailingNewline(mutated),
-		DiffCode:    diff,
 	}
 }
 
@@ -173,8 +171,6 @@ func removeElseBlock(stmt *ast.IfStmt, fset *token.FileSet, content []byte, sour
 
 	mutated := replaceRange(content, elseKeywordStart, elseEndOffset, "")
 
-	diff := diffCode(content, mutated)
-
 	h := sha256.Sum256([]byte(fmt.Sprintf("%s-%s-%d", source.Origin.FullPath, m.MutationBranch.Name, elseStartOffset+2000)))
 	id := fmt.Sprintf("%x", h)[:16]
 
@@ -183,7 +179,6 @@ func removeElseBlock(stmt *ast.IfStmt, fset *token.FileSet, content []byte, sour
 		Source:      source,
 		Type:        m.MutationBranch,
 		MutatedCode: ensureTrailingNewline(mutated),
-		DiffCode:    diff,
 	}
 
 	mutations = append(mutations, mutation)
@@ -254,8 +249,6 @@ func removeCaseBody(clause *ast.CaseClause, fset *token.FileSet, content []byte,
 
 	mutated := replaceRange(content, bodyStart, endOffset, "")
 
-	diff := diffCode(content, mutated)
-
 	h := sha256.Sum256([]byte(fmt.Sprintf("%s-%s-%d", source.Origin.FullPath, m.MutationBranch.Name, colonOffset+3000)))
 	id := fmt.Sprintf("%x", h)[:16]
 
@@ -264,7 +257,6 @@ func removeCaseBody(clause *ast.CaseClause, fset *token.FileSet, content []byte,
 		Source:      source,
 		Type:        m.MutationBranch,
 		MutatedCode: ensureTrailingNewline(mutated),
-		DiffCode:    diff,
 	}
 
 	mutations = append(mutations, mutation)
@@ -300,7 +292,6 @@ func invertCondition(cond ast.Expr, fset *token.FileSet, content []byte, source 
 // createConditionMutation creates a single condition mutation.
 func createConditionMutation(content []byte, offset, endOffset int, replacement string, source m.Source, idOffset int) m.Mutation {
 	mutated := replaceRange(content, offset, endOffset, replacement)
-	diff := diffCode(content, mutated)
 
 	h := sha256.Sum256([]byte(fmt.Sprintf("%s-%s-%d", source.Origin.FullPath, m.MutationBranch.Name, idOffset)))
 	id := fmt.Sprintf("%x", h)[:16]
@@ -310,7 +301,6 @@ func createConditionMutation(content []byte, offset, endOffset int, replacement 
 		Source:      source,
 		Type:        m.MutationBranch,
 		MutatedCode: ensureTrailingNewline(mutated),
-		DiffCode:    diff,
 	}
 }
 

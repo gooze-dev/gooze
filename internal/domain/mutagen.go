@@ -8,7 +8,6 @@ import (
 	"go/ast"
 	"go/token"
 
-	"gooze.dev/pkg/gooze/internal/adapter"
 	"gooze.dev/pkg/gooze/internal/domain/mutagens"
 	m "gooze.dev/pkg/gooze/internal/model"
 )
@@ -25,15 +24,17 @@ type Mutagen interface {
 
 // mutagen handles pure mutation generation logic.
 type mutagen struct {
-	adapter.GoFileAdapter
-	adapter.SourceFSAdapter
+	GoFileAdapter
+	SourceFSAdapter
+	differ Differ
 }
 
 // NewMutagen creates a new Mutagen instance.
-func NewMutagen(goFileAdapter adapter.GoFileAdapter, sourceFSAdapter adapter.SourceFSAdapter) Mutagen {
+func NewMutagen(goFileAdapter GoFileAdapter, sourceFSAdapter SourceFSAdapter, differ Differ) Mutagen {
 	return &mutagen{
 		GoFileAdapter:   goFileAdapter,
 		SourceFSAdapter: sourceFSAdapter,
+		differ:          differ,
 	}
 }
 
@@ -71,7 +72,7 @@ func (mg *mutagen) StreamMutations(ctx context.Context, source m.Source, fn func
 	}
 
 	for _, mutationType := range mutationTypes {
-		for _, mutation := range collectMutations(mutationType, file, fset, content, source) {
+		for _, mutation := range collectMutations(mutationType, file, fset, content, source, mg.differ) {
 			if err := fn(mutation); err != nil {
 				return err
 			}
@@ -90,7 +91,7 @@ func validateSource(source m.Source) error {
 }
 
 func validateAdapters(mg *mutagen) error {
-	if mg.SourceFSAdapter == nil || mg.GoFileAdapter == nil {
+	if mg.SourceFSAdapter == nil || mg.GoFileAdapter == nil || mg.differ == nil {
 		return fmt.Errorf("missing adapters")
 	}
 
@@ -127,7 +128,7 @@ func (mg *mutagen) loadSourceAST(ctx context.Context, source m.Source) ([]byte, 
 	return content, fset, file, nil
 }
 
-func collectMutations(mutationType m.MutationType, file *ast.File, fset *token.FileSet, content []byte, source m.Source) []m.Mutation {
+func collectMutations(mutationType m.MutationType, file *ast.File, fset *token.FileSet, content []byte, source m.Source, differ Differ) []m.Mutation {
 	ignore := buildIgnoreIndex(file, fset, content)
 	if ignore.file.ignores(mutationType) {
 		return nil
@@ -158,6 +159,7 @@ func collectMutations(mutationType m.MutationType, file *ast.File, fset *token.F
 		nodeMutations := generateMutationsForNode(mutationType, n, fset, content, source)
 		for i := range nodeMutations {
 			nodeMutations[i].Line = lineForOffset(content, firstDifference(content, nodeMutations[i].MutatedCode))
+			nodeMutations[i].DiffCode = differ.Diff(content, nodeMutations[i].MutatedCode)
 		}
 
 		mutations = append(mutations, nodeMutations...)

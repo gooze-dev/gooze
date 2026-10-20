@@ -32,7 +32,6 @@ func GenerateUnaryMutations(n ast.Node, fset *token.FileSet, content []byte, sou
 
 	for _, mutatedOp := range getUnaryAlternatives(unaryExpr.Op) {
 		mutatedCode := replaceRange(content, start, end, mutatedOp.String())
-		diff := diffCode(content, mutatedCode)
 		h := sha256.Sum256(mutatedCode)
 		id := fmt.Sprintf("%x", h)
 		mutations = append(mutations, m.Mutation{
@@ -40,13 +39,11 @@ func GenerateUnaryMutations(n ast.Node, fset *token.FileSet, content []byte, sou
 			Source:      source,
 			Type:        m.MutationUnary,
 			MutatedCode: mutatedCode,
-			DiffCode:    diff,
 		})
 	}
 
 	// Also generate removal mutation (remove the unary operator entirely)
 	mutatedCode := replaceRange(content, start, end, "")
-	diff := diffCode(content, mutatedCode)
 	h := sha256.Sum256(mutatedCode)
 	id := fmt.Sprintf("%x", h)
 	mutations = append(mutations, m.Mutation{
@@ -54,7 +51,6 @@ func GenerateUnaryMutations(n ast.Node, fset *token.FileSet, content []byte, sou
 		Source:      source,
 		Type:        m.MutationUnary,
 		MutatedCode: mutatedCode,
-		DiffCode:    diff,
 	})
 
 	return mutations

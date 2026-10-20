@@ -53,15 +53,6 @@ func TestGenerateArithmeticMutations(t *testing.T) {
 			t.Fatalf("expected mutated code to differ from original")
 		}
 
-		// Test that DiffCode is generated
-		if len(mutation.DiffCode) == 0 {
-			t.Fatalf("expected DiffCode to be generated for mutation %s", mutation.ID)
-		}
-		diffStr := string(mutation.DiffCode)
-		if !strings.Contains(diffStr, "--- original") || !strings.Contains(diffStr, "+++ mutated") {
-			t.Fatalf("expected valid diff format, got: %s", diffStr)
-		}
-
 		mutated := string(mutation.MutatedCode)
 		for op := range expectedOps {
 			if strings.Contains(mutated, "3"+op+"5") {

@@ -59,15 +59,6 @@ func TestGenerateBooleanMutations(t *testing.T) {
 			t.Fatalf("expected mutated code to differ from original")
 		}
 
-		// Test that DiffCode is generated
-		if len(mutation.DiffCode) == 0 {
-			t.Fatalf("expected DiffCode to be generated for mutation %d", i)
-		}
-		diffStr := string(mutation.DiffCode)
-		if !strings.Contains(diffStr, "--- original") || !strings.Contains(diffStr, "+++ mutated") {
-			t.Fatalf("expected valid diff format, got: %s", diffStr)
-		}
-
 		mutated := string(mutation.MutatedCode)
 		for fragment := range expectedFragments {
 			if strings.Contains(mutated, fragment) {

@@ -8,13 +8,6 @@ import (
 	"time"
 )
 
-// TestRunnerAdapter abstracts test execution operations for mutation testing.
-type TestRunnerAdapter interface {
-	// RunGoTest runs 'go test' for the package containing testFile, inside
-	// workDir. Returns the combined stdout/stderr output and any error.
-	RunGoTest(ctx context.Context, workDir, testFile string) (output string, err error)
-}
-
 // LocalTestRunnerAdapter provides a concrete implementation using os/exec.
 type LocalTestRunnerAdapter struct {
 }

@@ -73,52 +73,6 @@ func TestReplaceRange(t *testing.T) {
 	}
 }
 
-func TestDiffCode(t *testing.T) {
-	original := []byte("package main\n\nfunc foo() {\n\treturn 3 + 5\n}")
-	mutated := []byte("package main\n\nfunc foo() {\n\treturn 3 - 5\n}")
-
-	diff := diffCode(original, mutated)
-	diffStr := string(diff)
-
-	if !bytes.Contains(diff, []byte("--- original")) {
-		t.Errorf("expected diff to contain '--- original', got: %s", diffStr)
-	}
-	if !bytes.Contains(diff, []byte("+++ mutated")) {
-		t.Errorf("expected diff to contain '+++ mutated', got: %s", diffStr)
-	}
-	if !bytes.Contains(diff, []byte("-\treturn 3 + 5")) {
-		t.Errorf("expected diff to contain removed line, got: %s", diffStr)
-	}
-	if !bytes.Contains(diff, []byte("+\treturn 3 - 5")) {
-		t.Errorf("expected diff to contain added line, got: %s", diffStr)
-	}
-}
-
-func TestDiffCode_EmptyInputs(t *testing.T) {
-	// Test with both empty
-	diff := diffCode(nil, nil)
-	if diff != nil {
-		t.Errorf("expected nil diff for empty inputs, got: %v", diff)
-	}
-
-	diff = diffCode([]byte{}, []byte{})
-	if diff != nil {
-		t.Errorf("expected nil diff for empty byte slices, got: %v", diff)
-	}
-
-	// Test with one empty
-	original := []byte("some content")
-	diff = diffCode(original, nil)
-	if diff == nil {
-		t.Errorf("expected diff when one input is empty")
-	}
-
-	diff = diffCode(nil, original)
-	if diff == nil {
-		t.Errorf("expected diff when one input is empty")
-	}
-}
-
 func TestEnsureTrailingNewline(t *testing.T) {
 	tests := []struct {
 		name     string

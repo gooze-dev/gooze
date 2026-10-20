@@ -34,7 +34,6 @@ func GenerateBooleanMutations(n ast.Node, fset *token.FileSet, content []byte, s
 	mutated := flipBooleanV2(ident.Name)
 
 	mutatedCode := replaceRange(content, start, end, mutated)
-	diff := diffCode(content, mutatedCode)
 	h := sha256.Sum256(mutatedCode)
 	id := fmt.Sprintf("%x", h)
 
@@ -43,7 +42,6 @@ func GenerateBooleanMutations(n ast.Node, fset *token.FileSet, content []byte, s
 		Source:      source,
 		Type:        m.MutationBoolean,
 		MutatedCode: mutatedCode,
-		DiffCode:    diff,
 	}}
 }
 

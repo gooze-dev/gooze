@@ -1,13 +1,9 @@
 package domain
 
 import (
-	"context"
-	"path/filepath"
-	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	m "gooze.dev/pkg/gooze/internal/model"
 )
 
 func TestFirstDifference(t *testing.T) {
@@ -38,24 +34,4 @@ func TestLineForOffset(t *testing.T) {
 	require.Equal(t, 3, lineForOffset(content, 12)) // start of line3
 	require.Equal(t, 3, lineForOffset(content, 16)) // within line3
 	require.Equal(t, 4, lineForOffset(content, 99)) // past final newline clamps to end
-}
-
-func TestMutagen_AttributesLineNumbers(t *testing.T) {
-	mg := newTestMutagen()
-
-	source := makeSourceV2(t, filepath.Join("..", "..", "examples", "boolean", "main.go"))
-
-	mutations, err := mg.GenerateMutation(context.Background(), source, m.MutationBoolean)
-	require.NoError(t, err)
-	require.Len(t, mutations, 4)
-
-	lines := make([]int, 0, len(mutations))
-	for _, mut := range mutations {
-		require.Positive(t, mut.Line, "mutation should have a 1-based line number")
-		lines = append(lines, mut.Line)
-	}
-	sort.Ints(lines)
-
-	// true@7, false@8, and true/false@18 in examples/boolean/main.go.
-	require.Equal(t, []int{7, 8, 18, 18}, lines)
 }

@@ -8,14 +8,6 @@ import (
 	"log/slog"
 )
 
-// GoFileAdapter encapsulates Go-specific parsing and scope-detection logic so
-// the domain layer can focus on mutation rules while delegating compilation
-// details to an infrastructure component.
-type GoFileAdapter interface {
-	// Parse builds an AST using the provided file set and optional source bytes.
-	Parse(ctx context.Context, fileSet *token.FileSet, filename string, src []byte) (*ast.File, error)
-}
-
 // LocalGoFileAdapter provides a concrete GoFileAdapter backed by go/parser.
 type LocalGoFileAdapter struct{}
 

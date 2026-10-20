@@ -6,7 +6,7 @@ import (
 	context "context"
 
 	mock "github.com/stretchr/testify/mock"
-	adapter "gooze.dev/pkg/gooze/internal/adapter"
+	domain "gooze.dev/pkg/gooze/internal/domain"
 	model "gooze.dev/pkg/gooze/internal/model"
 )
 
@@ -24,7 +24,7 @@ func (_m *MockOCIRegistry) EXPECT() *MockOCIRegistry_Expecter {
 }
 
 // Pull provides a mock function with given fields: ctx, ref, dir, opts
-func (_m *MockOCIRegistry) Pull(ctx context.Context, ref string, dir model.Path, opts adapter.RegistryOptions) error {
+func (_m *MockOCIRegistry) Pull(ctx context.Context, ref string, dir model.Path, opts domain.RegistryOptions) error {
 	ret := _m.Called(ctx, ref, dir, opts)
 
 	if len(ret) == 0 {
@@ -32,7 +32,7 @@ func (_m *MockOCIRegistry) Pull(ctx context.Context, ref string, dir model.Path,
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, model.Path, adapter.RegistryOptions) error); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, string, model.Path, domain.RegistryOptions) error); ok {
 		r0 = rf(ctx, ref, dir, opts)
 	} else {
 		r0 = ret.Error(0)
@@ -50,14 +50,14 @@ type MockOCIRegistry_Pull_Call struct {
 //   - ctx context.Context
 //   - ref string
 //   - dir model.Path
-//   - opts adapter.RegistryOptions
+//   - opts domain.RegistryOptions
 func (_e *MockOCIRegistry_Expecter) Pull(ctx interface{}, ref interface{}, dir interface{}, opts interface{}) *MockOCIRegistry_Pull_Call {
 	return &MockOCIRegistry_Pull_Call{Call: _e.mock.On("Pull", ctx, ref, dir, opts)}
 }
 
-func (_c *MockOCIRegistry_Pull_Call) Run(run func(ctx context.Context, ref string, dir model.Path, opts adapter.RegistryOptions)) *MockOCIRegistry_Pull_Call {
+func (_c *MockOCIRegistry_Pull_Call) Run(run func(ctx context.Context, ref string, dir model.Path, opts domain.RegistryOptions)) *MockOCIRegistry_Pull_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(string), args[2].(model.Path), args[3].(adapter.RegistryOptions))
+		run(args[0].(context.Context), args[1].(string), args[2].(model.Path), args[3].(domain.RegistryOptions))
 	})
 	return _c
 }
@@ -67,13 +67,13 @@ func (_c *MockOCIRegistry_Pull_Call) Return(_a0 error) *MockOCIRegistry_Pull_Cal
 	return _c
 }
 
-func (_c *MockOCIRegistry_Pull_Call) RunAndReturn(run func(context.Context, string, model.Path, adapter.RegistryOptions) error) *MockOCIRegistry_Pull_Call {
+func (_c *MockOCIRegistry_Pull_Call) RunAndReturn(run func(context.Context, string, model.Path, domain.RegistryOptions) error) *MockOCIRegistry_Pull_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // Push provides a mock function with given fields: ctx, ref, dir, opts
-func (_m *MockOCIRegistry) Push(ctx context.Context, ref string, dir model.Path, opts adapter.RegistryOptions) error {
+func (_m *MockOCIRegistry) Push(ctx context.Context, ref string, dir model.Path, opts domain.RegistryOptions) error {
 	ret := _m.Called(ctx, ref, dir, opts)
 
 	if len(ret) == 0 {
@@ -81,7 +81,7 @@ func (_m *MockOCIRegistry) Push(ctx context.Context, ref string, dir model.Path,
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, model.Path, adapter.RegistryOptions) error); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, string, model.Path, domain.RegistryOptions) error); ok {
 		r0 = rf(ctx, ref, dir, opts)
 	} else {
 		r0 = ret.Error(0)
@@ -99,14 +99,14 @@ type MockOCIRegistry_Push_Call struct {
 //   - ctx context.Context
 //   - ref string
 //   - dir model.Path
-//   - opts adapter.RegistryOptions
+//   - opts domain.RegistryOptions
 func (_e *MockOCIRegistry_Expecter) Push(ctx interface{}, ref interface{}, dir interface{}, opts interface{}) *MockOCIRegistry_Push_Call {
 	return &MockOCIRegistry_Push_Call{Call: _e.mock.On("Push", ctx, ref, dir, opts)}
 }
 
-func (_c *MockOCIRegistry_Push_Call) Run(run func(ctx context.Context, ref string, dir model.Path, opts adapter.RegistryOptions)) *MockOCIRegistry_Push_Call {
+func (_c *MockOCIRegistry_Push_Call) Run(run func(ctx context.Context, ref string, dir model.Path, opts domain.RegistryOptions)) *MockOCIRegistry_Push_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(string), args[2].(model.Path), args[3].(adapter.RegistryOptions))
+		run(args[0].(context.Context), args[1].(string), args[2].(model.Path), args[3].(domain.RegistryOptions))
 	})
 	return _c
 }
@@ -116,7 +116,7 @@ func (_c *MockOCIRegistry_Push_Call) Return(_a0 error) *MockOCIRegistry_Push_Cal
 	return _c
 }
 
-func (_c *MockOCIRegistry_Push_Call) RunAndReturn(run func(context.Context, string, model.Path, adapter.RegistryOptions) error) *MockOCIRegistry_Push_Call {
+func (_c *MockOCIRegistry_Push_Call) RunAndReturn(run func(context.Context, string, model.Path, domain.RegistryOptions) error) *MockOCIRegistry_Push_Call {
 	_c.Call.Return(run)
 	return _c
 }

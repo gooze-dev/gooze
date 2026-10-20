@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"golang.org/x/sync/errgroup"
-	"gooze.dev/pkg/gooze/internal/adapter"
 	m "gooze.dev/pkg/gooze/internal/model"
 	pkg "gooze.dev/pkg/gooze/pkg"
 )
@@ -63,8 +62,8 @@ type Workflow interface {
 }
 
 type workflow struct {
-	reports      adapter.ReportStore
-	sources      adapter.SourceFSAdapter
+	reports      ReportStore
+	sources      SourceFSAdapter
 	progress     Reporter
 	orchestrator Orchestrator
 	mutagen      Mutagen
@@ -72,8 +71,8 @@ type workflow struct {
 
 // NewWorkflow creates a new Workflow instance with the provided dependencies.
 func NewWorkflow(
-	fsAdapter adapter.SourceFSAdapter,
-	reportStore adapter.ReportStore,
+	fsAdapter SourceFSAdapter,
+	reportStore ReportStore,
 	reporter Reporter,
 	orchestrator Orchestrator,
 	mutagen Mutagen,
