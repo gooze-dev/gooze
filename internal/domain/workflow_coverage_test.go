@@ -60,7 +60,7 @@ func TestWorkflow_Test_CoverageGateSkipsUncovered(t *testing.T) {
 		Once()
 
 	var saved []m.Report
-	mockReportStore.EXPECT().SaveSpillReports(ctx, mock.Anything, mock.Anything).
+	mockReportStore.EXPECT().SaveReports(ctx, mock.Anything, mock.Anything).
 		RunAndReturn(func(_ context.Context, _ m.Path, reports pkg.FileSpill[m.Report]) error {
 			saved = collectSpillReports(t, reports)
 			return nil

@@ -86,13 +86,11 @@ type TestRunnerAdapter interface {
 
 // ReportStore persists and loads mutation reports.
 type ReportStore interface {
-	SaveReports(ctx context.Context, path m.Path, reports []m.Report) error
-	SaveSpillReports(ctx context.Context, path m.Path, reports pkg.FileSpill[m.Report]) error
+	SaveReports(ctx context.Context, path m.Path, reports pkg.FileSpill[m.Report]) error
 	RegenerateIndex(ctx context.Context, path m.Path) error
-	LoadReports(ctx context.Context, path m.Path) ([]m.Report, error)
 	LoadSpillReports(ctx context.Context, path m.Path) (pkg.FileSpill[m.Report], error)
-	CheckUpdates(ctx context.Context, path m.Path, sources []m.Source) ([]m.Source, error)
-	CleanReports(ctx context.Context, path m.Path, sources []m.Source) error
+	CheckUpdates(ctx context.Context, path m.Path, sources pkg.FileSpill[m.Source]) (changed, deleted pkg.FileSpill[m.Source], err error)
+	CleanReports(ctx context.Context, path m.Path, sources pkg.FileSpill[m.Source]) error
 }
 
 // RegistryOptions tweaks how the registry is contacted.

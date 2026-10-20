@@ -3,6 +3,7 @@ package pkg
 
 import (
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -198,4 +199,37 @@ func NewFileSpill[T any]() (FileSpill[T], error) {
 		encoder: gob.NewEncoder(file),
 		length:  0,
 	}, nil
+}
+
+// FromSlice creates a FileSpill holding items in order.
+func FromSlice[T any](items []T) (FileSpill[T], error) {
+	spill, err := NewFileSpill[T]()
+	if err != nil {
+		return nil, err
+	}
+
+	if err := spill.AppendBatch(items); err != nil {
+		return nil, errors.Join(err, spill.Close())
+	}
+
+	return spill, nil
+}
+
+// ToSlice reads every item of the spill into a slice, in order.
+func ToSlice[T any](spill FileSpill[T]) ([]T, error) {
+	var items []T
+
+	err := spill.Range(func(_ uint64, item T) error {
+		items = append(items, item)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if items == nil {
+		items = []T{}
+	}
+
+	return items, nil
 }
