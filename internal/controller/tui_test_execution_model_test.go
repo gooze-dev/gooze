@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -381,5 +382,25 @@ func TestTestExecutionModel_ParallelMutationTracking(t *testing.T) {
 	}
 	if m.progressPercent != 1.0 {
 		t.Fatalf("progressPercent = %v, want 1.0", m.progressPercent)
+	}
+}
+
+func TestTestExecutionModel_CompletedMutationsAppendToListInOrder(t *testing.T) {
+	m := newTestExecutionModel()
+	m.totalMutations = 3
+
+	for i, file := range []string{"a.go", "b.go", "c.go"} {
+		m = m.handleCompletedMutation(completedMutationMsg{id: fmt.Sprintf("hash-%d", i), kind: "arith", displayPath: file, status: "survived"})
+	}
+
+	items := m.resultsList.Items()
+	if len(items) != 3 {
+		t.Fatalf("expected 3 list items, got %d", len(items))
+	}
+
+	for i, want := range []string{"a.go", "b.go", "c.go"} {
+		if got := items[i].(testResult).file; got != want {
+			t.Fatalf("item %d file = %q, want %q", i, got, want)
+		}
 	}
 }
