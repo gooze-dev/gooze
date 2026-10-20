@@ -934,3 +934,136 @@ func TestLocalReportStore_MarshalReport_WritesErrorString(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, string(data), "boom")
 }
+
+func closedSourceSpill(t *testing.T, sources ...m.Source) pkg.FileSpill[m.Source] {
+	t.Helper()
+
+	spill, err := pkg.FromSlice(sources)
+	require.NoError(t, err)
+	require.NoError(t, spill.Close())
+
+	return spill
+}
+
+func TestLocalReportStore_RangeErrors(t *testing.T) {
+	rs := &LocalReportStore{}
+	ctx := context.Background()
+
+	corrupt := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(corrupt, "bad.yaml"), []byte("source: [\n"), 0o600))
+
+	unreadable := t.TempDir()
+	require.NoError(t, os.Mkdir(filepath.Join(unreadable, "dir.yaml"), 0o750))
+	require.NoError(t, os.Symlink(filepath.Join(unreadable, "missing"), filepath.Join(unreadable, "dangling.yaml")))
+
+	t.Run("CheckUpdates on corrupt reports", func(t *testing.T) {
+		_, _, err := rs.CheckUpdates(ctx, m.Path(corrupt), sourceSpill(t))
+		require.ErrorContains(t, err, "bad.yaml")
+	})
+
+	t.Run("RegenerateIndex on corrupt reports", func(t *testing.T) {
+		require.ErrorContains(t, rs.RegenerateIndex(ctx, m.Path(corrupt)), "bad.yaml")
+	})
+
+	t.Run("unreadable report file", func(t *testing.T) {
+		_, err := rs.LoadSpillReports(ctx, m.Path(unreadable))
+		require.ErrorContains(t, err, "dangling.yaml")
+	})
+
+	t.Run("CleanReports with closed sources spill", func(t *testing.T) {
+		dir := t.TempDir()
+		require.NoError(t, rs.SaveReports(ctx, m.Path(dir), reportSpill(t, m.Report{
+			Source: m.Source{Origin: &m.File{FullPath: "/abs/a.go", Hash: "h"}},
+			Result: m.Result{m.MutationBoolean: {{MutationID: "b1", Status: m.Killed}}},
+		})))
+
+		require.ErrorContains(t, rs.CleanReports(ctx, m.Path(dir), closedSourceSpill(t, m.Source{Origin: &m.File{FullPath: "/abs/a.go"}})), "read sources to clean")
+	})
+
+	t.Run("CleanReports with corrupt report", func(t *testing.T) {
+		err := rs.CleanReports(ctx, m.Path(corrupt), sourceSpill(t, m.Source{Origin: &m.File{FullPath: "/abs/a.go", Hash: "h"}}))
+		require.ErrorContains(t, err, "bad.yaml")
+	})
+
+	t.Run("CheckUpdates with closed sources spill", func(t *testing.T) {
+		_, _, err := rs.CheckUpdates(ctx, m.Path(t.TempDir()), closedSourceSpill(t, m.Source{Origin: &m.File{FullPath: "/abs/a.go"}}))
+		require.ErrorContains(t, err, "split changed sources")
+	})
+
+	t.Run("spill creation fails", func(t *testing.T) {
+		sources := sourceSpill(t)
+		t.Setenv("TMPDIR", filepath.Join(t.TempDir(), "missing"))
+
+		_, _, err := rs.CheckUpdates(ctx, m.Path(t.TempDir()), sources)
+		require.ErrorContains(t, err, "create changed sources spill")
+
+		_, err = rs.LoadSpillReports(ctx, m.Path(t.TempDir()))
+		require.ErrorContains(t, err, "create filespill")
+	})
+}
+
+func TestLocalReportStore_CleanReports_IgnoresNilAndOriginlessSources(t *testing.T) {
+	rs := &LocalReportStore{}
+	ctx := context.Background()
+	dir := t.TempDir()
+
+	report := m.Report{
+		Source: m.Source{Origin: &m.File{FullPath: "/abs/a.go", Hash: "h"}},
+		Result: m.Result{m.MutationBoolean: {{MutationID: "b1", Status: m.Killed}}},
+	}
+	require.NoError(t, rs.SaveReports(ctx, m.Path(dir), reportSpill(t, report)))
+
+	require.NoError(t, rs.CleanReports(ctx, m.Path(dir), nil))
+	require.NoError(t, rs.CleanReports(ctx, m.Path(dir), sourceSpill(t, m.Source{})))
+
+	reports := spillItems(t, mustLoad(t, rs, dir))
+	require.Len(t, reports, 1)
+}
+
+func mustLoad(t *testing.T, rs *LocalReportStore, dir string) pkg.FileSpill[m.Report] {
+	t.Helper()
+
+	spill, err := rs.LoadSpillReports(context.Background(), m.Path(dir))
+	require.NoError(t, err)
+
+	return spill
+}
+
+func TestLocalReportStore_CheckUpdates_InconsistentStoredVersionsReturnSource(t *testing.T) {
+	rs := &LocalReportStore{}
+	ctx := context.Background()
+	dir := t.TempDir()
+
+	source := m.Source{Origin: &m.File{FullPath: "/abs/a.go", Hash: "same"}}
+	reports := []m.Report{
+		{Source: source, Result: m.Result{m.MutationBoolean: {{MutationID: "b1", Status: m.Killed}}}},
+		{Source: source, Result: m.Result{m.MutationType{Name: m.MutationBoolean.Name, Version: m.MutationBoolean.Version + 1}: {{MutationID: "b2", Status: m.Killed}}}},
+		{Source: m.Source{}, Result: m.Result{m.MutationBoolean: {{MutationID: "orphan", Status: m.Killed}}}},
+	}
+	require.NoError(t, rs.SaveReports(ctx, m.Path(dir), reportSpill(t, reports...)))
+
+	changed, deleted, err := rs.CheckUpdates(ctx, m.Path(dir), sourceSpill(t, source))
+	require.NoError(t, err)
+	require.Len(t, spillItems(t, changed), 1)
+	require.Empty(t, spillItems(t, deleted))
+}
+
+func TestLocalReportStore_RegenerateIndex_SkipsSourcesWithoutHash(t *testing.T) {
+	rs := &LocalReportStore{}
+	ctx := context.Background()
+	dir := t.TempDir()
+
+	require.NoError(t, rs.SaveReports(ctx, m.Path(dir), reportSpill(t, m.Report{
+		Source: m.Source{Origin: &m.File{FullPath: "/abs/a.go"}},
+		Result: m.Result{m.MutationBoolean: {{MutationID: "b1", Status: m.Killed}}},
+	})))
+	require.NoError(t, rs.RegenerateIndex(ctx, m.Path(dir)))
+
+	data, err := os.ReadFile(filepath.Join(dir, "_index.yaml"))
+	require.NoError(t, err)
+
+	var idx indexEntry
+	require.NoError(t, yaml.Unmarshal(data, &idx))
+	require.Equal(t, 1, idx.TotalMutations)
+	require.Empty(t, idx.Result)
+}

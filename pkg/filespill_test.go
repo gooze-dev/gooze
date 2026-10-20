@@ -4,6 +4,7 @@ import (
 	"errors"
 	"math"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -746,5 +747,17 @@ func TestToSlice_ClosedSpillReturnsError(t *testing.T) {
 	require.NoError(t, spill.Close())
 
 	_, err = ToSlice(spill)
+	require.Error(t, err)
+}
+
+func TestFromSlice_UnencodableItemReturnsError(t *testing.T) {
+	_, err := FromSlice([]chan int{make(chan int)})
+	require.Error(t, err)
+}
+
+func TestFromSlice_TempDirUnavailableReturnsError(t *testing.T) {
+	t.Setenv("TMPDIR", filepath.Join(t.TempDir(), "missing"))
+
+	_, err := FromSlice([]int{1})
 	require.Error(t, err)
 }
