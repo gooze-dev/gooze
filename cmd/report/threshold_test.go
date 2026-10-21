@@ -52,6 +52,17 @@ func TestThresholdFlags(t *testing.T) {
 	assert.Equal(t, domain.Thresholds{Key: "threshold.diff", Average: 90, File: 95}, got)
 }
 
+func TestThresholdFlags_HelpShowsOff(t *testing.T) {
+	cmd := &cobra.Command{Use: "x"}
+	AddThresholdFlags(cmd, "threshold", "threshold")
+
+	for _, name := range []string{"threshold-total", "threshold-average", "threshold-file"} {
+		flag := cmd.Flags().Lookup(name)
+		require.NotNil(t, flag, name)
+		assert.Equal(t, "0", flag.DefValue, name)
+	}
+}
+
 func TestThresholdFlags_OutOfRange(t *testing.T) {
 	defer viper.Reset()
 

@@ -60,6 +60,7 @@ func (f ThresholdFlags) Read(cmd *cobra.Command) (domain.Thresholds, error) {
 	return t, nil
 }
 
+// value returns the threshold name from its flag or the config.
 func (f ThresholdFlags) value(cmd *cobra.Command, name string) (float64, error) {
 	key := f.key + "." + name
 	field, _ := config.Lookup(key)
@@ -67,7 +68,8 @@ func (f ThresholdFlags) value(cmd *cobra.Command, name string) (float64, error) 
 	if flag := f.prefix + "-" + name; cmd.Flags().Changed(flag) {
 		value, _ := cmd.Flags().GetFloat64(flag)
 		if err := field.CheckFloat(value); err != nil {
-			return 0, fmt.Errorf("invalid --%s: %w", flag, err)
+			// Equivalent: Read ignores the number when err is set.
+			return 0, fmt.Errorf("invalid --%s: %w", flag, err) //gooze:ignore numbers
 		}
 
 		return value, nil
@@ -75,11 +77,13 @@ func (f ThresholdFlags) value(cmd *cobra.Command, name string) (float64, error) 
 
 	value, err := cast.ToFloat64E(viper.Get(key))
 	if err != nil {
-		return 0, fmt.Errorf("invalid %s: %q is not a number", key, viper.GetString(key))
+		// Equivalent: Read ignores the number when err is set.
+		return 0, fmt.Errorf("invalid %s: %q is not a number", key, viper.GetString(key)) //gooze:ignore numbers
 	}
 
 	if err := field.CheckFloat(value); err != nil {
-		return 0, fmt.Errorf("invalid %s: %w", key, err)
+		// Equivalent: Read ignores the number when err is set.
+		return 0, fmt.Errorf("invalid %s: %w", key, err) //gooze:ignore numbers
 	}
 
 	return value, nil
