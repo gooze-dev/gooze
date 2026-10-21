@@ -86,6 +86,7 @@ func TestWorkflow_View_NoMatchingPathsReturnsError(t *testing.T) {
 	wf := domain.NewWorkflow(nil, adapter.NewReportStore(), new(domainmocks.MockReporter), nil, nil)
 	err := wf.View(context.Background(), domain.ViewArgs{Reports: m.Path(dir), Paths: []m.Path{"internal/...", "x.go"}})
 	require.EqualError(t, err, "no reports in "+dir+" match internal/... x.go")
+	assert.Equal(t, m.ExitNoReports, exitCodeOf(err))
 }
 
 func TestWorkflow_ViewAll_FiltersByPath(t *testing.T) {
@@ -116,7 +117,9 @@ func TestWorkflow_Merge_MissingReportsDirReturnsError(t *testing.T) {
 	reporter.EXPECT().Close(ctx).Return().Once()
 
 	wf := domain.NewWorkflow(nil, adapter.NewReportStore(), reporter, nil, nil)
-	require.ErrorContains(t, wf.Merge(ctx, domain.MergeArgs{Reports: m.Path(missing)}), "no reports directory at "+missing)
+	err := wf.Merge(ctx, domain.MergeArgs{Reports: m.Path(missing)})
+	require.ErrorContains(t, err, "no reports directory at "+missing)
+	assert.Equal(t, m.ExitNoReports, exitCodeOf(err))
 }
 
 func TestWorkflow_View_EmptyReportsDirWithoutPathsDisplaysEmptySummary(t *testing.T) {

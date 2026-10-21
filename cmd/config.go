@@ -71,7 +71,7 @@ func validateConfig() error {
 		}
 
 		if err := field.CheckInt(viper.GetInt(key)); err != nil {
-			return fmt.Errorf("invalid %s: %w", key, err)
+			return usageError(fmt.Errorf("invalid %s: %w", key, err))
 		}
 	}
 

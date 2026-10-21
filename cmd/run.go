@@ -56,7 +56,7 @@ func newRunCmd() *cobra.Command {
 			}
 
 			if totalShards > 1 && estimateArgs.Run != "" {
-				return errRunWithShard
+				return usageError(errRunWithShard)
 			}
 
 			timeoutSeconds := viper.GetInt64(config.KeyRunMutationTimeout)
@@ -132,11 +132,11 @@ func parseShardFlag(shard string) (int, int, error) {
 
 	n, err := fmt.Sscanf(shard, "%d/%d", &index, &total)
 	if err != nil || n != 2 || fmt.Sprintf("%d/%d", index, total) != strings.TrimSpace(shard) {
-		return 0, 0, fmt.Errorf("invalid --shard %q: expected INDEX/TOTAL (e.g. 0/3)", shard)
+		return 0, 0, usageError(fmt.Errorf("invalid --shard %q: expected INDEX/TOTAL (e.g. 0/3)", shard))
 	}
 
 	if total <= 0 || index < 0 || index >= total {
-		return 0, 0, fmt.Errorf("invalid --shard %q: index must satisfy 0 <= INDEX < TOTAL", shard)
+		return 0, 0, usageError(fmt.Errorf("invalid --shard %q: index must satisfy 0 <= INDEX < TOTAL", shard))
 	}
 
 	return index, total, nil

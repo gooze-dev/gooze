@@ -641,7 +641,7 @@ func compileIgnoreRegexps(patterns []string) ([]*regexp.Regexp, error) {
 
 		re, err := regexp.Compile(pattern)
 		if err != nil {
-			return nil, fmt.Errorf("invalid ignore pattern %q: %w", pattern, err)
+			return nil, &m.CodedError{Code: m.ExitUsage, Err: fmt.Errorf("invalid ignore pattern %q: %w", pattern, err)}
 		}
 
 		regexps = append(regexps, re)

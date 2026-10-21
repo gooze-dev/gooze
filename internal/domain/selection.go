@@ -126,7 +126,7 @@ func ParseMutagens(values []string) ([]mgen.Type, error) {
 
 			i := slices.IndexFunc(DefaultMutations, func(t mgen.Type) bool { return t.Name == name })
 			if i < 0 {
-				return nil, fmt.Errorf("unknown mutagen %q; gooze runs %s", name, defaultMutagenNames())
+				return nil, WithExitCode(m.ExitUsage, fmt.Errorf("unknown mutagen %q; gooze runs %s", name, defaultMutagenNames()))
 			}
 
 			if !slices.Contains(types, DefaultMutations[i]) {
@@ -155,7 +155,7 @@ func (w *workflow) selection(ctx context.Context, args EstimateArgs) (Selection,
 	if args.Run != "" {
 		re, err := regexp.Compile(args.Run)
 		if err != nil {
-			return Selection{}, fmt.Errorf("invalid --run pattern %q: %w", args.Run, err)
+			return Selection{}, WithExitCode(m.ExitUsage, fmt.Errorf("invalid --run pattern %q: %w", args.Run, err))
 		}
 
 		sel.Run = re

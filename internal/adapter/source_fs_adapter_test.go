@@ -650,6 +650,15 @@ func TestShouldIgnorePath_MatchesWorkingDirRelativePath(t *testing.T) {
 	assert.False(t, shouldIgnorePath(filepath.Join(root, "pkg", "vendor_helper.go"), res))
 }
 
+func TestCompileIgnoreRegexps_BadPatternIsAUsageError(t *testing.T) {
+	_, err := compileIgnoreRegexps([]string{"^vendor/", "("})
+
+	var coded *m.CodedError
+	require.ErrorAs(t, err, &coded)
+	assert.Equal(t, m.ExitUsage, coded.Code)
+	assert.ErrorContains(t, err, `invalid ignore pattern "("`)
+}
+
 func TestLocalSourceFSAdapter_CopyDir_KeepsVendorAndSymlinks(t *testing.T) {
 	adapter := NewLocalSourceFSAdapter()
 	src := t.TempDir()

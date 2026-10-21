@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
@@ -36,7 +37,9 @@ func TestReportPublisher_Pull(t *testing.T) {
 func TestReportPublisher_Validation(t *testing.T) {
 	pub := domain.NewReportPublisher(domainmocks.NewMockOCIRegistry(t))
 
-	require.Error(t, pub.Push(context.Background(), domain.PushArgs{Reports: "/r"})) // missing ref
+	err := pub.Push(context.Background(), domain.PushArgs{Reports: "/r"}) // missing ref
+	require.Error(t, err)
+	assert.Equal(t, m.ExitUsage, exitCodeOf(err))
 	require.Error(t, pub.Push(context.Background(), domain.PushArgs{Ref: "x"}))      // missing reports
 	require.Error(t, pub.Pull(context.Background(), domain.PullArgs{Reports: "/r"})) // missing ref
 }
@@ -50,4 +53,8 @@ func TestReportPublisher_PropagatesError(t *testing.T) {
 
 	err := pub.Push(context.Background(), domain.PushArgs{Reports: "/r", Ref: "x"})
 	require.ErrorIs(t, err, boom)
+	assert.Equal(t, m.ExitRegistry, exitCodeOf(err))
+
+	reg.On("Pull", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(boom)
+	assert.Equal(t, m.ExitRegistry, exitCodeOf(pub.Pull(context.Background(), domain.PullArgs{Reports: "/r", Ref: "x"})))
 }

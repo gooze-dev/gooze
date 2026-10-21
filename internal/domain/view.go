@@ -64,7 +64,7 @@ func (w *workflow) View(ctx context.Context, args ViewArgs) error {
 	}
 
 	if len(summary.Files) == 0 && len(args.Paths) > 0 {
-		return fmt.Errorf("no reports in %s match %s", args.Reports, joinPaths(args.Paths))
+		return WithExitCode(m.ExitNoReports, fmt.Errorf("no reports in %s match %s", args.Reports, joinPaths(args.Paths)))
 	}
 
 	w.progress.DisplayReportSummary(ctx, summary)
@@ -139,7 +139,7 @@ func joinPaths(paths []m.Path) string {
 }
 
 func noReportsError(dir m.Path) error {
-	return fmt.Errorf("no reports directory at %s; run `gooze run` first, or pass -o with the reports directory", dir)
+	return WithExitCode(m.ExitNoReports, fmt.Errorf("no reports directory at %s; run `gooze run` first, or pass -o with the reports directory", dir))
 }
 
 // summarizeView counts the results of the reports matching paths per file and
