@@ -10,4 +10,5 @@ var (
 	_ domain.OCIRegistry       = (*ORASRegistry)(nil)
 	_ domain.Differ            = (*UnifiedDiffer)(nil)
 	_ domain.ReleaseChecker    = (*ModuleProxyReleaseChecker)(nil)
+	_ domain.ChangeDetector    = (*GitChangeDetector)(nil)
 )
