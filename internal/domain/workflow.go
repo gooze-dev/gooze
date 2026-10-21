@@ -176,7 +176,7 @@ func (w *workflow) Test(ctx context.Context, args TestArgs) error {
 			return fmt.Errorf("load coverage profile: %w", err)
 		}
 
-		reports, err := w.testReports(ctx, mutations, gate, args.Threads, args.MutationTimeout)
+		reports, err := w.testReports(ctx, mutations, gate, sel, args.Threads, args.MutationTimeout)
 		if err != nil {
 			slog.Error("Failed to run mutation tests", "error", err)
 			return fmt.Errorf("run mutation tests: %w", err)
@@ -207,8 +207,7 @@ func (w *workflow) cleanDeleted(ctx context.Context, base, reportsDir m.Path, de
 
 // generateMutations generates every mutation of the given sources once,
 // keeping those include accepts and sel selects, and spills them so the test
-// pass can replay them without regenerating or holding them in memory. Kept
-// mutations carry their source's report scope.
+// pass can replay them without regenerating or holding them in memory.
 func (w *workflow) generateMutations(ctx context.Context, sources pkg.FileSpill[rpt.Source], include func(m.Mutation) bool, sel Selection) (pkg.FileSpill[m.Mutation], int, error) {
 	mutations, err := pkg.NewFileSpill[m.Mutation]()
 	if err != nil {
@@ -218,15 +217,12 @@ func (w *workflow) generateMutations(ctx context.Context, sources pkg.FileSpill[
 	total := 0
 
 	err = sources.Range(func(_ uint64, source rpt.Source) error {
-		reportScope := sel.ReportScope(source)
-
 		return w.mutagen.StreamMutations(ctx, source, func(mutation m.Mutation) error {
 			if (include != nil && !include(mutation)) || !sel.Includes(mutation) {
 				return nil
 			}
 
 			total++
-			mutation.Scope = reportScope
 
 			return mutations.Append(mutation)
 		}, sel.Types()...)
@@ -930,6 +926,7 @@ func (w *workflow) testReports(
 	ctx context.Context,
 	mutations pkg.FileSpill[m.Mutation],
 	gate *CoverageIndex,
+	sel Selection,
 	threads int,
 	mutationTimeout time.Duration,
 ) (pkg.FileSpill[m.Report], error) {
@@ -953,7 +950,7 @@ func (w *workflow) testReports(
 	collected := make(chan collectorResult, 1)
 
 	go func() {
-		collected <- w.collectResults(ctx, results, reports)
+		collected <- w.collectResults(ctx, results, reports, sel.ReportScope)
 	}()
 
 	var group errgroup.Group
@@ -1014,6 +1011,7 @@ func (w *workflow) collectResults(
 	ctx context.Context,
 	results <-chan mutationOutcome,
 	reports pkg.FileSpill[m.Report],
+	scopeOf func(rpt.Source) *rpt.Scope,
 ) collectorResult {
 	var collected collectorResult
 
@@ -1023,7 +1021,7 @@ func (w *workflow) collectResults(
 			continue
 		}
 
-		if err := reports.Append(buildReport(outcome.mutation, outcome.result)); err != nil {
+		if err := reports.Append(buildReport(outcome.mutation, outcome.result, scopeOf(outcome.mutation.Source))); err != nil {
 			slog.Error("failed to append report to filespill", "error", err)
 
 			if collected.fatalErr == nil {
@@ -1039,12 +1037,14 @@ func (w *workflow) collectResults(
 	return collected
 }
 
-func buildReport(mutation m.Mutation, result m.Result) m.Report {
+// buildReport records the result of mutation; scope is what the run's
+// selection covered of the source (nil: all of it).
+func buildReport(mutation m.Mutation, result m.Result, scope *rpt.Scope) m.Report {
 	report := m.Report{
 		Source: mutation.Source,
 		Result: result,
 		Line:   mutation.Line,
-		Scope:  mutation.Scope,
+		Scope:  scope,
 	}
 
 	if getMutationStatus(result, mutation) != rpt.Killed {
