@@ -172,3 +172,11 @@ func TestField_CheckInt(t *testing.T) {
 		})
 	}
 }
+
+func TestRunMutagensListsItsValues(t *testing.T) {
+	field, ok := Lookup(KeyRunMutagens)
+	require.True(t, ok)
+	assert.Equal(t, KindStringList, field.Kind)
+	assert.Equal(t, []string{"arithmetic", "boolean", "numbers", "comparison", "logical", "unary"}, field.Enum,
+		"each item of run.mutagens must be one of these")
+}
