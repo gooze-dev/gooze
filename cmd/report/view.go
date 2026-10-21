@@ -23,7 +23,10 @@ arguments, relative to the module root:
 Use --all to list every mutation with its status and diff instead.`
 
 func newViewCmd(deps Deps) *cobra.Command {
-	var all bool
+	var (
+		all        bool
+		thresholds ThresholdFlags
+	)
 
 	cmd := &cobra.Command{
 		Use:   "view [paths...]",
@@ -38,15 +41,22 @@ func newViewCmd(deps Deps) *cobra.Command {
 				paths = append(paths, m.Path(arg))
 			}
 
+			minimums, err := thresholds.Read(cmd)
+			if err != nil {
+				return err
+			}
+
 			return deps.Workflow.View(cmd.Context(), domain.ViewArgs{
-				Reports: m.Path(viper.GetString(deps.OutputKey)),
-				Paths:   paths,
-				All:     all,
+				Reports:    m.Path(viper.GetString(deps.OutputKey)),
+				Paths:      paths,
+				All:        all,
+				Thresholds: minimums,
 			})
 		},
 	}
 
 	cmd.Flags().BoolVar(&all, "all", false, "list every mutation with its status and diff instead of a per-file summary")
+	thresholds = AddThresholdFlags(cmd, "threshold", "threshold")
 
 	return cmd
 }

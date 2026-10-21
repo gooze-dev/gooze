@@ -23,13 +23,19 @@ func formatMutationScore(score domain.MutationScore) string {
 }
 
 // runReportsHint tells where a narrowed run wrote its reports and how to add
-// them to the main reports, or returns "" for a full run.
+// them to the main reports, and that a shard left its thresholds to merge.
 func runReportsHint(score domain.MutationScore) string {
-	if score.ReportsDir == "" {
-		return ""
+	reports := ""
+	if score.ReportsDir != "" {
+		reports = fmt.Sprintf("Reports of this run are in %s; add them to the main reports with gooze report merge.", score.ReportsDir)
 	}
 
-	return fmt.Sprintf("Reports of this run are in %s; add them to the main reports with gooze report merge.", score.ReportsDir)
+	thresholds := ""
+	if score.ThresholdsSkipped {
+		thresholds = "Thresholds are not checked on a shard; gooze report merge checks them on all the results."
+	}
+
+	return joinLines(reports, thresholds)
 }
 
 func scoreBreakdown(score domain.MutationScore) string {

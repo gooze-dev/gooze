@@ -425,3 +425,49 @@ func TestRunCmd_DiffWithShardIsAllowed(t *testing.T) {
 
 	require.NoError(t, diffRunCmd(t, mockWorkflow, "run", "--diff", "main", "--shard", "1/2", "./..."))
 }
+
+// thresholdsOfRun runs gooze run with args and returns the thresholds it
+// passes to the workflow.
+func thresholdsOfRun(t *testing.T, args ...string) domain.Thresholds {
+	t.Helper()
+
+	var got domain.Thresholds
+
+	mockWorkflow := domainmocks.NewMockWorkflow(t)
+	mockWorkflow.On("Test", mock.Anything, mock.Anything).Run(func(a mock.Arguments) {
+		got = a.Get(1).(domain.TestArgs).Thresholds
+	}).Return(nil)
+
+	require.NoError(t, diffRunCmd(t, mockWorkflow, append([]string{"run"}, args...)...))
+
+	return got
+}
+
+func TestRunCmd_Thresholds(t *testing.T) {
+	assert.Equal(t, domain.Thresholds{Key: "threshold"}, thresholdsOfRun(t, "./..."))
+	assert.Equal(t, domain.Thresholds{Key: "threshold", Total: 80, File: 50.5},
+		thresholdsOfRun(t, "--threshold-total", "80", "--threshold-file", "50.5", "--threshold-diff-total", "99", "./..."),
+		"a run without --diff ignores the diff thresholds")
+}
+
+func TestRunCmd_DiffThresholdsReplaceThePlainOnes(t *testing.T) {
+	assert.Equal(t, domain.Thresholds{Key: "threshold.diff", Average: 90},
+		thresholdsOfRun(t, "--diff", "main", "--threshold-total", "80", "--threshold-diff-average", "90", "./..."))
+}
+
+func TestRunCmd_ThresholdsFromEnv(t *testing.T) {
+	t.Setenv("GOOZE_THRESHOLD_TOTAL", "70")
+	t.Setenv("GOOZE_THRESHOLD_DIFF_FILE", "85.5")
+
+	assert.Equal(t, domain.Thresholds{Key: "threshold", Total: 70}, thresholdsOfRun(t, "./..."))
+	assert.Equal(t, domain.Thresholds{Key: "threshold.diff", File: 85.5}, thresholdsOfRun(t, "--diff", "main", "./..."))
+}
+
+func TestRunCmd_BadThresholdIsAUsageError(t *testing.T) {
+	mockWorkflow := domainmocks.NewMockWorkflow(t)
+
+	err := diffRunCmd(t, mockWorkflow, "run", "--threshold-diff-total", "120", "./...")
+	require.EqualError(t, err, "invalid --threshold-diff-total: 120 is out of range: must be between 0 and 100")
+	assert.Equal(t, m.ExitUsage, exitCode(context.Background(), err, false))
+	mockWorkflow.AssertNotCalled(t, "Test", mock.Anything, mock.Anything)
+}

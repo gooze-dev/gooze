@@ -9,14 +9,26 @@ import (
 )
 
 func newMergeCmd(deps Deps) *cobra.Command {
-	return &cobra.Command{
+	var thresholds ThresholdFlags
+
+	cmd := &cobra.Command{
 		Use:   "merge",
 		Short: "Merge sharded reports into a single directory",
 		Long:  "Merge reports from shard_* subdirectories into a single reports directory.",
 		Args:  cobra.ExactArgs(0),
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			minimums, err := thresholds.Read(cmd)
+			if err != nil {
+				return err
+			}
+
 			reportsPath := m.Path(viper.GetString(deps.OutputKey))
-			return deps.Workflow.Merge(cmd.Context(), domain.MergeArgs{Reports: reportsPath})
+
+			return deps.Workflow.Merge(cmd.Context(), domain.MergeArgs{Reports: reportsPath, Thresholds: minimums})
 		},
 	}
+
+	thresholds = AddThresholdFlags(cmd, "threshold", "threshold")
+
+	return cmd
 }
