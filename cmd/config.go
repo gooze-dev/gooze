@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/spf13/cast"
 	"github.com/spf13/viper"
 	"gopkg.in/natefinch/lumberjack.v2"
 
@@ -65,17 +66,30 @@ func init() {
 func validateConfig() error {
 	for _, key := range config.Keys() {
 		field, _ := config.Lookup(key)
-		// Equivalent mutants: only KindInt fields declare bounds, and CheckInt accepts any value without them.
-		if field.Kind != config.KindInt || (field.Min == nil && field.Max == nil) { //gooze:ignore comparison logical
-			continue
-		}
-
-		if err := field.CheckInt(viper.GetInt(key)); err != nil {
+		if err := validateValue(field, key); err != nil {
 			return usageError(fmt.Errorf("invalid %s: %w", key, err))
 		}
 	}
 
 	return nil
+}
+
+// validateValue checks the value of key against field's bounds: a whole
+// number for a bounded KindInt field, a number for a KindFloat one.
+func validateValue(field config.Field, key string) error {
+	switch field.Kind {
+	case config.KindFloat:
+		x, err := cast.ToFloat64E(viper.Get(key))
+		if err != nil {
+			return fmt.Errorf("%q is not a number", viper.GetString(key))
+		}
+
+		return field.CheckFloat(x)
+	case config.KindInt:
+		return field.CheckInt(viper.GetInt(key))
+	default:
+		return nil
+	}
 }
 
 func parseSlogLevel(value string, defaultLevel slog.Level) slog.Level {
