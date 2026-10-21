@@ -125,9 +125,6 @@ make mocks           # regenerate mocks from .mockery.yaml
 pre-commit install   # or: make install-precommit
 ```
 
-The repository runs mutation testing on itself on every pull request
-(`.github/workflows/mutation.yml`), using the baseline from `main` for incremental runs.
-
 ## License
 
 [MIT](./LICENSE)
