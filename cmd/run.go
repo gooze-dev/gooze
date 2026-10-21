@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -25,6 +26,10 @@ var runDiffFlag string
 var runPatternFlag string
 var runMutagensFlag []string
 
+// errRunWithShard rejects --run with --shard: a run of a few functions is too
+// small to split across jobs.
+var errRunWithShard = errors.New("--run can't be combined with --shard: a function-level run is small, so run it in one job")
+
 // runCmd represents the run command.
 var runCmd = newRunCmd()
 
@@ -48,6 +53,10 @@ func newRunCmd() *cobra.Command {
 			shardIndex, totalShards, err := parseShardFlag(runShardFlag)
 			if err != nil {
 				return err
+			}
+
+			if totalShards > 1 && estimateArgs.Run != "" {
+				return errRunWithShard
 			}
 
 			timeoutSeconds := viper.GetInt64(config.KeyRunMutationTimeout)

@@ -3,6 +3,8 @@ package domain
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
@@ -23,6 +25,41 @@ type Selection struct {
 	Run *regexp.Regexp
 	// Mutagens are the mutagens to run; nil means DefaultMutations.
 	Mutagens []mgen.Type
+}
+
+// RunDirName is the directory, inside the reports directory, where a narrowed
+// run (--diff, --run or --mutagens) writes its reports, so the main reports
+// stay complete until `gooze report merge` folds them in.
+const RunDirName = "run"
+
+// Narrowed reports whether the selection leaves out any mutation.
+func (s Selection) Narrowed() bool {
+	return s.Diff != nil || s.Run != nil || s.Mutagens != nil
+}
+
+// Describe names what the selection keeps, e.g. "changed lines since main;
+// functions matching ^Add$", or returns "" when it keeps everything.
+func (s Selection) Describe() string {
+	var parts []string
+
+	if s.Diff != nil {
+		parts = append(parts, "changed lines since "+s.Diff.Info().Ref)
+	}
+
+	if s.Run != nil {
+		parts = append(parts, "functions matching "+s.Run.String())
+	}
+
+	if s.Mutagens != nil {
+		names := make([]string, 0, len(s.Mutagens))
+		for _, t := range s.Mutagens {
+			names = append(names, t.Name)
+		}
+
+		parts = append(parts, "mutagens "+strings.Join(names, ", "))
+	}
+
+	return strings.Join(parts, "; ")
 }
 
 // Types returns the mutagens to generate.
@@ -136,4 +173,20 @@ func (w *workflow) selection(ctx context.Context, args EstimateArgs) (Selection,
 	}
 
 	return sel, nil
+}
+
+// runReportsDir returns where a test run writes its reports: base (or its
+// shard dir) for a full run; base/run (or run/shard_N) for a narrowed run,
+// emptied first so it holds only this run's results.
+func runReportsDir(args TestArgs, sel Selection) (m.Path, error) {
+	if !sel.Narrowed() {
+		return shardReportsDir(args.Reports, args.ShardIndex, args.TotalShardCount), nil
+	}
+
+	dir := shardReportsDir(m.Path(filepath.Join(string(args.Reports), RunDirName)), args.ShardIndex, args.TotalShardCount)
+	if err := os.RemoveAll(string(dir)); err != nil {
+		return "", fmt.Errorf("clear %s: %w", dir, err)
+	}
+
+	return dir, nil
 }

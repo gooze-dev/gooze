@@ -295,3 +295,18 @@ func TestSimpleUI_DisplayEstimation_SelectionLineAfterDiffLine(t *testing.T) {
 		t.Fatalf("output = %q, want %q", got, want)
 	}
 }
+
+func TestSimpleUI_DisplayMutationScore_NarrowedRunPrintsHint(t *testing.T) {
+	var buf bytes.Buffer
+
+	cmd := &cobra.Command{}
+	cmd.SetOut(&buf)
+
+	score := domain.MutationScore{Summary: rpt.Summary{Total: 1, Killed: 1}, Tested: 1, Selection: "mutagens unary", ReportsDir: ".gooze-reports/run"}
+	NewSimpleUI(cmd).DisplayMutationScore(context.Background(), score)
+
+	want := "Mutation score: " + formatMutationScore(score) + "\n" + runReportsHint(score) + "\n"
+	if got := buf.String(); got != want {
+		t.Fatalf("output = %q, want %q", got, want)
+	}
+}

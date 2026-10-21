@@ -98,3 +98,20 @@ func TestSelection_ReportScope(t *testing.T) {
 		assert.Equal(t, tc.want, tc.sel.ReportScope(tc.source), name)
 	}
 }
+
+func TestSelection_NarrowedAndDescribe(t *testing.T) {
+	t.Parallel()
+
+	assert.False(t, domain.Selection{}.Narrowed())
+	assert.Empty(t, domain.Selection{}.Describe())
+
+	diff := domain.NewDiffScope(domain.ChangeSet{Ref: "origin/main", Base: "abc"})
+	sel := domain.Selection{Diff: diff, Run: regexp.MustCompile(`^Add$`), Mutagens: []mgen.Type{mgen.Comparison, mgen.Logical}}
+
+	assert.True(t, sel.Narrowed())
+	assert.Equal(t, "changed lines since origin/main; functions matching ^Add$; mutagens comparison, logical", sel.Describe())
+
+	assert.True(t, domain.Selection{Run: regexp.MustCompile(`x`)}.Narrowed())
+	assert.True(t, domain.Selection{Mutagens: []mgen.Type{mgen.Unary}}.Narrowed())
+	assert.True(t, domain.Selection{Diff: diff}.Narrowed())
+}

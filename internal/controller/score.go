@@ -12,8 +12,24 @@ import (
 // "87.50% (14 killed, 2 survived; 16 cached, 0 tested)". Statuses other than
 // killed and survived appear only when present; the cached/tested split only
 // for a run.
+// A narrowed run's score names its selection last.
 func formatMutationScore(score domain.MutationScore) string {
-	return fmt.Sprintf("%.2f%% (%s)", score.Score()*100, scoreBreakdown(score))
+	breakdown := scoreBreakdown(score)
+	if score.Selection != "" {
+		breakdown += "; " + score.Selection
+	}
+
+	return fmt.Sprintf("%.2f%% (%s)", score.Score()*100, breakdown)
+}
+
+// runReportsHint tells where a narrowed run wrote its reports and how to add
+// them to the main reports, or returns "" for a full run.
+func runReportsHint(score domain.MutationScore) string {
+	if score.ReportsDir == "" {
+		return ""
+	}
+
+	return fmt.Sprintf("Reports of this run are in %s; add them to the main reports with gooze report merge.", score.ReportsDir)
 }
 
 func scoreBreakdown(score domain.MutationScore) string {

@@ -406,3 +406,20 @@ func TestNewRunCmd(t *testing.T) {
 	shardFlag := cmd.Flags().Lookup("shard")
 	assert.NotNil(t, shardFlag)
 }
+
+func TestRunCmd_RunWithShardIsRejected(t *testing.T) {
+	mockWorkflow := domainmocks.NewMockWorkflow(t)
+
+	err := diffRunCmd(t, mockWorkflow, "run", "--run", "^InRange$", "--shard", "0/2", "./...")
+	require.EqualError(t, err, "--run can't be combined with --shard: a function-level run is small, so run it in one job")
+	mockWorkflow.AssertNotCalled(t, "Test", mock.Anything, mock.Anything)
+}
+
+func TestRunCmd_DiffWithShardIsAllowed(t *testing.T) {
+	mockWorkflow := domainmocks.NewMockWorkflow(t)
+	mockWorkflow.On("Test", mock.Anything, mock.MatchedBy(func(args domain.TestArgs) bool {
+		return args.Diff == "main" && args.TotalShardCount == 2
+	})).Return(nil)
+
+	require.NoError(t, diffRunCmd(t, mockWorkflow, "run", "--diff", "main", "--shard", "1/2", "./..."))
+}
