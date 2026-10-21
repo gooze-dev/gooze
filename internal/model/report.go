@@ -17,4 +17,8 @@ type Report struct {
 	Source rpt.Source
 	Result Result
 	Diff   *[]byte
+	// Line is the source line of the mutation; 0 when unknown (old reports).
+	Line int
+	// Scope is set when only some lines of the source were tested.
+	Scope *rpt.Scope
 }

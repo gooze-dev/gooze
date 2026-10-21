@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -21,10 +20,6 @@ var runEstimateFlag bool
 var runCoverageProfileFlag string
 var runDiffFlag string
 
-// errDiffNeedsEstimate rejects --diff on a real run until the run path
-// supports diff mode.
-var errDiffNeedsEstimate = errors.New("--diff works only with --estimate for now; running only the changed lines comes next")
-
 // runCmd represents the run command.
 var runCmd = newRunCmd()
 
@@ -43,10 +38,6 @@ func newRunCmd() *cobra.Command {
 
 			if runEstimateFlag {
 				return workflow.Estimate(cmd.Context(), estimateArgs)
-			}
-
-			if estimateArgs.Diff != "" {
-				return errDiffNeedsEstimate
 			}
 
 			shardIndex, totalShards, err := parseShardFlag(runShardFlag)

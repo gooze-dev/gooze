@@ -81,6 +81,26 @@ type Report struct {
 	Source Source   `yaml:"source"`
 	Result []Result `yaml:"result"`
 	Diff   *[]byte  `yaml:"diff"`
+	// Line is the 1-based source line of the mutation, or 0 in reports
+	// written before gooze recorded it (the diff still locates it).
+	Line int `yaml:"line,omitempty"`
+	// Scope is set when the run tested only some lines of the source, as a
+	// diff-mode run does; nil means the source was tested in full.
+	Scope *Scope `yaml:"scope,omitempty"`
+}
+
+// Scope records which lines of a source a diff-mode run tested.
+type Scope struct {
+	// Base is the commit the changes were taken against.
+	Base string `yaml:"base"`
+	// Lines are the tested line ranges.
+	Lines []LineRange `yaml:"lines"`
+}
+
+// LineRange is an inclusive range of 1-based line numbers.
+type LineRange struct {
+	Start int `yaml:"start"`
+	End   int `yaml:"end"`
 }
 
 // Result groups the mutation results of one mutagen and its version.

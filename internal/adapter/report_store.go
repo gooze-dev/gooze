@@ -166,6 +166,9 @@ func (rs *LocalReportStore) LoadSpillReports(ctx context.Context, path m.Path) (
 type storedSourceState struct {
 	source  rpt.Source
 	mutator map[string]int
+	// partial is set when any stored report covers only some lines of the
+	// source (a diff-mode run), so its other lines were never tested.
+	partial bool
 }
 
 // CleanReports deletes stored report files that belong to the provided sources.
@@ -371,7 +374,7 @@ func (rs *LocalReportStore) isSourceChanged(stored map[string]storedSourceState,
 		return true
 	}
 
-	if rs.sourceHashChanged(st.source, current) {
+	if st.partial || rs.sourceHashChanged(st.source, current) {
 		return true
 	}
 
@@ -391,6 +394,7 @@ func (rs *LocalReportStore) addStoredReport(state map[string]storedSourceState, 
 
 	// Keep the most recently seen Source metadata (hashes), but they should be consistent.
 	st.source = report.Source
+	st.partial = st.partial || report.Scope != nil
 
 	for mt := range report.Result {
 		if existing, ok := st.mutator[mt.Name]; ok && existing != mt.Version {
@@ -467,6 +471,8 @@ func (rs *LocalReportStore) marshalReport(report m.Report) ([]byte, error) {
 		Source: report.Source,
 		Result: encodeResult(report.Result),
 		Diff:   report.Diff,
+		Line:   report.Line,
+		Scope:  report.Scope,
 	})
 }
 
@@ -475,6 +481,8 @@ func decodeReport(report rpt.Report) m.Report {
 		Source: report.Source,
 		Result: decodeResult(report.Result),
 		Diff:   report.Diff,
+		Line:   report.Line,
+		Scope:  report.Scope,
 	}
 }
 

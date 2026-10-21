@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
@@ -1272,4 +1273,58 @@ func TestLocalReportStore_CheckUpdates_SourcesOutsideTheScanAreNotDeleted(t *tes
 	require.NoError(t, err)
 	require.Empty(t, spillItems(t, changed))
 	require.Equal(t, []string{"gone.go"}, shortPaths(spillItems(t, deleted)))
+}
+
+func TestLocalReportStore_SaveAndLoad_KeepsLineAndScope(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	rs := &LocalReportStore{}
+
+	scope := &rpt.Scope{Base: "1a2b3c4", Lines: []rpt.LineRange{{Start: 3, End: 4}}}
+	report := m.Report{
+		Source: rpt.Source{Origin: &rpt.File{FullPath: "/abs/a.go", Hash: "h"}},
+		Result: m.Result{mgen.Boolean: {{MutationID: "m1", Status: rpt.Survived}}},
+		Line:   3,
+		Scope:  scope,
+	}
+	require.NoError(t, rs.SaveReports(context.Background(), m.Path(dir), reportSpill(t, report)))
+
+	loaded, err := rs.LoadSpillReports(context.Background(), m.Path(dir))
+	require.NoError(t, err)
+
+	got := spillItems(t, loaded)
+	require.Len(t, got, 1)
+	assert.Equal(t, 3, got[0].Line)
+	assert.Equal(t, scope, got[0].Scope)
+}
+
+func TestLocalReportStore_CheckUpdates_PartlyTestedSourceIsChanged(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	rs := &LocalReportStore{}
+
+	partial := rpt.Source{Origin: &rpt.File{FullPath: "/abs/partial.go", Hash: "same-p"}}
+	full := rpt.Source{Origin: &rpt.File{FullPath: "/abs/full.go", Hash: "same-f"}}
+	result := m.Result{mgen.Boolean: {{MutationID: "m1", Status: rpt.Killed}}}
+
+	reports := []m.Report{
+		// A diff-mode run tested only line 3 of partial.go...
+		{Source: partial, Result: result, Line: 3, Scope: &rpt.Scope{Base: "abc", Lines: []rpt.LineRange{{Start: 3, End: 3}}}},
+		{Source: partial, Result: m.Result{mgen.Arithmetic: {{MutationID: "m2", Status: rpt.Killed}}}, Line: 3},
+		// ...while full.go was tested in full.
+		{Source: full, Result: m.Result{mgen.Boolean: {{MutationID: "m3", Status: rpt.Killed}}}, Line: 1},
+	}
+	require.NoError(t, rs.SaveReports(context.Background(), m.Path(dir), reportSpill(t, reports...)))
+
+	changedSpill, deletedSpill, err := rs.CheckUpdates(context.Background(), m.Path(dir), sourceSpill(t, partial, full))
+	require.NoError(t, err)
+
+	changed := spillItems(t, changedSpill)
+	_ = spillItems(t, deletedSpill)
+
+	// Unchanged hashes don't make partial.go cached: its other lines were
+	// never tested, so the next run re-tests it.
+	assert.Equal(t, []rpt.Source{partial}, changed)
 }
