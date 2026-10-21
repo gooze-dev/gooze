@@ -157,6 +157,7 @@ func TestWorkflow_SelectionErrorsStopBeforeScanning(t *testing.T) {
 			err := wf.Estimate(ctx, tc.args)
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tc.want)
+			assert.Equal(t, m.ExitUsage, exitCodeOf(err))
 		})
 	}
 }

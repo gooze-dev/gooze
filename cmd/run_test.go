@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"testing"
 	"time"
 
@@ -412,6 +413,7 @@ func TestRunCmd_RunWithShardIsRejected(t *testing.T) {
 
 	err := diffRunCmd(t, mockWorkflow, "run", "--run", "^InRange$", "--shard", "0/2", "./...")
 	require.EqualError(t, err, "--run can't be combined with --shard: a function-level run is small, so run it in one job")
+	assert.Equal(t, m.ExitUsage, exitCode(context.Background(), err, false))
 	mockWorkflow.AssertNotCalled(t, "Test", mock.Anything, mock.Anything)
 }
 

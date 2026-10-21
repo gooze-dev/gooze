@@ -1014,7 +1014,7 @@ func testRunError(runErr error, outcome collectorResult) error {
 	case outcome.fatalErr != nil:
 		return outcome.fatalErr
 	case len(outcome.errs) > 0:
-		return fmt.Errorf("errors occurred during mutation testing: %v", outcome.errs)
+		return fmt.Errorf("errors occurred during mutation testing: %w", errors.Join(outcome.errs...))
 	default:
 		return nil
 	}

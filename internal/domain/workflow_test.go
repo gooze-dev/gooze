@@ -1767,8 +1767,10 @@ func TestWorkflow_View_MissingReportsDirReturnsError(t *testing.T) {
 
 	missing := filepath.Join(t.TempDir(), "missing")
 	wf := domain.NewWorkflow(nil, adapter.NewReportStore(), new(domainmocks.MockReporter), nil, nil)
-	require.EqualError(t, wf.View(ctx, domain.ViewArgs{Reports: m.Path(missing)}),
+	err := wf.View(ctx, domain.ViewArgs{Reports: m.Path(missing)})
+	require.EqualError(t, err,
 		"no reports directory at "+missing+"; run `gooze run` first, or pass -o with the reports directory")
+	assert.Equal(t, m.ExitNoReports, exitCodeOf(err))
 }
 
 func TestWorkflow_Merge_WithoutBaselineDeduplicatesShardSources(t *testing.T) {

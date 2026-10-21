@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"maps"
 	"slices"
@@ -10,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	m "gooze.dev/pkg/gooze/internal/model"
 	"gooze.dev/pkg/gooze/pkg/config"
 )
 
@@ -91,6 +93,7 @@ func TestValidateConfig(t *testing.T) {
 			}
 
 			assert.EqualError(t, err, tt.wantErr)
+			assert.Equal(t, m.ExitUsage, exitCode(context.Background(), err, false))
 		})
 	}
 }

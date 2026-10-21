@@ -184,11 +184,16 @@ func Execute() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	err := rootCmd.ExecuteContext(ctx)
 
+	// Root's PersistentPreRunE silences usage once cobra accepted the flags
+	// and arguments, so an error while usage is still on came before any
+	// command ran. The code is read before stop, which also ends ctx.
+	code := exitCode(ctx, err, !rootCmd.SilenceUsage)
+
 	printUpdateNotice(ctx, rootCmd.ErrOrStderr())
 	stop()
 
-	if err != nil {
-		os.Exit(1)
+	if code != m.ExitOK {
+		os.Exit(int(code))
 	}
 }
 

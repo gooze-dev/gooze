@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -40,30 +41,26 @@ func NewReportPublisher(registry OCIRegistry) ReportPublisher {
 }
 
 func (p *reportPublisher) Push(ctx context.Context, args PushArgs) error {
-	if err := validateRef(args.Ref, args.Reports); err != nil {
-		return err
-	}
-
-	slog.Info("Pushing reports", "ref", args.Ref, "reports", args.Reports)
-
-	opts := RegistryOptions{PlainHTTP: args.PlainHTTP, Insecure: args.Insecure}
-	if err := p.registry.Push(ctx, args.Ref, args.Reports, opts); err != nil {
-		return fmt.Errorf("push reports: %w", err)
-	}
-
-	return nil
+	return transfer(ctx, "push", args.Ref, args.Reports, RegistryOptions{PlainHTTP: args.PlainHTTP, Insecure: args.Insecure}, p.registry.Push)
 }
 
 func (p *reportPublisher) Pull(ctx context.Context, args PullArgs) error {
-	if err := validateRef(args.Ref, args.Reports); err != nil {
+	return transfer(ctx, "pull", args.Ref, args.Reports, RegistryOptions{PlainHTTP: args.PlainHTTP, Insecure: args.Insecure}, p.registry.Pull)
+}
+
+// transfer pushes or pulls (op) the reports at ref with move, the registry's
+// Push or Pull. Its errors end the command with ExitRegistry.
+func transfer(ctx context.Context, op, ref string, reports m.Path, opts RegistryOptions,
+	move func(context.Context, string, m.Path, RegistryOptions) error,
+) error {
+	if err := validateRef(ref, reports); err != nil {
 		return err
 	}
 
-	slog.Info("Pulling reports", "ref", args.Ref, "reports", args.Reports)
+	slog.Info("Transferring reports", "op", op, "ref", ref, "reports", reports)
 
-	opts := RegistryOptions{PlainHTTP: args.PlainHTTP, Insecure: args.Insecure}
-	if err := p.registry.Pull(ctx, args.Ref, args.Reports, opts); err != nil {
-		return fmt.Errorf("pull reports: %w", err)
+	if err := move(ctx, ref, reports, opts); err != nil {
+		return WithExitCode(m.ExitRegistry, fmt.Errorf("%s reports: %w", op, err))
 	}
 
 	return nil
@@ -71,11 +68,11 @@ func (p *reportPublisher) Pull(ctx context.Context, args PullArgs) error {
 
 func validateRef(ref string, reports m.Path) error {
 	if ref == "" {
-		return fmt.Errorf("registry reference is required")
+		return WithExitCode(m.ExitUsage, errors.New("registry reference is required"))
 	}
 
 	if reports == "" {
-		return fmt.Errorf("reports directory is required")
+		return WithExitCode(m.ExitUsage, errors.New("reports directory is required"))
 	}
 
 	return nil

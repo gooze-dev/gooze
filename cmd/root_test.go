@@ -2,16 +2,20 @@ package cmd
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"slices"
 	"testing"
-
-	m "gooze.dev/pkg/gooze/internal/model"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"gooze.dev/pkg/gooze/internal/domain"
+	m "gooze.dev/pkg/gooze/internal/model"
 )
 
 // newRootCmd creates a root command with flags configured for testing.
@@ -47,6 +51,7 @@ func TestParseShardFlag(t *testing.T) {
 			gotIndex, gotTotal, err := parseShardFlag(tt.shard)
 			if tt.wantErr {
 				assert.Error(t, err)
+				assert.Equal(t, m.ExitUsage, exitCode(context.Background(), err, false))
 
 				return
 			}
@@ -249,6 +254,9 @@ func TestExecute_ProcessLevel_Failure(t *testing.T) {
 		originalRootCmd := rootCmd
 		mockCmd := &cobra.Command{
 			Use: "test",
+			PersistentPreRun: func(cmd *cobra.Command, _ []string) {
+				cmd.Root().SilenceUsage = true
+			},
 			RunE: func(cmd *cobra.Command, args []string) error {
 				fmt.Fprintln(os.Stderr, "error occurred")
 				return fmt.Errorf("command failed")
@@ -277,4 +285,51 @@ func TestExecute_ProcessLevel_Failure(t *testing.T) {
 	}
 
 	assert.Contains(t, string(output), "error occurred")
+}
+
+// runExitSubprocess runs the real Execute in a subprocess on args, with
+// rootCmd's run returning runErr, and returns the subprocess's exit code.
+func runExitSubprocess(t *testing.T, mode string, args ...string) int {
+	t.Helper()
+
+	cmd := exec.Command(os.Args[0], append([]string{"-test.run=TestExecute_ProcessLevel_ExitCodes", "--"}, args...)...)
+	cmd.Env = append(os.Environ(), "TEST_EXECUTE_EXIT_MODE="+mode)
+	output, err := cmd.CombinedOutput()
+
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) {
+		require.NoError(t, err, "output: %s", output)
+		return 0
+	}
+
+	return exitErr.ExitCode()
+}
+
+func TestExecute_ProcessLevel_ExitCodes(t *testing.T) {
+	if mode := os.Getenv("TEST_EXECUTE_EXIT_MODE"); mode != "" {
+		mockCmd := &cobra.Command{
+			Use: "test",
+			PersistentPreRun: func(cmd *cobra.Command, _ []string) {
+				cmd.Root().SilenceUsage = true
+			},
+			RunE: func(*cobra.Command, []string) error {
+				if mode == "threshold" {
+					return domain.WithExitCode(m.ExitBelowThreshold, errors.New("below threshold"))
+				}
+
+				return nil
+			},
+		}
+		mockCmd.Flags().Bool("known", false, "")
+		mockCmd.SetArgs(os.Args[slices.Index(os.Args, "--")+1:])
+		rootCmd = mockCmd
+
+		Execute()
+
+		return
+	}
+
+	assert.Equal(t, 0, runExitSubprocess(t, "ok"))
+	assert.Equal(t, 2, runExitSubprocess(t, "ok", "--unknown"))
+	assert.Equal(t, 3, runExitSubprocess(t, "threshold", "--known"))
 }
