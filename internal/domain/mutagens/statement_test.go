@@ -9,52 +9,22 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	m "gooze.dev/pkg/gooze/internal/model"
 	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
 	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 func TestGenerateStatementMutations_AssignmentDeletion(t *testing.T) {
-	examplePath := filepath.Join("..", "..", "..", "examples", "statement", "main.go")
-	content, err := os.ReadFile(examplePath)
-	if err != nil {
-		t.Fatalf("failed to read example file: %v", err)
-	}
+	body := "n = a\nx := b\n_ = x\nn += b"
 
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, examplePath, content, parser.ParseComments)
-	if err != nil {
-		t.Fatalf("failed to parse source: %v", err)
-	}
+	// Deleting x := b would leave its uses undefined, so it is kept.
+	assert.Equal(t, []string{"-_ = x", "-n += b", "-n = a"}, mutantsOf(t, GenerateStatementMutations, body))
 
-	src := rpt.Source{
-		Origin: &rpt.File{FullPath: examplePath},
-	}
-
-	var mutations []m.Mutation
-	ast.Inspect(file, func(n ast.Node) bool {
-		mutations = append(mutations, GenerateStatementMutations(n, fset, content, src)...)
-		return true
-	})
-
-	// Should have deletions for assignments in assignments() function
-	if len(mutations) < 3 {
-		t.Fatalf("expected at least 3 mutations, got %d", len(mutations))
-	}
-
-	// Verify at least one assignment was deleted
-	foundDeletion := false
-	for _, mutation := range mutations {
-		code := string(mutation.MutatedCode)
-		// Check if any of the assignments are missing
-		if !strings.Contains(code, "x := 10") || !strings.Contains(code, "y := 20") || !strings.Contains(code, "z := x + y") {
-			foundDeletion = true
-			break
-		}
-	}
-
-	if !foundDeletion {
-		t.Error("expected at least one assignment deletion mutation")
+	for _, mutation := range generateAll(t, GenerateStatementMutations, "package p\n\nfunc f(n int) {\n\tn = 1\n}\n") {
+		assert.Equal(t, "package p\n\nfunc f(n int) {\n}\n", string(mutation.MutatedCode), "the line goes with the statement")
+		assert.Equal(t, mutationID(mutation.MutatedCode), mutation.ID)
 	}
 }
 

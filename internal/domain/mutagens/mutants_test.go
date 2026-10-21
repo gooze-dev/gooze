@@ -15,7 +15,8 @@ import (
 type generator func(ast.Node, *token.FileSet, []byte, rpt.Source) []m.Mutation
 
 // mutantsOf parses body as the body of a function and returns, sorted, the
-// lines each mutation of gen changes, joined by "; " ("" for a deleted line).
+// lines each mutation of gen changes, joined by "; ". A mutation that only
+// deletes lines shows them as "-" and the deleted lines.
 func mutantsOf(t *testing.T, gen generator, body string) []string {
 	t.Helper()
 
@@ -43,7 +44,7 @@ func mutantsOf(t *testing.T, gen generator, body string) []string {
 }
 
 // changedLines returns the lines of mutated that differ from original, trimmed
-// and joined by "; ".
+// and joined by "; ", or "-" and the deleted lines when mutated only deletes.
 func changedLines(original, mutated string) string {
 	a, b := strings.Split(original, "\n"), strings.Split(mutated, "\n")
 
@@ -57,12 +58,19 @@ func changedLines(original, mutated string) string {
 		suffix++
 	}
 
-	lines := b[prefix : len(b)-suffix]
-	for i, line := range lines {
-		lines[i] = strings.TrimSpace(line)
+	trimmed := func(lines []string) string {
+		for i, line := range lines {
+			lines[i] = strings.TrimSpace(line)
+		}
+
+		return strings.Join(lines, "; ")
 	}
 
-	return strings.Join(lines, "; ")
+	if changed := b[prefix : len(b)-suffix]; len(changed) > 0 {
+		return trimmed(changed)
+	}
+
+	return "-" + trimmed(a[prefix:len(a)-suffix])
 }
 
 // generateAll returns every mutation gen generates for the file code, and
@@ -87,6 +95,19 @@ func generateAll(t *testing.T, gen generator, code string) []m.Mutation {
 	if len(mutations) == 0 {
 		t.Fatal("expected mutations")
 	}
+
+	return mutations
+}
+
+// inspectAll calls gen on every node of root, as gooze walks a file, and
+// returns the mutations in walk order.
+func inspectAll(gen generator, root ast.Node, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
+	var mutations []m.Mutation
+
+	ast.Inspect(root, func(n ast.Node) bool {
+		mutations = append(mutations, gen(n, fset, content, source)...)
+		return true
+	})
 
 	return mutations
 }

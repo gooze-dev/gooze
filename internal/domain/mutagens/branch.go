@@ -1,8 +1,6 @@
 package mutagens
 
 import (
-	"crypto/sha256"
-	"fmt"
 	"go/ast"
 	"go/token"
 
@@ -11,47 +9,40 @@ import (
 	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
-// GenerateBranchMutations generates branch mutations for the given AST node.
-// Branch mutations modify conditional statements to test boundary behavior.
+// GenerateBranchMutations generates branch mutations for the given AST node:
+// an if statement's condition is inverted and forced true and false, its
+// block and its else block are removed; a for loop's condition is inverted
+// and forced false (forcing it true would loop until the test times out);
+// each case body of a switch is removed.
 func GenerateBranchMutations(n ast.Node, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
-	if n == nil {
-		return nil
+	switch stmt := n.(type) {
+	case *ast.IfStmt:
+		return mutateIfStatement(stmt, fset, content, source)
+	case *ast.ForStmt:
+		if stmt.Cond != nil {
+			return invertCondition(stmt.Cond, fset, content, source, "!", "false")
+		}
+	case *ast.SwitchStmt:
+		return mutateSwitchStatement(stmt, fset, content, source)
 	}
 
-	var mutations []m.Mutation
-
-	ast.Inspect(n, func(node ast.Node) bool {
-		if node == nil {
-			return false
-		}
-
-		switch stmt := node.(type) {
-		case *ast.IfStmt:
-			// Mutate if statement: condition, remove if block, remove else block
-			mutations = append(mutations, mutateIfStatement(stmt, fset, content, source)...)
-		case *ast.ForStmt:
-			// Mutate for loop condition
-			if stmt.Cond != nil {
-				mutations = append(mutations, invertCondition(stmt.Cond, fset, content, source)...)
-			}
-		case *ast.SwitchStmt:
-			// Mutate switch statement and its cases
-			mutations = append(mutations, mutateSwitchStatement(stmt, fset, content, source)...)
-		}
-
-		return true
-	})
-
-	return mutations
+	return nil
 }
 
 // mutateIfStatement creates comprehensive mutations for if statements.
 func mutateIfStatement(stmt *ast.IfStmt, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
 	var mutations []m.Mutation
 
-	// 1. Mutate the condition (invert, force true, force false)
+	// 1. Mutate the condition (invert, force true, force false). Forcing it
+	// would leave unused a variable the init statement declares for the
+	// condition alone, as ok in if v, ok := m[k]; ok.
 	if stmt.Cond != nil {
-		mutations = append(mutations, invertCondition(stmt.Cond, fset, content, source)...)
+		replacements := []string{"!", "true", "false"}
+		if declaresForCondOnly(stmt) {
+			replacements = replacements[:1]
+		}
+
+		mutations = append(mutations, invertCondition(stmt.Cond, fset, content, source, replacements...)...)
 	}
 
 	// 2. Remove the if block (keep only else if it exists)
@@ -63,6 +54,38 @@ func mutateIfStatement(stmt *ast.IfStmt, fset *token.FileSet, content []byte, so
 	}
 
 	return mutations
+}
+
+// declaresForCondOnly reports whether the init statement of an if declares a
+// variable that only the condition uses.
+func declaresForCondOnly(stmt *ast.IfStmt) bool {
+	assign, ok := stmt.Init.(*ast.AssignStmt)
+	if !ok || assign.Tok != token.DEFINE {
+		return false
+	}
+
+	used := map[string]bool{}
+	markUsed := func(n ast.Node) bool {
+		if ident, ok := n.(*ast.Ident); ok {
+			used[ident.Name] = true
+		}
+
+		return true
+	}
+
+	ast.Inspect(stmt.Body, markUsed)
+
+	if stmt.Else != nil {
+		ast.Inspect(stmt.Else, markUsed)
+	}
+
+	for _, lhs := range assign.Lhs {
+		if ident, ok := lhs.(*ast.Ident); ok && ident.Name != "_" && !used[ident.Name] {
+			return true
+		}
+	}
+
+	return false
 }
 
 // removeIfBlock creates a mutation that removes the if block, keeping the else block if present.
@@ -81,14 +104,14 @@ func removeIfBlock(stmt *ast.IfStmt, fset *token.FileSet, content []byte, source
 	if stmt.Else != nil {
 		mutated = replaceIfWithElse(stmt, fset, content, offset, endOffset)
 	} else {
-		mutated = replaceRange(content, offset, endOffset, "")
+		mutated = deleteRange(content, offset, endOffset)
 	}
 
 	if mutated == nil {
 		return nil
 	}
 
-	return []m.Mutation{createIfRemovalMutation(mutated, source, offset)}
+	return []m.Mutation{branchMutation(mutated, source)}
 }
 
 // replaceIfWithElse replaces an if statement with its else block content.
@@ -130,37 +153,28 @@ func extractBlockBody(block *ast.BlockStmt, fset *token.FileSet, content []byte)
 	return ""
 }
 
-// createIfRemovalMutation creates a mutation for removing an if block.
-func createIfRemovalMutation(mutated []byte, source rpt.Source, offset int) m.Mutation {
-	h := sha256.Sum256([]byte(fmt.Sprintf("%s-%s-%d", source.Origin.FullPath, mgen.Branch.Name, offset+1000)))
-	id := fmt.Sprintf("%x", h)[:16]
+// branchMutation returns the branch mutation that turns the file into mutated.
+func branchMutation(mutated []byte, source rpt.Source) m.Mutation {
+	mutated = ensureTrailingNewline(mutated)
 
 	return m.Mutation{
-		ID:          id,
+		ID:          mutationID(mutated),
 		Source:      source,
 		Type:        mgen.Branch,
-		MutatedCode: ensureTrailingNewline(mutated),
+		MutatedCode: mutated,
 	}
 }
 
 // removeElseBlock creates a mutation that removes the else block.
 func removeElseBlock(stmt *ast.IfStmt, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
-	mutations := make([]m.Mutation, 0, 1)
-
 	if stmt.Else == nil {
 		return nil
 	}
 
-	// Find where the if block ends and else begins
-	ifBlockEnd := stmt.Body.End()
-	elseStart := stmt.Else.Pos()
-	elseEnd := stmt.Else.End()
+	ifEndOffset, ok1 := offsetForPos(fset, stmt.Body.End())
+	elseEndOffset, ok2 := offsetForPos(fset, stmt.Else.End())
 
-	ifEndOffset, ok1 := offsetForPos(fset, ifBlockEnd)
-	elseStartOffset, ok2 := offsetForPos(fset, elseStart)
-	elseEndOffset, ok3 := offsetForPos(fset, elseEnd)
-
-	if !ok1 || !ok2 || !ok3 {
+	if !ok1 || !ok2 {
 		return nil
 	}
 
@@ -173,29 +187,12 @@ func removeElseBlock(stmt *ast.IfStmt, fset *token.FileSet, content []byte, sour
 
 	mutated := replaceRange(content, elseKeywordStart, elseEndOffset, "")
 
-	h := sha256.Sum256([]byte(fmt.Sprintf("%s-%s-%d", source.Origin.FullPath, mgen.Branch.Name, elseStartOffset+2000)))
-	id := fmt.Sprintf("%x", h)[:16]
-
-	mutation := m.Mutation{
-		ID:          id,
-		Source:      source,
-		Type:        mgen.Branch,
-		MutatedCode: ensureTrailingNewline(mutated),
-	}
-
-	mutations = append(mutations, mutation)
-
-	return mutations
+	return []m.Mutation{branchMutation(mutated, source)}
 }
 
 // mutateSwitchStatement creates mutations for switch statements and their cases.
 func mutateSwitchStatement(stmt *ast.SwitchStmt, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
 	var mutations []m.Mutation
-
-	// Mutate switch tag if present
-	if stmt.Tag != nil {
-		mutations = append(mutations, mutateSwitchTag(stmt.Tag, fset, content, source)...)
-	}
 
 	// Mutate each case clause
 	if stmt.Body != nil {
@@ -226,8 +223,6 @@ func mutateCaseClause(clause *ast.CaseClause, fset *token.FileSet, content []byt
 
 // removeCaseBody creates a mutation that removes the case body.
 func removeCaseBody(clause *ast.CaseClause, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
-	mutations := make([]m.Mutation, 0, 1)
-
 	if len(clause.Body) == 0 {
 		return nil
 	}
@@ -251,25 +246,13 @@ func removeCaseBody(clause *ast.CaseClause, fset *token.FileSet, content []byte,
 
 	mutated := replaceRange(content, bodyStart, endOffset, "")
 
-	h := sha256.Sum256([]byte(fmt.Sprintf("%s-%s-%d", source.Origin.FullPath, mgen.Branch.Name, colonOffset+3000)))
-	id := fmt.Sprintf("%x", h)[:16]
-
-	mutation := m.Mutation{
-		ID:          id,
-		Source:      source,
-		Type:        mgen.Branch,
-		MutatedCode: ensureTrailingNewline(mutated),
-	}
-
-	mutations = append(mutations, mutation)
-
-	return mutations
+	return []m.Mutation{branchMutation(mutated, source)}
 }
 
-// invertCondition inverts a boolean condition expression.
-func invertCondition(cond ast.Expr, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
-	mutations := make([]m.Mutation, 0, 3)
-
+// invertCondition returns a mutation of cond for each replacement: "!"
+// inverts it, any other replacement takes its place unless cond already reads
+// so (forcing "true" true changes nothing).
+func invertCondition(cond ast.Expr, fset *token.FileSet, content []byte, source rpt.Source, replacements ...string) []m.Mutation {
 	offset, ok1 := offsetForPos(fset, cond.Pos())
 
 	endOffset, ok2 := offsetForPos(fset, cond.End())
@@ -277,38 +260,20 @@ func invertCondition(cond ast.Expr, fset *token.FileSet, content []byte, source 
 		return nil
 	}
 
-	originalExpr := string(content[offset:endOffset])
+	original := string(content[offset:endOffset])
+	mutations := make([]m.Mutation, 0, len(replacements))
 
-	// Create mutation that inverts the condition
-	mutations = append(mutations, createConditionMutation(content, offset, endOffset, "!("+originalExpr+")", source, offset))
+	for _, replacement := range replacements {
+		if replacement == original {
+			continue
+		}
 
-	// Force condition to true
-	mutations = append(mutations, createConditionMutation(content, offset, endOffset, "true", source, offset+1))
+		if replacement == "!" {
+			replacement = "!(" + original + ")"
+		}
 
-	// Force condition to false
-	mutations = append(mutations, createConditionMutation(content, offset, endOffset, "false", source, offset+2))
+		mutations = append(mutations, branchMutation(replaceRange(content, offset, endOffset, replacement), source))
+	}
 
 	return mutations
-}
-
-// createConditionMutation creates a single condition mutation.
-func createConditionMutation(content []byte, offset, endOffset int, replacement string, source rpt.Source, idOffset int) m.Mutation {
-	mutated := replaceRange(content, offset, endOffset, replacement)
-
-	h := sha256.Sum256([]byte(fmt.Sprintf("%s-%s-%d", source.Origin.FullPath, mgen.Branch.Name, idOffset)))
-	id := fmt.Sprintf("%x", h)[:16]
-
-	return m.Mutation{
-		ID:          id,
-		Source:      source,
-		Type:        mgen.Branch,
-		MutatedCode: ensureTrailingNewline(mutated),
-	}
-}
-
-// mutateSwitchTag creates mutations for switch statement tags.
-func mutateSwitchTag(_ ast.Expr, _ *token.FileSet, _ []byte, _ rpt.Source) []m.Mutation {
-	// For now, we'll skip switch tag mutations as they're complex
-	// and require type analysis
-	return nil
 }

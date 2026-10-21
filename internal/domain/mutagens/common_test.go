@@ -7,7 +7,10 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestOffsetForPos(t *testing.T) {
@@ -141,4 +144,23 @@ func TestViableOps_NilAndStringOperands(t *testing.T) {
 	if got := viableOps(parse("a + b"), arith); len(got) != len(arith) {
 		t.Fatalf("plain arithmetic alternatives = %v, want all", got)
 	}
+}
+
+func TestDeleteRange(t *testing.T) {
+	cases := []struct {
+		name, code, stmt, want string
+	}{
+		{"alone on its line", "a\n\tx = 1\nb\n", "x = 1", "a\nb\n"},
+		{"last line", "a\n\tx = 1", "x = 1", "a\n"},
+		{"inside a function literal", "\tdefer func() { x = 1 }()\n", "x = 1", "\tdefer func() {  }()\n"},
+		{"before a comment", "\tx = 1 // why\n", "x = 1", "\t // why\n"},
+	}
+
+	for _, tc := range cases {
+		start := strings.Index(tc.code, tc.stmt)
+		got := deleteRange([]byte(tc.code), start, start+len(tc.stmt))
+		assert.Equal(t, tc.want, string(got), tc.name)
+	}
+
+	assert.Equal(t, "abc", string(deleteRange([]byte("abc"), 2, 1)), "an invalid range changes nothing")
 }

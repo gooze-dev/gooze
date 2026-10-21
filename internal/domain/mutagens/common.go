@@ -2,10 +2,12 @@
 package mutagens
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"fmt"
 	"go/ast"
 	"go/token"
+	"slices"
 	"strings"
 
 	m "gooze.dev/pkg/gooze/internal/model"
@@ -33,6 +35,26 @@ func replaceRange(content []byte, start, end int, replacement string) []byte {
 	mutated = append(mutated, content[end:]...)
 
 	return mutated
+}
+
+// deleteRange removes content[start:end]. When nothing but blanks share its
+// lines, the lines go too, so a statement alone on its line leaves no blank
+// line behind; otherwise the rest of the line, such as the }() closing a
+// function literal, is kept.
+func deleteRange(content []byte, start, end int) []byte {
+	if start < 0 || end < start || end > len(content) {
+		return content
+	}
+
+	before := bytes.TrimRight(content[:start], " \t")
+	after := bytes.TrimLeft(content[end:], " \t")
+
+	ownLines := (len(before) == 0 || before[len(before)-1] == '\n') && (len(after) == 0 || after[0] == '\n')
+	if !ownLines {
+		return replaceRange(content, start, end, "")
+	}
+
+	return append(slices.Clip(before), bytes.TrimPrefix(after, []byte("\n"))...)
 }
 
 func ensureTrailingNewline(content []byte) []byte {
