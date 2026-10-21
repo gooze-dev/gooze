@@ -9,6 +9,7 @@ import (
 
 	"gooze.dev/pkg/gooze/internal/domain"
 	m "gooze.dev/pkg/gooze/internal/model"
+	"gooze.dev/pkg/gooze/pkg/config"
 	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
 	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
@@ -114,4 +115,17 @@ func TestSelection_NarrowedAndDescribe(t *testing.T) {
 	assert.True(t, domain.Selection{Run: regexp.MustCompile(`x`)}.Narrowed())
 	assert.True(t, domain.Selection{Mutagens: []mgen.Type{mgen.Unary}}.Narrowed())
 	assert.True(t, domain.Selection{Diff: diff}.Narrowed())
+}
+
+func TestParseMutagensMatchesTheConfigSchema(t *testing.T) {
+	t.Parallel()
+
+	field, ok := config.Lookup(config.KeyRunMutagens)
+	require.True(t, ok)
+
+	// The schema lists the names editors validate run.mutagens against; they
+	// must be exactly the mutagens a run accepts.
+	types, err := domain.ParseMutagens(field.Enum)
+	require.NoError(t, err)
+	assert.Equal(t, domain.DefaultMutations, types)
 }
