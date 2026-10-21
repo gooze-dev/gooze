@@ -7,6 +7,7 @@ package config
 import (
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -17,7 +18,7 @@ type Field struct {
 	// Kind is the type of value the key expects.
 	Kind Kind
 	// Default is the value gooze uses when the key is not set: a string, bool,
-	// int or []string matching Kind, and nil for objects.
+	// int, float64 or []string matching Kind, and nil for objects.
 	Default any
 	// Doc is a one-line description of the key.
 	Doc string
@@ -26,8 +27,9 @@ type Field struct {
 	Enum []string
 	// IntEnum reports whether a KindEnum field also accepts an integer.
 	IntEnum bool
-	// Min and Max, when non-nil, are the inclusive bounds of a KindInt field's
-	// value. CheckInt validates a value against them.
+	// Min and Max, when non-nil, are the inclusive bounds of a KindInt or
+	// KindFloat field's value. CheckInt and CheckFloat validate a value
+	// against them.
 	Min *int
 	Max *int
 	// Children are the keys of a KindObject field.
@@ -44,6 +46,7 @@ func Schema() []Field {
 		{Name: KeyNoUpdateCheck, Kind: KindBool, Default: false, Doc: "Disable the check for a newer gooze release."},
 		pathsField(),
 		runField(),
+		thresholdField(),
 		logField(),
 	}
 }
@@ -66,6 +69,26 @@ func runField() Field {
 			Doc:  "Mutagens to run (arithmetic, boolean, numbers, comparison, logical, unary); empty runs all of them.",
 		},
 	}}
+}
+
+// thresholdField holds the minimum mutation scores, in percent. A command
+// whose score is below one exits with code 3; 0 turns a threshold off.
+func thresholdField() Field {
+	return Field{Name: "threshold", Kind: KindObject, Doc: "Minimum mutation scores in percent; below one, gooze exits with code 3. 0 turns a threshold off.", Children: append(
+		thresholdFields("the score of all mutations", "the average of the per-file scores", "the score every file must reach"),
+		Field{
+			Name: "diff", Kind: KindObject, Doc: "Thresholds for --diff runs, scored on the changed lines; they replace the ones above there.",
+			Children: thresholdFields("the changed lines' score", "the average of the changed files' scores", "the score every changed file must reach"),
+		},
+	)}
+}
+
+func thresholdFields(total, average, file string) []Field {
+	percent := func(name, doc string) Field {
+		return Field{Name: name, Kind: KindFloat, Default: 0.0, Min: new(0), Max: new(100), Doc: "Minimum for " + doc + "."}
+	}
+
+	return []Field{percent("total", total), percent("average", average), percent("file", file)}
 }
 
 func logField() Field {
@@ -93,6 +116,16 @@ func (f Field) CheckInt(n int) error {
 	}
 
 	return fmt.Errorf("%d is out of range: %s", n, f.boundText())
+}
+
+// CheckFloat is CheckInt for a KindFloat value, e.g. "100.5 is out of range:
+// must be between 0 and 100".
+func (f Field) CheckFloat(x float64) error {
+	if (f.Min == nil || x >= float64(*f.Min)) && (f.Max == nil || x <= float64(*f.Max)) {
+		return nil
+	}
+
+	return fmt.Errorf("%s is out of range: %s", strconv.FormatFloat(x, 'f', -1, 64), f.boundText())
 }
 
 func (f Field) boundText() string {

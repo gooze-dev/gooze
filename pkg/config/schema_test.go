@@ -9,23 +9,29 @@ import (
 
 func TestDefaults(t *testing.T) {
 	want := map[string]any{
-		KeyVersion:            1,
-		KeyOutput:             DefaultReportsDir,
-		KeyNoCache:            false,
-		KeyNoUpdateCheck:      false,
-		KeyPathsExclude:       []string{},
-		KeyRunParallel:        1,
-		KeyRunMutationTimeout: 120,
-		KeyRunCoverageProfile: "",
-		KeyRunDiff:            "",
-		KeyRunMutagens:        []string{},
-		KeyLogFilename:        ".gooze.log",
-		KeyLogLevel:           "info",
-		KeyLogVerbose:         false,
-		KeyLogMaxSize:         10,
-		KeyLogMaxBackups:      3,
-		KeyLogMaxAge:          28,
-		KeyLogCompress:        true,
+		KeyVersion:              1,
+		KeyOutput:               DefaultReportsDir,
+		KeyNoCache:              false,
+		KeyNoUpdateCheck:        false,
+		KeyPathsExclude:         []string{},
+		KeyRunParallel:          1,
+		KeyRunMutationTimeout:   120,
+		KeyRunCoverageProfile:   "",
+		KeyRunDiff:              "",
+		KeyRunMutagens:          []string{},
+		KeyThresholdTotal:       0.0,
+		KeyThresholdAverage:     0.0,
+		KeyThresholdFile:        0.0,
+		KeyThresholdDiffTotal:   0.0,
+		KeyThresholdDiffAverage: 0.0,
+		KeyThresholdDiffFile:    0.0,
+		KeyLogFilename:          ".gooze.log",
+		KeyLogLevel:             "info",
+		KeyLogVerbose:           false,
+		KeyLogMaxSize:           10,
+		KeyLogMaxBackups:        3,
+		KeyLogMaxAge:            28,
+		KeyLogCompress:          true,
 	}
 
 	for _, key := range Keys() {
@@ -84,6 +90,10 @@ func TestLookup_Kinds(t *testing.T) {
 		KeyRunCoverageProfile: KindString,
 		KeyRunDiff:            KindString,
 		KeyRunMutagens:        KindStringList,
+		"threshold":           KindObject,
+		KeyThresholdTotal:     KindFloat,
+		"threshold.diff":      KindObject,
+		KeyThresholdDiffFile:  KindFloat,
 		"log":                 KindObject,
 		KeyLogCompress:        KindBool,
 	}
@@ -127,6 +137,10 @@ func TestSchema_Bounds(t *testing.T) {
 		KeyRunMutationTimeout: {new(1), nil},
 	}
 
+	for _, key := range thresholdKeys {
+		want[key] = [2]*int{new(0), new(100)}
+	}
+
 	for _, key := range Keys() {
 		field, ok := Lookup(key)
 		require.True(t, ok, key)
@@ -135,7 +149,10 @@ func TestSchema_Bounds(t *testing.T) {
 		assert.Equal(t, bounds[0], field.Min, key)
 		assert.Equal(t, bounds[1], field.Max, key)
 
-		if field.Min != nil || field.Max != nil {
+		switch {
+		case field.Kind == KindFloat:
+			assert.NoError(t, field.CheckFloat(field.Default.(float64)), key)
+		case field.Min != nil || field.Max != nil:
 			assert.Equal(t, KindInt, field.Kind, key)
 			assert.NoError(t, field.CheckInt(field.Default.(int)), key)
 		}
@@ -179,4 +196,41 @@ func TestRunMutagensListsItsValues(t *testing.T) {
 	assert.Equal(t, KindStringList, field.Kind)
 	assert.Equal(t, []string{"arithmetic", "boolean", "numbers", "comparison", "logical", "unary"}, field.Enum,
 		"each item of run.mutagens must be one of these")
+}
+
+var thresholdKeys = []string{
+	KeyThresholdTotal, KeyThresholdAverage, KeyThresholdFile,
+	KeyThresholdDiffTotal, KeyThresholdDiffAverage, KeyThresholdDiffFile,
+}
+
+func TestField_CheckFloat(t *testing.T) {
+	percent := Field{Min: new(0), Max: new(100)}
+
+	tests := []struct {
+		name    string
+		field   Field
+		value   float64
+		wantErr string
+	}{
+		{name: "no bounds", field: Field{}, value: -5.5},
+		{name: "at min", field: percent, value: 0},
+		{name: "just below min", field: percent, value: -0.01, wantErr: "-0.01 is out of range: must be between 0 and 100"},
+		{name: "decimal inside", field: percent, value: 87.5},
+		{name: "at max", field: percent, value: 100},
+		{name: "just above max", field: percent, value: 100.01, wantErr: "100.01 is out of range: must be between 0 and 100"},
+		{name: "min only", field: Field{Min: new(1)}, value: 0.5, wantErr: "0.5 is out of range: must be at least 1"},
+		{name: "max only", field: Field{Max: new(3)}, value: 3.5, wantErr: "3.5 is out of range: must be at most 3"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.field.CheckFloat(tt.value)
+			if tt.wantErr == "" {
+				assert.NoError(t, err)
+				return
+			}
+
+			assert.EqualError(t, err, tt.wantErr)
+		})
+	}
 }

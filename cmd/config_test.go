@@ -30,23 +30,29 @@ func TestConfigFile(t *testing.T) {
 
 func TestConfigDefaults(t *testing.T) {
 	want := map[string]any{
-		"version":              1,
-		"output":               ".gooze-reports",
-		"no-cache":             false,
-		"no-update-check":      false,
-		"paths.exclude":        []string{},
-		"run.parallel":         1,
-		"run.mutation_timeout": 120,
-		"run.coverage_profile": "",
-		"run.diff":             "",
-		"run.mutagens":         []string{},
-		"log.filename":         ".gooze.log",
-		"log.level":            "info",
-		"log.verbose":          false,
-		"log.max_size":         10,
-		"log.max_backups":      3,
-		"log.max_age":          28,
-		"log.compress":         true,
+		"version":                1,
+		"output":                 ".gooze-reports",
+		"no-cache":               false,
+		"no-update-check":        false,
+		"paths.exclude":          []string{},
+		"run.parallel":           1,
+		"run.mutation_timeout":   120,
+		"run.coverage_profile":   "",
+		"run.diff":               "",
+		"run.mutagens":           []string{},
+		"threshold.total":        0.0,
+		"threshold.average":      0.0,
+		"threshold.file":         0.0,
+		"threshold.diff.total":   0.0,
+		"threshold.diff.average": 0.0,
+		"threshold.diff.file":    0.0,
+		"log.filename":           ".gooze.log",
+		"log.level":              "info",
+		"log.verbose":            false,
+		"log.max_size":           10,
+		"log.max_backups":        3,
+		"log.max_age":            28,
+		"log.compress":           true,
 	}
 
 	assert.ElementsMatch(t, slices.Collect(maps.Keys(want)), viper.AllKeys())
@@ -76,6 +82,11 @@ func TestValidateConfig(t *testing.T) {
 		{key: config.KeyRunParallel, value: 0, wantErr: "invalid run.parallel: 0 is out of range: must be at least 1"},
 		{key: config.KeyRunMutationTimeout, value: 0, wantErr: "invalid run.mutation_timeout: 0 is out of range: must be at least 1"},
 		{key: config.KeyVersion, value: 2, wantErr: "invalid version: 2 is out of range: must be 1"},
+		{key: config.KeyThresholdTotal, value: 87.5},
+		{key: config.KeyThresholdTotal, value: 100},
+		{key: config.KeyThresholdFile, value: 100.5, wantErr: "invalid threshold.file: 100.5 is out of range: must be between 0 and 100"},
+		{key: config.KeyThresholdDiffAverage, value: -1, wantErr: "invalid threshold.diff.average: -1 is out of range: must be between 0 and 100"},
+		{key: config.KeyThresholdAverage, value: "high", wantErr: `invalid threshold.average: "high" is not a number`},
 	}
 
 	for _, tt := range tests {

@@ -16,6 +16,8 @@ const (
 	KindStringList
 	// KindEnum is a string from Field.Enum, or an integer when Field.IntEnum is set.
 	KindEnum
+	// KindFloat is a number, which may have a fractional part.
+	KindFloat
 )
 
 // String returns the name of the kind.
@@ -33,6 +35,8 @@ func (k Kind) String() string {
 		return "string list"
 	case KindEnum:
 		return "enum"
+	case KindFloat:
+		return "float"
 	default:
 		return "unknown"
 	}

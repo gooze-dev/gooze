@@ -14,6 +14,7 @@ func TestKindString(t *testing.T) {
 		KindInt:        "int",
 		KindStringList: "string list",
 		KindEnum:       "enum",
+		KindFloat:      "float",
 		Kind(99):       "unknown",
 	}
 
