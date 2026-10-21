@@ -10,6 +10,7 @@ const (
 	KeyRunParallel        = "run.parallel"
 	KeyRunMutationTimeout = "run.mutation_timeout"
 	KeyRunCoverageProfile = "run.coverage_profile"
+	KeyRunDiff            = "run.diff"
 	KeyLogFilename        = "log.filename"
 	KeyLogLevel           = "log.level"
 	KeyLogVerbose         = "log.verbose"

@@ -32,6 +32,9 @@ type EstimateArgs struct {
 	Exclude  []string
 	UseCache bool
 	Reports  m.Path
+	// Diff is a git ref; when set, only lines changed since its merge base
+	// with HEAD are mutated. Empty mutates everything in scope.
+	Diff string
 }
 
 // TestArgs contains the arguments for running mutation tests.

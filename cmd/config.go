@@ -28,6 +28,8 @@ const (
 
 	coverageProfileFlagName = "coverage-profile"
 
+	diffFlagName = "diff"
+
 	envPrefix = "GOOZE"
 )
 

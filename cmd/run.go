@@ -18,6 +18,7 @@ var runParallelFlag int
 var runShardFlag string
 var runEstimateFlag bool
 var runCoverageProfileFlag string
+var runDiffFlag string
 
 // runCmd represents the run command.
 var runCmd = newRunCmd()
@@ -44,6 +45,7 @@ func newRunCmd() *cobra.Command {
 				Exclude:  viper.GetStringSlice(config.KeyPathsExclude),
 				UseCache: !viper.GetBool(config.KeyNoCache),
 				Reports:  reportsPath,
+				Diff:     viper.GetString(config.KeyRunDiff),
 			}
 
 			if runEstimateFlag {
@@ -89,6 +91,9 @@ func configureRunFlags(cmd *cobra.Command) {
 
 	cmd.Flags().StringVar(&runCoverageProfileFlag, coverageProfileFlagName, viper.GetString(config.KeyRunCoverageProfile), "path to a Go coverage profile; mutations on uncovered lines are reported as not_covered without running tests")
 	bindFlagToConfig(cmd.Flags().Lookup(coverageProfileFlagName), config.KeyRunCoverageProfile)
+
+	cmd.Flags().StringVar(&runDiffFlag, diffFlagName, viper.GetString(config.KeyRunDiff), "git ref to diff against; mutate only lines changed since its merge base with HEAD")
+	bindFlagToConfig(cmd.Flags().Lookup(diffFlagName), config.KeyRunDiff)
 }
 
 // parseShardFlag parses INDEX/TOTAL; an empty value means no sharding.
