@@ -154,10 +154,13 @@ func parseUnifiedDiff(diff string) map[string]domain.FileChange {
 			newFile = true
 		case strings.HasPrefix(line, "+++ "):
 			current = diffPath(strings.TrimPrefix(line, "+++ "))
-			if current != "" && newFile {
+			// Equivalent: a new file never has a /dev/null ("") new side.
+			if current != "" && newFile { //gooze:ignore comparison
 				files[current] = domain.FileChange{Whole: true}
 			}
-		case strings.HasPrefix(line, "@@ ") && current != "" && !newFile:
+		// Equivalent: a deleted file ("") only has hunks with zero new lines,
+		// which addHunk skips anyway.
+		case strings.HasPrefix(line, "@@ ") && current != "" && !newFile: //gooze:ignore comparison
 			addHunk(files, current, line)
 		}
 	}
@@ -169,7 +172,8 @@ func parseUnifiedDiff(diff string) map[string]domain.FileChange {
 // only deletes lines adds none.
 func addHunk(files map[string]domain.FileChange, path, header string) {
 	start, count, ok := parseHunkNewRange(header)
-	if !ok || count == 0 {
+	// Equivalent: git never writes a negative line count.
+	if !ok || count == 0 { //gooze:ignore comparison
 		return
 	}
 

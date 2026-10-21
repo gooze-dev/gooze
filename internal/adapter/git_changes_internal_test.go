@@ -1,9 +1,14 @@
 package adapter
 
 import (
+	"context"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"gooze.dev/pkg/gooze/internal/domain"
 )
@@ -103,4 +108,37 @@ func TestParseHunkNewRange(t *testing.T) {
 		assert.Equal(t, want.start, start, header)
 		assert.Equal(t, want.count, count, header)
 	}
+}
+
+func TestRunGit_ErrorNamesSubcommandAndGitMessage(t *testing.T) {
+	git, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("git is not installed")
+	}
+
+	dir := t.TempDir()
+	t.Setenv("GIT_CEILING_DIRECTORIES", filepath.Dir(dir))
+
+	// git prints a reason on stderr: the error carries its first line.
+	_, err = runGit(context.Background(), git, dir, "rev-parse", "--show-prefix")
+	require.Error(t, err)
+	assert.True(t, strings.HasPrefix(err.Error(), "git rev-parse: fatal: not a git repository"), err.Error())
+	assert.NotContains(t, err.Error(), "\n")
+}
+
+func TestRunGit_ErrorWithoutGitMessage(t *testing.T) {
+	git, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("git is not installed")
+	}
+
+	dir := t.TempDir()
+	cmd := exec.Command(git, "init", "-q", dir)
+	require.NoError(t, cmd.Run())
+
+	// --quiet makes git fail without printing anything: the exit status is
+	// all there is to report.
+	_, err = runGit(context.Background(), git, dir, "rev-parse", "--verify", "--quiet", "nope")
+	require.Error(t, err)
+	assert.Equal(t, "git rev-parse: exit status 1", err.Error())
 }

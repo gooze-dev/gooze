@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -20,6 +21,10 @@ var runEstimateFlag bool
 var runCoverageProfileFlag string
 var runDiffFlag string
 
+// errDiffNeedsEstimate rejects --diff on a real run until the run path
+// supports diff mode.
+var errDiffNeedsEstimate = errors.New("--diff works only with --estimate for now; running only the changed lines comes next")
+
 // runCmd represents the run command.
 var runCmd = newRunCmd()
 
@@ -33,23 +38,15 @@ func newRunCmd() *cobra.Command {
 				return err
 			}
 
-			// Default to scanning the current module recursively when no paths
-			// are given (equivalent to `gooze run ./...`).
-			if len(args) == 0 {
-				args = []string{"./..."}
-			}
-
-			reportsPath := m.Path(viper.GetString(config.KeyOutput))
-			estimateArgs := domain.EstimateArgs{
-				Paths:    parsePaths(args),
-				Exclude:  viper.GetStringSlice(config.KeyPathsExclude),
-				UseCache: !viper.GetBool(config.KeyNoCache),
-				Reports:  reportsPath,
-				Diff:     viper.GetString(config.KeyRunDiff),
-			}
+			estimateArgs := runEstimateArgs(args)
+			reportsPath := estimateArgs.Reports
 
 			if runEstimateFlag {
 				return workflow.Estimate(cmd.Context(), estimateArgs)
+			}
+
+			if estimateArgs.Diff != "" {
+				return errDiffNeedsEstimate
 			}
 
 			shardIndex, totalShards, err := parseShardFlag(runShardFlag)
@@ -94,6 +91,23 @@ func configureRunFlags(cmd *cobra.Command) {
 
 	cmd.Flags().StringVar(&runDiffFlag, diffFlagName, viper.GetString(config.KeyRunDiff), "git ref to diff against; mutate only lines changed since its merge base with HEAD (requires git)")
 	bindFlagToConfig(cmd.Flags().Lookup(diffFlagName), config.KeyRunDiff)
+}
+
+// runEstimateArgs builds the scan settings shared by --estimate and a run
+// from the path arguments and config. No paths means ./..., the current
+// module recursively.
+func runEstimateArgs(args []string) domain.EstimateArgs {
+	if len(args) == 0 {
+		args = []string{"./..."}
+	}
+
+	return domain.EstimateArgs{
+		Paths:    parsePaths(args),
+		Exclude:  viper.GetStringSlice(config.KeyPathsExclude),
+		UseCache: !viper.GetBool(config.KeyNoCache),
+		Reports:  m.Path(viper.GetString(config.KeyOutput)),
+		Diff:     viper.GetString(config.KeyRunDiff),
+	}
 }
 
 // parseShardFlag parses INDEX/TOTAL; an empty value means no sharding.

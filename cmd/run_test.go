@@ -127,13 +127,12 @@ func diffRunCmd(t *testing.T, mockWorkflow *domainmocks.MockWorkflow, args ...st
 	return cmd.Execute()
 }
 
-func TestRunCmd_DiffFlag(t *testing.T) {
+func TestRunCmd_DiffWithoutEstimateIsNotSupportedYet(t *testing.T) {
 	mockWorkflow := domainmocks.NewMockWorkflow(t)
-	mockWorkflow.On("Test", mock.Anything, mock.MatchedBy(func(args domain.TestArgs) bool {
-		return args.Diff == "origin/main"
-	})).Return(nil)
 
-	require.NoError(t, diffRunCmd(t, mockWorkflow, "run", "--diff", "origin/main", "./..."))
+	err := diffRunCmd(t, mockWorkflow, "run", "--diff", "origin/main", "./...")
+	require.EqualError(t, err, "--diff works only with --estimate for now; running only the changed lines comes next")
+	mockWorkflow.AssertNotCalled(t, "Test", mock.Anything, mock.Anything)
 }
 
 func TestRunCmd_DiffFlagWithEstimate(t *testing.T) {
@@ -165,11 +164,11 @@ func TestRunCmd_DiffFromConfig(t *testing.T) {
 	setConfigDiff(t, "origin/develop")
 
 	mockWorkflow := domainmocks.NewMockWorkflow(t)
-	mockWorkflow.On("Test", mock.Anything, mock.MatchedBy(func(args domain.TestArgs) bool {
+	mockWorkflow.On("Estimate", mock.Anything, mock.MatchedBy(func(args domain.EstimateArgs) bool {
 		return args.Diff == "origin/develop"
 	})).Return(nil)
 
-	require.NoError(t, diffRunCmd(t, mockWorkflow, "run", "./..."))
+	require.NoError(t, diffRunCmd(t, mockWorkflow, "run", "--estimate", "./..."))
 }
 
 func TestRunCmd_DiffFlagOverridesConfig(t *testing.T) {
@@ -188,11 +187,11 @@ func TestRunCmd_DiffFromEnv(t *testing.T) {
 	t.Setenv("GOOZE_RUN_DIFF", "main")
 
 	mockWorkflow := domainmocks.NewMockWorkflow(t)
-	mockWorkflow.On("Test", mock.Anything, mock.MatchedBy(func(args domain.TestArgs) bool {
+	mockWorkflow.On("Estimate", mock.Anything, mock.MatchedBy(func(args domain.EstimateArgs) bool {
 		return args.Diff == "main"
 	})).Return(nil)
 
-	require.NoError(t, diffRunCmd(t, mockWorkflow, "run", "./..."))
+	require.NoError(t, diffRunCmd(t, mockWorkflow, "run", "--estimate", "./..."))
 }
 
 func TestRunCmd_WithSharding(t *testing.T) {

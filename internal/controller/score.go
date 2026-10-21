@@ -79,7 +79,8 @@ func diffEstimateLine(estimation domain.Estimation) string {
 	}
 
 	base := diff.Base
-	if len(base) > shortCommitLen {
+	// Equivalent: a base of exactly shortCommitLen is unchanged by the cut.
+	if len(base) > shortCommitLen { //gooze:ignore comparison
 		base = base[:shortCommitLen]
 	}
 
@@ -89,7 +90,8 @@ func diffEstimateLine(estimation domain.Estimation) string {
 	}
 
 	files := "files"
-	if diff.Files == 1 {
+	// Equivalent: zero files returned above, and counts are never negative.
+	if diff.Files == 1 { //gooze:ignore comparison
 		files = "file"
 	}
 
