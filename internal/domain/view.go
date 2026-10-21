@@ -69,7 +69,7 @@ func (w *workflow) View(ctx context.Context, args ViewArgs) error {
 
 	w.progress.DisplayReportSummary(ctx, summary)
 
-	return nil
+	return args.Thresholds.Err(summary.Score)
 }
 
 // viewAll replays every mutation with its status, as a run displays them.
@@ -91,12 +91,10 @@ func (w *workflow) viewAll(ctx context.Context, args ViewArgs) error {
 			return fmt.Errorf("count view items: %w", err)
 		}
 
-		summary, err := summarizeReports(reports, include)
+		score, err := scoreReports(reports, include)
 		if err != nil {
 			return fmt.Errorf("calculate mutation score: %w", err)
 		}
-
-		score := MutationScore{Summary: summary}
 
 		slog.Info("Calculated mutation score", "score", score.Score(), "reportsCount", reports.Len(), "mutationsCount", total)
 		w.progress.DisplayUpcomingTestsInfo(ctx, total)
@@ -110,7 +108,7 @@ func (w *workflow) viewAll(ctx context.Context, args ViewArgs) error {
 
 		w.progress.DisplayMutationScore(ctx, score)
 
-		return nil
+		return args.Thresholds.Err(score)
 	})
 }
 
@@ -176,6 +174,8 @@ func summarizeView(reports pkg.FileSpill[m.Report], paths []m.Path) (ReportSumma
 	for _, key := range slices.Sorted(maps.Keys(files)) {
 		summary.Files = append(summary.Files, *files[key])
 	}
+
+	summary.Score.Files = summary.Files
 
 	slices.SortStableFunc(summary.Survivors, func(a, b Survivor) int {
 		return cmp.Or(cmp.Compare(a.Path, b.Path), cmp.Compare(a.Line, b.Line), cmp.Compare(a.Mutagen, b.Mutagen))
