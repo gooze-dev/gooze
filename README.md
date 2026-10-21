@@ -1,5 +1,7 @@
 ![logo](./logo.png)
 
+[![Website](https://img.shields.io/badge/website-gooze.dev-7DBC23)](https://gooze.dev)
+[![Docs](https://img.shields.io/badge/docs-gooze.dev%2Fdocs-4CB8B8)](https://gooze.dev/docs)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/gooze-dev/gooze/badge)](https://scorecard.dev/viewer/?uri=github.com/gooze-dev/gooze)
 [![codecov](https://codecov.io/gh/gooze-dev/gooze/graph/badge.svg)](https://app.codecov.io/gh/gooze-dev/gooze)
 [![Go Report Card](https://goreportcard.com/badge/github.com/gooze-dev/gooze)](https://goreportcard.com/report/github.com/gooze-dev/gooze)

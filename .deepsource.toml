@@ -1,7 +1,7 @@
 version = 1
 
 [[analyzers]]
-name = "go"
+name = 'go'
 
-  [analyzers.meta]
-  import_root = "gooze.dev/pkg/gooze"
+[analyzers.meta]
+import_root = 'gooze.dev/pkg/gooze'
