@@ -16,4 +16,7 @@ type Mutation struct {
 	MutatedCode []byte
 	DiffCode    []byte
 	Line        int
+	// Scope is set in diff mode when only some lines of the source are
+	// tested; reports of the mutation record it.
+	Scope *rpt.Scope
 }

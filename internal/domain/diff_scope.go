@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 
+	pkg "gooze.dev/pkg/gooze/pkg"
 	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
@@ -71,6 +73,27 @@ func (s *DiffScope) Includes(source rpt.Source, line int) bool {
 	return s.changes.Files[source.Origin.FullPath].Contains(line)
 }
 
+// ReportScope returns what reports of source record about the lines tested:
+// nil when the whole file is in scope (diff mode off, a new file, or a changed
+// test), otherwise the base and changed line ranges.
+func (s *DiffScope) ReportScope(source rpt.Source) *rpt.Scope {
+	if s == nil || source.Origin == nil || s.testChanged(source) {
+		return nil
+	}
+
+	change := s.changes.Files[source.Origin.FullPath]
+	if change.Whole {
+		return nil
+	}
+
+	lines := make([]rpt.LineRange, 0, len(change.Lines))
+	for _, r := range change.Lines {
+		lines = append(lines, rpt.LineRange{Start: r.Start, End: r.End})
+	}
+
+	return &rpt.Scope{Base: s.changes.Base, Lines: lines}
+}
+
 func (s *DiffScope) testChanged(source rpt.Source) bool {
 	if source.Test == nil {
 		return false
@@ -110,4 +133,64 @@ func (w *workflow) diffScope(ctx context.Context, args EstimateArgs) (*DiffScope
 	}
 
 	return NewDiffScope(changes), nil
+}
+
+// narrowToScope keeps only the changed sources in diff scope, so a diff run
+// neither tests nor cleans the stored reports of sources outside it.
+func narrowToScope(sources sourceSet, scope *DiffScope) (sourceSet, error) {
+	if scope == nil {
+		return sources, nil
+	}
+
+	inScope, err := pkg.NewFileSpill[rpt.Source]()
+	if err != nil {
+		return sources, fmt.Errorf("create diff scope spill: %w", err)
+	}
+
+	err = sources.changed.Range(func(_ uint64, source rpt.Source) error {
+		if !scope.InScope(source) {
+			return nil
+		}
+
+		return inScope.Append(source)
+	})
+	if err != nil {
+		closeSpill("diff scope sources", inScope)
+		return sources, err
+	}
+
+	// Equivalent: when changed is scanned, closing it early is never observed,
+	// since scanned is read again only by cached runs, where they differ.
+	if sources.changed != sources.scanned { //gooze:ignore comparison
+		closeSpill("changed sources", sources.changed)
+	}
+
+	sources.changed = inScope
+
+	return sources, nil
+}
+
+// testSources resolves a test run's sources and, in diff mode, its scope,
+// narrowing the sources to test to those in scope. Diff errors are returned
+// before any scan. The caller must close the set.
+func (w *workflow) testSources(ctx context.Context, args EstimateArgs) (sourceSet, *DiffScope, error) {
+	scope, err := w.diffScope(ctx, args)
+	if err != nil {
+		slog.Error("Failed to read diff changes", "error", err)
+		return sourceSet{}, nil, err
+	}
+
+	sources, err := w.resolveSources(ctx, args)
+	if err != nil {
+		slog.Error("Failed to resolve sources", "error", err)
+		return sourceSet{}, nil, err
+	}
+
+	narrowed, err := narrowToScope(sources, scope)
+	if err != nil {
+		sources.close()
+		return sourceSet{}, nil, err
+	}
+
+	return narrowed, scope, nil
 }

@@ -44,3 +44,34 @@ func TestSource_Key(t *testing.T) {
 	assert.Equal(t, "/abs/a.go", Source{Origin: &File{FullPath: "/abs/a.go"}}.Key())
 	assert.Equal(t, "a.go", Source{Origin: &File{ShortPath: "a.go", FullPath: "/abs/a.go"}}.Key())
 }
+
+func TestReport_LineAndScopeAreOptional(t *testing.T) {
+	// Reports written before diff mode have neither field, and full results
+	// still omit them, so old and new files look the same.
+	data, err := yaml.Marshal(Report{Source: Source{}})
+	require.NoError(t, err)
+	assert.NotContains(t, string(data), "line")
+	assert.NotContains(t, string(data), "scope")
+
+	var old Report
+	require.NoError(t, yaml.Unmarshal([]byte("source: {}\nresult: []\ndiff: null\n"), &old))
+	assert.Zero(t, old.Line)
+	assert.Nil(t, old.Scope)
+}
+
+func TestReport_ScopeRoundTrip(t *testing.T) {
+	in := Report{
+		Result: []Result{},
+		Line:   12,
+		Scope:  &Scope{Base: "1a2b3c4", Lines: []LineRange{{Start: 3, End: 3}, {Start: 10, End: 12}}},
+	}
+
+	data, err := yaml.Marshal(in)
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "line: 12\n")
+	assert.Contains(t, string(data), "scope:\n    base: 1a2b3c4\n    lines:\n        - start: 3\n          end: 3\n")
+
+	var out Report
+	require.NoError(t, yaml.Unmarshal(data, &out))
+	assert.Equal(t, in, out)
+}

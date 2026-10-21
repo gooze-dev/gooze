@@ -139,9 +139,8 @@ func (w *workflow) Test(ctx context.Context, args TestArgs) error {
 
 		reportsDir := shardReportsDir(args.Reports, args.ShardIndex, args.TotalShardCount)
 
-		sources, err := w.resolveSources(ctx, args.EstimateArgs)
+		sources, scope, err := w.testSources(ctx, args.EstimateArgs)
 		if err != nil {
-			slog.Error("Failed to resolve sources", "error", err)
 			return err
 		}
 
@@ -155,7 +154,7 @@ func (w *workflow) Test(ctx context.Context, args TestArgs) error {
 			return inShard(mutation.ID, args.ShardIndex, args.TotalShardCount)
 		}
 
-		mutations, total, err := w.generateMutations(ctx, sources.changed, inThisShard)
+		mutations, total, err := w.generateMutations(ctx, sources.changed, inThisShard, scope)
 		if err != nil {
 			slog.Error("Failed to generate mutations", "error", err)
 			return fmt.Errorf("generate mutations: %w", err)
@@ -201,9 +200,10 @@ func (w *workflow) cleanDeleted(ctx context.Context, base, reportsDir m.Path, de
 }
 
 // generateMutations generates every mutation of the given sources once,
-// keeping those include accepts, and spills them so the test pass can replay
-// them without regenerating or holding them in memory.
-func (w *workflow) generateMutations(ctx context.Context, sources pkg.FileSpill[rpt.Source], include func(m.Mutation) bool) (pkg.FileSpill[m.Mutation], int, error) {
+// keeping those include accepts and the diff scope (nil: all) contains, and
+// spills them so the test pass can replay them without regenerating or
+// holding them in memory. Kept mutations carry their source's report scope.
+func (w *workflow) generateMutations(ctx context.Context, sources pkg.FileSpill[rpt.Source], include func(m.Mutation) bool, scope *DiffScope) (pkg.FileSpill[m.Mutation], int, error) {
 	mutations, err := pkg.NewFileSpill[m.Mutation]()
 	if err != nil {
 		return nil, 0, fmt.Errorf("create mutations spill: %w", err)
@@ -212,12 +212,15 @@ func (w *workflow) generateMutations(ctx context.Context, sources pkg.FileSpill[
 	total := 0
 
 	err = sources.Range(func(_ uint64, source rpt.Source) error {
+		reportScope := scope.ReportScope(source)
+
 		return w.mutagen.StreamMutations(ctx, source, func(mutation m.Mutation) error {
-			if include != nil && !include(mutation) {
+			if (include != nil && !include(mutation)) || !scope.Includes(source, mutation.Line) {
 				return nil
 			}
 
 			total++
+			mutation.Scope = reportScope
 
 			return mutations.Append(mutation)
 		}, DefaultMutations...)
@@ -1026,6 +1029,8 @@ func buildReport(mutation m.Mutation, result m.Result) m.Report {
 	report := m.Report{
 		Source: mutation.Source,
 		Result: result,
+		Line:   mutation.Line,
+		Scope:  mutation.Scope,
 	}
 
 	if getMutationStatus(result, mutation) != rpt.Killed {
