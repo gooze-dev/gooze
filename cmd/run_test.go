@@ -106,6 +106,95 @@ func TestRunCmd_CoverageProfileDefaultsEmpty(t *testing.T) {
 	mockWorkflow.AssertExpectations(t)
 }
 
+// diffRunCmd runs `gooze <args>` against a mock workflow and returns it.
+func diffRunCmd(t *testing.T, mockWorkflow *domainmocks.MockWorkflow, args ...string) error {
+	t.Helper()
+
+	cmd := newRootCmd()
+	cmd.AddCommand(newRunCmd())
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+
+	originalWorkflow := workflow
+	workflow = mockWorkflow
+	t.Cleanup(func() { workflow = originalWorkflow })
+	// Rebind run.diff to a fresh, unset flag so this run's --diff doesn't
+	// leak into later tests (viper.Set would override every layer instead).
+	t.Cleanup(func() { newRunCmd() })
+
+	cmd.SetArgs(args)
+
+	return cmd.Execute()
+}
+
+func TestRunCmd_DiffFlag(t *testing.T) {
+	mockWorkflow := domainmocks.NewMockWorkflow(t)
+	mockWorkflow.On("Test", mock.Anything, mock.MatchedBy(func(args domain.TestArgs) bool {
+		return args.Diff == "origin/main"
+	})).Return(nil)
+
+	require.NoError(t, diffRunCmd(t, mockWorkflow, "run", "--diff", "origin/main", "./..."))
+}
+
+func TestRunCmd_DiffFlagWithEstimate(t *testing.T) {
+	mockWorkflow := domainmocks.NewMockWorkflow(t)
+	mockWorkflow.On("Estimate", mock.Anything, mock.MatchedBy(func(args domain.EstimateArgs) bool {
+		return args.Diff == "HEAD~1"
+	})).Return(nil)
+
+	require.NoError(t, diffRunCmd(t, mockWorkflow, "run", "--estimate", "--diff", "HEAD~1"))
+}
+
+func TestRunCmd_DiffDefaultsOff(t *testing.T) {
+	mockWorkflow := domainmocks.NewMockWorkflow(t)
+	mockWorkflow.On("Test", mock.Anything, mock.MatchedBy(func(args domain.TestArgs) bool {
+		return args.Diff == ""
+	})).Return(nil)
+
+	require.NoError(t, diffRunCmd(t, mockWorkflow, "run", "./..."))
+}
+
+// setConfigDiff sets run.diff in viper's config-file layer, as gooze.yaml does.
+func setConfigDiff(t *testing.T, ref string) {
+	t.Helper()
+	require.NoError(t, viper.MergeConfigMap(map[string]any{"run": map[string]any{"diff": ref}}))
+	t.Cleanup(func() { _ = viper.MergeConfigMap(map[string]any{"run": map[string]any{"diff": ""}}) })
+}
+
+func TestRunCmd_DiffFromConfig(t *testing.T) {
+	setConfigDiff(t, "origin/develop")
+
+	mockWorkflow := domainmocks.NewMockWorkflow(t)
+	mockWorkflow.On("Test", mock.Anything, mock.MatchedBy(func(args domain.TestArgs) bool {
+		return args.Diff == "origin/develop"
+	})).Return(nil)
+
+	require.NoError(t, diffRunCmd(t, mockWorkflow, "run", "./..."))
+}
+
+func TestRunCmd_DiffFlagOverridesConfig(t *testing.T) {
+	setConfigDiff(t, "origin/develop")
+
+	mockWorkflow := domainmocks.NewMockWorkflow(t)
+	mockWorkflow.On("Test", mock.Anything, mock.MatchedBy(func(args domain.TestArgs) bool {
+		return args.Diff == ""
+	})).Return(nil)
+
+	// An explicit empty value turns a configured diff off for one run.
+	require.NoError(t, diffRunCmd(t, mockWorkflow, "run", "--diff=", "./..."))
+}
+
+func TestRunCmd_DiffFromEnv(t *testing.T) {
+	t.Setenv("GOOZE_RUN_DIFF", "main")
+
+	mockWorkflow := domainmocks.NewMockWorkflow(t)
+	mockWorkflow.On("Test", mock.Anything, mock.MatchedBy(func(args domain.TestArgs) bool {
+		return args.Diff == "main"
+	})).Return(nil)
+
+	require.NoError(t, diffRunCmd(t, mockWorkflow, "run", "./..."))
+}
+
 func TestRunCmd_WithSharding(t *testing.T) {
 	mockWorkflow := domainmocks.NewMockWorkflow(t)
 
