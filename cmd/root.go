@@ -68,6 +68,7 @@ func init() {
 		ui,
 		orchestrator,
 		mutagen,
+		domain.WithChangeDetector(adapter.NewGitChangeDetector()),
 	)
 	publisher = domain.NewReportPublisher(ociRegistry)
 	releaseChecker = adapter.NewModuleProxyReleaseChecker()

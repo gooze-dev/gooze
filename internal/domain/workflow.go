@@ -77,6 +77,7 @@ type workflow struct {
 	progress     Reporter
 	orchestrator Orchestrator
 	mutagen      Mutagen
+	changes      ChangeDetector // nil disables diff mode
 }
 
 // NewWorkflow creates a new Workflow instance with the provided dependencies.
@@ -86,14 +87,21 @@ func NewWorkflow(
 	reporter Reporter,
 	orchestrator Orchestrator,
 	mutagen Mutagen,
+	opts ...WorkflowOption,
 ) Workflow {
-	return &workflow{
+	w := &workflow{
 		sources:      fsAdapter,
 		reports:      reportStore,
 		progress:     reporter,
 		orchestrator: orchestrator,
 		mutagen:      mutagen,
 	}
+
+	for _, opt := range opts {
+		opt(w)
+	}
+
+	return w
 }
 
 func (w *workflow) Estimate(ctx context.Context, args EstimateArgs) error {
@@ -713,6 +721,11 @@ func (w *workflow) scanSources(ctx context.Context, args EstimateArgs) (pkg.File
 // without ever holding the sources or mutations in memory all at once. Files
 // whose stored reports are still valid are listed too, marked as cached.
 func (w *workflow) estimateMutations(ctx context.Context, args EstimateArgs) (Estimation, error) {
+	scope, err := w.diffScope(ctx, args)
+	if err != nil {
+		return Estimation{}, err
+	}
+
 	sources, err := w.resolveSources(ctx, args)
 	if err != nil {
 		return Estimation{}, err
@@ -734,37 +747,28 @@ func (w *workflow) estimateMutations(ctx context.Context, args EstimateArgs) (Es
 		}
 	}
 
-	return w.countMutations(ctx, sources.scanned, isCached)
+	return w.countMutations(ctx, sources.scanned, isCached, scope)
 }
 
 // countMutations generates the mutations for the given sources and aggregates
 // per-file counts. Mutations are processed one at a time and never retained.
-func (w *workflow) countMutations(ctx context.Context, sources pkg.FileSpill[rpt.Source], isCached func(rpt.Source) bool) (Estimation, error) {
-	byKey := map[string]*FileEstimate{}
-	order := make([]string, 0)
-
-	var estimation Estimation
+// With a diff scope, only sources and lines in scope are counted.
+func (w *workflow) countMutations(ctx context.Context, sources pkg.FileSpill[rpt.Source], isCached func(rpt.Source) bool, scope *DiffScope) (Estimation, error) {
+	tally := newEstimateTally(scope)
 
 	err := sources.Range(func(_ uint64, source rpt.Source) error {
+		if !scope.InScope(source) {
+			return nil
+		}
+
+		tally.addSource()
+
 		cached := isCached(source)
 
 		return w.mutagen.StreamMutations(ctx, source, func(mutation m.Mutation) error {
-			estimation.Total++
-
-			if cached {
-				estimation.Cached++
+			if scope.Includes(source, mutation.Line) {
+				tally.add(mutation, cached)
 			}
-
-			key, path := fileKey(mutation)
-
-			estimate, ok := byKey[key]
-			if !ok {
-				estimate = &FileEstimate{Path: path, Cached: cached}
-				byKey[key] = estimate
-				order = append(order, key)
-			}
-
-			estimate.Count++
 
 			return nil
 		}, DefaultMutations...)
@@ -773,9 +777,60 @@ func (w *workflow) countMutations(ctx context.Context, sources pkg.FileSpill[rpt
 		return Estimation{}, err
 	}
 
-	estimation.Files = make([]FileEstimate, 0, len(order))
-	for _, key := range order {
-		estimation.Files = append(estimation.Files, *byKey[key])
+	return tally.estimation(), nil
+}
+
+// estimateTally accumulates per-file mutation counts for an Estimation.
+type estimateTally struct {
+	result Estimation
+	byKey  map[string]*FileEstimate
+	order  []string
+}
+
+func newEstimateTally(scope *DiffScope) *estimateTally {
+	tally := &estimateTally{byKey: map[string]*FileEstimate{}}
+
+	if scope != nil {
+		info := scope.Info()
+		tally.result.Diff = &info
+	}
+
+	return tally
+}
+
+// addSource counts a source file in scope of a diff-mode estimate.
+func (t *estimateTally) addSource() {
+	if t.result.Diff != nil {
+		t.result.Diff.Files++
+	}
+}
+
+func (t *estimateTally) add(mutation m.Mutation, cached bool) {
+	t.result.Total++
+
+	if cached {
+		t.result.Cached++
+	}
+
+	key, path := fileKey(mutation)
+
+	estimate, ok := t.byKey[key]
+	if !ok {
+		estimate = &FileEstimate{Path: path, Cached: cached}
+		t.byKey[key] = estimate
+		t.order = append(t.order, key)
+	}
+
+	estimate.Count++
+}
+
+// estimation returns the counts, with files sorted by path.
+func (t *estimateTally) estimation() Estimation {
+	estimation := t.result
+	estimation.Files = make([]FileEstimate, 0, len(t.order))
+
+	for _, key := range t.order {
+		estimation.Files = append(estimation.Files, *t.byKey[key])
 	}
 
 	sort.Slice(estimation.Files, func(i, j int) bool {
@@ -787,7 +842,7 @@ func (w *workflow) countMutations(ctx context.Context, sources pkg.FileSpill[rpt
 		return files[i].Count < files[j].Count
 	})
 
-	return estimation, nil
+	return estimation
 }
 
 func fileKey(mutation m.Mutation) (string, string) {

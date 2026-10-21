@@ -255,3 +255,18 @@ func TestTUI_DisplayUpdateNotice_BeforeStart(t *testing.T) {
 
 	var _ UpdateNotifier = tui
 }
+
+func TestJoinLines(t *testing.T) {
+	cases := map[string][]string{
+		"":     {"", ""},
+		"a":    {"a", ""},
+		"b":    {"", "b"},
+		"a\nb": {"a", "b"},
+	}
+
+	for want, lines := range cases {
+		if got := joinLines(lines...); got != want {
+			t.Errorf("joinLines(%q) = %q, want %q", lines, got, want)
+		}
+	}
+}

@@ -250,3 +250,25 @@ func TestReportedDiff(t *testing.T) {
 		})
 	}
 }
+
+func TestSimpleUI_DisplayEstimation_DiffModeLineComesFirst(t *testing.T) {
+	var buf bytes.Buffer
+
+	cmd := &cobra.Command{}
+	cmd.SetOut(&buf)
+
+	estimation := domain.Estimation{
+		Total: 2,
+		Files: []domain.FileEstimate{{Path: "calc.go", Count: 2}},
+		Diff:  &domain.DiffInfo{Ref: "origin/main", Base: "1a2b3c4d5e", Files: 1},
+	}
+
+	if err := NewSimpleUI(cmd).DisplayEstimation(context.Background(), estimation, nil); err != nil {
+		t.Fatalf("DisplayEstimation() error = %v", err)
+	}
+
+	want := diffEstimateLine(estimation) + "\n\n" + renderEstimationTable(estimation)
+	if got := buf.String(); got != want {
+		t.Fatalf("output = %q, want %q", got, want)
+	}
+}

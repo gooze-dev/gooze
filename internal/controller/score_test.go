@@ -71,3 +71,34 @@ func TestCachedEstimateHint(t *testing.T) {
 		t.Fatalf("cachedEstimateHint() = %q, want %q", got, want)
 	}
 }
+
+func TestDiffEstimateLine(t *testing.T) {
+	cases := []struct {
+		name string
+		diff *domain.DiffInfo
+		want string
+	}{
+		{name: "not diff mode", diff: nil, want: ""},
+		{
+			name: "one file, long base shortened",
+			diff: &domain.DiffInfo{Ref: "origin/main", Base: "1a2b3c4d5e6f7a8b", Files: 1},
+			want: "Diff mode: 1 file changed since origin/main (merge base 1a2b3c4); counts cover changed lines only.",
+		},
+		{
+			name: "several files, short base kept",
+			diff: &domain.DiffInfo{Ref: "HEAD~1", Base: "abc", Files: 3},
+			want: "Diff mode: 3 files changed since HEAD~1 (merge base abc); counts cover changed lines only.",
+		},
+		{
+			name: "no changed files",
+			diff: &domain.DiffInfo{Ref: "main", Base: "1a2b3c4d", Files: 0},
+			want: "Diff mode: no changed files since main (merge base 1a2b3c4).",
+		},
+	}
+
+	for _, tc := range cases {
+		if got := diffEstimateLine(domain.Estimation{Diff: tc.diff}); got != tc.want {
+			t.Errorf("%s: diffEstimateLine() = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
