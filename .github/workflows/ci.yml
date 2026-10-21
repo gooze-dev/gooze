@@ -6,6 +6,9 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 env:
   GOFLAGS: -buildvcs=false
 
@@ -14,19 +17,27 @@ jobs:
     runs-on: ubuntu-latest
     container: golang:1.27
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
     - name: Build
       run: go install ./...
     - name: Vet
       run: go vet ./...
     - name: Test
-      run: go test -race ./...
+      run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        files: ./coverage.out
+        flags: unittests
+        # Don't fail CI while Codecov is down or the token isn't set up yet.
+        fail_ci_if_error: false
 
   lint:
     runs-on: ubuntu-latest
     container: golang:1.27
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # golangci-lint must be built with the same Go as the toolchain (1.27):
       # prebuilt release binaries are compiled with an older Go and panic when
       # they type-check a newer-Go module. The Makefile installs it from source.

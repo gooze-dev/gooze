@@ -1,5 +1,8 @@
 ![logo](./logo.png)
 
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/gooze-dev/gooze/badge)](https://scorecard.dev/viewer/?uri=github.com/gooze-dev/gooze)
+[![codecov](https://codecov.io/gh/gooze-dev/gooze/graph/badge.svg)](https://app.codecov.io/gh/gooze-dev/gooze)
+
 A Golang mutation testing tool inspired by TMNT "ooze" mutagen.
 
 Gooze helps you measure test suite quality by introducing small, controlled mutations
