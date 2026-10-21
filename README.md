@@ -100,10 +100,7 @@ marks cached files; pass `--no-cache` to re-test everything.
 Mutation categories not implemented yet: core logic, return value, conditional,
 complex expression, slice, map, pointer & memory, interface / type assertion,
 function signature / parameter, type system & interfaces, global state &
-initialization, Go-specific error handling, concurrency & channels, string
-literals, assignment operators (`+=` ↔ `-=`), increment and decrement
-(`i++` ↔ `i--`). The `branch`, `statement` and `loop` mutagens exist but are
-off by default and can't be selected with `--mutagens` yet.
+initialization, Go-specific error handling, concurrency & channels.
 
 ## Go packages
 
