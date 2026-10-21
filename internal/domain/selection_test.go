@@ -66,7 +66,7 @@ func TestParseMutagens(t *testing.T) {
 
 	_, err = domain.ParseMutagens([]string{"statement"})
 	require.EqualError(t, err, `unknown mutagen "statement"; gooze runs arithmetic, boolean, numbers, comparison, logical, unary`,
-		"registered but not run by gooze yet")
+		"registered but not one of the mutagens gooze runs")
 }
 
 func TestSelection_ReportScope(t *testing.T) {

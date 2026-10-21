@@ -149,7 +149,7 @@ func TestFormatMutationScore_NarrowedRun(t *testing.T) {
 		t.Errorf("formatMutationScore() = %q, want %q", got, want)
 	}
 
-	// The CI gate's sed still reads the number.
+	// The CI gate's sed reads the score from the start of the line.
 	if !strings.HasPrefix(want, "50.00%") {
 		t.Fatal("score must lead the line")
 	}
