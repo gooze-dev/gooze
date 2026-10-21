@@ -137,7 +137,8 @@ func runGit(ctx context.Context, git, dir string, args ...string) (string, error
 
 // parseUnifiedDiff returns the added or modified lines of each file in a
 // `git diff -U0` output, keyed by repository-relative path. New files count
-// in full; deleted files and renames without edits are absent.
+// in full; a file whose hunks only delete lines is listed with no lines;
+// deleted files and renames without edits are absent.
 func parseUnifiedDiff(diff string) map[string]domain.FileChange {
 	files := make(map[string]domain.FileChange)
 
@@ -154,9 +155,10 @@ func parseUnifiedDiff(diff string) map[string]domain.FileChange {
 			newFile = true
 		case strings.HasPrefix(line, "+++ "):
 			current = diffPath(strings.TrimPrefix(line, "+++ "))
-			// Equivalent: a new file never has a /dev/null ("") new side.
-			if current != "" && newFile { //gooze:ignore comparison
-				files[current] = domain.FileChange{Whole: true}
+			if current != "" {
+				// Listed even if its hunks only delete lines: a test file
+				// changed that way still puts its source in scope.
+				files[current] = domain.FileChange{Whole: newFile}
 			}
 		// Equivalent: a deleted file ("") only has hunks with zero new lines,
 		// which addHunk skips anyway.
