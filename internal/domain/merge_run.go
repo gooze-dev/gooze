@@ -29,38 +29,35 @@ type baseFile struct {
 // reports, the run's results replace the matching mutations and the rest are
 // kept, so a complete file stays complete. For a changed or new file, the
 // run's results replace the file's and keep their partial scope, so the next
-// full run re-tests it. It reports whether there was a run to merge.
-func (w *workflow) mergeRunReports(ctx context.Context, base m.Path) (bool, error) {
+// full run re-tests it. Without a run directory it does nothing.
+func (w *workflow) mergeRunReports(ctx context.Context, base m.Path) error {
 	runDir := filepath.Join(string(base), RunDirName)
-	if info, err := os.Stat(runDir); errors.Is(err, os.ErrNotExist) || (err == nil && !info.IsDir()) {
-		return false, nil
-	} else if err != nil {
-		return false, fmt.Errorf("read %s: %w", runDir, err)
-	}
 
 	shardDirs, err := findShardDirs(runDir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+
 	if err != nil {
-		return false, fmt.Errorf("find run shard directories: %w", err)
+		return fmt.Errorf("find run shard directories: %w", err)
 	}
 
 	runReports, err := w.loadShardReports(ctx, append([]string{runDir}, shardDirs...))
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	defer closeSpill("run reports", runReports)
 
-	if runReports.Len() > 0 {
-		if err := w.overlayRunReports(ctx, base, runReports); err != nil {
-			return false, err
-		}
+	if err := w.overlayRunReports(ctx, base, runReports); err != nil {
+		return err
 	}
 
 	if err := os.RemoveAll(runDir); err != nil {
-		return false, fmt.Errorf("remove %s: %w", runDir, err)
+		return fmt.Errorf("remove %s: %w", runDir, err)
 	}
 
-	return true, nil
+	return nil
 }
 
 func (w *workflow) overlayRunReports(ctx context.Context, base m.Path, runReports pkg.FileSpill[m.Report]) error {

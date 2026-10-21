@@ -365,24 +365,16 @@ func (w *workflow) Merge(ctx context.Context, args MergeArgs) error {
 			return err
 		}
 
-		if len(shardDirs) > 0 {
-			if err := w.mergeShards(ctx, base, shardDirs); err != nil {
-				return err
-			}
+		if err := w.mergeShards(ctx, base, shardDirs); err != nil {
+			return err
 		}
 
-		mergedRun, err := w.mergeRunReports(ctx, base)
-		if err != nil {
+		if err := w.mergeRunReports(ctx, base); err != nil {
 			slog.Error("Failed to merge the run reports", "error", err, "basePath", base)
 			return err
 		}
 
-		if len(shardDirs) == 0 && !mergedRun {
-			slog.Warn("No shard or run directories found; regenerating index only", "basePath", base)
-			return w.regenerateIndexAndScore(ctx, base)
-		}
-
-		return w.displayScore(ctx, base)
+		return w.regenerateIndexAndScore(ctx, base)
 	})
 }
 

@@ -44,7 +44,8 @@ func buildFuncIndex(file *ast.File, fset *token.FileSet) funcIndex {
 // receiverTypeName returns the receiver's type name without pointer or type
 // parameters (Parser for *Parser, Gen for Gen[T]), or "" for a function.
 func receiverTypeName(fd *ast.FuncDecl) string {
-	if fd.Recv == nil || len(fd.Recv.List) == 0 {
+	// Equivalent: a list length is never negative.
+	if fd.Recv == nil || len(fd.Recv.List) == 0 { //gooze:ignore comparison
 		return ""
 	}
 
