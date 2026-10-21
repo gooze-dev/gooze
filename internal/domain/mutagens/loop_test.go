@@ -76,6 +76,8 @@ func TestGenerateLoopMutations_RangeLoopBodyRemoval(t *testing.T) {
 		"for a = range n {\nb++\n}":       {"for a = range n {}"},
 		"for i := range n {\na += i\n}":   nil, // i would be unused
 		"for _, x := range s {\n_ = x\n}": nil,
+		"for K := range n {\na += K\n}":   nil, // upper case is a name too
+		"for _ := range s {\na++\n}":      {"for _ := range s {}"},
 	}
 
 	for body, want := range cases {
@@ -312,6 +314,11 @@ func TestGenerateLoopMutations_EveryLoopStillEnds(t *testing.T) {
 		"for {\nif a > n {\ncontinue\n}\nreturn\n}": {"-continue"},
 		"for a < n {\nif a > b {\nbreak\n}\na++\n}": {"-break", "for a <= n {"},
 		"for range n {\nif a > b {\nbreak\n}\n}":    {"-break", "for range n {}"},
+		// An empty body is not emptied again.
+		"for i := 0; i < n; i++ {\n}": {"for i := 0; i <= n; i++ {"},
+		"for range n {\n}":            nil,
+		// fallthrough belongs to the switch.
+		"for range n {\nswitch {\ncase a > b:\nfallthrough\ndefault:\na++\n}\n}": {"for range n {}"},
 	}
 
 	for body, want := range cases {
@@ -361,6 +368,13 @@ func TestGenerateLoopMutations_RecursionOnlyWhereZeroFits(t *testing.T) {
 	require.Len(t, mutations, 1)
 	assert.Contains(t, string(mutations[0].MutatedCode), "return 0\n")
 
+	for name := range numberTypes {
+		assert.Len(t, recursive("func fact(n int) "+name), 1, name)
+	}
+
+	assert.Len(t, recursive("func fact(n int) (r int)"), 1, "a named result")
+	assert.Empty(t, recursive("func fact(n int) ()"), "no result")
+	assert.Empty(t, recursive("func fact(n int) (a, b int)"), "two named results")
 	assert.Empty(t, recursive("func fact(n int) string"), "0 is not a string")
 	assert.Empty(t, recursive("func fact(n int) (int, error)"), "one 0 can't return two values")
 	assert.Empty(t, recursive("func (c calc) fact(n int) int"), "a method's fact() is another function")

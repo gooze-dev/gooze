@@ -519,4 +519,18 @@ func TestGenerateBranchMutations_KeepsInitVariablesUsed(t *testing.T) {
 		"if err := g(); false {",
 		"if err := g(); true {",
 	}, mutantsOf(t, GenerateBranchMutations, "g := func() error { return nil }\nif err := g(); err != nil {\n_ = err\n}"))
+
+	// An upper-case name is checked too.
+	assert.Equal(t, []string{
+		"-if v, OK := m[a]; OK {; n = v; }",
+		"if v, OK := m[a]; !(OK) {",
+	}, mutantsOf(t, GenerateBranchMutations, "m := map[int]int{}\nif v, OK := m[a]; OK {\nn = v\n}"))
+
+	// An init that assigns declares nothing, so the condition is forced.
+	assert.Equal(t, []string{
+		"-if a = b; a > 0 {; n = 1; }",
+		"if a = b; !(a > 0) {",
+		"if a = b; false {",
+		"if a = b; true {",
+	}, mutantsOf(t, GenerateBranchMutations, "if a = b; a > 0 {\nn = 1\n}"))
 }

@@ -21,7 +21,8 @@ import (
 func GenerateStatementMutations(n ast.Node, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
 	switch stmt := n.(type) {
 	case *ast.AssignStmt:
-		if stmt.Tok != token.DEFINE {
+		// Equivalent: every other assignment token sorts before DEFINE.
+		if stmt.Tok != token.DEFINE { //gooze:ignore comparison
 			return deleteStatement(stmt, fset, content, source)
 		}
 

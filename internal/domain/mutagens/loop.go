@@ -69,7 +69,8 @@ func mutateRangeLoop(stmt *ast.RangeStmt, fset *token.FileSet, content []byte, s
 // than _: emptying its body would leave the variable unused, which does not
 // compile.
 func declaresNamed(stmt *ast.RangeStmt) bool {
-	if stmt.Tok != token.DEFINE {
+	// Equivalent: a range's other tokens, = and none, sort before DEFINE.
+	if stmt.Tok != token.DEFINE { //gooze:ignore comparison
 		return false
 	}
 
@@ -103,7 +104,11 @@ func loopControls(body *ast.BlockStmt, withBreaks bool) []*ast.BranchStmt {
 					return false
 				}
 			case *ast.BranchStmt:
-				if node.Label == nil && (node.Tok == token.CONTINUE || node.Tok == token.BREAK && withBreaks && !inSwitch) {
+				// Equivalent: no branch token sorts before BREAK, and the ones
+				// after it are continue (matched already), goto (always
+				// labeled) and fallthrough (always in a switch).
+				isBreak := node.Tok == token.BREAK //gooze:ignore comparison
+				if node.Label == nil && (node.Tok == token.CONTINUE || isBreak && withBreaks && !inSwitch) {
 					found = append(found, node)
 				}
 			}

@@ -154,6 +154,8 @@ func TestDeleteRange(t *testing.T) {
 		{"last line", "a\n\tx = 1", "x = 1", "a\n"},
 		{"inside a function literal", "\tdefer func() { x = 1 }()\n", "x = 1", "\tdefer func() {  }()\n"},
 		{"before a comment", "\tx = 1 // why\n", "x = 1", "\t // why\n"},
+		{"after code", "\tf(); x = 1\n", "x = 1", "\tf(); \n"},
+		{"first line", "x = 1\nb", "x = 1", "b"},
 	}
 
 	for _, tc := range cases {
@@ -162,5 +164,9 @@ func TestDeleteRange(t *testing.T) {
 		assert.Equal(t, tc.want, string(got), tc.name)
 	}
 
-	assert.Equal(t, "abc", string(deleteRange([]byte("abc"), 2, 1)), "an invalid range changes nothing")
+	assert.Equal(t, "a\nb", string(deleteRange([]byte("a\n\nb"), 2, 2)), "an empty range on an empty line takes the line")
+
+	for _, r := range [][2]int{{2, 1}, {-1, 1}, {0, 10}} {
+		assert.Equal(t, "abc", string(deleteRange([]byte("abc"), r[0], r[1])), "an invalid range %v changes nothing", r)
+	}
 }
