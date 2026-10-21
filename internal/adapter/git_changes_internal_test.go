@@ -80,6 +80,24 @@ index 7777777..8888888 100644
 	}, parseUnifiedDiff(diff))
 }
 
+func TestParseUnifiedDiff_DeletionOnlyFileIsListed(t *testing.T) {
+	t.Parallel()
+
+	// A test file whose change only deletes lines still changed: removing a
+	// test can let mutants survive, so its source must come into scope.
+	diff := `diff --git a/calc_test.go b/calc_test.go
+index 1111111..2222222 100644
+--- a/calc_test.go
++++ b/calc_test.go
+@@ -10,3 +9,0 @@ func TestInRange(t *testing.T) {
+-	if !InRange(1, 1, 10) {
+-		t.Fatal("lo is inclusive")
+-	}
+`
+
+	assert.Equal(t, map[string]domain.FileChange{"calc_test.go": {}}, parseUnifiedDiff(diff))
+}
+
 func TestParseUnifiedDiff_Empty(t *testing.T) {
 	t.Parallel()
 

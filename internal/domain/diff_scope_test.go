@@ -51,6 +51,11 @@ func TestDiffScope(t *testing.T) {
 	assert.False(t, scope.InScope(unchanged))
 	assert.False(t, scope.Includes(unchanged, 1))
 
+	// A test whose change only deleted lines still puts its source in scope.
+	deletedTest := domain.NewDiffScope(domain.ChangeSet{Files: map[string]domain.FileChange{"/p/x_test.go": {}}})
+	assert.True(t, deletedTest.InScope(diffSource("/p/x.go", "/p/x_test.go")))
+	assert.True(t, deletedTest.Includes(diffSource("/p/x.go", "/p/x_test.go"), 7))
+
 	// A file whose change only deleted lines has nothing left to mutate.
 	onlyDelete := diffSource("/p/onlydelete.go", "")
 	assert.False(t, scope.InScope(onlyDelete))
