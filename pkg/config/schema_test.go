@@ -194,8 +194,11 @@ func TestRunMutagensListsItsValues(t *testing.T) {
 	field, ok := Lookup(KeyRunMutagens)
 	require.True(t, ok)
 	assert.Equal(t, KindStringList, field.Kind)
-	assert.Equal(t, []string{"arithmetic", "boolean", "numbers", "comparison", "logical", "unary"}, field.Enum,
-		"each item of run.mutagens must be one of these")
+	assert.Equal(t, []string{
+		"arithmetic", "boolean", "numbers", "comparison", "logical", "unary",
+		"bitwise", "increment", "assignment", "branch", "statement", "loop",
+	}, field.Enum, "each item of run.mutagens must be one of these")
+	assert.Equal(t, "Mutagens to run (arithmetic, boolean, numbers, comparison, logical, unary, bitwise, increment, assignment, branch, statement, loop); empty runs the default ones, all but branch, statement and loop.", field.Doc)
 }
 
 var thresholdKeys = []string{

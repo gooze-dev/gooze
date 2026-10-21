@@ -13,6 +13,7 @@ import (
 	"gooze.dev/pkg/gooze/internal/domain"
 	m "gooze.dev/pkg/gooze/internal/model"
 	"gooze.dev/pkg/gooze/pkg/config"
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
 )
 
 var mutationTimeoutFlag int64
@@ -110,7 +111,7 @@ func configureRunFlags(cmd *cobra.Command) (report.ThresholdFlags, report.Thresh
 
 	cmd.Flags().StringVar(&runPatternFlag, runFlagName, "", "mutate only functions matching this regular expression, as for go test -run (matches Name, or Type.Name for methods)")
 
-	cmd.Flags().StringSliceVar(&runMutagensFlag, mutagensFlagName, viper.GetStringSlice(config.KeyRunMutagens), "mutagens to run, comma-separated (default all: arithmetic, boolean, numbers, comparison, logical, unary)")
+	cmd.Flags().StringSliceVar(&runMutagensFlag, mutagensFlagName, viper.GetStringSlice(config.KeyRunMutagens), "mutagens to run, comma-separated: "+strings.Join(mgen.Names(), ", ")+" (default all but branch, statement and loop)")
 	bindFlagToConfig(cmd.Flags().Lookup(mutagensFlagName), config.KeyRunMutagens)
 
 	return report.AddThresholdFlags(cmd, "threshold", "threshold"),

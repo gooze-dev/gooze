@@ -9,6 +9,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
 )
 
 // Field describes one key of the configuration file.
@@ -65,8 +67,8 @@ func runField() Field {
 		{Name: "diff", Kind: KindString, Default: "", Doc: "Git ref to diff against; only lines changed since its merge base with HEAD are mutated. Requires git. Empty runs everything."},
 		{
 			Name: "mutagens", Kind: KindStringList, Default: []string{},
-			Enum: []string{"arithmetic", "boolean", "numbers", "comparison", "logical", "unary"},
-			Doc:  "Mutagens to run (arithmetic, boolean, numbers, comparison, logical, unary); empty runs all of them.",
+			Enum: mgen.Names(),
+			Doc:  "Mutagens to run (" + strings.Join(mgen.Names(), ", ") + "); empty runs the default ones, all but branch, statement and loop.",
 		},
 	}}
 }

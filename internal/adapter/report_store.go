@@ -268,9 +268,15 @@ func (rs *LocalReportStore) shouldCleanReport(source rpt.Source, toCleanPaths ma
 
 // CheckUpdates splits sources into those that must be re-tested and the stored
 // sources whose files no longer exist. A source is re-tested when it has no
-// stored reports, its source or test hash changed, or the mutators that produced
-// its reports changed. Both returned spills must be closed by the caller.
-func (rs *LocalReportStore) CheckUpdates(ctx context.Context, path m.Path, sources pkg.FileSpill[rpt.Source]) (pkg.FileSpill[rpt.Source], pkg.FileSpill[rpt.Source], error) {
+// stored reports, its source or test hash changed, the mutators that produced
+// its reports changed, or untested (when set) returns true for it. Both
+// returned spills must be closed by the caller.
+func (rs *LocalReportStore) CheckUpdates(
+	ctx context.Context,
+	path m.Path,
+	sources pkg.FileSpill[rpt.Source],
+	untested func(source rpt.Source, tested []string) bool,
+) (pkg.FileSpill[rpt.Source], pkg.FileSpill[rpt.Source], error) {
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
 	}
@@ -296,10 +302,14 @@ func (rs *LocalReportStore) CheckUpdates(ctx context.Context, path m.Path, sourc
 		}
 	}
 
-	return rs.splitChangedAndDeleted(stored, sources)
+	return rs.splitChangedAndDeleted(stored, sources, untested)
 }
 
-func (rs *LocalReportStore) splitChangedAndDeleted(stored map[string]storedSourceState, sources pkg.FileSpill[rpt.Source]) (pkg.FileSpill[rpt.Source], pkg.FileSpill[rpt.Source], error) {
+func (rs *LocalReportStore) splitChangedAndDeleted(
+	stored map[string]storedSourceState,
+	sources pkg.FileSpill[rpt.Source],
+	untested func(rpt.Source, []string) bool,
+) (pkg.FileSpill[rpt.Source], pkg.FileSpill[rpt.Source], error) {
 	changed, err := pkg.NewFileSpill[rpt.Source]()
 	if err != nil {
 		return nil, nil, fmt.Errorf("create changed sources spill: %w", err)
@@ -316,7 +326,7 @@ func (rs *LocalReportStore) splitChangedAndDeleted(stored map[string]storedSourc
 		key := src.Key()
 		visited[key] = true
 
-		if rs.isSourceChanged(stored, key, src) {
+		if rs.isSourceChanged(stored, key, src) || isUntested(stored[key], src, untested) {
 			return changed.Append(src)
 		}
 
@@ -379,6 +389,22 @@ func (rs *LocalReportStore) isSourceChanged(stored map[string]storedSourceState,
 	}
 
 	return rs.mutatorsChanged(st.mutator)
+}
+
+// isUntested asks untested about a source whose stored reports are current.
+func isUntested(st storedSourceState, current rpt.Source, untested func(rpt.Source, []string) bool) bool {
+	if untested == nil {
+		return false
+	}
+
+	tested := make([]string, 0, len(st.mutator))
+	for name := range st.mutator {
+		tested = append(tested, name)
+	}
+
+	sort.Strings(tested)
+
+	return untested(current, tested)
 }
 
 func (rs *LocalReportStore) addStoredReport(state map[string]storedSourceState, report m.Report) {

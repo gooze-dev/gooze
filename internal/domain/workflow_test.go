@@ -118,7 +118,7 @@ func TestWorkflow_Test_Success(t *testing.T) {
 	mockReporter.EXPECT().DisplayCompletedTestInfo(ctx, mock.Anything, mock.Anything).Return().Once()
 	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources(sources))
 	mockMutagen.EXPECT().
-		StreamMutations(ctx, mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).
+		StreamMutations(ctx, mock.Anything, mock.Anything, typeArgs(domain.DefaultMutations)...).
 		RunAndReturn(streamMutationsFn(mutations))
 	mockWorkspace.EXPECT().Run(mock.Anything, mock.Anything).Return(m.Result{}, nil)
 	mockWorkspace.EXPECT().Close(mock.Anything).Return().Maybe()
@@ -203,7 +203,7 @@ func TestWorkflow_Test_GenerateMutationsError(t *testing.T) {
 	mockReporter.EXPECT().DisplayConcurrencyInfo(ctx, mock.Anything, mock.Anything, mock.Anything).Return()
 	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources(sources))
 	mockMutagen.EXPECT().
-		StreamMutations(ctx, mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).
+		StreamMutations(ctx, mock.Anything, mock.Anything, typeArgs(domain.DefaultMutations)...).
 		Return(testErr)
 	mockWorkspace := new(domainmocks.MockWorkspace)
 	mockWorkspace.EXPECT().Close(mock.Anything).Return().Maybe()
@@ -252,7 +252,7 @@ func TestWorkflow_Test_TestMutationError(t *testing.T) {
 	mockReporter.EXPECT().DisplayStartingTestInfo(ctx, mock.Anything, mock.Anything).Return().Once()
 	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources(sources))
 	mockMutagen.EXPECT().
-		StreamMutations(ctx, mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).
+		StreamMutations(ctx, mock.Anything, mock.Anything, typeArgs(domain.DefaultMutations)...).
 		RunAndReturn(streamMutationsFn(mutations))
 	mockWorkspace.EXPECT().Run(mock.Anything, mock.Anything).Return(nil, testErr)
 	mockWorkspace.EXPECT().Close(mock.Anything).Return().Maybe()
@@ -304,7 +304,7 @@ func TestWorkflow_Test_SaveReportsError(t *testing.T) {
 	mockReporter.EXPECT().DisplayCompletedTestInfo(ctx, mock.Anything, mock.Anything).Return().Once()
 	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources(sources))
 	mockMutagen.EXPECT().
-		StreamMutations(ctx, mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).
+		StreamMutations(ctx, mock.Anything, mock.Anything, typeArgs(domain.DefaultMutations)...).
 		RunAndReturn(streamMutationsFn(mutations))
 	mockWorkspace.EXPECT().Run(mock.Anything, mock.Anything).Return(m.Result{}, nil)
 	mockWorkspace.EXPECT().Close(mock.Anything).Return().Maybe()
@@ -355,7 +355,7 @@ func TestWorkflow_Test_NoMutations(t *testing.T) {
 	mockReporter.EXPECT().DisplayUpcomingTestsInfo(ctx, mock.Anything).Return()
 	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources(sources))
 	mockMutagen.EXPECT().
-		StreamMutations(ctx, mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).
+		StreamMutations(ctx, mock.Anything, mock.Anything, typeArgs(domain.DefaultMutations)...).
 		RunAndReturn(streamMutationsFn([]m.Mutation{}))
 	mockWorkspace.EXPECT().Close(mock.Anything).Return().Maybe()
 	mockOrchestrator.EXPECT().NewWorkspace().Return(mockWorkspace).Maybe()
@@ -416,7 +416,7 @@ func TestWorkflow_Test_MultipleThreads(t *testing.T) {
 	mockReporter.EXPECT().DisplayCompletedTestInfo(ctx, mock.Anything, mock.Anything).Return().Times(3)
 	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources(sources))
 	mockMutagen.EXPECT().
-		StreamMutations(ctx, mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).
+		StreamMutations(ctx, mock.Anything, mock.Anything, typeArgs(domain.DefaultMutations)...).
 		RunAndReturn(streamMutationsFn(mutations))
 	mockWorkspace.EXPECT().Run(mock.Anything, mock.Anything).Return(m.Result{}, nil).Times(3)
 	mockWorkspace.EXPECT().Close(mock.Anything).Return().Maybe()
@@ -481,7 +481,7 @@ func TestWorkflow_Test_WithSharding(t *testing.T) {
 	mockReporter.EXPECT().DisplayCompletedTestInfo(ctx, mock.Anything, mock.Anything).Return().Maybe()
 	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources([]rpt.Source{source}))
 	mockMutagen.EXPECT().
-		StreamMutations(ctx, mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).
+		StreamMutations(ctx, mock.Anything, mock.Anything, typeArgs(domain.DefaultMutations)...).
 		RunAndReturn(streamMutationsFn(mutations))
 	// With hash-based sharding, the number of mutations in shard 0 may vary
 	mockWorkspace.EXPECT().Run(mock.Anything, mock.Anything).Return(m.Result{}, nil).Maybe()
@@ -540,7 +540,7 @@ func TestWorkflow_TestThreadsZeroDoesNotPanic(t *testing.T) {
 	mockReporter.EXPECT().DisplayCompletedTestInfo(ctx, mutations[0], mock.Anything).Return().Once()
 	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources([]rpt.Source{source}))
 	mockMutagen.EXPECT().
-		StreamMutations(ctx, mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).
+		StreamMutations(ctx, mock.Anything, mock.Anything, typeArgs(domain.DefaultMutations)...).
 		RunAndReturn(streamMutationsFn(mutations))
 	mockWorkspace.EXPECT().Run(mock.Anything, mutations[0]).Return(m.Result{}, nil)
 	mockWorkspace.EXPECT().Close(mock.Anything).Return().Maybe()
@@ -595,7 +595,7 @@ func TestWorkflow_TestThreadIDWithinBounds(t *testing.T) {
 	mockReporter.EXPECT().DisplayCompletedTestInfo(ctx, mock.Anything, mock.Anything).Return().Times(2)
 	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources([]rpt.Source{source}))
 	mockMutagen.EXPECT().
-		StreamMutations(ctx, mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).
+		StreamMutations(ctx, mock.Anything, mock.Anything, typeArgs(domain.DefaultMutations)...).
 		RunAndReturn(streamMutationsFn(mutations))
 	mockWorkspace.EXPECT().Run(mock.Anything, mock.Anything).Return(m.Result{}, nil).Times(2)
 	mockWorkspace.EXPECT().Close(mock.Anything).Return().Maybe()
@@ -663,7 +663,7 @@ func TestWorkflow_TestThreadIDIsUniqueForThreadsTwo(t *testing.T) {
 	mockReporter.EXPECT().DisplayCompletedTestInfo(ctx, mock.Anything, mock.Anything).Return().Times(2)
 	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources([]rpt.Source{source}))
 	mockMutagen.EXPECT().
-		StreamMutations(ctx, mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).
+		StreamMutations(ctx, mock.Anything, mock.Anything, typeArgs(domain.DefaultMutations)...).
 		RunAndReturn(streamMutationsFn(mutations))
 	mockWorkspace.EXPECT().Run(mock.Anything, mock.Anything).Run(func(_ context.Context, _ m.Mutation) {
 		// Signal arrival, then wait until both Runs have arrived so each
@@ -747,7 +747,7 @@ func TestWorkflow_TestWithSkippedMutation(t *testing.T) {
 
 	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources(sources))
 	mockMutagen.EXPECT().
-		StreamMutations(ctx, mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).
+		StreamMutations(ctx, mock.Anything, mock.Anything, typeArgs(domain.DefaultMutations)...).
 		RunAndReturn(streamMutationsFn(mutations))
 	mockWorkspace.EXPECT().Run(mock.Anything, mutations[0]).Return(skippedResult, nil)
 	mockWorkspace.EXPECT().Close(mock.Anything).Return().Maybe()
@@ -829,7 +829,7 @@ func TestWorkflow_TestMutationIDExactMatchDoesNotUseHigherID(t *testing.T) {
 
 	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources(sources))
 	mockMutagen.EXPECT().
-		StreamMutations(ctx, mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).
+		StreamMutations(ctx, mock.Anything, mock.Anything, typeArgs(domain.DefaultMutations)...).
 		RunAndReturn(streamMutationsFn(mutations))
 	mockWorkspace.EXPECT().Run(mock.Anything, mutations[0]).Return(result, nil)
 	mockWorkspace.EXPECT().Close(mock.Anything).Return().Maybe()
@@ -908,7 +908,7 @@ func TestWorkflow_TestEmptyResultEntriesReturnsError(t *testing.T) {
 
 	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources(sources))
 	mockMutagen.EXPECT().
-		StreamMutations(ctx, mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).
+		StreamMutations(ctx, mock.Anything, mock.Anything, typeArgs(domain.DefaultMutations)...).
 		RunAndReturn(streamMutationsFn(mutations))
 	mockWorkspace.EXPECT().Run(mock.Anything, mutations[0]).Return(result, nil)
 	mockWorkspace.EXPECT().Close(mock.Anything).Return().Maybe()
@@ -975,10 +975,10 @@ func TestWorkflow_Test_MultipleSources(t *testing.T) {
 	mockReporter.EXPECT().DisplayCompletedTestInfo(ctx, mock.Anything, mock.Anything).Return().Times(3)
 	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources([]rpt.Source{source1, source2}))
 	mockMutagen.EXPECT().
-		StreamMutations(ctx, source1, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).
+		StreamMutations(ctx, source1, mock.Anything, typeArgs(domain.DefaultMutations)...).
 		RunAndReturn(streamMutationsFn(mutations1))
 	mockMutagen.EXPECT().
-		StreamMutations(ctx, source2, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).
+		StreamMutations(ctx, source2, mock.Anything, typeArgs(domain.DefaultMutations)...).
 		RunAndReturn(streamMutationsFn(mutations2))
 	mockWorkspace.EXPECT().Run(mock.Anything, mock.Anything).Return(m.Result{}, nil).Times(3)
 	mockWorkspace.EXPECT().Close(mock.Anything).Return().Maybe()
@@ -1077,7 +1077,7 @@ func TestWorkflow_TestWithSurvivedMutation(t *testing.T) {
 
 	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources(sources))
 	mockMutagen.EXPECT().
-		StreamMutations(ctx, mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).
+		StreamMutations(ctx, mock.Anything, mock.Anything, typeArgs(domain.DefaultMutations)...).
 		RunAndReturn(streamMutationsFn(mutations))
 	mockWorkspace.EXPECT().Run(mock.Anything, mutations[0]).Return(survivedResult, nil)
 	mockWorkspace.EXPECT().Close(mock.Anything).Return().Maybe()
@@ -1164,7 +1164,7 @@ func TestWorkflow_TestWithKilledMutation(t *testing.T) {
 
 	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources(sources))
 	mockMutagen.EXPECT().
-		StreamMutations(ctx, mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).
+		StreamMutations(ctx, mock.Anything, mock.Anything, typeArgs(domain.DefaultMutations)...).
 		RunAndReturn(streamMutationsFn(mutations))
 	mockWorkspace.EXPECT().Run(mock.Anything, mutations[0]).Return(killedResult, nil)
 	mockWorkspace.EXPECT().Close(mock.Anything).Return().Maybe()
@@ -1230,7 +1230,7 @@ func TestWorkflow_Estimate_Success(t *testing.T) {
 
 	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources(sources))
 	mockMutagen.EXPECT().
-		StreamMutations(ctx, mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).
+		StreamMutations(ctx, mock.Anything, mock.Anything, typeArgs(domain.DefaultMutations)...).
 		RunAndReturn(streamMutationsFn(mutations))
 
 	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockReporter, mockOrchestrator, mockMutagen)
@@ -1323,7 +1323,7 @@ func TestWorkflow_Estimate_DisplayError(t *testing.T) {
 
 	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources(sources))
 	mockMutagen.EXPECT().
-		StreamMutations(ctx, mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).
+		StreamMutations(ctx, mock.Anything, mock.Anything, typeArgs(domain.DefaultMutations)...).
 		RunAndReturn(streamMutationsFn(mutations))
 
 	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockReporter, mockOrchestrator, mockMutagen)
@@ -1370,7 +1370,7 @@ func TestWorkflow_TestThreadIDStartsAtZero(t *testing.T) {
 	mockReporter.EXPECT().DisplayCompletedTestInfo(ctx, mutations[0], mock.Anything).Return().Once()
 	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources([]rpt.Source{source}))
 	mockMutagen.EXPECT().
-		StreamMutations(ctx, mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).
+		StreamMutations(ctx, mock.Anything, mock.Anything, typeArgs(domain.DefaultMutations)...).
 		RunAndReturn(streamMutationsFn(mutations))
 	mockWorkspace.EXPECT().Run(mock.Anything, mutations[0]).Return(m.Result{}, nil)
 	mockWorkspace.EXPECT().Close(mock.Anything).Return().Maybe()
@@ -1445,7 +1445,7 @@ func TestWorkflow_TestExactMutationIDMatch(t *testing.T) {
 
 	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources(sources))
 	mockMutagen.EXPECT().
-		StreamMutations(ctx, mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).
+		StreamMutations(ctx, mock.Anything, mock.Anything, typeArgs(domain.DefaultMutations)...).
 		RunAndReturn(streamMutationsFn(mutations))
 	mockWorkspace.EXPECT().Run(mock.Anything, mutations[0]).Return(result, nil)
 	mockWorkspace.EXPECT().Close(mock.Anything).Return().Maybe()
@@ -1616,7 +1616,7 @@ func TestWorkflow_Test_CleansStaleReportsForTestedSources(t *testing.T) {
 
 	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources([]rpt.Source{source}))
 	mockMutagen.EXPECT().
-		StreamMutations(ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		StreamMutations(ctx, mock.Anything, mock.Anything, typeArgs(domain.DefaultMutations)...).
 		RunAndReturn(streamMutationsFn([]m.Mutation{mutation}))
 	mockOrchestrator.EXPECT().NewWorkspace().Return(mockWorkspace).Maybe()
 	mockWorkspace.EXPECT().Close(mock.Anything).Return().Maybe()
@@ -1626,7 +1626,7 @@ func TestWorkflow_Test_CleansStaleReportsForTestedSources(t *testing.T) {
 	mockReportStore.EXPECT().
 		CheckUpdates(ctx, m.Path("reports"), mock.MatchedBy(func(sources pkg.FileSpill[rpt.Source]) bool {
 			return assert.ObjectsAreEqual([]string{"a.go"}, spillKeys(sources))
-		})).
+		}), mock.Anything).
 		Return(spillOf(t, source), spillOf(t, gone), nil)
 	mockReportStore.EXPECT().LoadSpillReports(ctx, m.Path("reports")).
 		Return(spillOf(t, m.Report{Source: source, Result: m.Result{mgen.Arithmetic: {{MutationID: "m2", Status: rpt.Killed}}}}), nil).Once()
@@ -1700,7 +1700,7 @@ func TestWorkflow_Test_GeneratesMutationsOncePerSource(t *testing.T) {
 
 	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources([]rpt.Source{source}))
 	mockMutagen.EXPECT().
-		StreamMutations(ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		StreamMutations(ctx, mock.Anything, mock.Anything, typeArgs(domain.DefaultMutations)...).
 		RunAndReturn(streamMutationsFn([]m.Mutation{mutation})).Once()
 	mockOrchestrator.EXPECT().NewWorkspace().Return(mockWorkspace).Maybe()
 	mockWorkspace.EXPECT().Close(mock.Anything).Return().Maybe()
@@ -1868,7 +1868,7 @@ func TestWorkflow_Test_ShardedRunRebuildsBaseIndexAfterCleaningDeleted(t *testin
 	mockReporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Return()
 
 	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources(nil))
-	mockReportStore.EXPECT().CheckUpdates(ctx, m.Path("reports"), mock.Anything).Return(spillOf[rpt.Source](t), spillOf(t, gone), nil)
+	mockReportStore.EXPECT().CheckUpdates(ctx, m.Path("reports"), mock.Anything, mock.Anything).Return(spillOf[rpt.Source](t), spillOf(t, gone), nil)
 	mockReportStore.EXPECT().CleanReports(ctx, m.Path("reports"), mock.Anything).Return(nil).Once()
 	mockReportStore.EXPECT().RegenerateIndex(ctx, m.Path("reports")).Return(nil).Once()
 	mockReportStore.EXPECT().CleanReports(ctx, shardDir, mock.Anything).Return(nil).Maybe()
@@ -1914,7 +1914,7 @@ func TestWorkflow_Test_ErrorsAreReturned(t *testing.T) {
 
 	t.Run("check updates", func(t *testing.T) {
 		fs, store, reporter, mutagen := setup()
-		store.EXPECT().CheckUpdates(ctx, mock.Anything, mock.Anything).Return(nil, nil, boom)
+		store.EXPECT().CheckUpdates(ctx, mock.Anything, mock.Anything, mock.Anything).Return(nil, nil, boom)
 
 		err := domain.NewWorkflow(fs, store, reporter, nil, mutagen).Test(ctx, cached)
 		require.ErrorIs(t, err, boom)
@@ -1923,7 +1923,7 @@ func TestWorkflow_Test_ErrorsAreReturned(t *testing.T) {
 	t.Run("clean deleted", func(t *testing.T) {
 		fs, store, reporter, mutagen := setup()
 		gone := rpt.Source{Origin: &rpt.File{ShortPath: "gone.go", Hash: "g"}}
-		store.EXPECT().CheckUpdates(ctx, mock.Anything, mock.Anything).Return(spillOf[rpt.Source](t), spillOf(t, gone), nil)
+		store.EXPECT().CheckUpdates(ctx, mock.Anything, mock.Anything, mock.Anything).Return(spillOf[rpt.Source](t), spillOf(t, gone), nil)
 		store.EXPECT().CleanReports(ctx, mock.Anything, mock.Anything).Return(boom)
 
 		err := domain.NewWorkflow(fs, store, reporter, nil, mutagen).Test(ctx, cached)
@@ -1952,7 +1952,7 @@ func TestWorkflow_Estimate_StreamMutationsErrorIsReturned(t *testing.T) {
 	reporter.EXPECT().Close(ctx).Return().Once()
 	fs.EXPECT().Stream(ctx, mock.Anything).Return(streamSources([]rpt.Source{{Origin: &rpt.File{ShortPath: "a.go", FullPath: "/p/a.go"}}}))
 	mutagen.EXPECT().
-		StreamMutations(ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		StreamMutations(ctx, mock.Anything, mock.Anything, typeArgs(domain.DefaultMutations)...).
 		Return(boom)
 
 	err := domain.NewWorkflow(fs, nil, reporter, nil, mutagen).Estimate(ctx, domain.EstimateArgs{Paths: []m.Path{"."}})
@@ -2045,7 +2045,7 @@ func TestWorkflow_Test_ShardedRunWithoutDeletedSourcesLeavesBaseUntouched(t *tes
 	mockReporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Return()
 
 	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources(nil))
-	mockReportStore.EXPECT().CheckUpdates(ctx, m.Path("reports"), mock.Anything).Return(spillOf[rpt.Source](t), spillOf[rpt.Source](t), nil)
+	mockReportStore.EXPECT().CheckUpdates(ctx, m.Path("reports"), mock.Anything, mock.Anything).Return(spillOf[rpt.Source](t), spillOf[rpt.Source](t), nil)
 	mockReportStore.EXPECT().CleanReports(ctx, shardDir, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().SaveReports(ctx, shardDir, mock.Anything).Return(nil).Once()
 	mockReportStore.EXPECT().RegenerateIndex(ctx, shardDir).Return(nil).Once()
@@ -2114,7 +2114,7 @@ func TestWorkflow_Test_ShardFilterExcludesOtherShardsMutations(t *testing.T) {
 	mockReporter.EXPECT().DisplayCompletedTestInfo(ctx, mock.Anything, mock.Anything).Return()
 	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources([]rpt.Source{source}))
 	mockMutagen.EXPECT().
-		StreamMutations(ctx, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		StreamMutations(ctx, mock.Anything, mock.Anything, typeArgs(domain.DefaultMutations)...).
 		RunAndReturn(streamMutationsFn(mutations))
 	mockOrchestrator.EXPECT().NewWorkspace().Return(mockWorkspace).Maybe()
 	mockWorkspace.EXPECT().Close(mock.Anything).Return().Maybe()

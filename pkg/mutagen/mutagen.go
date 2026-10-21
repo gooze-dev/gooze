@@ -32,6 +32,12 @@ var (
 	Logical = Type{Name: "logical", Version: 1}
 	// Unary mutates unary operators (-, +, !, ^).
 	Unary = Type{Name: "unary", Version: 1}
+	// Bitwise mutates bitwise operators (&, |, ^, &^, <<, >>).
+	Bitwise = Type{Name: "bitwise", Version: 1}
+	// Increment swaps increment and decrement statements (x++ <-> x--).
+	Increment = Type{Name: "increment", Version: 1}
+	// Assignment mutates compound assignments (x += y -> x -= y, x += y -> x = y).
+	Assignment = Type{Name: "assignment", Version: 1}
 	// Branch mutates branch and conditional expressions (if, for, switch conditions).
 	Branch = Type{Name: "branch", Version: 1}
 	// Statement deletes statements (assignments, expressions, defer, go, send).
@@ -45,21 +51,41 @@ type Mutagen struct {
 	Type
 	// Doc is a one-line description of the mutations the mutagen generates.
 	Doc string
+	// Default reports whether gooze runs the mutagen when no mutagens are
+	// selected. The others run only when selected.
+	Default bool
 }
 
 // All returns every mutagen in registry order. Each call returns a new slice.
 func All() []Mutagen {
 	return []Mutagen{
-		{Type: Arithmetic, Doc: "Mutates arithmetic operators (+, -, *, /, %)."},
-		{Type: Boolean, Doc: "Mutates boolean literals (true <-> false)."},
-		{Type: Numbers, Doc: "Mutates numeric literals (e.g. 5 -> 0, 5 -> 1)."},
-		{Type: Comparison, Doc: `Mutates comparison operators (<, >, <=, >=, ==, !=), except the one equivalent mutant when an operand is "" or 0 compared with len or cap.`},
-		{Type: Logical, Doc: "Mutates logical operators (&&, ||)."},
-		{Type: Unary, Doc: "Mutates unary operators (-, +, !, ^)."},
+		{Type: Arithmetic, Doc: "Mutates arithmetic operators (+, -, *, /, %).", Default: true},
+		{Type: Boolean, Doc: "Mutates boolean literals (true <-> false).", Default: true},
+		{Type: Numbers, Doc: "Mutates numeric literals (e.g. 5 -> 0, 5 -> 1).", Default: true},
+		{Type: Comparison, Doc: `Mutates comparison operators (<, >, <=, >=, ==, !=), except the one equivalent mutant when an operand is "" or 0 compared with len or cap.`, Default: true},
+		{Type: Logical, Doc: "Mutates logical operators (&&, ||).", Default: true},
+		{Type: Unary, Doc: "Mutates unary operators (-, +, !, ^).", Default: true},
+		{Type: Bitwise, Doc: "Mutates bitwise operators (& <-> |, ^ -> &, &^ -> &, << <-> >>).", Default: true},
+		{Type: Increment, Doc: "Swaps increment and decrement statements (x++ <-> x--), except in a for loop's post statement.", Default: true},
+		{Type: Assignment, Doc: "Mutates compound assignments (+= <-> -=, *= <-> /=, %= -> *=, &= <-> |=, ^= -> &=, &^= -> &=, <<= <-> >>=) and turns x op= y into x = y, except in a for loop's post statement.", Default: true},
 		{Type: Branch, Doc: "Mutates branch and conditional expressions (if, for, switch conditions)."},
 		{Type: Statement, Doc: "Deletes statements (assignments, expressions, defer, go, send)."},
 		{Type: Loop, Doc: "Mutates loops (boundary conditions, loop body removal, break/continue removal)."},
 	}
+}
+
+// Defaults returns the mutagens gooze runs when none are selected, in
+// registry order.
+func Defaults() []Type {
+	var types []Type
+
+	for _, mg := range All() {
+		if mg.Default {
+			types = append(types, mg.Type)
+		}
+	}
+
+	return types
 }
 
 // Lookup returns the mutagen with the given name, ignoring case and

@@ -103,11 +103,11 @@ func validateAdapters(mg *mutagen) error {
 
 func resolveMutationTypes(mutationTypes []mgen.Type) ([]mgen.Type, error) {
 	if len(mutationTypes) == 0 {
-		return []mgen.Type{mgen.Arithmetic, mgen.Boolean, mgen.Numbers, mgen.Comparison, mgen.Logical, mgen.Unary, mgen.Branch}, nil
+		return DefaultMutations, nil
 	}
 
 	for _, mutationType := range mutationTypes {
-		if mutationType != mgen.Arithmetic && mutationType != mgen.Boolean && mutationType != mgen.Numbers && mutationType != mgen.Comparison && mutationType != mgen.Logical && mutationType != mgen.Unary && mutationType != mgen.Branch {
+		if _, ok := mutationGenerators[mutationType]; !ok {
 			return nil, fmt.Errorf("unsupported mutation type: %s", mutationType.Name)
 		}
 	}
@@ -168,8 +168,14 @@ func walkMutations(
 
 	var walkErr error
 
+	constraints := map[ast.Node]bool{}
+
 	ast.Inspect(file, func(n ast.Node) bool {
 		if n == nil || walkErr != nil {
+			return false
+		}
+
+		if markTypeParams(n, constraints); constraints[n] {
 			return false
 		}
 
@@ -192,6 +198,25 @@ func walkMutations(
 	})
 
 	return walkErr
+}
+
+// markTypeParams adds the type parameter list of a generic function or type
+// to constraints, so the walk skips it: a constraint such as int | string is
+// a type, and no mutation of it compiles. Interfaces are skipped for the same
+// reason.
+func markTypeParams(n ast.Node, constraints map[ast.Node]bool) {
+	switch node := n.(type) {
+	case *ast.FuncType:
+		if node.TypeParams != nil {
+			constraints[node.TypeParams] = true
+		}
+	case *ast.TypeSpec:
+		if node.TypeParams != nil {
+			constraints[node.TypeParams] = true
+		}
+	case *ast.InterfaceType:
+		constraints[node] = true
+	}
 }
 
 // firstDifference returns the index of the first byte that differs between a and
@@ -234,6 +259,9 @@ var mutationGenerators = map[mgen.Type]func(ast.Node, *token.FileSet, []byte, rp
 	mgen.Comparison: mutagens.GenerateComparisonMutations,
 	mgen.Logical:    mutagens.GenerateLogicalMutations,
 	mgen.Unary:      mutagens.GenerateUnaryMutations,
+	mgen.Bitwise:    mutagens.GenerateBitwiseMutations,
+	mgen.Increment:  mutagens.GenerateIncrementMutations,
+	mgen.Assignment: mutagens.GenerateAssignmentMutations,
 	mgen.Branch:     mutagens.GenerateBranchMutations,
 	mgen.Statement:  mutagens.GenerateStatementMutations,
 	mgen.Loop:       mutagens.GenerateLoopMutations,

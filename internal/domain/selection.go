@@ -111,40 +111,30 @@ func (s Selection) ReportScope(source rpt.Source) *rpt.Scope {
 }
 
 // ParseMutagens resolves mutagen names, given as a list whose items may be
-// comma-separated. Names are case-insensitive and de-duplicated. Only the
-// mutagens gooze runs (DefaultMutations) are accepted. No names returns nil,
-// meaning all of them.
+// comma-separated. Names are case-insensitive and de-duplicated. Any
+// registered mutagen is accepted, including those that are off by default. No
+// names returns nil, meaning DefaultMutations.
 func ParseMutagens(values []string) ([]mgen.Type, error) {
 	var types []mgen.Type
 
 	for _, value := range values {
 		for name := range strings.SplitSeq(value, ",") {
-			name = strings.ToLower(strings.TrimSpace(name))
-			if name == "" {
+			if strings.TrimSpace(name) == "" {
 				continue
 			}
 
-			i := slices.IndexFunc(DefaultMutations, func(t mgen.Type) bool { return t.Name == name })
-			if i < 0 {
-				return nil, WithExitCode(m.ExitUsage, fmt.Errorf("unknown mutagen %q; gooze runs %s", name, defaultMutagenNames()))
+			mg, ok := mgen.Lookup(name)
+			if !ok {
+				return nil, WithExitCode(m.ExitUsage, fmt.Errorf("unknown mutagen %q; gooze has %s", strings.TrimSpace(name), strings.Join(mgen.Names(), ", ")))
 			}
 
-			if !slices.Contains(types, DefaultMutations[i]) {
-				types = append(types, DefaultMutations[i])
+			if !slices.Contains(types, mg.Type) {
+				types = append(types, mg.Type)
 			}
 		}
 	}
 
 	return types, nil
-}
-
-func defaultMutagenNames() string {
-	names := make([]string, 0, len(DefaultMutations))
-	for _, t := range DefaultMutations {
-		names = append(names, t.Name)
-	}
-
-	return strings.Join(names, ", ")
 }
 
 // selection resolves the run's Selection from args: the diff scope, the

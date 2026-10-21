@@ -371,7 +371,7 @@ func TestLocalReportStore_CheckUpdates_NoReportsDir_ReturnsAllSources(t *testing
 		{Origin: &rpt.File{FullPath: "/abs/b.go", Hash: "hash-b"}},
 	}
 
-	changedSpill, deletedSpill, err := rs.CheckUpdates(context.Background(), m.Path(dir), sourceSpill(t, sources...))
+	changedSpill, deletedSpill, err := rs.CheckUpdates(context.Background(), m.Path(dir), sourceSpill(t, sources...), nil)
 	changed := spillItems(t, changedSpill)
 	_ = spillItems(t, deletedSpill)
 	if err != nil {
@@ -386,7 +386,7 @@ func TestLocalReportStore_CheckUpdates_EmptyPath_ReturnsError(t *testing.T) {
 	t.Parallel()
 
 	rs := &LocalReportStore{}
-	_, _, err := rs.CheckUpdates(context.Background(), "", sourceSpill(t))
+	_, _, err := rs.CheckUpdates(context.Background(), "", sourceSpill(t), nil)
 	if err == nil {
 		t.Fatalf("expected error")
 	}
@@ -405,7 +405,7 @@ func TestLocalReportStore_CheckUpdates_PathIsFile_ReturnsError(t *testing.T) {
 	}
 
 	rs := &LocalReportStore{}
-	_, _, err := rs.CheckUpdates(context.Background(), m.Path(filePath), sourceSpill(t))
+	_, _, err := rs.CheckUpdates(context.Background(), m.Path(filePath), sourceSpill(t), nil)
 	if err == nil {
 		t.Fatalf("expected error")
 	}
@@ -421,7 +421,7 @@ func TestLocalReportStore_CheckUpdates_EmptyReportsDir_ReturnsAllSources(t *test
 	rs := &LocalReportStore{}
 
 	sources := []rpt.Source{{Origin: &rpt.File{FullPath: "/abs/a.go", Hash: "hash-a"}}}
-	changedSpill, deletedSpill, err := rs.CheckUpdates(context.Background(), m.Path(dir), sourceSpill(t, sources...))
+	changedSpill, deletedSpill, err := rs.CheckUpdates(context.Background(), m.Path(dir), sourceSpill(t, sources...), nil)
 	changed := spillItems(t, changedSpill)
 	_ = spillItems(t, deletedSpill)
 	if err != nil {
@@ -447,7 +447,7 @@ func TestLocalReportStore_CheckUpdates_SourceDeleted_ReturnsMissingSource(t *tes
 		t.Fatalf("SaveReports returned error: %v", err)
 	}
 
-	changedSpill, deletedSpill, err := rs.CheckUpdates(context.Background(), m.Path(dir), sourceSpill(t))
+	changedSpill, deletedSpill, err := rs.CheckUpdates(context.Background(), m.Path(dir), sourceSpill(t), nil)
 	if err != nil {
 		t.Fatalf("CheckUpdates returned error: %v", err)
 	}
@@ -489,7 +489,7 @@ func TestLocalReportStore_CheckUpdates_CodeOrTestChanged_ReturnsSource(t *testin
 		Test:   &rpt.File{FullPath: "/abs/a_test.go", Hash: "old-test"},
 	}}
 
-	changedSpill, deletedSpill, err := rs.CheckUpdates(context.Background(), m.Path(dir), sourceSpill(t, current...))
+	changedSpill, deletedSpill, err := rs.CheckUpdates(context.Background(), m.Path(dir), sourceSpill(t, current...), nil)
 	changed := spillItems(t, changedSpill)
 	_ = spillItems(t, deletedSpill)
 	if err != nil {
@@ -524,7 +524,7 @@ func TestLocalReportStore_CheckUpdates_TestFileAddedOrRemoved_ReturnsSource(t *t
 
 	// Current run has no test file associated.
 	current := []rpt.Source{{Origin: &rpt.File{FullPath: "/abs/a.go", Hash: "same"}}}
-	changedSpill, deletedSpill, err := rs.CheckUpdates(context.Background(), m.Path(dir), sourceSpill(t, current...))
+	changedSpill, deletedSpill, err := rs.CheckUpdates(context.Background(), m.Path(dir), sourceSpill(t, current...), nil)
 	changed := spillItems(t, changedSpill)
 	_ = spillItems(t, deletedSpill)
 	if err != nil {
@@ -553,7 +553,7 @@ func TestLocalReportStore_CheckUpdates_NewMutator_ReturnsSource(t *testing.T) {
 	}
 
 	current := []rpt.Source{{Origin: &rpt.File{FullPath: "/abs/a.go", Hash: "same"}}}
-	changedSpill, deletedSpill, err := rs.CheckUpdates(context.Background(), m.Path(dir), sourceSpill(t, current...))
+	changedSpill, deletedSpill, err := rs.CheckUpdates(context.Background(), m.Path(dir), sourceSpill(t, current...), nil)
 	changed := spillItems(t, changedSpill)
 	_ = spillItems(t, deletedSpill)
 	if err != nil {
@@ -581,7 +581,7 @@ func TestLocalReportStore_CheckUpdates_StoredHasUnknownMutator_ReturnsSource(t *
 	}
 
 	current := []rpt.Source{{Origin: &rpt.File{FullPath: "/abs/a.go", Hash: "same"}}}
-	changedSpill, deletedSpill, err := rs.CheckUpdates(context.Background(), m.Path(dir), sourceSpill(t, current...))
+	changedSpill, deletedSpill, err := rs.CheckUpdates(context.Background(), m.Path(dir), sourceSpill(t, current...), nil)
 	changed := spillItems(t, changedSpill)
 	_ = spillItems(t, deletedSpill)
 	if err != nil {
@@ -599,7 +599,7 @@ func TestLocalReportStore_CheckUpdates_IgnoresSourcesWithNilOrigin(t *testing.T)
 	rs := &LocalReportStore{}
 
 	sources := []rpt.Source{{Origin: nil}}
-	changedSpill, deletedSpill, err := rs.CheckUpdates(context.Background(), m.Path(dir), sourceSpill(t, sources...))
+	changedSpill, deletedSpill, err := rs.CheckUpdates(context.Background(), m.Path(dir), sourceSpill(t, sources...), nil)
 	changed := spillItems(t, changedSpill)
 	_ = spillItems(t, deletedSpill)
 	if err != nil {
@@ -768,7 +768,7 @@ func TestLocalReportStore_CheckUpdates_MutatorVersionDiff_ReturnsSource(t *testi
 	}
 
 	current := []rpt.Source{{Origin: &rpt.File{FullPath: "/abs/a.go", Hash: "same"}}}
-	changedSpill, deletedSpill, err := rs.CheckUpdates(context.Background(), m.Path(dir), sourceSpill(t, current...))
+	changedSpill, deletedSpill, err := rs.CheckUpdates(context.Background(), m.Path(dir), sourceSpill(t, current...), nil)
 	changed := spillItems(t, changedSpill)
 	_ = spillItems(t, deletedSpill)
 	if err != nil {
@@ -794,7 +794,7 @@ func TestLocalReportStore_CheckUpdates_ComparisonV1ReportsAreRetested(t *testing
 		t.Fatalf("SaveReports returned error: %v", err)
 	}
 
-	changedSpill, deletedSpill, err := rs.CheckUpdates(context.Background(), m.Path(dir), sourceSpill(t, source))
+	changedSpill, deletedSpill, err := rs.CheckUpdates(context.Background(), m.Path(dir), sourceSpill(t, source), nil)
 	if err != nil {
 		t.Fatalf("CheckUpdates returned error: %v", err)
 	}
@@ -884,7 +884,7 @@ func TestLocalReportStore_CheckUpdates_ChangedKeepsScanOrderAndDeletedIsSorted(t
 		{Origin: &rpt.File{ShortPath: "new1.go", FullPath: "/new/new1.go", Hash: "n1"}},
 	}
 
-	changedSpill, deletedSpill, err := rs.CheckUpdates(context.Background(), m.Path(dir), sourceSpill(t, current...))
+	changedSpill, deletedSpill, err := rs.CheckUpdates(context.Background(), m.Path(dir), sourceSpill(t, current...), nil)
 	require.NoError(t, err)
 
 	changed := spillItems(t, changedSpill)
@@ -986,7 +986,7 @@ func TestLocalReportStore_RangeErrors(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(unreadable, "locked.yaml"), []byte("result: []\n"), 0o000))
 
 	t.Run("CheckUpdates on corrupt reports", func(t *testing.T) {
-		_, _, err := rs.CheckUpdates(ctx, m.Path(corrupt), sourceSpill(t))
+		_, _, err := rs.CheckUpdates(ctx, m.Path(corrupt), sourceSpill(t), nil)
 		require.ErrorContains(t, err, "bad.yaml")
 	})
 
@@ -1019,7 +1019,7 @@ func TestLocalReportStore_RangeErrors(t *testing.T) {
 	})
 
 	t.Run("CheckUpdates with closed sources spill", func(t *testing.T) {
-		_, _, err := rs.CheckUpdates(ctx, m.Path(t.TempDir()), closedSourceSpill(t, rpt.Source{Origin: &rpt.File{FullPath: "/abs/a.go"}}))
+		_, _, err := rs.CheckUpdates(ctx, m.Path(t.TempDir()), closedSourceSpill(t, rpt.Source{Origin: &rpt.File{FullPath: "/abs/a.go"}}), nil)
 		require.ErrorContains(t, err, "split changed sources")
 	})
 
@@ -1027,7 +1027,7 @@ func TestLocalReportStore_RangeErrors(t *testing.T) {
 		sources := sourceSpill(t)
 		t.Setenv("TMPDIR", filepath.Join(t.TempDir(), "missing"))
 
-		_, _, err := rs.CheckUpdates(ctx, m.Path(t.TempDir()), sources)
+		_, _, err := rs.CheckUpdates(ctx, m.Path(t.TempDir()), sources, nil)
 		require.ErrorContains(t, err, "create changed sources spill")
 
 		_, err = rs.LoadSpillReports(ctx, m.Path(t.TempDir()))
@@ -1075,7 +1075,7 @@ func TestLocalReportStore_CheckUpdates_InconsistentStoredVersionsReturnSource(t 
 	}
 	require.NoError(t, rs.SaveReports(ctx, m.Path(dir), reportSpill(t, reports...)))
 
-	changed, deleted, err := rs.CheckUpdates(ctx, m.Path(dir), sourceSpill(t, source))
+	changed, deleted, err := rs.CheckUpdates(ctx, m.Path(dir), sourceSpill(t, source), nil)
 	require.NoError(t, err)
 	require.Len(t, spillItems(t, changed), 1)
 	require.Empty(t, spillItems(t, deleted))
@@ -1226,7 +1226,7 @@ func TestLocalReportStore_CheckUpdates_EveryRegisteredMutatorIsKnown(t *testing.
 
 		require.NoError(t, rs.SaveReports(context.Background(), m.Path(dir), reportSpill(t, report)))
 
-		changedSpill, deletedSpill, err := rs.CheckUpdates(context.Background(), m.Path(dir), sourceSpill(t, source))
+		changedSpill, deletedSpill, err := rs.CheckUpdates(context.Background(), m.Path(dir), sourceSpill(t, source), nil)
 		require.NoError(t, err)
 		require.Empty(t, spillItems(t, changedSpill), mg.Name)
 		require.Empty(t, spillItems(t, deletedSpill), mg.Name)
@@ -1269,7 +1269,7 @@ func TestLocalReportStore_CheckUpdates_SourcesOutsideTheScanAreNotDeleted(t *tes
 		m.Report{Source: gone, Result: m.Result{mgen.Boolean: {{MutationID: "g1", Status: rpt.Killed}}}},
 	)))
 
-	changed, deleted, err := rs.CheckUpdates(ctx, m.Path(dir), sourceSpill(t))
+	changed, deleted, err := rs.CheckUpdates(ctx, m.Path(dir), sourceSpill(t), nil)
 	require.NoError(t, err)
 	require.Empty(t, spillItems(t, changed))
 	require.Equal(t, []string{"gone.go"}, shortPaths(spillItems(t, deleted)))
@@ -1318,7 +1318,7 @@ func TestLocalReportStore_CheckUpdates_PartlyTestedSourceIsChanged(t *testing.T)
 	}
 	require.NoError(t, rs.SaveReports(context.Background(), m.Path(dir), reportSpill(t, reports...)))
 
-	changedSpill, deletedSpill, err := rs.CheckUpdates(context.Background(), m.Path(dir), sourceSpill(t, partial, full))
+	changedSpill, deletedSpill, err := rs.CheckUpdates(context.Background(), m.Path(dir), sourceSpill(t, partial, full), nil)
 	require.NoError(t, err)
 
 	changed := spillItems(t, changedSpill)
@@ -1327,4 +1327,42 @@ func TestLocalReportStore_CheckUpdates_PartlyTestedSourceIsChanged(t *testing.T)
 	// Unchanged hashes don't make partial.go cached: its other lines were
 	// never tested, so the next run re-tests it.
 	assert.Equal(t, []rpt.Source{partial}, changed)
+}
+
+func TestLocalReportStore_CheckUpdates_AsksUntestedAboutCurrentSources(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	rs := &LocalReportStore{}
+	ctx := context.Background()
+
+	current := rpt.Source{Origin: &rpt.File{FullPath: "/abs/a.go", Hash: "same"}}
+	untested := rpt.Source{Origin: &rpt.File{FullPath: "/abs/b.go", Hash: "same"}}
+	edited := rpt.Source{Origin: &rpt.File{FullPath: "/abs/c.go", Hash: "old"}}
+	added := rpt.Source{Origin: &rpt.File{FullPath: "/abs/d.go", Hash: "new"}}
+
+	require.NoError(t, rs.SaveReports(ctx, m.Path(dir), reportSpill(t,
+		m.Report{Source: current, Result: m.Result{mgen.Unary: {{MutationID: "a1", Status: rpt.Killed}}}},
+		m.Report{Source: current, Result: m.Result{mgen.Arithmetic: {{MutationID: "a2", Status: rpt.Killed}}}},
+		m.Report{Source: untested, Result: m.Result{mgen.Boolean: {{MutationID: "b1", Status: rpt.Killed}}}},
+		m.Report{Source: edited, Result: m.Result{mgen.Boolean: {{MutationID: "c1", Status: rpt.Killed}}}},
+	)))
+
+	asked := map[string][]string{}
+	editedNow := rpt.Source{Origin: &rpt.File{FullPath: "/abs/c.go", Hash: "new"}}
+
+	changedSpill, deletedSpill, err := rs.CheckUpdates(ctx, m.Path(dir), sourceSpill(t, current, untested, editedNow, added),
+		func(source rpt.Source, tested []string) bool {
+			asked[source.Key()] = tested
+			return source.Key() == "/abs/b.go"
+		})
+	require.NoError(t, err)
+	_ = spillItems(t, deletedSpill)
+
+	assert.Equal(t, []rpt.Source{untested, editedNow, added}, spillItems(t, changedSpill),
+		"a source untested says yes to is re-tested, like an edited or a new one")
+	assert.Equal(t, map[string][]string{
+		"/abs/a.go": {"arithmetic", "unary"},
+		"/abs/b.go": {"boolean"},
+	}, asked, "only sources whose reports are otherwise current are asked about, with their mutagens sorted")
 }

@@ -43,14 +43,19 @@ func calcMutations(types ...mgen.Type) []m.Mutation {
 	return kept
 }
 
-// expectStream makes the mutagen stream calcMutations for exactly types.
-func expectStream(mutagen *domainmocks.MockMutagen, types ...mgen.Type) {
-	args := []any{mock.Anything, mock.Anything, mock.Anything}
+// typeArgs returns types as mock arguments, which match exactly those types.
+func typeArgs(types []mgen.Type) []any {
+	args := make([]any, 0, len(types))
 	for _, t := range types {
 		args = append(args, t)
 	}
 
-	mutagen.On("StreamMutations", args...).Return(func(ctx context.Context, source rpt.Source, fn func(m.Mutation) error, ts ...mgen.Type) error {
+	return args
+}
+
+// expectStream makes the mutagen stream calcMutations for exactly types.
+func expectStream(mutagen *domainmocks.MockMutagen, types ...mgen.Type) {
+	mutagen.EXPECT().StreamMutations(mock.Anything, mock.Anything, mock.Anything, typeArgs(types)...).RunAndReturn(func(ctx context.Context, source rpt.Source, fn func(m.Mutation) error, ts ...mgen.Type) error {
 		return streamMutationsFn(calcMutations(ts...))(ctx, source, fn, ts...)
 	})
 }
@@ -188,8 +193,8 @@ func newNarrowedRunFixture(t *testing.T, types ...mgen.Type) *narrowedRunFixture
 	expectStream(mutagen, types...)
 
 	gone := rpt.Source{Origin: &rpt.File{FullPath: "/p/gone.go", ShortPath: "gone.go", Hash: "h-gone"}}
-	store.EXPECT().CheckUpdates(mock.Anything, m.Path(f.base), mock.Anything).RunAndReturn(
-		func(context.Context, m.Path, pkg.FileSpill[rpt.Source]) (pkg.FileSpill[rpt.Source], pkg.FileSpill[rpt.Source], error) {
+	store.EXPECT().CheckUpdates(mock.Anything, m.Path(f.base), mock.Anything, mock.Anything).RunAndReturn(
+		func(context.Context, m.Path, pkg.FileSpill[rpt.Source], func(rpt.Source, []string) bool) (pkg.FileSpill[rpt.Source], pkg.FileSpill[rpt.Source], error) {
 			return spillOfSources(t, calcSource), spillOfSources(t, gone), nil
 		})
 	store.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, path m.Path, _ pkg.FileSpill[rpt.Source]) error {

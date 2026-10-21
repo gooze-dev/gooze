@@ -90,7 +90,11 @@ type ReportStore interface {
 	SaveReports(ctx context.Context, path m.Path, reports pkg.FileSpill[m.Report]) error
 	RegenerateIndex(ctx context.Context, path m.Path) error
 	LoadSpillReports(ctx context.Context, path m.Path) (pkg.FileSpill[m.Report], error)
-	CheckUpdates(ctx context.Context, path m.Path, sources pkg.FileSpill[rpt.Source]) (changed, deleted pkg.FileSpill[rpt.Source], err error)
+	// CheckUpdates splits sources into those to re-test and the stored ones
+	// whose files are gone. untested, when set, is asked about each source
+	// whose stored reports are otherwise current, with the names of the
+	// mutagens they hold results of; true re-tests the source.
+	CheckUpdates(ctx context.Context, path m.Path, sources pkg.FileSpill[rpt.Source], untested func(source rpt.Source, tested []string) bool) (changed, deleted pkg.FileSpill[rpt.Source], err error)
 	CleanReports(ctx context.Context, path m.Path, sources pkg.FileSpill[rpt.Source]) error
 }
 

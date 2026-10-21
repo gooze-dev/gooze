@@ -61,12 +61,12 @@ func TestParseMutagens(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, none, "no names means every default mutagen")
 
-	_, err = domain.ParseMutagens([]string{"comparison", "bogus"})
-	require.EqualError(t, err, `unknown mutagen "bogus"; gooze runs arithmetic, boolean, numbers, comparison, logical, unary`)
+	_, err = domain.ParseMutagens([]string{"comparison", " Bogus "})
+	require.EqualError(t, err, `unknown mutagen "Bogus"; gooze has arithmetic, boolean, numbers, comparison, logical, unary, bitwise, increment, assignment, branch, statement, loop`)
 
-	_, err = domain.ParseMutagens([]string{"statement"})
-	require.EqualError(t, err, `unknown mutagen "statement"; gooze runs arithmetic, boolean, numbers, comparison, logical, unary`,
-		"registered but not one of the mutagens gooze runs")
+	optIn, err := domain.ParseMutagens([]string{"statement,branch,loop"})
+	require.NoError(t, err)
+	assert.Equal(t, []mgen.Type{mgen.Statement, mgen.Branch, mgen.Loop}, optIn, "the mutagens that are off by default can be selected")
 }
 
 func TestSelection_ReportScope(t *testing.T) {
@@ -127,5 +127,5 @@ func TestParseMutagensMatchesTheConfigSchema(t *testing.T) {
 	// must be exactly the mutagens a run accepts.
 	types, err := domain.ParseMutagens(field.Enum)
 	require.NoError(t, err)
-	assert.Equal(t, domain.DefaultMutations, types)
+	assert.Len(t, types, len(mgen.All()))
 }
