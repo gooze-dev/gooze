@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -153,7 +154,7 @@ func (t *TUI) DisplayEstimation(ctx context.Context, estimation domain.Estimatio
 
 	t.send(estimationMsg{
 		total:     estimation.Total,
-		hint:      cachedEstimateHint(estimation),
+		hint:      joinLines(diffEstimateLine(estimation), cachedEstimateHint(estimation)),
 		paths:     len(estimation.Files),
 		fileStats: fileStats,
 	})
@@ -288,4 +289,17 @@ func (t *TUI) send(msg tea.Msg) {
 	}
 
 	program.Send(msg)
+}
+
+// joinLines joins the non-empty lines with newlines.
+func joinLines(lines ...string) string {
+	kept := lines[:0:0]
+
+	for _, line := range lines {
+		if line != "" {
+			kept = append(kept, line)
+		}
+	}
+
+	return strings.Join(kept, "\n")
 }

@@ -66,3 +66,33 @@ func cachedEstimateHint(estimation domain.Estimation) string {
 		estimation.Cached, estimation.Total,
 	)
 }
+
+// shortCommitLen is how many characters of a commit hash diff mode shows.
+const shortCommitLen = 7
+
+// diffEstimateLine describes a diff-mode estimate, or returns "" outside diff
+// mode.
+func diffEstimateLine(estimation domain.Estimation) string {
+	diff := estimation.Diff
+	if diff == nil {
+		return ""
+	}
+
+	base := diff.Base
+	if len(base) > shortCommitLen {
+		base = base[:shortCommitLen]
+	}
+
+	// Equivalent mutant: file counts are never negative.
+	if diff.Files == 0 { //gooze:ignore comparison
+		return fmt.Sprintf("Diff mode: no changed files since %s (merge base %s).", diff.Ref, base)
+	}
+
+	files := "files"
+	if diff.Files == 1 {
+		files = "file"
+	}
+
+	return fmt.Sprintf("Diff mode: %d %s changed since %s (merge base %s); counts cover changed lines only.",
+		diff.Files, files, diff.Ref, base)
+}

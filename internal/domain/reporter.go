@@ -24,6 +24,8 @@ type Estimation struct {
 	Total  int
 	Cached int
 	Files  []FileEstimate
+	// Diff is set in diff mode: the counts then cover changed lines only.
+	Diff *DiffInfo
 }
 
 // Reporter is the presentation port the workflow depends on. It is defined in
