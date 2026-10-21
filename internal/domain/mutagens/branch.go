@@ -60,7 +60,8 @@ func mutateIfStatement(stmt *ast.IfStmt, fset *token.FileSet, content []byte, so
 // variable that only the condition uses.
 func declaresForCondOnly(stmt *ast.IfStmt) bool {
 	assign, ok := stmt.Init.(*ast.AssignStmt)
-	if !ok || assign.Tok != token.DEFINE {
+	// Equivalent: every other assignment token sorts before DEFINE.
+	if !ok || assign.Tok != token.DEFINE { //gooze:ignore comparison
 		return false
 	}
 
@@ -174,7 +175,9 @@ func removeElseBlock(stmt *ast.IfStmt, fset *token.FileSet, content []byte, sour
 	ifEndOffset, ok1 := offsetForPos(fset, stmt.Body.End())
 	elseEndOffset, ok2 := offsetForPos(fset, stmt.Else.End())
 
-	if !ok1 || !ok2 {
+	// Equivalent: both positions are in the file being mutated, so neither
+	// lookup fails.
+	if !ok1 || !ok2 { //gooze:ignore logical
 		return nil
 	}
 
@@ -268,7 +271,8 @@ func invertCondition(cond ast.Expr, fset *token.FileSet, content []byte, source 
 			continue
 		}
 
-		if replacement == "!" {
+		// Equivalent: no other replacement sorts before "!".
+		if replacement == "!" { //gooze:ignore comparison
 			replacement = "!(" + original + ")"
 		}
 

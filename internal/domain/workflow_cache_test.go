@@ -53,7 +53,7 @@ func newCacheFixture(t *testing.T) cacheFixture {
 // cachedRunWorkflow wires a workflow over the real report store that scans
 // sources and generates mutations per source key. It records the displayed
 // score and estimation.
-func cachedRunWorkflow(t *testing.T, sources []rpt.Source, mutations map[string][]m.Mutation, score *domain.MutationScore, estimation *domain.Estimation) domain.Workflow {
+func cachedRunWorkflow(t *testing.T, sources []rpt.Source, mutations map[string][]m.Mutation, score *domain.MutationScore, estimation *domain.Estimation, missing ...mgen.Type) domain.Workflow {
 	t.Helper()
 
 	fs := domainmocks.NewMockSourceFSAdapter(t)
@@ -76,13 +76,17 @@ func cachedRunWorkflow(t *testing.T, sources []rpt.Source, mutations map[string]
 
 	// The run generates every default mutagen for the sources it tests, and
 	// the cache asks for the ones a cached source has no results of: all
-	// but arithmetic in the fixture.
+	// but arithmetic in the fixture, or missing when given.
+	if missing == nil {
+		missing = domain.DefaultMutations[1:]
+	}
+
 	mutagen := domainmocks.NewMockMutagen(t)
 	mutagen.EXPECT().
 		StreamMutations(mock.Anything, mock.Anything, mock.Anything, typeArgs(domain.DefaultMutations)...).
 		RunAndReturn(stream).Maybe()
 	mutagen.EXPECT().
-		StreamMutations(mock.Anything, mock.Anything, mock.Anything, typeArgs(domain.DefaultMutations[1:])...).
+		StreamMutations(mock.Anything, mock.Anything, mock.Anything, typeArgs(missing)...).
 		RunAndReturn(stream).Maybe()
 
 	workspace := domainmocks.NewMockWorkspace(t)
@@ -173,6 +177,55 @@ func TestWorkflow_Test_RetestsACachedFileANewMutagenMutates(t *testing.T) {
 	require.NoError(t, wf.Test(context.Background(), cachedTestArgs(fx.reports)))
 
 	assert.Equal(t, domain.MutationScore{Summary: rpt.Summary{Total: 2, Survived: 2}, Tested: 2, Files: []domain.FileSummary{{Path: "a.go", Summary: rpt.Summary{Total: 2, Survived: 2}}}}, score)
+}
+
+// fullyTestedFixture is newCacheFixture with a.go's reports holding results
+// of every default mutagen but skip.
+func fullyTestedFixture(t *testing.T, skip mgen.Type) cacheFixture {
+	t.Helper()
+
+	fx := newCacheFixture(t)
+
+	for _, mg := range domain.DefaultMutations {
+		if mg != skip && mg != mgen.Arithmetic {
+			writeReports(t, fx.reports, m.Report{Source: fx.a, Result: m.Result{mg: {{MutationID: "a-" + mg.Name, Status: rpt.Killed}}}})
+		}
+	}
+
+	return fx
+}
+
+func TestWorkflow_Test_KeepsACachedFileWithResultsOfEveryMutagen(t *testing.T) {
+	fx := fullyTestedFixture(t, mgen.Type{})
+
+	var (
+		score      domain.MutationScore
+		estimation domain.Estimation
+	)
+
+	// The mutagen mock fails a call it doesn't expect, such as one asking
+	// for no mutagens at all.
+	wf := cachedRunWorkflow(t, []rpt.Source{fx.a}, nil, &score, &estimation)
+	require.NoError(t, wf.Test(context.Background(), cachedTestArgs(fx.reports)))
+
+	assert.Zero(t, score.Tested)
+	assert.Equal(t, len(domain.DefaultMutations)+2, score.Cached)
+}
+
+func TestWorkflow_Test_RetestsACachedFileMissingOneMutagen(t *testing.T) {
+	fx := fullyTestedFixture(t, mgen.Bitwise)
+
+	var (
+		score      domain.MutationScore
+		estimation domain.Estimation
+	)
+
+	mutations := map[string][]m.Mutation{"a.go": {{ID: "a-new", Source: fx.a, Type: mgen.Bitwise}}}
+	wf := cachedRunWorkflow(t, []rpt.Source{fx.a}, mutations, &score, &estimation, mgen.Bitwise)
+	require.NoError(t, wf.Test(context.Background(), cachedTestArgs(fx.reports)))
+
+	assert.Equal(t, 1, score.Tested)
+	assert.Zero(t, score.Cached)
 }
 
 func TestWorkflow_Test_UncachedRunScoresTestedResultsOnly(t *testing.T) {

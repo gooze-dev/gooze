@@ -49,7 +49,9 @@ func deleteRange(content []byte, start, end int) []byte {
 	before := bytes.TrimRight(content[:start], " \t")
 	after := bytes.TrimLeft(content[end:], " \t")
 
-	ownLines := (len(before) == 0 || before[len(before)-1] == '\n') && (len(after) == 0 || after[0] == '\n')
+	// Equivalent: before and after are trimmed of blanks, and gofmt'd Go
+	// source has no byte below '\n' (such as \r) next to a newline.
+	ownLines := (len(before) == 0 || before[len(before)-1] == '\n') && (len(after) == 0 || after[0] == '\n') //gooze:ignore comparison
 	if !ownLines {
 		return replaceRange(content, start, end, "")
 	}

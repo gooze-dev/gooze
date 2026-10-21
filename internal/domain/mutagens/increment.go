@@ -9,6 +9,9 @@ import (
 	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
+// incDecSwaps maps each of ++ and -- to the other.
+var incDecSwaps = map[token.Token]token.Token{token.INC: token.DEC, token.DEC: token.INC}
+
 // GenerateIncrementMutations swaps x++ and x-- in the statements of the given
 // block. Only statements in a list are mutated, so a for loop's post
 // statement, where i-- would loop until the test times out, is left alone.
@@ -21,12 +24,7 @@ func GenerateIncrementMutations(n ast.Node, fset *token.FileSet, content []byte,
 			continue
 		}
 
-		swapped := token.INC
-		if incDec.Tok == token.INC {
-			swapped = token.DEC
-		}
-
-		mutations = append(mutations, replaceToken(fset, content, source, mgen.Increment, incDec.TokPos, incDec.Tok, swapped)...)
+		mutations = append(mutations, replaceToken(fset, content, source, mgen.Increment, incDec.TokPos, incDec.Tok, incDecSwaps[incDec.Tok])...)
 	}
 
 	return mutations

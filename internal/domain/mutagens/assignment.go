@@ -44,7 +44,7 @@ func GenerateAssignmentMutations(n ast.Node, fset *token.FileSet, content []byte
 		}
 
 		replacements := []token.Token{swapped, token.ASSIGN}
-		if len(assign.Rhs) == 1 && isStringLit(assign.Rhs[0]) {
+		if isStringLit(assign.Rhs[0]) { // x op= y has one operand on each side
 			// Strings support only +=.
 			replacements = []token.Token{token.ASSIGN}
 		}
