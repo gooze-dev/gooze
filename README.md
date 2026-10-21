@@ -2,6 +2,12 @@
 
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/gooze-dev/gooze/badge)](https://scorecard.dev/viewer/?uri=github.com/gooze-dev/gooze)
 [![codecov](https://codecov.io/gh/gooze-dev/gooze/graph/badge.svg)](https://app.codecov.io/gh/gooze-dev/gooze)
+[![Go Report Card](https://goreportcard.com/badge/github.com/gooze-dev/gooze)](https://goreportcard.com/report/github.com/gooze-dev/gooze)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=gooze-dev_gooze&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=gooze-dev_gooze)
+[![DeepSource](https://app.deepsource.com/gh/gooze-dev/gooze.svg/?label=active+issues&show_trend=true)](https://app.deepsource.com/gh/gooze-dev/gooze/)
+[![CodeFactor](https://www.codefactor.io/repository/github/gooze-dev/gooze/badge)](https://www.codefactor.io/repository/github/gooze-dev/gooze)
+[![Known Vulnerabilities](https://snyk.io/test/github/gooze-dev/gooze/badge.svg)](https://snyk.io/test/github/gooze-dev/gooze)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fgooze-dev%2Fgooze.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fgooze-dev%2Fgooze?ref=badge_shield)
 
 A Golang mutation testing tool inspired by TMNT "ooze" mutagen.
 
