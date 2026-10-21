@@ -1,8 +1,6 @@
 package mutagens
 
 import (
-	"crypto/sha256"
-	"fmt"
 	"go/ast"
 	"go/token"
 
@@ -14,15 +12,18 @@ import (
 // GenerateStatementMutations generates statement deletion mutations for the given AST node.
 // This focuses on statement removal to test if statements are necessary.
 // Deletes:
-// - Assignment statements (x := 10, x = 20)
-// - Expression statements (function calls, method calls)
-// - Defer statements
-// - Go statements (goroutine launches)
-// - Send statements (channel sends).
+//   - Assignment statements (x = 20, x += 1); declarations (x := 10) are kept,
+//     since the uses of x would not compile without them
+//   - Expression statements (function calls, method calls)
+//   - Defer statements
+//   - Go statements (goroutine launches)
+//   - Send statements (channel sends).
 func GenerateStatementMutations(n ast.Node, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
 	switch stmt := n.(type) {
 	case *ast.AssignStmt:
-		return deleteStatement(stmt, fset, content, source)
+		if stmt.Tok != token.DEFINE {
+			return deleteStatement(stmt, fset, content, source)
+		}
 
 	case *ast.ExprStmt:
 		return deleteStatement(stmt, fset, content, source)
@@ -52,25 +53,12 @@ func deleteStatement(stmt ast.Stmt, fset *token.FileSet, content []byte, source 
 		return nil
 	}
 
-	// Find the end of the line (including newline)
-	lineEnd := endOffset
-	for lineEnd < len(content) && content[lineEnd] != '\n' {
-		lineEnd++
-	}
-
-	if lineEnd < len(content) {
-		lineEnd++ // Include the newline
-	}
-
-	mutated := replaceRange(content, offset, lineEnd, "")
-
-	h := sha256.Sum256([]byte(fmt.Sprintf("%s-%s-delete-%d", source.Origin.FullPath, mgen.Statement.Name, offset)))
-	id := fmt.Sprintf("%x", h)[:16]
+	mutated := ensureTrailingNewline(deleteRange(content, offset, endOffset))
 
 	return []m.Mutation{{
-		ID:          id,
+		ID:          mutationID(mutated),
 		Source:      source,
 		Type:        mgen.Statement,
-		MutatedCode: ensureTrailingNewline(mutated),
+		MutatedCode: mutated,
 	}}
 }

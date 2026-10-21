@@ -68,9 +68,9 @@ func All() []Mutagen {
 		{Type: Bitwise, Doc: "Mutates bitwise operators (& <-> |, ^ -> &, &^ -> &, << <-> >>).", Default: true},
 		{Type: Increment, Doc: "Swaps increment and decrement statements (x++ <-> x--), except in a for loop's post statement.", Default: true},
 		{Type: Assignment, Doc: "Mutates compound assignments (+= <-> -=, *= <-> /=, %= -> *=, &= <-> |=, ^= -> &=, &^= -> &=, <<= <-> >>=) and turns x op= y into x = y, except in a for loop's post statement.", Default: true},
-		{Type: Branch, Doc: "Mutates branch and conditional expressions (if, for, switch conditions)."},
-		{Type: Statement, Doc: "Deletes statements (assignments, expressions, defer, go, send)."},
-		{Type: Loop, Doc: "Mutates loops (boundary conditions, loop body removal, break/continue removal)."},
+		{Type: Branch, Doc: "Inverts and forces if and for conditions, removes if and else blocks and switch case bodies."},
+		{Type: Statement, Doc: "Deletes statements (assignments, calls, defer, go, channel sends); declarations with := are kept."},
+		{Type: Loop, Doc: "Mutates loops (boundary conditions, body removal, break and continue removal, recursive calls), never so that a loop runs forever."},
 	}
 }
 

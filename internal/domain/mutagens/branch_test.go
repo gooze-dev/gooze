@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
 	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
@@ -31,7 +33,7 @@ func foo(x int) int {
 		Origin: &rpt.File{FullPath: "test.go"},
 	}
 
-	mutations := GenerateBranchMutations(file, fset, []byte(source), src)
+	mutations := inspectAll(GenerateBranchMutations, file, fset, []byte(source), src)
 
 	if len(mutations) == 0 {
 		t.Fatal("expected mutations, got none")
@@ -114,15 +116,16 @@ func bar() {
 		Origin: &rpt.File{FullPath: "test.go"},
 	}
 
-	mutations := GenerateBranchMutations(file, fset, []byte(source), src)
+	mutations := inspectAll(GenerateBranchMutations, file, fset, []byte(source), src)
 
 	if len(mutations) == 0 {
 		t.Fatal("expected mutations for for loop, got none")
 	}
 
-	// Should generate 3 mutations for the loop condition
-	if len(mutations) != 3 {
-		t.Fatalf("expected 3 mutations for for loop, got %d", len(mutations))
+	// The condition is inverted and forced false; forcing it true would
+	// loop until the test times out.
+	if len(mutations) != 2 {
+		t.Fatalf("expected 2 mutations for for loop, got %d", len(mutations))
 	}
 
 	for i, mutation := range mutations {
@@ -159,7 +162,7 @@ func baz(a, b int) int {
 		Origin: &rpt.File{FullPath: "test.go"},
 	}
 
-	mutations := GenerateBranchMutations(file, fset, []byte(source), src)
+	mutations := inspectAll(GenerateBranchMutations, file, fset, []byte(source), src)
 
 	// Should generate 6 mutations: 3 for each if statement (inverted, true, false) + 1 removal each
 	if len(mutations) != 8 {
@@ -191,7 +194,7 @@ func simple() int {
 		Origin: &rpt.File{FullPath: "test.go"},
 	}
 
-	mutations := GenerateBranchMutations(file, fset, []byte(source), src)
+	mutations := inspectAll(GenerateBranchMutations, file, fset, []byte(source), src)
 
 	if len(mutations) != 0 {
 		t.Fatalf("expected no mutations for code without conditionals, got %d", len(mutations))
@@ -218,7 +221,7 @@ func complex(x, y int) bool {
 		Origin: &rpt.File{FullPath: "test.go"},
 	}
 
-	mutations := GenerateBranchMutations(file, fset, []byte(source), src)
+	mutations := inspectAll(GenerateBranchMutations, file, fset, []byte(source), src)
 
 	if len(mutations) != 4 {
 		t.Fatalf("expected 4 mutations for complex condition (3 condition + 1 removal), got %d", len(mutations))
@@ -263,10 +266,11 @@ func test() {
 		Origin: &rpt.File{FullPath: "test.go"},
 	}
 
-	mutations := invertCondition(ifStmt.Cond, fset, []byte(source), src)
+	mutations := invertCondition(ifStmt.Cond, fset, []byte(source), src, "!", "true", "false")
 
-	if len(mutations) != 3 {
-		t.Fatalf("expected 3 mutations, got %d", len(mutations))
+	// Forcing true to true changes nothing, so it is not a mutation.
+	if len(mutations) != 2 {
+		t.Fatalf("expected 2 mutations, got %d", len(mutations))
 	}
 
 	// Verify each mutation is valid Go code
@@ -299,7 +303,7 @@ func test(x int) int {
 		Origin: &rpt.File{FullPath: "test.go"},
 	}
 
-	mutations := GenerateBranchMutations(file, fset, []byte(source), src)
+	mutations := inspectAll(GenerateBranchMutations, file, fset, []byte(source), src)
 
 	// Should have: 3 condition mutations + 1 remove if block + 1 remove else block
 	expectedMin := 5
@@ -355,7 +359,7 @@ func test(x int) string {
 		Origin: &rpt.File{FullPath: "test.go"},
 	}
 
-	mutations := GenerateBranchMutations(file, fset, []byte(source), src)
+	mutations := inspectAll(GenerateBranchMutations, file, fset, []byte(source), src)
 
 	// Should have mutations for both if statements (outer and else if)
 	if len(mutations) < 8 {
@@ -394,7 +398,7 @@ func test(x int) string {
 		Origin: &rpt.File{FullPath: "test.go"},
 	}
 
-	mutations := GenerateBranchMutations(file, fset, []byte(source), src)
+	mutations := inspectAll(GenerateBranchMutations, file, fset, []byte(source), src)
 
 	// Should have mutations for each case body (3 cases)
 	if len(mutations) < 3 {
@@ -439,7 +443,7 @@ func test(x int) {
 		Origin: &rpt.File{FullPath: "test.go"},
 	}
 
-	mutations := GenerateBranchMutations(file, fset, []byte(source), src)
+	mutations := inspectAll(GenerateBranchMutations, file, fset, []byte(source), src)
 
 	if len(mutations) < 2 {
 		t.Fatalf("expected at least 2 mutations, got %d", len(mutations))
@@ -477,7 +481,7 @@ func test(a, b int) int {
 		Origin: &rpt.File{FullPath: "test.go"},
 	}
 
-	mutations := GenerateBranchMutations(file, fset, []byte(source), src)
+	mutations := inspectAll(GenerateBranchMutations, file, fset, []byte(source), src)
 
 	// Should have mutations for both outer and inner if statements
 	// Each if gets: 3 condition mutations + 1 remove if block
@@ -485,4 +489,34 @@ func test(a, b int) int {
 	if len(mutations) < expectedMin {
 		t.Fatalf("expected at least %d mutations for nested ifs, got %d", expectedMin, len(mutations))
 	}
+}
+
+func TestGenerateBranchMutations_EachMutantOnce(t *testing.T) {
+	body := "if a > 0 {\nif b > 0 {\nn = 1\n}\n}"
+
+	// Four mutants per if statement, each generated once though the inner
+	// if is inside the outer one: removed, inverted, forced false and forced
+	// true.
+	assert.Equal(t, []string{
+		"-if a > 0 {; if b > 0 {; n = 1; }; }", "-if b > 0 {; n = 1; }",
+		"if !(a > 0) {", "if !(b > 0) {",
+		"if false {", "if false {",
+		"if true {", "if true {",
+	}, mutantsOf(t, GenerateBranchMutations, body))
+}
+
+func TestGenerateBranchMutations_KeepsInitVariablesUsed(t *testing.T) {
+	// ok is used by the condition only: forcing it would leave ok unused.
+	assert.Equal(t, []string{
+		"-if v, ok := m[a]; ok {; n = v; }",
+		"if v, ok := m[a]; !(ok) {",
+	}, mutantsOf(t, GenerateBranchMutations, "m := map[int]int{}\nif v, ok := m[a]; ok {\nn = v\n}"))
+
+	// err is used by the body too, so the condition can be forced.
+	assert.Equal(t, []string{
+		"-if err := g(); err != nil {; _ = err; }",
+		"if err := g(); !(err != nil) {",
+		"if err := g(); false {",
+		"if err := g(); true {",
+	}, mutantsOf(t, GenerateBranchMutations, "g := func() error { return nil }\nif err := g(); err != nil {\n_ = err\n}"))
 }
