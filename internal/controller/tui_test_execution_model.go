@@ -389,7 +389,12 @@ func (m testExecutionModel) viewResults() string {
 		summaryParts = append(summaryParts, fmt.Sprintf("Score: %s", accentStyle.Render(formatMutationScore(m.mutationScore))))
 	}
 
-	summary := summaryStyle.Render(strings.Join(summaryParts, "  •  "))
+	summaryText := strings.Join(summaryParts, "  •  ")
+	if hint := runReportsHint(m.mutationScore); m.mutationScoreSet && hint != "" {
+		summaryText += "\n" + hint
+	}
+
+	summary := summaryStyle.Render(summaryText)
 
 	// 3. Results table with list
 	resultsBox := m.renderResultsBox(accentColor)

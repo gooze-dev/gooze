@@ -143,8 +143,6 @@ func (w *workflow) Test(ctx context.Context, args TestArgs) error {
 		slog.Info("Starting mutation testing", "threads", args.Threads, "shardIndex", args.ShardIndex, "totalShardCount", args.TotalShardCount)
 		w.progress.DisplayConcurrencyInfo(ctx, args.Threads, args.ShardIndex, args.TotalShardCount)
 
-		reportsDir := shardReportsDir(args.Reports, args.ShardIndex, args.TotalShardCount)
-
 		sources, sel, err := w.testSources(ctx, args.EstimateArgs)
 		if err != nil {
 			return err
@@ -152,7 +150,8 @@ func (w *workflow) Test(ctx context.Context, args TestArgs) error {
 
 		defer sources.close()
 
-		if err := w.cleanDeleted(ctx, args.Reports, reportsDir, sources.deleted); err != nil {
+		reportsDir, err := w.prepareReportsDir(ctx, args, sel, sources)
+		if err != nil {
 			return err
 		}
 
@@ -184,8 +183,20 @@ func (w *workflow) Test(ctx context.Context, args TestArgs) error {
 
 		slog.Info("Completed mutation tests", "reportsCount", reports.Len())
 
-		return w.finalizeReports(ctx, args, sources, reports)
+		return w.finalizeReports(ctx, args, sel, reportsDir, sources, reports)
 	})
+}
+
+// prepareReportsDir returns the directory the run writes to. A full run first
+// drops the stored reports of deleted sources; a narrowed run leaves the main
+// reports alone and starts its own directory afresh.
+func (w *workflow) prepareReportsDir(ctx context.Context, args TestArgs, sel Selection, sources sourceSet) (m.Path, error) {
+	reportsDir, err := runReportsDir(args, sel)
+	if err != nil || sel.Narrowed() {
+		return reportsDir, err
+	}
+
+	return reportsDir, w.cleanDeleted(ctx, args.Reports, reportsDir, sources.deleted)
 }
 
 func (w *workflow) cleanDeleted(ctx context.Context, base, reportsDir m.Path, deleted pkg.FileSpill[rpt.Source]) error {
@@ -247,10 +258,8 @@ func closeSpill[T any](name string, spill pkg.FileSpill[T]) {
 
 // finalizeReports replaces previous reports for the tested sources with the
 // spilled ones, regenerates the reports index and displays the run's score.
-func (w *workflow) finalizeReports(ctx context.Context, args TestArgs, sources sourceSet, reports pkg.FileSpill[m.Report]) error {
+func (w *workflow) finalizeReports(ctx context.Context, args TestArgs, sel Selection, reportsDir m.Path, sources sourceSet, reports pkg.FileSpill[m.Report]) error {
 	defer closeSpill("reports", reports)
-
-	reportsDir := shardReportsDir(args.Reports, args.ShardIndex, args.TotalShardCount)
 
 	if err := w.reports.CleanReports(ctx, reportsDir, sources.changed); err != nil {
 		slog.Error("Failed to clean stale reports", "error", err, "path", reportsDir)
@@ -271,7 +280,7 @@ func (w *workflow) finalizeReports(ctx context.Context, args TestArgs, sources s
 
 	slog.Debug("Regenerated reports index", "path", reportsDir)
 
-	score, err := w.runScore(ctx, args, sources, reports)
+	score, err := w.runScore(ctx, args, sel, reportsDir, sources, reports)
 	if err != nil {
 		return fmt.Errorf("calculate mutation score: %w", err)
 	}
@@ -284,14 +293,23 @@ func (w *workflow) finalizeReports(ctx context.Context, args TestArgs, sources s
 
 // runScore scores a run over every source in its scope: the results tested now
 // plus, for an unsharded cached run, the stored results of unchanged sources.
-// A shard scores only its own results; `report merge` scores the whole set.
-func (w *workflow) runScore(ctx context.Context, args TestArgs, sources sourceSet, tested pkg.FileSpill[m.Report]) (MutationScore, error) {
+// A shard scores only its own results, and a narrowed run only its selection;
+// `report merge` scores the whole set.
+func (w *workflow) runScore(ctx context.Context, args TestArgs, sel Selection, reportsDir m.Path, sources sourceSet, tested pkg.FileSpill[m.Report]) (MutationScore, error) {
 	testedSummary, err := summarizeReports(tested, nil)
 	if err != nil {
 		return MutationScore{}, err
 	}
 
 	score := MutationScore{Summary: testedSummary, Tested: testedSummary.Total}
+
+	if sel.Narrowed() {
+		score.Selection = sel.Describe()
+		score.ReportsDir = reportsDir
+
+		return score, nil
+	}
+
 	if !sources.cached || args.TotalShardCount > 1 {
 		return score, nil
 	}
@@ -347,24 +365,37 @@ func (w *workflow) Merge(ctx context.Context, args MergeArgs) error {
 			return err
 		}
 
-		if len(shardDirs) == 0 {
-			slog.Warn("No shard directories found; regenerating index only", "basePath", base)
+		if len(shardDirs) > 0 {
+			if err := w.mergeShards(ctx, base, shardDirs); err != nil {
+				return err
+			}
+		}
+
+		mergedRun, err := w.mergeRunReports(ctx, base)
+		if err != nil {
+			slog.Error("Failed to merge the run reports", "error", err, "basePath", base)
+			return err
+		}
+
+		if len(shardDirs) == 0 && !mergedRun {
+			slog.Warn("No shard or run directories found; regenerating index only", "basePath", base)
 			return w.regenerateIndexAndScore(ctx, base)
-		}
-
-		if err := w.mergeReports(ctx, base, shardDirs); err != nil {
-			slog.Error("Failed to merge shard reports", "error", err, "basePath", base)
-			return err
-		}
-
-		slog.Info("Merged shard reports", "basePath", base)
-
-		if err := w.removeShardDirs(shardDirs); err != nil {
-			return err
 		}
 
 		return w.displayScore(ctx, base)
 	})
+}
+
+// mergeShards moves the shard reports into base and removes the shard dirs.
+func (w *workflow) mergeShards(ctx context.Context, base m.Path, shardDirs []string) error {
+	if err := w.mergeReports(ctx, base, shardDirs); err != nil {
+		slog.Error("Failed to merge shard reports", "error", err, "basePath", base)
+		return err
+	}
+
+	slog.Info("Merged shard reports", "basePath", base)
+
+	return w.removeShardDirs(shardDirs)
 }
 
 func (w *workflow) regenerateIndexAndScore(ctx context.Context, base m.Path) error {

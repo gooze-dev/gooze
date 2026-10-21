@@ -215,6 +215,10 @@ func (s *SimpleUI) DisplayMutationScore(ctx context.Context, score domain.Mutati
 	}
 
 	s.printf("Mutation score: %s\n", formatMutationScore(score))
+
+	if hint := runReportsHint(score); hint != "" {
+		s.printf("%s\n", hint)
+	}
 }
 
 // DisplayReportSummary prints a per-file summary of stored reports.

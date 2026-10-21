@@ -1,9 +1,12 @@
 package controller
 
 import (
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"gooze.dev/pkg/gooze/internal/domain"
+	m "gooze.dev/pkg/gooze/internal/model"
 	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
@@ -131,5 +134,41 @@ func TestSelectionLine(t *testing.T) {
 		if got := selectionLine(tc.estimation); got != tc.want {
 			t.Errorf("%s: selectionLine() = %q, want %q", tc.name, got, tc.want)
 		}
+	}
+}
+
+func TestFormatMutationScore_NarrowedRun(t *testing.T) {
+	score := domain.MutationScore{
+		Summary:   rpt.Summary{Total: 4, Killed: 2, Survived: 2},
+		Tested:    4,
+		Selection: "functions matching ^Add$",
+	}
+
+	want := "50.00% (2 killed, 2 survived; 0 cached, 4 tested; functions matching ^Add$)"
+	if got := formatMutationScore(score); got != want {
+		t.Errorf("formatMutationScore() = %q, want %q", got, want)
+	}
+
+	// The CI gate's sed still reads the number.
+	if !strings.HasPrefix(want, "50.00%") {
+		t.Fatal("score must lead the line")
+	}
+
+	empty := domain.MutationScore{Selection: "functions matching ^Nope$"}
+	if got := formatMutationScore(empty); got != "100.00% (no mutations; functions matching ^Nope$)" {
+		t.Errorf("formatMutationScore(no mutations) = %q", got)
+	}
+}
+
+func TestRunReportsHint(t *testing.T) {
+	if got := runReportsHint(domain.MutationScore{}); got != "" {
+		t.Errorf("full run hint = %q, want none", got)
+	}
+
+	got := runReportsHint(domain.MutationScore{ReportsDir: m.Path(filepath.Join(".gooze-reports", "run"))})
+	want := "Reports of this run are in " + filepath.Join(".gooze-reports", "run") + "; add them to the main reports with gooze report merge."
+
+	if got != want {
+		t.Errorf("runReportsHint() = %q, want %q", got, want)
 	}
 }

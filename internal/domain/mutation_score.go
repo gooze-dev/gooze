@@ -14,6 +14,11 @@ type MutationScore struct {
 	rpt.Summary
 	Cached int
 	Tested int
+	// Selection describes a narrowed run's selection (see Selection.Describe);
+	// its score then covers only that selection.
+	Selection string
+	// ReportsDir is where a narrowed run wrote its reports.
+	ReportsDir m.Path
 }
 
 // summarizeReports counts the results of the reports whose source include
