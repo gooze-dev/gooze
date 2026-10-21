@@ -5,6 +5,7 @@ const (
 	KeyVersion            = "version"
 	KeyOutput             = "output"
 	KeyNoCache            = "no-cache"
+	KeyNoUpdateCheck      = "no-update-check"
 	KeyPathsExclude       = "paths.exclude"
 	KeyRunParallel        = "run.parallel"
 	KeyRunMutationTimeout = "run.mutation_timeout"

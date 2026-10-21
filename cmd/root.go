@@ -44,6 +44,9 @@ var reportsOutputDirFlag string
 // noCacheFlag disables incremental caching when set.
 var noCacheFlag bool
 
+// noUpdateCheckFlagValue disables the newer-release check when set.
+var noUpdateCheckFlagValue bool
+
 // excludePatterns is a root-level flag that filters files for applicable commands.
 var excludePatterns []string
 
@@ -67,6 +70,7 @@ func init() {
 		mutagen,
 	)
 	publisher = domain.NewReportPublisher(ociRegistry)
+	releaseChecker = adapter.NewModuleProxyReleaseChecker()
 
 	rootCmd.AddCommand(report.New(report.Deps{
 		Workflow:  workflow,
@@ -127,6 +131,7 @@ func baseRootCmd() *cobra.Command {
 			}
 
 			configureLogger(logPath, verbose)
+			startUpdateCheck(cmd)
 
 			return nil
 		},
@@ -150,6 +155,9 @@ func configureRootFlags(cmd *cobra.Command) {
 
 	cmd.PersistentFlags().BoolVar(&noCacheFlag, noCacheFlagName, viper.GetBool(config.KeyNoCache), "disable cached incremental runs (re-test everything)")
 	bindFlagToConfig(cmd.PersistentFlags().Lookup(noCacheFlagName), config.KeyNoCache)
+
+	cmd.PersistentFlags().BoolVar(&noUpdateCheckFlagValue, noUpdateCheckFlag, viper.GetBool(config.KeyNoUpdateCheck), "skip checking for a newer gooze release")
+	bindFlagToConfig(cmd.PersistentFlags().Lookup(noUpdateCheckFlag), config.KeyNoUpdateCheck)
 
 	cmd.PersistentFlags().StringArrayVarP(&excludePatterns, excludeFlagName, "x", viper.GetStringSlice(config.KeyPathsExclude), "exclude files matching regex (can be repeated)")
 	bindFlagToConfig(cmd.PersistentFlags().Lookup(excludeFlagName), config.KeyPathsExclude)
@@ -175,6 +183,7 @@ func Execute() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	err := rootCmd.ExecuteContext(ctx)
 
+	printUpdateNotice(ctx, rootCmd.ErrOrStderr())
 	stop()
 
 	if err != nil {

@@ -119,6 +119,7 @@ type testExecutionModel struct {
 	showDiff          bool
 	selectedDiff      string
 	selectedDiffPath  string
+	updateLatest      string // newer release tag to announce, if any
 }
 
 func newTestExecutionModel() testExecutionModel {
@@ -181,12 +182,25 @@ func (m testExecutionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case upcomingMsg:
 		m = m.handleUpcoming(msg)
 
-	case mutationScoreMsg:
-		m.mutationScore = msg.score
-		m.mutationScoreSet = true
+	case mutationScoreMsg, updateNoticeMsg:
+		m = m.handleHeaderMsg(msg)
 	}
 
 	return m, cmd
+}
+
+// handleHeaderMsg records values shown in the view headers: the final mutation
+// score and a newer-release notice.
+func (m testExecutionModel) handleHeaderMsg(msg tea.Msg) testExecutionModel {
+	switch msg := msg.(type) {
+	case mutationScoreMsg:
+		m.mutationScore = msg.score
+		m.mutationScoreSet = true
+	case updateNoticeMsg:
+		m.updateLatest = msg.latest
+	}
+
+	return m
 }
 
 func (m testExecutionModel) handleConcurrency(msg concurrencyMsg) testExecutionModel {
@@ -253,7 +267,7 @@ func (m testExecutionModel) viewProgress() string {
 	footer := footerStyle.Render("Press q to quit")
 
 	// 1. Title
-	title := titleStyle.Render("🧬 Gooze Mutation Testing")
+	title := withUpdateNotice(titleStyle.Render("🧬 Gooze Mutation Testing"), m.updateLatest)
 
 	// While the upfront count pass runs the total isn't known yet.
 	if m.counting {
@@ -361,7 +375,7 @@ func (m testExecutionModel) viewResults() string {
 	accentStyle := lipgloss.NewStyle().Foreground(accentColor)
 
 	// 1. Title
-	title := titleStyle.Render("🧬 Gooze Test Results")
+	title := withUpdateNotice(titleStyle.Render("🧬 Gooze Test Results"), m.updateLatest)
 
 	// 2. Summary
 	summaryParts := []string{

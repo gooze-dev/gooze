@@ -57,3 +57,9 @@ type UI interface {
 	DisplayMutationScore(ctx context.Context, score domain.MutationScore)
 	DisplayReportSummary(ctx context.Context, summary domain.ReportSummary)
 }
+
+// UpdateNotifier is implemented by UIs that can announce a newer gooze release
+// while they run. UIs without it rely on the notice printed after the command.
+type UpdateNotifier interface {
+	DisplayUpdateNotice(ctx context.Context, notice domain.UpdateNotice)
+}

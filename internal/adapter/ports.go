@@ -9,4 +9,5 @@ var (
 	_ domain.ReportStore       = (*LocalReportStore)(nil)
 	_ domain.OCIRegistry       = (*ORASRegistry)(nil)
 	_ domain.Differ            = (*UnifiedDiffer)(nil)
+	_ domain.ReleaseChecker    = (*ModuleProxyReleaseChecker)(nil)
 )

@@ -92,6 +92,7 @@ type estimateModel struct {
 	rendered     bool
 	animOffset   int
 	lastSelected int
+	updateLatest string // newer release tag to announce, if any
 }
 
 func newEstimateModel() estimateModel {
@@ -127,18 +128,13 @@ func (m estimateModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.fileList.SetWidth(m.width)
 		// ... adjustment logic handles in View ...
 
-	case tickMsg:
-		if m.fileList.FilterState() != list.Filtering && m.rendered {
-			m.animOffset++
-			m.delegate.offset = m.animOffset
-			m.fileList.SetDelegate(m.delegate)
-
-			return m, tea.Tick(time.Millisecond*150, func(t time.Time) tea.Msg {
-				return tickMsg(t)
-			})
-		}
+	case updateNoticeMsg:
+		m.updateLatest = msg.latest
 
 		return m, nil
+
+	case tickMsg:
+		return m.handleTick()
 
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -167,6 +163,21 @@ func (m estimateModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, cmd
+}
+
+// handleTick advances the path marquee, pausing while the user filters.
+func (m estimateModel) handleTick() (estimateModel, tea.Cmd) {
+	if m.fileList.FilterState() == list.Filtering || !m.rendered {
+		return m, nil
+	}
+
+	m.animOffset++
+	m.delegate.offset = m.animOffset
+	m.fileList.SetDelegate(m.delegate)
+
+	return m, tea.Tick(time.Millisecond*150, func(t time.Time) tea.Msg {
+		return tickMsg(t)
+	})
 }
 
 func (m estimateModel) handleEstimationMsg(msg estimationMsg) estimateModel {
@@ -219,7 +230,7 @@ func (m estimateModel) View() string {
 	accentStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("6")) // Cyan
 
 	// 1. Title
-	title := titleStyle.Render("🧬 Gooze Mutation Estimate")
+	title := withUpdateNotice(titleStyle.Render("🧬 Gooze Mutation Estimate"), m.updateLatest)
 
 	// 2. Summary
 	summaryText := fmt.Sprintf(

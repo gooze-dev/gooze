@@ -2,6 +2,23 @@ package controller
 
 import "github.com/charmbracelet/lipgloss"
 
+// withUpdateNotice places a short newer-release notice beside a view title,
+// keeping the title's height so the layout below is unchanged; the update
+// command itself is printed when gooze exits. An empty latest leaves the title
+// as is.
+func withUpdateNotice(title, latest string) string {
+	if latest == "" {
+		return title
+	}
+
+	notice := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("3")). // Yellow
+		Padding(1, 0, 0, 3).
+		Render("⬆ gooze " + latest + " available")
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, title, notice)
+}
+
 // truncateToWidth shortens text to fit width display cells, appending an
 // ellipsis when it had to cut.
 func truncateToWidth(text string, width int) string {

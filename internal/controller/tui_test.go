@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -219,4 +220,38 @@ func completedResult() m.Result {
 
 func mResultEmpty() m.Result {
 	return m.Result{}
+}
+
+func TestWithUpdateNotice(t *testing.T) {
+	if got := withUpdateNotice("title", ""); got != "title" {
+		t.Fatalf("withUpdateNotice without a release = %q, want title unchanged", got)
+	}
+
+	got := withUpdateNotice("title", "v1.3.0")
+	if !strings.Contains(got, "title") || !strings.Contains(got, "gooze v1.3.0 available") {
+		t.Fatalf("withUpdateNotice = %q, want title plus notice", got)
+	}
+}
+
+func TestModels_UpdateNoticeMsg(t *testing.T) {
+	est, _ := newEstimateModel().Update(updateNoticeMsg{latest: "v1.3.0"})
+	if got := est.(estimateModel).updateLatest; got != "v1.3.0" {
+		t.Fatalf("estimateModel.updateLatest = %q", got)
+	}
+
+	exec, _ := newTestExecutionModel().Update(updateNoticeMsg{latest: "v1.3.0"})
+	if got := exec.(testExecutionModel).updateLatest; got != "v1.3.0" {
+		t.Fatalf("testExecutionModel.updateLatest = %q", got)
+	}
+}
+
+func TestTUI_DisplayUpdateNotice_BeforeStart(t *testing.T) {
+	tui := NewTUI(&bytes.Buffer{})
+	tui.DisplayUpdateNotice(context.Background(), domain.UpdateNotice{Current: "v1.2.0", Latest: "v1.3.0"})
+
+	if tui.notice == nil || tui.notice.Latest != "v1.3.0" {
+		t.Fatalf("notice not kept for start: %+v", tui.notice)
+	}
+
+	var _ UpdateNotifier = tui
 }

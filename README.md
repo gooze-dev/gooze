@@ -81,6 +81,14 @@ compared with `len(...)` or `cap(...)`. For example, `v == ""` is not mutated to
 `v <= ""`, nor `len(s) != 0` to `len(s) > 0`; the other mutants of those
 comparisons remain. Reports from version 1 are re-tested.
 
+Update check: when the last known release is newer than yours, gooze prints a
+notice to stderr when the command ends and shows it in the TUI title. That
+answer comes from a cache in your user cache directory, refreshed in the
+background from the Go module proxy at most once a day. Nothing waits for the
+network, so being offline has no effect.
+Turn it off with `no-update-check: true` in `gooze.yaml`, `--no-update-check`,
+or `GOOZE_NO_UPDATE_CHECK=true`.
+
 Cached results for a file are invalidated when its source content hash changes,
 its test file content hash changes, a mutator version changes (e.g. after upgrading
 Gooze), or the source file is deleted. The score `gooze run` prints covers every
