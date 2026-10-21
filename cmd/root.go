@@ -192,7 +192,8 @@ func Execute() {
 	printUpdateNotice(ctx, rootCmd.ErrOrStderr())
 	stop()
 
-	if code != m.ExitOK {
+	// Equivalent: exit codes are never negative, so != is >.
+	if code != m.ExitOK { //gooze:ignore comparison
 		os.Exit(int(code))
 	}
 }

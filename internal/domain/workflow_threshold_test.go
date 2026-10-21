@@ -72,6 +72,9 @@ func TestWorkflow_Test_AShardSkipsTheThresholds(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, score.ThresholdsSkipped, "nothing to skip without thresholds")
 
+	_, err = thresholdRun(t, shard(strict, 0))
+	require.Error(t, err, "an unset shard count is an unsharded run, which checks them")
+
 	score, err = thresholdRun(t, shard(strict, 1))
 	require.EqualError(t, err, "mutation score 0.00% is below threshold.total 100%", "an unsharded run checks them")
 	assert.False(t, score.ThresholdsSkipped)

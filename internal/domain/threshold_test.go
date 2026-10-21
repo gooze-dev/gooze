@@ -34,6 +34,8 @@ func TestThresholds_Set(t *testing.T) {
 	assert.True(t, domain.Thresholds{Total: 1}.Set())
 	assert.True(t, domain.Thresholds{Average: 0.5}.Set())
 	assert.True(t, domain.Thresholds{File: 100}.Set())
+	assert.True(t, domain.Thresholds{Total: 0.5}.Set())
+	assert.True(t, domain.Thresholds{File: 0.5}.Set())
 }
 
 func TestThresholds_Check(t *testing.T) {
@@ -61,9 +63,13 @@ func TestThresholds_Check(t *testing.T) {
 			[]string{"a.go: score 0.00% is below threshold.file 1%", "z.go: score 0.00% is below threshold.file 1%"}},
 		// A file of mutations that don't compile has no score, so it neither
 		// fails threshold.file nor counts towards the average.
-		"unscored file":  {scoreOf(file("a.go", 1, 1, 0), file("b.go", 0, 0, 3)), domain.Thresholds{Key: "threshold", Average: 100, File: 100}, nil},
-		"no mutations":   {scoreOf(), domain.Thresholds{Key: "threshold", Total: 100, Average: 100, File: 100}, nil},
-		"nothing scored": {scoreOf(file("a.go", 0, 0, 2)), domain.Thresholds{Key: "threshold", Total: 100, Average: 100}, nil},
+		"unscored file":                              {scoreOf(file("a.go", 1, 1, 0), file("b.go", 0, 0, 3)), domain.Thresholds{Key: "threshold", Average: 100, File: 100}, nil},
+		"one file below the average":                 {calc, domain.Thresholds{Key: "threshold", Average: 85}, []string{"average file score 84.62% is below threshold.average 85%"}},
+		"a fraction of a percent":                    {scoreOf(file("a.go", 0, 1, 0)), domain.Thresholds{Key: "threshold", Total: 0.5, Average: 0.5, File: 0.5}, []string{"mutation score 0.00% is below threshold.total 0.5%", "average file score 0.00% is below threshold.average 0.5%", "a.go: score 0.00% is below threshold.file 0.5%"}},
+		"zero is off":                                {scoreOf(file("a.go", 0, 1, 0)), domain.Thresholds{Key: "threshold"}, nil},
+		"an unscored file doesn't raise the average": {scoreOf(file("a.go", 1, 2, 0), file("b.go", 0, 0, 3)), domain.Thresholds{Key: "threshold", Average: 60}, []string{"average file score 50.00% is below threshold.average 60%"}},
+		"no mutations":                               {scoreOf(), domain.Thresholds{Key: "threshold", Total: 100, Average: 100, File: 100}, nil},
+		"nothing scored":                             {scoreOf(file("a.go", 0, 0, 2)), domain.Thresholds{Key: "threshold", Total: 100, Average: 100}, nil},
 	}
 
 	for name, tc := range cases {

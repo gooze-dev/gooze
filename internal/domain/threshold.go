@@ -25,7 +25,8 @@ type Thresholds struct {
 
 // Set reports whether any threshold is on.
 func (t Thresholds) Set() bool {
-	return t.Total > 0 || t.Average > 0 || t.File > 0
+	// Equivalent: thresholds are validated to 0..100, so > 0 is != 0.
+	return t.Total > 0 || t.Average > 0 || t.File > 0 //gooze:ignore comparison
 }
 
 // Breach is a score below one of the thresholds.
@@ -78,21 +79,19 @@ func (t Thresholds) Err(score MutationScore) error {
 
 // Check returns the scores below their thresholds: the total, the average of
 // the file scores, then each low file by path. Scores are compared as gooze
-// prints them, rounded to two decimals. Files with no scored mutations (none,
-// or none that compile) have no score: they never fail threshold.file and
-// don't count towards the average, and a set without scored mutations meets
-// every threshold.
+// prints them, rounded to two decimals. A threshold of 0 is off: no score is
+// below it. Files with no scored mutations (none, or none that compile) have
+// no score: they never fail threshold.file and don't count towards the
+// average, and a set without scored mutations scores 100%, which meets every
+// threshold.
 func (t Thresholds) Check(score MutationScore) []Breach {
-	var breaches []Breach
-
-	if score.Scored() > 0 && t.Total > 0 {
-		breaches = appendBelow(breaches, t.Key+".total", "", percent(score.Score()), t.Total)
-	}
+	breaches := appendBelow(nil, t.Key+".total", "", percent(score.Score()), t.Total)
 
 	files := slices.SortedFunc(slices.Values(score.Files), func(a, b FileSummary) int { return strings.Compare(a.Path, b.Path) })
-	files = slices.DeleteFunc(files, func(f FileSummary) bool { return f.Scored() <= 0 })
+	// Equivalent: a file's scored count is never negative, so == 0 is <= 0.
+	files = slices.DeleteFunc(files, func(f FileSummary) bool { return f.Scored() == 0 }) //gooze:ignore comparison
 
-	if len(files) > 0 && t.Average > 0 {
+	if len(files) > 0 {
 		sum := 0.0
 		for _, f := range files {
 			sum += f.Score()
@@ -101,10 +100,8 @@ func (t Thresholds) Check(score MutationScore) []Breach {
 		breaches = appendBelow(breaches, t.Key+".average", "", percent(sum/float64(len(files))), t.Average)
 	}
 
-	if t.File > 0 {
-		for _, f := range files {
-			breaches = appendBelow(breaches, t.Key+".file", f.Path, percent(f.Score()), t.File)
-		}
+	for _, f := range files {
+		breaches = appendBelow(breaches, t.Key+".file", f.Path, percent(f.Score()), t.File)
 	}
 
 	return breaches
