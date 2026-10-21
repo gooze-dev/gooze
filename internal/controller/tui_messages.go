@@ -48,6 +48,10 @@ type mutationScoreMsg struct {
 	score domain.MutationScore
 }
 
+type updateNoticeMsg struct {
+	latest string
+}
+
 // List item types.
 type fileItem struct {
 	path   string

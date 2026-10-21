@@ -12,6 +12,7 @@ func TestDefaults(t *testing.T) {
 		KeyVersion:            1,
 		KeyOutput:             DefaultReportsDir,
 		KeyNoCache:            false,
+		KeyNoUpdateCheck:      false,
 		KeyPathsExclude:       []string{},
 		KeyRunParallel:        1,
 		KeyRunMutationTimeout: 120,
@@ -108,11 +109,11 @@ func TestSchema_EveryFieldDocumented(t *testing.T) {
 func TestSchema_ReturnsCopy(t *testing.T) {
 	first := Schema()
 	first[0].Name = "changed"
-	first[3].Children[0].Name = "changed"
+	first[4].Children[0].Name = "changed"
 
 	second := Schema()
 	assert.Equal(t, "version", second[0].Name)
-	assert.Equal(t, "exclude", second[3].Children[0].Name)
+	assert.Equal(t, "exclude", second[4].Children[0].Name)
 }
 
 func TestSchema_Bounds(t *testing.T) {

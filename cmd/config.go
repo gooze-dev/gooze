@@ -20,6 +20,7 @@ const (
 
 	outputFlagName      = "output"
 	noCacheFlagName     = "no-cache"
+	noUpdateCheckFlag   = "no-update-check"
 	excludeFlagName     = "exclude"
 	runParallelFlagName = "parallel"
 

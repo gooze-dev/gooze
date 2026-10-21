@@ -19,6 +19,7 @@ type TUI struct {
 	started bool
 	done    chan struct{}
 	closed  bool
+	notice  *domain.UpdateNotice // shown once the program starts, if set
 }
 
 // NewTUI creates a new TUI.
@@ -80,6 +81,11 @@ func (t *TUI) startWithModel(model tea.Model) error {
 		_, _ = t.program.Run()
 		close(t.done)
 	}()
+
+	if t.notice != nil {
+		program, msg := t.program, updateNoticeMsg{latest: t.notice.Latest}
+		go program.Send(msg)
+	}
 
 	return nil
 }
@@ -251,6 +257,20 @@ func (t *TUI) DisplayReportSummary(ctx context.Context, summary domain.ReportSum
 	}
 
 	_, _ = fmt.Fprint(t.output, renderReportSummary(summary))
+}
+
+// DisplayUpdateNotice announces a newer gooze release in the view title. It
+// may arrive before the program starts, in which case it is shown on start.
+func (t *TUI) DisplayUpdateNotice(ctx context.Context, notice domain.UpdateNotice) {
+	if err := ctx.Err(); err != nil {
+		return
+	}
+
+	t.mu.Lock()
+	t.notice = &notice
+	t.mu.Unlock()
+
+	t.send(updateNoticeMsg{latest: notice.Latest})
 }
 
 func (t *TUI) ensureStarted(ctx context.Context) {

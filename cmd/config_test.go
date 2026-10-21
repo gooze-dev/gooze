@@ -31,6 +31,7 @@ func TestConfigDefaults(t *testing.T) {
 		"version":              1,
 		"output":               ".gooze-reports",
 		"no-cache":             false,
+		"no-update-check":      false,
 		"paths.exclude":        []string{},
 		"run.parallel":         1,
 		"run.mutation_timeout": 120,
