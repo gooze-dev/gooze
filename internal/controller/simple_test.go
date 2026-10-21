@@ -272,3 +272,26 @@ func TestSimpleUI_DisplayEstimation_DiffModeLineComesFirst(t *testing.T) {
 		t.Fatalf("output = %q, want %q", got, want)
 	}
 }
+
+func TestSimpleUI_DisplayEstimation_SelectionLineAfterDiffLine(t *testing.T) {
+	var buf bytes.Buffer
+
+	cmd := &cobra.Command{}
+	cmd.SetOut(&buf)
+
+	estimation := domain.Estimation{
+		Total: 1,
+		Files: []domain.FileEstimate{{Path: "calc.go", Count: 1}},
+		Diff:  &domain.DiffInfo{Ref: "main", Base: "abc", Files: 1},
+		Run:   "^InRange$",
+	}
+
+	if err := NewSimpleUI(cmd).DisplayEstimation(context.Background(), estimation, nil); err != nil {
+		t.Fatalf("DisplayEstimation() error = %v", err)
+	}
+
+	want := diffEstimateLine(estimation) + "\n" + selectionLine(estimation) + "\n\n" + renderEstimationTable(estimation)
+	if got := buf.String(); got != want {
+		t.Fatalf("output = %q, want %q", got, want)
+	}
+}

@@ -17,6 +17,7 @@ func TestKeys(t *testing.T) {
 		KeyRunMutationTimeout,
 		KeyRunCoverageProfile,
 		KeyRunDiff,
+		KeyRunMutagens,
 		KeyLogFilename,
 		KeyLogLevel,
 		KeyLogVerbose,
@@ -30,7 +31,7 @@ func TestKeys(t *testing.T) {
 func TestKeyValues(t *testing.T) {
 	assert.Equal(t, []string{
 		"version", "output", "no-cache", "no-update-check", "paths.exclude",
-		"run.parallel", "run.mutation_timeout", "run.coverage_profile", "run.diff",
+		"run.parallel", "run.mutation_timeout", "run.coverage_profile", "run.diff", "run.mutagens",
 		"log.filename", "log.level", "log.verbose", "log.max_size",
 		"log.max_backups", "log.max_age", "log.compress",
 	}, Keys())

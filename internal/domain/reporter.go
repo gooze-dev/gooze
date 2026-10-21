@@ -26,6 +26,10 @@ type Estimation struct {
 	Files  []FileEstimate
 	// Diff is set in diff mode: the counts then cover changed lines only.
 	Diff *DiffInfo
+	// Run is the --run pattern the counts are limited to, if any.
+	Run string
+	// Mutagens are the only mutagens counted, if a subset was chosen.
+	Mutagens []string
 }
 
 // Reporter is the presentation port the workflow depends on. It is defined in

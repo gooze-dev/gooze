@@ -20,6 +20,11 @@ var runEstimateFlag bool
 var runCoverageProfileFlag string
 var runDiffFlag string
 
+// runPatternFlag (--run) and runMutagensFlag (--mutagens) narrow a run to
+// some functions and mutagens. --run is a flag only, like go test -run.
+var runPatternFlag string
+var runMutagensFlag []string
+
 // runCmd represents the run command.
 var runCmd = newRunCmd()
 
@@ -82,6 +87,11 @@ func configureRunFlags(cmd *cobra.Command) {
 
 	cmd.Flags().StringVar(&runDiffFlag, diffFlagName, viper.GetString(config.KeyRunDiff), "git ref to diff against; mutate only lines changed since its merge base with HEAD (requires git)")
 	bindFlagToConfig(cmd.Flags().Lookup(diffFlagName), config.KeyRunDiff)
+
+	cmd.Flags().StringVar(&runPatternFlag, runFlagName, "", "mutate only functions matching this regular expression, as for go test -run (matches Name, or Type.Name for methods)")
+
+	cmd.Flags().StringSliceVar(&runMutagensFlag, mutagensFlagName, viper.GetStringSlice(config.KeyRunMutagens), "mutagens to run, comma-separated (default all: arithmetic, boolean, numbers, comparison, logical, unary)")
+	bindFlagToConfig(cmd.Flags().Lookup(mutagensFlagName), config.KeyRunMutagens)
 }
 
 // runEstimateArgs builds the scan settings shared by --estimate and a run
@@ -98,6 +108,8 @@ func runEstimateArgs(args []string) domain.EstimateArgs {
 		UseCache: !viper.GetBool(config.KeyNoCache),
 		Reports:  m.Path(viper.GetString(config.KeyOutput)),
 		Diff:     viper.GetString(config.KeyRunDiff),
+		Run:      runPatternFlag,
+		Mutagens: viper.GetStringSlice(config.KeyRunMutagens),
 	}
 }
 

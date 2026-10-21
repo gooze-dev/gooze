@@ -98,3 +98,23 @@ func diffEstimateLine(estimation domain.Estimation) string {
 	return fmt.Sprintf("Diff mode: %d %s changed since %s (merge base %s); counts cover changed lines only.",
 		diff.Files, files, diff.Ref, base)
 }
+
+// selectionLine names the --run pattern and mutagen subset an estimate is
+// limited to, or returns "" when there are none.
+func selectionLine(estimation domain.Estimation) string {
+	var parts []string
+
+	if estimation.Run != "" {
+		parts = append(parts, "functions matching "+estimation.Run)
+	}
+
+	if len(estimation.Mutagens) > 0 {
+		parts = append(parts, "mutagens "+strings.Join(estimation.Mutagens, ", "))
+	}
+
+	if len(parts) == 0 {
+		return ""
+	}
+
+	return "Only " + strings.Join(parts, ", ") + "."
+}

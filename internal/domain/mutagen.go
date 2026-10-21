@@ -74,9 +74,10 @@ func (mg *mutagen) StreamMutations(ctx context.Context, source rpt.Source, fn fu
 	}
 
 	ignore := buildIgnoreIndex(file, fset, content)
+	funcs := buildFuncIndex(file, fset)
 
 	for _, mutationType := range mutationTypes {
-		if err := walkMutations(mutationType, file, fset, content, source, ignore, mg.differ, fn); err != nil {
+		if err := walkMutations(mutationType, file, fset, content, source, ignore, funcs, mg.differ, fn); err != nil {
 			return err
 		}
 	}
@@ -157,6 +158,7 @@ func walkMutations(
 	content []byte,
 	source rpt.Source,
 	ignore ignoreIndex,
+	funcs funcIndex,
 	differ Differ,
 	fn func(m.Mutation) error,
 ) error {
@@ -178,6 +180,7 @@ func walkMutations(
 
 		for _, mutation := range generateMutationsForNode(mutationType, n, fset, content, source) {
 			mutation.Line = lineForOffset(content, firstDifference(content, mutation.MutatedCode))
+			mutation.Funcs = funcs.at(mutation.Line)
 			mutation.DiffCode = differ.Diff(content, mutation.MutatedCode)
 
 			if walkErr = fn(mutation); walkErr != nil {

@@ -16,6 +16,9 @@ type Mutation struct {
 	MutatedCode []byte
 	DiffCode    []byte
 	Line        int
+	// Funcs names the function declaration the mutation is in: "Name", plus
+	// "Type.Name" for a method. Nil outside any function.
+	Funcs []string
 	// Scope is set in diff mode when only some lines of the source are
 	// tested; reports of the mutation record it.
 	Scope *rpt.Scope
