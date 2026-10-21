@@ -1,9 +1,11 @@
 package domain_test
 
 import (
+	"cmp"
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -57,18 +59,31 @@ func cachedRunWorkflow(t *testing.T, sources []rpt.Source, mutations map[string]
 	fs := domainmocks.NewMockSourceFSAdapter(t)
 	fs.EXPECT().Stream(mock.Anything, mock.Anything).Return(streamSources(sources))
 
-	mutagen := domainmocks.NewMockMutagen(t)
-	mutagen.EXPECT().
-		StreamMutations(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-		RunAndReturn(func(_ context.Context, source rpt.Source, fn func(m.Mutation) error, _ ...mgen.Type) error {
-			for _, mutation := range mutations[source.Key()] {
-				if err := fn(mutation); err != nil {
-					return err
-				}
+	stream := func(_ context.Context, source rpt.Source, fn func(m.Mutation) error, types ...mgen.Type) error {
+		for _, mutation := range mutations[source.Key()] {
+			// A mutation without a type is arithmetic, as in the fixture.
+			if !slices.Contains(types, cmp.Or(mutation.Type, mgen.Arithmetic)) {
+				continue
 			}
 
-			return nil
-		}).Maybe()
+			if err := fn(mutation); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	}
+
+	// The run generates every default mutagen for the sources it tests, and
+	// the cache asks for the ones a cached source has no results of: all
+	// but arithmetic in the fixture.
+	mutagen := domainmocks.NewMockMutagen(t)
+	mutagen.EXPECT().
+		StreamMutations(mock.Anything, mock.Anything, mock.Anything, typeArgs(domain.DefaultMutations)...).
+		RunAndReturn(stream).Maybe()
+	mutagen.EXPECT().
+		StreamMutations(mock.Anything, mock.Anything, mock.Anything, typeArgs(domain.DefaultMutations[1:])...).
+		RunAndReturn(stream).Maybe()
 
 	workspace := domainmocks.NewMockWorkspace(t)
 	workspace.EXPECT().Close(mock.Anything).Return().Maybe()
@@ -138,6 +153,26 @@ func TestWorkflow_Test_IncrementalRunScoresCachedAndTestedResults(t *testing.T) 
 	require.NoError(t, wf.Test(context.Background(), cachedTestArgs(fx.reports)))
 
 	assert.Equal(t, domain.MutationScore{Summary: rpt.Summary{Total: 4, Killed: 2, Survived: 2}, Cached: 3, Tested: 1, Files: []domain.FileSummary{{Path: "a.go", Summary: rpt.Summary{Total: 3, Killed: 2, Survived: 1}}, {Path: "c.go", Summary: rpt.Summary{Total: 1, Survived: 1}}}}, score)
+}
+
+func TestWorkflow_Test_RetestsACachedFileANewMutagenMutates(t *testing.T) {
+	fx := newCacheFixture(t)
+
+	var (
+		score      domain.MutationScore
+		estimation domain.Estimation
+	)
+
+	// a.go's reports hold arithmetic results only; a mutagen added since
+	// mutates it too, so the whole file is tested again.
+	mutations := map[string][]m.Mutation{"a.go": {
+		{ID: "a-1", Source: fx.a, Type: mgen.Arithmetic},
+		{ID: "a-4", Source: fx.a, Type: mgen.Bitwise},
+	}}
+	wf := cachedRunWorkflow(t, []rpt.Source{fx.a}, mutations, &score, &estimation)
+	require.NoError(t, wf.Test(context.Background(), cachedTestArgs(fx.reports)))
+
+	assert.Equal(t, domain.MutationScore{Summary: rpt.Summary{Total: 2, Survived: 2}, Tested: 2, Files: []domain.FileSummary{{Path: "a.go", Summary: rpt.Summary{Total: 2, Survived: 2}}}}, score)
 }
 
 func TestWorkflow_Test_UncachedRunScoresTestedResultsOnly(t *testing.T) {

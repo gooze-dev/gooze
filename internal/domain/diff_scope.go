@@ -181,7 +181,7 @@ func (w *workflow) testSources(ctx context.Context, args EstimateArgs) (sourceSe
 		return sourceSet{}, Selection{}, err
 	}
 
-	sources, err := w.resolveSources(ctx, args)
+	sources, err := w.resolveSources(ctx, args, sel.Types())
 	if err != nil {
 		slog.Error("Failed to resolve sources", "error", err)
 		return sourceSet{}, Selection{}, err

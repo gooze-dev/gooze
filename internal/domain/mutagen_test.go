@@ -332,3 +332,25 @@ func TestMutagen_LineIgnoreHonoursLineDirectives(t *testing.T) {
 
 	require.Empty(t, streamTypesFromSource(t, src, mgen.Arithmetic))
 }
+
+func TestMutagen_GenerateMutation_SkipsTypeConstraints(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "generic.go")
+	code := `package generic
+
+type Number interface {
+	~int | ~uint
+}
+
+type Set[T int | string] map[T]bool
+
+func Or[T Number | ~int8](a, b T) T {
+	return a | b
+}
+`
+	require.NoError(t, os.WriteFile(path, []byte(code), 0o600))
+
+	mutations, err := newTestMutagen().GenerateMutation(context.Background(), makeSourceV2(t, path), mgen.Bitwise)
+	require.NoError(t, err)
+	require.Len(t, mutations, 1, "only the expression a | b is mutated, not the constraints")
+	require.Contains(t, string(mutations[0].MutatedCode), "return a & b")
+}

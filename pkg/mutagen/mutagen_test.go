@@ -14,6 +14,9 @@ func TestTypes(t *testing.T) {
 	assert.Equal(t, Type{Name: "comparison", Version: 2}, Comparison)
 	assert.Equal(t, Type{Name: "logical", Version: 1}, Logical)
 	assert.Equal(t, Type{Name: "unary", Version: 1}, Unary)
+	assert.Equal(t, Type{Name: "bitwise", Version: 1}, Bitwise)
+	assert.Equal(t, Type{Name: "increment", Version: 1}, Increment)
+	assert.Equal(t, Type{Name: "assignment", Version: 1}, Assignment)
 	assert.Equal(t, Type{Name: "branch", Version: 1}, Branch)
 	assert.Equal(t, Type{Name: "statement", Version: 1}, Statement)
 	assert.Equal(t, Type{Name: "loop", Version: 1}, Loop)
@@ -26,13 +29,13 @@ func TestType_String(t *testing.T) {
 func TestNames(t *testing.T) {
 	assert.Equal(t, []string{
 		"arithmetic", "boolean", "numbers", "comparison", "logical",
-		"unary", "branch", "statement", "loop",
+		"unary", "bitwise", "increment", "assignment", "branch", "statement", "loop",
 	}, Names())
 }
 
 func TestAll(t *testing.T) {
 	all := All()
-	require.Len(t, all, 9)
+	require.Len(t, all, 12)
 
 	types := make([]Type, 0, len(all))
 	for _, mg := range all {
@@ -40,7 +43,11 @@ func TestAll(t *testing.T) {
 		assert.NotEmpty(t, mg.Doc, mg.Name)
 	}
 
-	assert.Equal(t, []Type{Arithmetic, Boolean, Numbers, Comparison, Logical, Unary, Branch, Statement, Loop}, types)
+	assert.Equal(t, []Type{Arithmetic, Boolean, Numbers, Comparison, Logical, Unary, Bitwise, Increment, Assignment, Branch, Statement, Loop}, types)
+}
+
+func TestDefaults(t *testing.T) {
+	assert.Equal(t, []Type{Arithmetic, Boolean, Numbers, Comparison, Logical, Unary, Bitwise, Increment, Assignment}, Defaults())
 }
 
 func TestAll_ReturnsCopy(t *testing.T) {
@@ -77,6 +84,6 @@ func TestIsValid(t *testing.T) {
 func TestVersions(t *testing.T) {
 	assert.Equal(t, map[string]int{
 		"arithmetic": 1, "boolean": 1, "numbers": 1, "comparison": 2, "logical": 1,
-		"unary": 1, "branch": 1, "statement": 1, "loop": 1,
+		"unary": 1, "bitwise": 1, "increment": 1, "assignment": 1, "branch": 1, "statement": 1, "loop": 1,
 	}, Versions())
 }

@@ -74,10 +74,8 @@ func generateBinaryExprMutations(
 
 	for _, mutatedOp := range viableOps(binExpr, getAlternatives(binExpr.Op)) {
 		mutatedCode := replaceRange(content, start, end, mutatedOp.String())
-		h := sha256.Sum256(mutatedCode)
-		id := fmt.Sprintf("%x", h)
 		mutations = append(mutations, m.Mutation{
-			ID:          id,
+			ID:          mutationID(mutatedCode),
 			Source:      source,
 			Type:        mutationType,
 			MutatedCode: mutatedCode,
@@ -85,6 +83,12 @@ func generateBinaryExprMutations(
 	}
 
 	return mutations
+}
+
+// mutationID identifies a mutation by the code it produces, so the same
+// mutation gets the same ID on every machine and in every run.
+func mutationID(mutatedCode []byte) string {
+	return fmt.Sprintf("%x", sha256.Sum256(mutatedCode))
 }
 
 // viableOps drops operator alternatives that cannot compile for the given

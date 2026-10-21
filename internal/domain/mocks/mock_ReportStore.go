@@ -27,9 +27,9 @@ func (_m *MockReportStore) EXPECT() *MockReportStore_Expecter {
 	return &MockReportStore_Expecter{mock: &_m.Mock}
 }
 
-// CheckUpdates provides a mock function with given fields: ctx, path, sources
-func (_m *MockReportStore) CheckUpdates(ctx context.Context, path model.Path, sources pkg.FileSpill[report.Source]) (pkg.FileSpill[report.Source], pkg.FileSpill[report.Source], error) {
-	ret := _m.Called(ctx, path, sources)
+// CheckUpdates provides a mock function with given fields: ctx, path, sources, untested
+func (_m *MockReportStore) CheckUpdates(ctx context.Context, path model.Path, sources pkg.FileSpill[report.Source], untested func(report.Source, []string) bool) (pkg.FileSpill[report.Source], pkg.FileSpill[report.Source], error) {
+	ret := _m.Called(ctx, path, sources, untested)
 
 	if len(ret) == 0 {
 		panic("no return value specified for CheckUpdates")
@@ -38,27 +38,27 @@ func (_m *MockReportStore) CheckUpdates(ctx context.Context, path model.Path, so
 	var r0 pkg.FileSpill[report.Source]
 	var r1 pkg.FileSpill[report.Source]
 	var r2 error
-	if rf, ok := ret.Get(0).(func(context.Context, model.Path, pkg.FileSpill[report.Source]) (pkg.FileSpill[report.Source], pkg.FileSpill[report.Source], error)); ok {
-		return rf(ctx, path, sources)
+	if rf, ok := ret.Get(0).(func(context.Context, model.Path, pkg.FileSpill[report.Source], func(report.Source, []string) bool) (pkg.FileSpill[report.Source], pkg.FileSpill[report.Source], error)); ok {
+		return rf(ctx, path, sources, untested)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, model.Path, pkg.FileSpill[report.Source]) pkg.FileSpill[report.Source]); ok {
-		r0 = rf(ctx, path, sources)
+	if rf, ok := ret.Get(0).(func(context.Context, model.Path, pkg.FileSpill[report.Source], func(report.Source, []string) bool) pkg.FileSpill[report.Source]); ok {
+		r0 = rf(ctx, path, sources, untested)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(pkg.FileSpill[report.Source])
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, model.Path, pkg.FileSpill[report.Source]) pkg.FileSpill[report.Source]); ok {
-		r1 = rf(ctx, path, sources)
+	if rf, ok := ret.Get(1).(func(context.Context, model.Path, pkg.FileSpill[report.Source], func(report.Source, []string) bool) pkg.FileSpill[report.Source]); ok {
+		r1 = rf(ctx, path, sources, untested)
 	} else {
 		if ret.Get(1) != nil {
 			r1 = ret.Get(1).(pkg.FileSpill[report.Source])
 		}
 	}
 
-	if rf, ok := ret.Get(2).(func(context.Context, model.Path, pkg.FileSpill[report.Source]) error); ok {
-		r2 = rf(ctx, path, sources)
+	if rf, ok := ret.Get(2).(func(context.Context, model.Path, pkg.FileSpill[report.Source], func(report.Source, []string) bool) error); ok {
+		r2 = rf(ctx, path, sources, untested)
 	} else {
 		r2 = ret.Error(2)
 	}
@@ -75,13 +75,14 @@ type MockReportStore_CheckUpdates_Call struct {
 //   - ctx context.Context
 //   - path model.Path
 //   - sources pkg.FileSpill[report.Source]
-func (_e *MockReportStore_Expecter) CheckUpdates(ctx interface{}, path interface{}, sources interface{}) *MockReportStore_CheckUpdates_Call {
-	return &MockReportStore_CheckUpdates_Call{Call: _e.mock.On("CheckUpdates", ctx, path, sources)}
+//   - untested func(report.Source , []string) bool
+func (_e *MockReportStore_Expecter) CheckUpdates(ctx interface{}, path interface{}, sources interface{}, untested interface{}) *MockReportStore_CheckUpdates_Call {
+	return &MockReportStore_CheckUpdates_Call{Call: _e.mock.On("CheckUpdates", ctx, path, sources, untested)}
 }
 
-func (_c *MockReportStore_CheckUpdates_Call) Run(run func(ctx context.Context, path model.Path, sources pkg.FileSpill[report.Source])) *MockReportStore_CheckUpdates_Call {
+func (_c *MockReportStore_CheckUpdates_Call) Run(run func(ctx context.Context, path model.Path, sources pkg.FileSpill[report.Source], untested func(report.Source, []string) bool)) *MockReportStore_CheckUpdates_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(model.Path), args[2].(pkg.FileSpill[report.Source]))
+		run(args[0].(context.Context), args[1].(model.Path), args[2].(pkg.FileSpill[report.Source]), args[3].(func(report.Source, []string) bool))
 	})
 	return _c
 }
@@ -91,7 +92,7 @@ func (_c *MockReportStore_CheckUpdates_Call) Return(changed pkg.FileSpill[report
 	return _c
 }
 
-func (_c *MockReportStore_CheckUpdates_Call) RunAndReturn(run func(context.Context, model.Path, pkg.FileSpill[report.Source]) (pkg.FileSpill[report.Source], pkg.FileSpill[report.Source], error)) *MockReportStore_CheckUpdates_Call {
+func (_c *MockReportStore_CheckUpdates_Call) RunAndReturn(run func(context.Context, model.Path, pkg.FileSpill[report.Source], func(report.Source, []string) bool) (pkg.FileSpill[report.Source], pkg.FileSpill[report.Source], error)) *MockReportStore_CheckUpdates_Call {
 	_c.Call.Return(run)
 	return _c
 }

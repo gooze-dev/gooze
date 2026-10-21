@@ -50,7 +50,7 @@ func newDiffEstimateFixture(t *testing.T) diffEstimateFixture {
 	}
 
 	mutagen.EXPECT().
-		StreamMutations(mock.Anything, mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).
+		StreamMutations(mock.Anything, mock.Anything, mock.Anything, typeArgs(domain.DefaultMutations)...).
 		RunAndReturn(func(ctx context.Context, source rpt.Source, fn func(m.Mutation) error, types ...mgen.Type) error {
 			return streamMutationsFn(byPath[source.Origin.FullPath])(ctx, source, fn, types...)
 		}).Maybe()
@@ -200,7 +200,7 @@ func newDiffRunFixture(t *testing.T) *diffRunFixture {
 	}
 
 	mutagen.EXPECT().
-		StreamMutations(mock.Anything, mock.Anything, mock.Anything, domain.DefaultMutations[0], domain.DefaultMutations[1], domain.DefaultMutations[2], domain.DefaultMutations[3], domain.DefaultMutations[4], domain.DefaultMutations[5]).
+		StreamMutations(mock.Anything, mock.Anything, mock.Anything, typeArgs(domain.DefaultMutations)...).
 		RunAndReturn(func(ctx context.Context, source rpt.Source, fn func(m.Mutation) error, types ...mgen.Type) error {
 			return streamMutationsFn(byPath[source.Origin.FullPath])(ctx, source, fn, types...)
 		}).Maybe()

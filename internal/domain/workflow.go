@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -21,7 +22,7 @@ import (
 )
 
 // DefaultMutations defines the default set of mutation types to generate.
-var DefaultMutations = []mgen.Type{mgen.Arithmetic, mgen.Boolean, mgen.Numbers, mgen.Comparison, mgen.Logical, mgen.Unary}
+var DefaultMutations = mgen.Defaults()
 
 // ShardDirPrefix is the directory name prefix used when storing sharded reports.
 const ShardDirPrefix = "shard_"
@@ -698,8 +699,11 @@ func (s sourceSet) close() {
 
 // resolveSources scans the sources in scope. With caching enabled, unchanged
 // files are left out of changed and sources whose files are gone are returned
-// as deleted. The caller must close the set.
-func (w *workflow) resolveSources(ctx context.Context, args EstimateArgs) (sourceSet, error) {
+// as deleted. A file also counts as changed when one of types generates
+// mutations for it but its stored reports hold no results of that mutagen,
+// such as a mutagen added to gooze after the file was tested. The caller must
+// close the set.
+func (w *workflow) resolveSources(ctx context.Context, args EstimateArgs, types []mgen.Type) (sourceSet, error) {
 	scanned, err := w.scanSources(ctx, args)
 	if err != nil {
 		return sourceSet{}, err
@@ -709,13 +713,34 @@ func (w *workflow) resolveSources(ctx context.Context, args EstimateArgs) (sourc
 		return sourceSet{scanned: scanned, changed: scanned}, nil
 	}
 
-	changed, deleted, err := w.reports.CheckUpdates(ctx, args.Reports, scanned)
+	changed, deleted, err := w.reports.CheckUpdates(ctx, args.Reports, scanned, w.untested(ctx, types))
 	if err != nil {
 		closeSpill("scanned sources", scanned)
 		return sourceSet{}, fmt.Errorf("check updates: %w", err)
 	}
 
 	return sourceSet{scanned: scanned, changed: changed, deleted: deleted, cached: true}, nil
+}
+
+// errFound stops a mutation stream at the first mutation.
+var errFound = errors.New("found a mutation")
+
+// untested reports whether any of types that a source's stored reports hold
+// no results of generates a mutation for it. A source that can't be read or
+// parsed counts as untested, so the run reports the error.
+func (w *workflow) untested(ctx context.Context, types []mgen.Type) func(rpt.Source, []string) bool {
+	return func(source rpt.Source, tested []string) bool {
+		missing := slices.DeleteFunc(slices.Clone(types), func(t mgen.Type) bool {
+			return slices.Contains(tested, t.Name)
+		})
+		if len(missing) == 0 {
+			return false
+		}
+
+		err := w.mutagen.StreamMutations(ctx, source, func(m.Mutation) error { return errFound }, missing...)
+
+		return err != nil
+	}
 }
 
 // sourceKeys returns the Key of every source in the spill.
@@ -768,7 +793,7 @@ func (w *workflow) estimateMutations(ctx context.Context, args EstimateArgs) (Es
 		return Estimation{}, err
 	}
 
-	sources, err := w.resolveSources(ctx, args)
+	sources, err := w.resolveSources(ctx, args, sel.Types())
 	if err != nil {
 		return Estimation{}, err
 	}
