@@ -58,7 +58,7 @@ func runField() Field {
 		{Name: "parallel", Kind: KindInt, Default: 1, Min: new(1), Doc: "Number of concurrent mutation workers."},
 		{Name: "mutation_timeout", Kind: KindInt, Default: 120, Min: new(1), Doc: "Per-mutation timeout in seconds."},
 		{Name: "coverage_profile", Kind: KindString, Default: "", Doc: "Go coverage profile; mutations on uncovered lines are reported as not_covered without running tests."},
-		{Name: "diff", Kind: KindString, Default: "", Doc: "Git ref to diff against; only lines changed since its merge base with HEAD are mutated. Empty runs everything."},
+		{Name: "diff", Kind: KindString, Default: "", Doc: "Git ref to diff against; only lines changed since its merge base with HEAD are mutated. Requires git. Empty runs everything."},
 	}}
 }
 

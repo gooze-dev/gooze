@@ -20,6 +20,7 @@ packages:
       ReportStore:
       OCIRegistry:
       Differ:
+      ChangeDetector:
   gooze.dev/pkg/gooze/internal/controller:
     config:
       dir: internal/controller/mocks
