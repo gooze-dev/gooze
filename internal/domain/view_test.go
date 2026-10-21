@@ -57,7 +57,10 @@ func TestWorkflow_View_SummarizesPerFileWithSurvivors(t *testing.T) {
 	summary := viewSummary(t, domain.ViewArgs{Reports: m.Path(viewFixture(t))})
 
 	assert.Equal(t, domain.ReportSummary{
-		Score: domain.MutationScore{Summary: rpt.Summary{Total: 4, Killed: 1, Survived: 1, NotCovered: 1, Error: 1}},
+		Score: domain.MutationScore{Summary: rpt.Summary{Total: 4, Killed: 1, Survived: 1, NotCovered: 1, Error: 1}, Files: []domain.FileSummary{
+			{Path: "cmd/b.go", Summary: rpt.Summary{Total: 1, NotCovered: 1}},
+			{Path: "pkg/a.go", Summary: rpt.Summary{Total: 3, Killed: 1, Survived: 1, Error: 1}},
+		}},
 		Files: []domain.FileSummary{
 			{Path: "cmd/b.go", Total: 1, NotCovered: 1},
 			{Path: "pkg/a.go", Total: 3, Killed: 1, Survived: 1, Error: 1},
@@ -102,7 +105,9 @@ func TestWorkflow_ViewAll_FiltersByPath(t *testing.T) {
 	reporter.EXPECT().DisplayCompletedTestInfo(ctx, mock.MatchedBy(func(mutation m.Mutation) bool {
 		return mutation.ID == "b-1"
 	}), mock.Anything).Return().Once()
-	reporter.EXPECT().DisplayMutationScore(ctx, domain.MutationScore{Total: 1, NotCovered: 1}).Return().Once()
+	reporter.EXPECT().DisplayMutationScore(ctx, domain.MutationScore{Summary: rpt.Summary{Total: 1, NotCovered: 1}, Files: []domain.FileSummary{
+		{Path: "cmd/b.go", Summary: rpt.Summary{Total: 1, NotCovered: 1}},
+	}}).Return().Once()
 
 	wf := domain.NewWorkflow(nil, adapter.NewReportStore(), reporter, nil, nil)
 	require.NoError(t, wf.View(ctx, domain.ViewArgs{Reports: m.Path(dir), Paths: []m.Path{"cmd/b.go"}, All: true}))

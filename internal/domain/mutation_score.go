@@ -1,6 +1,9 @@
 package domain
 
 import (
+	"maps"
+	"slices"
+
 	m "gooze.dev/pkg/gooze/internal/model"
 	pkg "gooze.dev/pkg/gooze/pkg"
 	rpt "gooze.dev/pkg/gooze/pkg/report"
@@ -19,25 +22,50 @@ type MutationScore struct {
 	Selection string
 	// ReportsDir is where a narrowed run wrote its reports.
 	ReportsDir m.Path
+	// Files counts the results of each source file, for the thresholds on
+	// file scores.
+	Files []FileSummary
+	// ThresholdsSkipped is set on a shard's score when thresholds are set:
+	// a shard holds only part of the results, so report merge checks them.
+	ThresholdsSkipped bool
 }
 
-// summarizeReports counts the results of the reports whose source include
-// accepts, or of every report when include is nil.
-func summarizeReports(reports pkg.FileSpill[m.Report], include func(rpt.Source) bool) (rpt.Summary, error) {
-	var summary rpt.Summary
+// scoreReports counts the results of the reports whose source include
+// accepts, or of every report when include is nil, in total and per file
+// (sorted by path).
+func scoreReports(reports pkg.FileSpill[m.Report], include func(rpt.Source) bool) (MutationScore, error) {
+	files := map[string]*FileSummary{}
+
+	var score MutationScore
 
 	err := reports.Range(func(_ uint64, report m.Report) error {
-		if include == nil || include(report.Source) {
-			summary.Merge(summarizeReport(report))
+		if include != nil && !include(report.Source) {
+			return nil
 		}
+
+		key := report.Source.Key()
+
+		file, ok := files[key]
+		if !ok {
+			file = &FileSummary{Path: key}
+			files[key] = file
+		}
+
+		counts := summarizeReport(report)
+		file.Merge(counts)
+		score.Merge(counts)
 
 		return nil
 	})
 	if err != nil {
-		return rpt.Summary{}, err
+		return MutationScore{}, err
 	}
 
-	return summary, nil
+	for _, key := range slices.Sorted(maps.Keys(files)) {
+		score.Files = append(score.Files, *files[key])
+	}
+
+	return score, nil
 }
 
 func summarizeReport(report m.Report) rpt.Summary {

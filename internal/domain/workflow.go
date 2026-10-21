@@ -52,6 +52,9 @@ type TestArgs struct {
 	TotalShardCount int
 	MutationTimeout time.Duration
 	CoverageProfile m.Path
+	// Thresholds are the minimum scores the run must reach. A shard doesn't
+	// check them: report merge does, on all the results.
+	Thresholds Thresholds
 }
 
 // ViewArgs contains the arguments for viewing mutation test reports.
@@ -62,11 +65,15 @@ type ViewArgs struct {
 	Paths []m.Path
 	// All lists every mutation with its status instead of a per-file summary.
 	All bool
+	// Thresholds are the minimum scores of the viewed reports.
+	Thresholds Thresholds
 }
 
 // MergeArgs contains the arguments for merging sharded mutation test reports.
 type MergeArgs struct {
 	Reports m.Path
+	// Thresholds are the minimum scores of the merged reports.
+	Thresholds Thresholds
 }
 
 // Workflow defines the interface for the mutation testing workflow.
@@ -285,10 +292,16 @@ func (w *workflow) finalizeReports(ctx context.Context, args TestArgs, sel Selec
 		return fmt.Errorf("calculate mutation score: %w", err)
 	}
 
+	score.ThresholdsSkipped = args.Thresholds.Set() && args.TotalShardCount > 1
+
 	slog.Info("Calculated mutation score", "score", score.Score(), "cached", score.Cached, "tested", score.Tested)
 	w.progress.DisplayMutationScore(ctx, score)
 
-	return nil
+	if score.ThresholdsSkipped {
+		return nil
+	}
+
+	return args.Thresholds.Err(score)
 }
 
 // runScore scores a run over every source in its scope: the results tested now
@@ -296,12 +309,12 @@ func (w *workflow) finalizeReports(ctx context.Context, args TestArgs, sel Selec
 // A shard scores only its own results, and a narrowed run only its selection;
 // `report merge` scores the whole set.
 func (w *workflow) runScore(ctx context.Context, args TestArgs, sel Selection, reportsDir m.Path, sources sourceSet, tested pkg.FileSpill[m.Report]) (MutationScore, error) {
-	testedSummary, err := summarizeReports(tested, nil)
+	score, err := scoreReports(tested, nil)
 	if err != nil {
 		return MutationScore{}, err
 	}
 
-	score := MutationScore{Summary: testedSummary, Tested: testedSummary.Total}
+	score.Tested = score.Total
 
 	if sel.Narrowed() {
 		score.Selection = sel.Describe()
@@ -326,7 +339,7 @@ func (w *workflow) runScore(ctx context.Context, args TestArgs, sel Selection, r
 
 	defer closeSpill("stored reports", stored)
 
-	scopeSummary, err := summarizeReports(stored, func(source rpt.Source) bool {
+	scope, err := scoreReports(stored, func(source rpt.Source) bool {
 		_, ok := inScope[source.Key()]
 		return ok
 	})
@@ -334,11 +347,10 @@ func (w *workflow) runScore(ctx context.Context, args TestArgs, sel Selection, r
 		return MutationScore{}, err
 	}
 
-	return MutationScore{
-		Summary: scopeSummary,
-		Cached:  max(scopeSummary.Total-testedSummary.Total, 0),
-		Tested:  testedSummary.Total,
-	}, nil
+	scope.Cached = max(scope.Total-score.Tested, 0)
+	scope.Tested = score.Tested
+
+	return scope, nil
 }
 
 func shardReportsDir(base m.Path, shardIndex int, totalShardCount int) m.Path {
@@ -374,7 +386,7 @@ func (w *workflow) Merge(ctx context.Context, args MergeArgs) error {
 			return err
 		}
 
-		return w.regenerateIndexAndScore(ctx, base)
+		return w.regenerateIndexAndScore(ctx, base, args.Thresholds)
 	})
 }
 
@@ -390,15 +402,17 @@ func (w *workflow) mergeShards(ctx context.Context, base m.Path, shardDirs []str
 	return w.removeShardDirs(shardDirs)
 }
 
-func (w *workflow) regenerateIndexAndScore(ctx context.Context, base m.Path) error {
+func (w *workflow) regenerateIndexAndScore(ctx context.Context, base m.Path, thresholds Thresholds) error {
 	if err := w.regenerateIndex(ctx, base); err != nil {
 		return err
 	}
 
-	return w.displayScore(ctx, base)
+	return w.displayScore(ctx, base, thresholds)
 }
 
-func (w *workflow) displayScore(ctx context.Context, base m.Path) error {
+// displayScore shows the score of the reports at base and checks it against
+// thresholds.
+func (w *workflow) displayScore(ctx context.Context, base m.Path, thresholds Thresholds) error {
 	reports, err := w.reports.LoadSpillReports(ctx, base)
 	if err != nil {
 		return fmt.Errorf("load reports from base: %w", err)
@@ -406,14 +420,14 @@ func (w *workflow) displayScore(ctx context.Context, base m.Path) error {
 
 	defer closeSpill("reports", reports)
 
-	summary, err := summarizeReports(reports, nil)
+	score, err := scoreReports(reports, nil)
 	if err != nil {
 		return fmt.Errorf("calculate mutation score: %w", err)
 	}
 
-	w.progress.DisplayMutationScore(ctx, MutationScore{Summary: summary})
+	w.progress.DisplayMutationScore(ctx, score)
 
-	return nil
+	return thresholds.Err(score)
 }
 
 func (w *workflow) findShardDirs(base m.Path) ([]string, error) {

@@ -25,9 +25,9 @@ func (e errSpill[T]) Close() error                                   { return ni
 
 // scoreOf is the score of every report in the spill.
 func scoreOf(reports goozepkg.FileSpill[m.Report]) (float64, error) {
-	summary, err := summarizeReports(reports, nil)
+	score, err := scoreReports(reports, nil)
 
-	return summary.Score(), err
+	return score.Score(), err
 }
 
 func TestSummarizeReports(t *testing.T) {
@@ -190,7 +190,8 @@ func TestSummarizeReports_IncludeFiltersBySource(t *testing.T) {
 
 	defer spill.Close()
 
-	summary, err := summarizeReports(spill, func(source rpt.Source) bool { return source.Key() == "a.go" })
+	score, err := scoreReports(spill, func(source rpt.Source) bool { return source.Key() == "a.go" })
 	require.NoError(t, err)
-	require.Equal(t, rpt.Summary{Total: 2, Killed: 1, Survived: 1}, summary)
+	require.Equal(t, rpt.Summary{Total: 2, Killed: 1, Survived: 1}, score.Summary)
+	require.Equal(t, []FileSummary{{Path: "a.go", Summary: rpt.Summary{Total: 2, Killed: 1, Survived: 1}}}, score.Files)
 }
