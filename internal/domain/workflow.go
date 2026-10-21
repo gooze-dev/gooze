@@ -35,6 +35,12 @@ type EstimateArgs struct {
 	// Diff is a git ref; when set, only lines changed since its merge base
 	// with HEAD are mutated. Empty mutates everything in scope.
 	Diff string
+	// Run is a regular expression, as for go test -run; when set, only
+	// functions whose name or Type.Name matches are mutated.
+	Run string
+	// Mutagens names the mutagens to run (items may be comma-separated);
+	// empty runs all of DefaultMutations.
+	Mutagens []string
 }
 
 // TestArgs contains the arguments for running mutation tests.
@@ -139,7 +145,7 @@ func (w *workflow) Test(ctx context.Context, args TestArgs) error {
 
 		reportsDir := shardReportsDir(args.Reports, args.ShardIndex, args.TotalShardCount)
 
-		sources, scope, err := w.testSources(ctx, args.EstimateArgs)
+		sources, sel, err := w.testSources(ctx, args.EstimateArgs)
 		if err != nil {
 			return err
 		}
@@ -154,7 +160,7 @@ func (w *workflow) Test(ctx context.Context, args TestArgs) error {
 			return inShard(mutation.ID, args.ShardIndex, args.TotalShardCount)
 		}
 
-		mutations, total, err := w.generateMutations(ctx, sources.changed, inThisShard, scope)
+		mutations, total, err := w.generateMutations(ctx, sources.changed, inThisShard, sel)
 		if err != nil {
 			slog.Error("Failed to generate mutations", "error", err)
 			return fmt.Errorf("generate mutations: %w", err)
@@ -200,10 +206,10 @@ func (w *workflow) cleanDeleted(ctx context.Context, base, reportsDir m.Path, de
 }
 
 // generateMutations generates every mutation of the given sources once,
-// keeping those include accepts and the diff scope (nil: all) contains, and
-// spills them so the test pass can replay them without regenerating or
-// holding them in memory. Kept mutations carry their source's report scope.
-func (w *workflow) generateMutations(ctx context.Context, sources pkg.FileSpill[rpt.Source], include func(m.Mutation) bool, scope *DiffScope) (pkg.FileSpill[m.Mutation], int, error) {
+// keeping those include accepts and sel selects, and spills them so the test
+// pass can replay them without regenerating or holding them in memory. Kept
+// mutations carry their source's report scope.
+func (w *workflow) generateMutations(ctx context.Context, sources pkg.FileSpill[rpt.Source], include func(m.Mutation) bool, sel Selection) (pkg.FileSpill[m.Mutation], int, error) {
 	mutations, err := pkg.NewFileSpill[m.Mutation]()
 	if err != nil {
 		return nil, 0, fmt.Errorf("create mutations spill: %w", err)
@@ -212,10 +218,10 @@ func (w *workflow) generateMutations(ctx context.Context, sources pkg.FileSpill[
 	total := 0
 
 	err = sources.Range(func(_ uint64, source rpt.Source) error {
-		reportScope := scope.ReportScope(source)
+		reportScope := sel.ReportScope(source)
 
 		return w.mutagen.StreamMutations(ctx, source, func(mutation m.Mutation) error {
-			if (include != nil && !include(mutation)) || !scope.Includes(source, mutation.Line) {
+			if (include != nil && !include(mutation)) || !sel.Includes(mutation) {
 				return nil
 			}
 
@@ -223,7 +229,7 @@ func (w *workflow) generateMutations(ctx context.Context, sources pkg.FileSpill[
 			mutation.Scope = reportScope
 
 			return mutations.Append(mutation)
-		}, DefaultMutations...)
+		}, sel.Types()...)
 	})
 	if err != nil {
 		closeSpill("mutations", mutations)
@@ -724,7 +730,7 @@ func (w *workflow) scanSources(ctx context.Context, args EstimateArgs) (pkg.File
 // without ever holding the sources or mutations in memory all at once. Files
 // whose stored reports are still valid are listed too, marked as cached.
 func (w *workflow) estimateMutations(ctx context.Context, args EstimateArgs) (Estimation, error) {
-	scope, err := w.diffScope(ctx, args)
+	sel, err := w.selection(ctx, args)
 	if err != nil {
 		return Estimation{}, err
 	}
@@ -750,17 +756,17 @@ func (w *workflow) estimateMutations(ctx context.Context, args EstimateArgs) (Es
 		}
 	}
 
-	return w.countMutations(ctx, sources.scanned, isCached, scope)
+	return w.countMutations(ctx, sources.scanned, isCached, sel)
 }
 
 // countMutations generates the mutations for the given sources and aggregates
 // per-file counts. Mutations are processed one at a time and never retained.
-// With a diff scope, only sources and lines in scope are counted.
-func (w *workflow) countMutations(ctx context.Context, sources pkg.FileSpill[rpt.Source], isCached func(rpt.Source) bool, scope *DiffScope) (Estimation, error) {
-	tally := newEstimateTally(scope)
+// Only the sources and mutations sel selects are counted.
+func (w *workflow) countMutations(ctx context.Context, sources pkg.FileSpill[rpt.Source], isCached func(rpt.Source) bool, sel Selection) (Estimation, error) {
+	tally := newEstimateTally(sel)
 
 	err := sources.Range(func(_ uint64, source rpt.Source) error {
-		if !scope.InScope(source) {
+		if !sel.InScope(source) {
 			return nil
 		}
 
@@ -769,12 +775,12 @@ func (w *workflow) countMutations(ctx context.Context, sources pkg.FileSpill[rpt
 		cached := isCached(source)
 
 		return w.mutagen.StreamMutations(ctx, source, func(mutation m.Mutation) error {
-			if scope.Includes(source, mutation.Line) {
+			if sel.Includes(mutation) {
 				tally.add(mutation, cached)
 			}
 
 			return nil
-		}, DefaultMutations...)
+		}, sel.Types()...)
 	})
 	if err != nil {
 		return Estimation{}, err
@@ -790,12 +796,20 @@ type estimateTally struct {
 	order  []string
 }
 
-func newEstimateTally(scope *DiffScope) *estimateTally {
+func newEstimateTally(sel Selection) *estimateTally {
 	tally := &estimateTally{byKey: map[string]*FileEstimate{}}
 
-	if scope != nil {
-		info := scope.Info()
+	if sel.Diff != nil {
+		info := sel.Diff.Info()
 		tally.result.Diff = &info
+	}
+
+	if sel.Run != nil {
+		tally.result.Run = sel.Run.String()
+	}
+
+	for _, t := range sel.Mutagens {
+		tally.result.Mutagens = append(tally.result.Mutagens, t.Name)
 	}
 
 	return tally

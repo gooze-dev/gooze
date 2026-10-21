@@ -59,6 +59,7 @@ func runField() Field {
 		{Name: "mutation_timeout", Kind: KindInt, Default: 120, Min: new(1), Doc: "Per-mutation timeout in seconds."},
 		{Name: "coverage_profile", Kind: KindString, Default: "", Doc: "Go coverage profile; mutations on uncovered lines are reported as not_covered without running tests."},
 		{Name: "diff", Kind: KindString, Default: "", Doc: "Git ref to diff against; only lines changed since its merge base with HEAD are mutated. Requires git. Empty runs everything."},
+		{Name: "mutagens", Kind: KindStringList, Default: []string{}, Doc: "Mutagens to run (arithmetic, boolean, numbers, comparison, logical, unary); empty runs all of them."},
 	}}
 }
 

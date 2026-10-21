@@ -68,8 +68,10 @@ func (s *SimpleUI) DisplayEstimation(ctx context.Context, estimation domain.Esti
 		return err
 	}
 
-	if line := diffEstimateLine(estimation); line != "" {
-		s.printf("%s\n", line)
+	for _, line := range []string{diffEstimateLine(estimation), selectionLine(estimation)} {
+		if line != "" {
+			s.printf("%s\n", line)
+		}
 	}
 
 	tableStr := renderEstimationTable(estimation)

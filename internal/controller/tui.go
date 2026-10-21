@@ -154,7 +154,7 @@ func (t *TUI) DisplayEstimation(ctx context.Context, estimation domain.Estimatio
 
 	t.send(estimationMsg{
 		total:     estimation.Total,
-		hint:      joinLines(diffEstimateLine(estimation), cachedEstimateHint(estimation)),
+		hint:      joinLines(diffEstimateLine(estimation), selectionLine(estimation), cachedEstimateHint(estimation)),
 		paths:     len(estimation.Files),
 		fileStats: fileStats,
 	})

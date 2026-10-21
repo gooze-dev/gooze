@@ -170,27 +170,28 @@ func narrowToScope(sources sourceSet, scope *DiffScope) (sourceSet, error) {
 	return sources, nil
 }
 
-// testSources resolves a test run's sources and, in diff mode, its scope,
-// narrowing the sources to test to those in scope. Diff errors are returned
-// before any scan. The caller must close the set.
-func (w *workflow) testSources(ctx context.Context, args EstimateArgs) (sourceSet, *DiffScope, error) {
-	scope, err := w.diffScope(ctx, args)
+// testSources resolves a test run's selection and sources, narrowing the
+// sources to test to those in diff scope. Selection errors (a bad pattern,
+// an unknown mutagen, git) are returned before any scan. The caller must
+// close the set.
+func (w *workflow) testSources(ctx context.Context, args EstimateArgs) (sourceSet, Selection, error) {
+	sel, err := w.selection(ctx, args)
 	if err != nil {
-		slog.Error("Failed to read diff changes", "error", err)
-		return sourceSet{}, nil, err
+		slog.Error("Failed to resolve the run's selection", "error", err)
+		return sourceSet{}, Selection{}, err
 	}
 
 	sources, err := w.resolveSources(ctx, args)
 	if err != nil {
 		slog.Error("Failed to resolve sources", "error", err)
-		return sourceSet{}, nil, err
+		return sourceSet{}, Selection{}, err
 	}
 
-	narrowed, err := narrowToScope(sources, scope)
+	narrowed, err := narrowToScope(sources, sel.Diff)
 	if err != nil {
 		sources.close()
-		return sourceSet{}, nil, err
+		return sourceSet{}, Selection{}, err
 	}
 
-	return narrowed, scope, nil
+	return narrowed, sel, nil
 }

@@ -37,6 +37,7 @@ func TestConfigDefaults(t *testing.T) {
 		"run.mutation_timeout": 120,
 		"run.coverage_profile": "",
 		"run.diff":             "",
+		"run.mutagens":         []string{},
 		"log.filename":         ".gooze.log",
 		"log.level":            "info",
 		"log.verbose":          false,

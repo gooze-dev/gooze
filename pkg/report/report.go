@@ -84,17 +84,21 @@ type Report struct {
 	// Line is the 1-based source line of the mutation, or 0 in reports
 	// written before gooze recorded it (the diff still locates it).
 	Line int `yaml:"line,omitempty"`
-	// Scope is set when the run tested only some lines of the source, as a
-	// diff-mode run does; nil means the source was tested in full.
+	// Scope is set when the run tested only part of the source (some lines,
+	// some functions or some mutagens); nil means it was tested in full.
 	Scope *Scope `yaml:"scope,omitempty"`
 }
 
-// Scope records which lines of a source a diff-mode run tested.
+// Scope records how a run narrowed what it tested of a source.
 type Scope struct {
-	// Base is the commit the changes were taken against.
-	Base string `yaml:"base"`
-	// Lines are the tested line ranges.
-	Lines []LineRange `yaml:"lines"`
+	// Base is the commit a diff-mode run took the changes against.
+	Base string `yaml:"base,omitempty"`
+	// Lines are the line ranges a diff-mode run tested.
+	Lines []LineRange `yaml:"lines,omitempty"`
+	// Run is the --run pattern that selected the functions tested.
+	Run string `yaml:"run,omitempty"`
+	// Mutagens are the only mutagens the run used.
+	Mutagens []string `yaml:"mutagens,omitempty"`
 }
 
 // LineRange is an inclusive range of 1-based line numbers.

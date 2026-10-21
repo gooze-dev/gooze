@@ -122,6 +122,9 @@ func diffRunCmd(t *testing.T, mockWorkflow *domainmocks.MockWorkflow, args ...st
 	// leak into later tests (viper.Set would override every layer instead).
 	t.Cleanup(func() { newRunCmd() })
 
+	// --run and --mutagens are plain flags kept in package variables; reset them.
+	t.Cleanup(func() { runPatternFlag, runMutagensFlag = "", nil })
+
 	cmd.SetArgs(args)
 
 	return cmd.Execute()
@@ -190,6 +193,55 @@ func TestRunCmd_DiffFromEnv(t *testing.T) {
 	mockWorkflow := domainmocks.NewMockWorkflow(t)
 	mockWorkflow.On("Test", mock.Anything, mock.MatchedBy(func(args domain.TestArgs) bool {
 		return args.Diff == "main"
+	})).Return(nil)
+
+	require.NoError(t, diffRunCmd(t, mockWorkflow, "run", "./..."))
+}
+
+func TestRunCmd_RunFlag(t *testing.T) {
+	mockWorkflow := domainmocks.NewMockWorkflow(t)
+	mockWorkflow.On("Test", mock.Anything, mock.MatchedBy(func(args domain.TestArgs) bool {
+		return args.Run == "^InRange$"
+	})).Return(nil)
+
+	require.NoError(t, diffRunCmd(t, mockWorkflow, "run", "--run", "^InRange$", "./calc"))
+}
+
+func TestRunCmd_RunFlagWithEstimate(t *testing.T) {
+	mockWorkflow := domainmocks.NewMockWorkflow(t)
+	mockWorkflow.On("Estimate", mock.Anything, mock.MatchedBy(func(args domain.EstimateArgs) bool {
+		return args.Run == "Parser\\.Next"
+	})).Return(nil)
+
+	require.NoError(t, diffRunCmd(t, mockWorkflow, "run", "--estimate", "--run", "Parser\\.Next"))
+}
+
+func TestRunCmd_MutagensFlag(t *testing.T) {
+	mockWorkflow := domainmocks.NewMockWorkflow(t)
+	mockWorkflow.On("Test", mock.Anything, mock.MatchedBy(func(args domain.TestArgs) bool {
+		return assert.ObjectsAreEqual([]string{"comparison", "arithmetic", "unary"}, args.Mutagens)
+	})).Return(nil)
+
+	// Comma-separated and repeatable.
+	require.NoError(t, diffRunCmd(t, mockWorkflow, "run", "--mutagens", "comparison,arithmetic", "--mutagens", "unary", "./..."))
+}
+
+func TestRunCmd_MutagensDefaultEmpty(t *testing.T) {
+	mockWorkflow := domainmocks.NewMockWorkflow(t)
+	mockWorkflow.On("Test", mock.Anything, mock.MatchedBy(func(args domain.TestArgs) bool {
+		return len(args.Mutagens) == 0 && args.Run == ""
+	})).Return(nil)
+
+	require.NoError(t, diffRunCmd(t, mockWorkflow, "run", "./..."))
+}
+
+func TestRunCmd_MutagensFromEnv(t *testing.T) {
+	t.Setenv("GOOZE_RUN_MUTAGENS", "comparison,logical")
+
+	mockWorkflow := domainmocks.NewMockWorkflow(t)
+	mockWorkflow.On("Test", mock.Anything, mock.MatchedBy(func(args domain.TestArgs) bool {
+		// The workflow splits on commas, so the raw env value is enough.
+		return assert.ObjectsAreEqual([]string{"comparison,logical"}, args.Mutagens)
 	})).Return(nil)
 
 	require.NoError(t, diffRunCmd(t, mockWorkflow, "run", "./..."))

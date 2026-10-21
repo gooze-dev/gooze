@@ -18,6 +18,7 @@ func TestDefaults(t *testing.T) {
 		KeyRunMutationTimeout: 120,
 		KeyRunCoverageProfile: "",
 		KeyRunDiff:            "",
+		KeyRunMutagens:        []string{},
 		KeyLogFilename:        ".gooze.log",
 		KeyLogLevel:           "info",
 		KeyLogVerbose:         false,
@@ -54,7 +55,7 @@ func TestLookup_Object(t *testing.T) {
 		names = append(names, child.Name)
 	}
 
-	assert.Equal(t, []string{"parallel", "mutation_timeout", "coverage_profile", "diff"}, names)
+	assert.Equal(t, []string{"parallel", "mutation_timeout", "coverage_profile", "diff", "mutagens"}, names)
 }
 
 func TestLookup_Missing(t *testing.T) {
@@ -82,6 +83,7 @@ func TestLookup_Kinds(t *testing.T) {
 		KeyRunMutationTimeout: KindInt,
 		KeyRunCoverageProfile: KindString,
 		KeyRunDiff:            KindString,
+		KeyRunMutagens:        KindStringList,
 		"log":                 KindObject,
 		KeyLogCompress:        KindBool,
 	}

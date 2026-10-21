@@ -102,3 +102,34 @@ func TestDiffEstimateLine(t *testing.T) {
 		}
 	}
 }
+
+func TestSelectionLine(t *testing.T) {
+	cases := []struct {
+		name       string
+		estimation domain.Estimation
+		want       string
+	}{
+		{name: "no filters", estimation: domain.Estimation{}, want: ""},
+		{
+			name:       "run",
+			estimation: domain.Estimation{Run: "^InRange$"},
+			want:       "Only functions matching ^InRange$.",
+		},
+		{
+			name:       "mutagens",
+			estimation: domain.Estimation{Mutagens: []string{"comparison", "arithmetic"}},
+			want:       "Only mutagens comparison, arithmetic.",
+		},
+		{
+			name:       "both",
+			estimation: domain.Estimation{Run: "Next$", Mutagens: []string{"comparison"}},
+			want:       "Only functions matching Next$, mutagens comparison.",
+		},
+	}
+
+	for _, tc := range cases {
+		if got := selectionLine(tc.estimation); got != tc.want {
+			t.Errorf("%s: selectionLine() = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}

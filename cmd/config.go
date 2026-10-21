@@ -28,7 +28,9 @@ const (
 
 	coverageProfileFlagName = "coverage-profile"
 
-	diffFlagName = "diff"
+	diffFlagName     = "diff"
+	runFlagName      = "run"
+	mutagensFlagName = "mutagens"
 
 	envPrefix = "GOOZE"
 )

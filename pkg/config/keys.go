@@ -11,6 +11,7 @@ const (
 	KeyRunMutationTimeout = "run.mutation_timeout"
 	KeyRunCoverageProfile = "run.coverage_profile"
 	KeyRunDiff            = "run.diff"
+	KeyRunMutagens        = "run.mutagens"
 	KeyLogFilename        = "log.filename"
 	KeyLogLevel           = "log.level"
 	KeyLogVerbose         = "log.verbose"
