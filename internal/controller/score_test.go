@@ -172,3 +172,16 @@ func TestRunReportsHint(t *testing.T) {
 		t.Errorf("runReportsHint() = %q, want %q", got, want)
 	}
 }
+
+func TestRunReportsHint_ShardWithThresholds(t *testing.T) {
+	want := "Thresholds are not checked on a shard; gooze report merge checks them on all the results."
+
+	if got := runReportsHint(domain.MutationScore{ThresholdsSkipped: true}); got != want {
+		t.Errorf("runReportsHint() = %q, want %q", got, want)
+	}
+
+	got := runReportsHint(domain.MutationScore{ReportsDir: "run/shard_0", ThresholdsSkipped: true})
+	if !strings.HasPrefix(got, "Reports of this run are in run/shard_0;") || !strings.HasSuffix(got, "\n"+want) {
+		t.Errorf("runReportsHint() = %q, want the reports line, then %q", got, want)
+	}
+}

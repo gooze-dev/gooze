@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"gooze.dev/pkg/gooze/cmd/report"
 	"gooze.dev/pkg/gooze/internal/domain"
 	m "gooze.dev/pkg/gooze/internal/model"
 	"gooze.dev/pkg/gooze/pkg/config"
@@ -34,6 +35,8 @@ var errRunWithShard = errors.New("--run can't be combined with --shard: a functi
 var runCmd = newRunCmd()
 
 func newRunCmd() *cobra.Command {
+	var thresholds, diffThresholds report.ThresholdFlags
+
 	cmd := &cobra.Command{
 		Use:   "run [paths...]",
 		Short: "Run mutation testing",
@@ -59,6 +62,11 @@ func newRunCmd() *cobra.Command {
 				return usageError(errRunWithShard)
 			}
 
+			minimums, err := runThresholds(cmd, estimateArgs.Diff != "", thresholds, diffThresholds)
+			if err != nil {
+				return err
+			}
+
 			timeoutSeconds := viper.GetInt64(config.KeyRunMutationTimeout)
 
 			return workflow.Test(cmd.Context(), domain.TestArgs{
@@ -69,11 +77,12 @@ func newRunCmd() *cobra.Command {
 				TotalShardCount: totalShards,
 				MutationTimeout: time.Duration(timeoutSeconds) * time.Second,
 				CoverageProfile: m.Path(viper.GetString(config.KeyRunCoverageProfile)),
+				Thresholds:      minimums,
 			})
 		},
 	}
 
-	configureRunFlags(cmd)
+	thresholds, diffThresholds = configureRunFlags(cmd)
 
 	return cmd
 }
@@ -82,7 +91,9 @@ func init() {
 	rootCmd.AddCommand(runCmd)
 }
 
-func configureRunFlags(cmd *cobra.Command) {
+// configureRunFlags adds run's flags and returns its threshold flags: the
+// plain ones, and the ones for --diff runs.
+func configureRunFlags(cmd *cobra.Command) (report.ThresholdFlags, report.ThresholdFlags) {
 	cmd.Flags().Int64Var(&mutationTimeoutFlag, mutationTimeoutFlagName, viper.GetInt64(config.KeyRunMutationTimeout), "timeout duration for testing a mutation in seconds")
 	bindFlagToConfig(cmd.Flags().Lookup(mutationTimeoutFlagName), config.KeyRunMutationTimeout)
 
@@ -101,6 +112,30 @@ func configureRunFlags(cmd *cobra.Command) {
 
 	cmd.Flags().StringSliceVar(&runMutagensFlag, mutagensFlagName, viper.GetStringSlice(config.KeyRunMutagens), "mutagens to run, comma-separated (default all: arithmetic, boolean, numbers, comparison, logical, unary)")
 	bindFlagToConfig(cmd.Flags().Lookup(mutagensFlagName), config.KeyRunMutagens)
+
+	return report.AddThresholdFlags(cmd, "threshold", "threshold"),
+		report.AddThresholdFlags(cmd, "threshold.diff", "threshold-diff")
+}
+
+// runThresholds returns the minimum scores of a run: a --diff run is scored
+// on its changed lines, so it has its own. Both sets are checked, so a bad
+// value fails whichever applies.
+func runThresholds(cmd *cobra.Command, diff bool, plain, diffOnly report.ThresholdFlags) (domain.Thresholds, error) {
+	minimums, err := plain.Read(cmd)
+	if err != nil {
+		return domain.Thresholds{}, err
+	}
+
+	diffMinimums, err := diffOnly.Read(cmd)
+	if err != nil {
+		return domain.Thresholds{}, err
+	}
+
+	if diff {
+		return diffMinimums, nil
+	}
+
+	return minimums, nil
 }
 
 // runEstimateArgs builds the scan settings shared by --estimate and a run
