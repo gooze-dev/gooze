@@ -27,6 +27,7 @@ var runDiffFlag string
 // some functions and mutagens. --run is a flag only, like go test -run.
 var runPatternFlag string
 var runMutagensFlag []string
+var runWorkspaceFlag string
 
 // errRunWithShard rejects --run with --shard: a run of a few functions is too
 // small to split across jobs.
@@ -78,6 +79,7 @@ func newRunCmd() *cobra.Command {
 				TotalShardCount: totalShards,
 				MutationTimeout: time.Duration(timeoutSeconds) * time.Second,
 				CoverageProfile: m.Path(viper.GetString(config.KeyRunCoverageProfile)),
+				Workspace:       domain.WorkspaceMode(viper.GetString(config.KeyRunWorkspace)),
 				Thresholds:      minimums,
 			})
 		},
@@ -113,6 +115,9 @@ func configureRunFlags(cmd *cobra.Command) (report.ThresholdFlags, report.Thresh
 
 	cmd.Flags().StringSliceVar(&runMutagensFlag, mutagensFlagName, viper.GetStringSlice(config.KeyRunMutagens), "mutagens to run, comma-separated: "+strings.Join(mgen.Names(), ", ")+" (default all but branch, statement and loop)")
 	bindFlagToConfig(cmd.Flags().Lookup(mutagensFlagName), config.KeyRunMutagens)
+
+	cmd.Flags().StringVar(&runWorkspaceFlag, workspaceFlagName, viper.GetString(config.KeyRunWorkspace), "how mutants are built: overlay (go test -overlay in the project) or deep-copy (a copy of the project per worker, for tests that build the code in a subprocess or read source files)")
+	bindFlagToConfig(cmd.Flags().Lookup(workspaceFlagName), config.KeyRunWorkspace)
 
 	return report.AddThresholdFlags(cmd, "threshold", "threshold"),
 		report.AddThresholdFlags(cmd, "threshold.diff", "threshold-diff")

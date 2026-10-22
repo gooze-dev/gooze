@@ -114,7 +114,7 @@ func TestWorkflow_Test_RunAndMutagensSelectAndRecordScope(t *testing.T) {
 		return m.Result{mutation.Type: {{MutationID: mutation.ID, Status: rpt.Killed}}}, nil
 	})
 	workspace.EXPECT().Close(mock.Anything).Return().Maybe()
-	orchestrator.EXPECT().NewWorkspace().Return(workspace).Maybe()
+	orchestrator.EXPECT().NewWorkspace(mock.Anything).Return(workspace).Maybe()
 
 	var saved []m.Report
 
@@ -225,7 +225,7 @@ func newNarrowedRunFixture(t *testing.T, types ...mgen.Type) *narrowedRunFixture
 		return m.Result{mutation.Type: {{MutationID: mutation.ID, Status: rpt.Survived}}}, nil
 	})
 	workspace.EXPECT().Close(mock.Anything).Return().Maybe()
-	orchestrator.EXPECT().NewWorkspace().Return(workspace).Maybe()
+	orchestrator.EXPECT().NewWorkspace(mock.Anything).Return(workspace).Maybe()
 
 	f.wf = domain.NewWorkflow(fs, store, reporter, orchestrator, mutagen)
 

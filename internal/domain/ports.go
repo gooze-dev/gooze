@@ -81,8 +81,10 @@ type GoFileAdapter interface {
 // TestRunnerAdapter abstracts test execution operations for mutation testing.
 type TestRunnerAdapter interface {
 	// RunGoTest runs 'go test' for the package containing testFile, inside
-	// workDir. Returns the combined stdout/stderr output and any error.
-	RunGoTest(ctx context.Context, workDir, testFile string) (output string, err error)
+	// workDir. A non-empty overlay is passed as -overlay, so the build reads
+	// the files it maps instead of their originals. Returns the combined
+	// stdout/stderr output and any error.
+	RunGoTest(ctx context.Context, workDir, testFile, overlay string) (output string, err error)
 }
 
 // ReportStore persists and loads mutation reports.

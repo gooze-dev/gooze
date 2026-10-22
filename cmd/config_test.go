@@ -40,6 +40,7 @@ func TestConfigDefaults(t *testing.T) {
 		"run.coverage_profile":   "",
 		"run.diff":               "",
 		"run.mutagens":           []string{},
+		"run.workspace":          "overlay",
 		"threshold.total":        0.0,
 		"threshold.average":      0.0,
 		"threshold.file":         0.0,
@@ -87,6 +88,9 @@ func TestValidateConfig(t *testing.T) {
 		{key: config.KeyThresholdFile, value: 100.5, wantErr: "invalid threshold.file: 100.5 is out of range: must be between 0 and 100"},
 		{key: config.KeyThresholdDiffAverage, value: -1, wantErr: "invalid threshold.diff.average: -1 is out of range: must be between 0 and 100"},
 		{key: config.KeyThresholdAverage, value: "high", wantErr: `invalid threshold.average: "high" is not a number`},
+		{key: config.KeyRunWorkspace, value: "deep-copy"},
+		{key: config.KeyRunWorkspace, value: "overly", wantErr: `invalid run.workspace: "overly" is not one of overlay, deep-copy`},
+		{key: config.KeyLogLevel, value: "-4"},
 	}
 
 	for _, tt := range tests {

@@ -24,17 +24,17 @@ func (_m *MockOrchestrator) EXPECT() *MockOrchestrator_Expecter {
 	return &MockOrchestrator_Expecter{mock: &_m.Mock}
 }
 
-// NewWorkspace provides a mock function with no fields
-func (_m *MockOrchestrator) NewWorkspace() domain.Workspace {
-	ret := _m.Called()
+// NewWorkspace provides a mock function with given fields: mode
+func (_m *MockOrchestrator) NewWorkspace(mode domain.WorkspaceMode) domain.Workspace {
+	ret := _m.Called(mode)
 
 	if len(ret) == 0 {
 		panic("no return value specified for NewWorkspace")
 	}
 
 	var r0 domain.Workspace
-	if rf, ok := ret.Get(0).(func() domain.Workspace); ok {
-		r0 = rf()
+	if rf, ok := ret.Get(0).(func(domain.WorkspaceMode) domain.Workspace); ok {
+		r0 = rf(mode)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(domain.Workspace)
@@ -50,13 +50,14 @@ type MockOrchestrator_NewWorkspace_Call struct {
 }
 
 // NewWorkspace is a helper method to define mock.On call
-func (_e *MockOrchestrator_Expecter) NewWorkspace() *MockOrchestrator_NewWorkspace_Call {
-	return &MockOrchestrator_NewWorkspace_Call{Call: _e.mock.On("NewWorkspace")}
+//   - mode domain.WorkspaceMode
+func (_e *MockOrchestrator_Expecter) NewWorkspace(mode interface{}) *MockOrchestrator_NewWorkspace_Call {
+	return &MockOrchestrator_NewWorkspace_Call{Call: _e.mock.On("NewWorkspace", mode)}
 }
 
-func (_c *MockOrchestrator_NewWorkspace_Call) Run(run func()) *MockOrchestrator_NewWorkspace_Call {
+func (_c *MockOrchestrator_NewWorkspace_Call) Run(run func(mode domain.WorkspaceMode)) *MockOrchestrator_NewWorkspace_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run()
+		run(args[0].(domain.WorkspaceMode))
 	})
 	return _c
 }
@@ -66,14 +67,14 @@ func (_c *MockOrchestrator_NewWorkspace_Call) Return(_a0 domain.Workspace) *Mock
 	return _c
 }
 
-func (_c *MockOrchestrator_NewWorkspace_Call) RunAndReturn(run func() domain.Workspace) *MockOrchestrator_NewWorkspace_Call {
+func (_c *MockOrchestrator_NewWorkspace_Call) RunAndReturn(run func(domain.WorkspaceMode) domain.Workspace) *MockOrchestrator_NewWorkspace_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// TestMutation provides a mock function with given fields: ctx, mutation
-func (_m *MockOrchestrator) TestMutation(ctx context.Context, mutation model.Mutation) (model.Result, error) {
-	ret := _m.Called(ctx, mutation)
+// TestMutation provides a mock function with given fields: ctx, mode, mutation
+func (_m *MockOrchestrator) TestMutation(ctx context.Context, mode domain.WorkspaceMode, mutation model.Mutation) (model.Result, error) {
+	ret := _m.Called(ctx, mode, mutation)
 
 	if len(ret) == 0 {
 		panic("no return value specified for TestMutation")
@@ -81,19 +82,19 @@ func (_m *MockOrchestrator) TestMutation(ctx context.Context, mutation model.Mut
 
 	var r0 model.Result
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, model.Mutation) (model.Result, error)); ok {
-		return rf(ctx, mutation)
+	if rf, ok := ret.Get(0).(func(context.Context, domain.WorkspaceMode, model.Mutation) (model.Result, error)); ok {
+		return rf(ctx, mode, mutation)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, model.Mutation) model.Result); ok {
-		r0 = rf(ctx, mutation)
+	if rf, ok := ret.Get(0).(func(context.Context, domain.WorkspaceMode, model.Mutation) model.Result); ok {
+		r0 = rf(ctx, mode, mutation)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(model.Result)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, model.Mutation) error); ok {
-		r1 = rf(ctx, mutation)
+	if rf, ok := ret.Get(1).(func(context.Context, domain.WorkspaceMode, model.Mutation) error); ok {
+		r1 = rf(ctx, mode, mutation)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -108,14 +109,15 @@ type MockOrchestrator_TestMutation_Call struct {
 
 // TestMutation is a helper method to define mock.On call
 //   - ctx context.Context
+//   - mode domain.WorkspaceMode
 //   - mutation model.Mutation
-func (_e *MockOrchestrator_Expecter) TestMutation(ctx interface{}, mutation interface{}) *MockOrchestrator_TestMutation_Call {
-	return &MockOrchestrator_TestMutation_Call{Call: _e.mock.On("TestMutation", ctx, mutation)}
+func (_e *MockOrchestrator_Expecter) TestMutation(ctx interface{}, mode interface{}, mutation interface{}) *MockOrchestrator_TestMutation_Call {
+	return &MockOrchestrator_TestMutation_Call{Call: _e.mock.On("TestMutation", ctx, mode, mutation)}
 }
 
-func (_c *MockOrchestrator_TestMutation_Call) Run(run func(ctx context.Context, mutation model.Mutation)) *MockOrchestrator_TestMutation_Call {
+func (_c *MockOrchestrator_TestMutation_Call) Run(run func(ctx context.Context, mode domain.WorkspaceMode, mutation model.Mutation)) *MockOrchestrator_TestMutation_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(model.Mutation))
+		run(args[0].(context.Context), args[1].(domain.WorkspaceMode), args[2].(model.Mutation))
 	})
 	return _c
 }
@@ -125,7 +127,7 @@ func (_c *MockOrchestrator_TestMutation_Call) Return(_a0 model.Result, _a1 error
 	return _c
 }
 
-func (_c *MockOrchestrator_TestMutation_Call) RunAndReturn(run func(context.Context, model.Mutation) (model.Result, error)) *MockOrchestrator_TestMutation_Call {
+func (_c *MockOrchestrator_TestMutation_Call) RunAndReturn(run func(context.Context, domain.WorkspaceMode, model.Mutation) (model.Result, error)) *MockOrchestrator_TestMutation_Call {
 	_c.Call.Return(run)
 	return _c
 }

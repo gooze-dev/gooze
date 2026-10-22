@@ -70,6 +70,10 @@ func runField() Field {
 			Enum: mgen.Names(),
 			Doc:  "Mutagens to run (" + strings.Join(mgen.Names(), ", ") + "); empty runs the default ones, all but branch, statement and loop.",
 		},
+		{
+			Name: "workspace", Kind: KindEnum, Default: "overlay", Enum: []string{"overlay", "deep-copy"},
+			Doc: "How mutants are built: overlay tests them in the project through go test -overlay, without copying it; deep-copy tests them in a per-worker copy of the project, for tests that build the project's code in a subprocess, read its source files or write next to themselves.",
+		},
 	}}
 }
 

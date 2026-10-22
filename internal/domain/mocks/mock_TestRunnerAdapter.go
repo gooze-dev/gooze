@@ -21,9 +21,9 @@ func (_m *MockTestRunnerAdapter) EXPECT() *MockTestRunnerAdapter_Expecter {
 	return &MockTestRunnerAdapter_Expecter{mock: &_m.Mock}
 }
 
-// RunGoTest provides a mock function with given fields: ctx, workDir, testFile
-func (_m *MockTestRunnerAdapter) RunGoTest(ctx context.Context, workDir string, testFile string) (string, error) {
-	ret := _m.Called(ctx, workDir, testFile)
+// RunGoTest provides a mock function with given fields: ctx, workDir, testFile, overlay
+func (_m *MockTestRunnerAdapter) RunGoTest(ctx context.Context, workDir string, testFile string, overlay string) (string, error) {
+	ret := _m.Called(ctx, workDir, testFile, overlay)
 
 	if len(ret) == 0 {
 		panic("no return value specified for RunGoTest")
@@ -31,17 +31,17 @@ func (_m *MockTestRunnerAdapter) RunGoTest(ctx context.Context, workDir string, 
 
 	var r0 string
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, string) (string, error)); ok {
-		return rf(ctx, workDir, testFile)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, string) (string, error)); ok {
+		return rf(ctx, workDir, testFile, overlay)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, string, string) string); ok {
-		r0 = rf(ctx, workDir, testFile)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, string) string); ok {
+		r0 = rf(ctx, workDir, testFile, overlay)
 	} else {
 		r0 = ret.Get(0).(string)
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
-		r1 = rf(ctx, workDir, testFile)
+	if rf, ok := ret.Get(1).(func(context.Context, string, string, string) error); ok {
+		r1 = rf(ctx, workDir, testFile, overlay)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -58,13 +58,14 @@ type MockTestRunnerAdapter_RunGoTest_Call struct {
 //   - ctx context.Context
 //   - workDir string
 //   - testFile string
-func (_e *MockTestRunnerAdapter_Expecter) RunGoTest(ctx interface{}, workDir interface{}, testFile interface{}) *MockTestRunnerAdapter_RunGoTest_Call {
-	return &MockTestRunnerAdapter_RunGoTest_Call{Call: _e.mock.On("RunGoTest", ctx, workDir, testFile)}
+//   - overlay string
+func (_e *MockTestRunnerAdapter_Expecter) RunGoTest(ctx interface{}, workDir interface{}, testFile interface{}, overlay interface{}) *MockTestRunnerAdapter_RunGoTest_Call {
+	return &MockTestRunnerAdapter_RunGoTest_Call{Call: _e.mock.On("RunGoTest", ctx, workDir, testFile, overlay)}
 }
 
-func (_c *MockTestRunnerAdapter_RunGoTest_Call) Run(run func(ctx context.Context, workDir string, testFile string)) *MockTestRunnerAdapter_RunGoTest_Call {
+func (_c *MockTestRunnerAdapter_RunGoTest_Call) Run(run func(ctx context.Context, workDir string, testFile string, overlay string)) *MockTestRunnerAdapter_RunGoTest_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(string), args[2].(string))
+		run(args[0].(context.Context), args[1].(string), args[2].(string), args[3].(string))
 	})
 	return _c
 }
@@ -74,7 +75,7 @@ func (_c *MockTestRunnerAdapter_RunGoTest_Call) Return(output string, err error)
 	return _c
 }
 
-func (_c *MockTestRunnerAdapter_RunGoTest_Call) RunAndReturn(run func(context.Context, string, string) (string, error)) *MockTestRunnerAdapter_RunGoTest_Call {
+func (_c *MockTestRunnerAdapter_RunGoTest_Call) RunAndReturn(run func(context.Context, string, string, string) (string, error)) *MockTestRunnerAdapter_RunGoTest_Call {
 	_c.Call.Return(run)
 	return _c
 }

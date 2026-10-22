@@ -97,7 +97,7 @@ func cachedRunWorkflow(t *testing.T, sources []rpt.Source, mutations map[string]
 		}).Maybe()
 
 	orchestrator := domainmocks.NewMockOrchestrator(t)
-	orchestrator.EXPECT().NewWorkspace().Return(workspace).Maybe()
+	orchestrator.EXPECT().NewWorkspace(mock.Anything).Return(workspace).Maybe()
 
 	reporter := domainmocks.NewMockReporter(t)
 	reporter.EXPECT().StartTest(mock.Anything).Return(nil).Maybe()

@@ -43,6 +43,58 @@ func TestRunCmd_TestMode(t *testing.T) {
 	mockWorkflow.AssertExpectations(t)
 }
 
+func TestRunCmd_WorkspaceFlag(t *testing.T) {
+	for _, tt := range []struct {
+		args []string
+		want domain.WorkspaceMode
+	}{
+		{args: []string{"run", "./..."}, want: domain.WorkspaceOverlay},
+		{args: []string{"run", "--workspace", "deep-copy", "./..."}, want: domain.WorkspaceDeepCopy},
+	} {
+		t.Run(string(tt.want), func(t *testing.T) {
+			mockWorkflow := domainmocks.NewMockWorkflow(t)
+
+			cmd := newRootCmd()
+			cmd.AddCommand(newRunCmd())
+			cmd.SetOut(&bytes.Buffer{})
+			cmd.SetErr(&bytes.Buffer{})
+
+			originalWorkflow := workflow
+			workflow = mockWorkflow
+			defer func() { workflow = originalWorkflow }()
+			// Rebind run.workspace to a fresh, unset flag so later tests see the default.
+			defer newRunCmd()
+
+			mockWorkflow.On("Test", mock.Anything, mock.MatchedBy(func(args domain.TestArgs) bool {
+				return args.Workspace == tt.want
+			})).Return(nil)
+
+			cmd.SetArgs(tt.args)
+			require.NoError(t, cmd.Execute())
+			mockWorkflow.AssertExpectations(t)
+		})
+	}
+}
+
+func TestRunCmd_RejectsUnknownWorkspace(t *testing.T) {
+	mockWorkflow := domainmocks.NewMockWorkflow(t)
+
+	cmd := newRootCmd()
+	cmd.AddCommand(newRunCmd())
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+
+	originalWorkflow := workflow
+	workflow = mockWorkflow
+	defer func() { workflow = originalWorkflow }()
+	defer newRunCmd()
+
+	cmd.SetArgs([]string{"run", "--workspace", "overly", "./..."})
+	err := cmd.Execute()
+	require.EqualError(t, err, `invalid run.workspace: "overly" is not one of overlay, deep-copy`)
+	assert.Equal(t, m.ExitUsage, exitCode(context.Background(), err, false))
+}
+
 func TestRunCmd_RejectsOutOfRangeParallel(t *testing.T) {
 	mockWorkflow := domainmocks.NewMockWorkflow(t)
 

@@ -12,6 +12,7 @@ const (
 	KeyRunCoverageProfile   = "run.coverage_profile"
 	KeyRunDiff              = "run.diff"
 	KeyRunMutagens          = "run.mutagens"
+	KeyRunWorkspace         = "run.workspace"
 	KeyThresholdTotal       = "threshold.total"
 	KeyThresholdAverage     = "threshold.average"
 	KeyThresholdFile        = "threshold.file"

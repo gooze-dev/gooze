@@ -222,7 +222,7 @@ func newDiffRunFixture(t *testing.T) *diffRunFixture {
 		return m.Result{mutation.Type: {{MutationID: mutation.ID, Status: rpt.Survived}}}, nil
 	}).Maybe()
 	workspace.EXPECT().Close(mock.Anything).Return().Maybe()
-	orchestrator.EXPECT().NewWorkspace().Return(workspace).Maybe()
+	orchestrator.EXPECT().NewWorkspace(mock.Anything).Return(workspace).Maybe()
 
 	f.store.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, _ m.Path, sources pkg.FileSpill[rpt.Source]) error {
 		return sources.Range(func(_ uint64, source rpt.Source) error {
