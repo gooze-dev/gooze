@@ -8,6 +8,8 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 func TestTestResult_FilterValue(t *testing.T) {
@@ -414,6 +416,81 @@ func TestTestExecutionModel_DiffMaxLines(t *testing.T) {
 
 		if got := m.diffMaxLines(); got != want {
 			t.Fatalf("diffMaxLines() with height %d = %d, want %d", height, got, want)
+		}
+	}
+}
+
+func TestTestResultDelegate_RenderEveryStatusOnOneLine(t *testing.T) {
+	const width = 80
+
+	for status := rpt.Killed; status.String() != "unknown"; status++ {
+		for _, selected := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/selected=%v", status, selected), func(t *testing.T) {
+				delegate := testResultDelegate{}
+				items := []list.Item{testResult{id: "abcd1234", file: "internal/domain/workflow.go", typ: "comparison", status: status.String()}}
+				m := list.New(items, delegate, width, 5)
+
+				if !selected {
+					m.Select(1) // out of range: row 0 renders unselected
+				}
+
+				var buf strings.Builder
+				delegate.Render(&buf, m, 0, items[0])
+				row := buf.String()
+
+				if strings.Contains(row, "\n") {
+					t.Fatalf("row wraps onto a second line:\n%s", row)
+				}
+
+				if !strings.Contains(row, status.String()) {
+					t.Fatalf("row %q lacks the full status %q", row, status)
+				}
+
+				if got := lipgloss.Width(row); got > width {
+					t.Fatalf("row is %d cells wide, want at most %d: %q", got, width, row)
+				}
+			})
+		}
+	}
+}
+
+func TestStatusColumnFitsLongestLabel(t *testing.T) {
+	if statusColumnWidth != len("not_covered")+2 {
+		t.Fatalf("statusColumnWidth = %d, want %d", statusColumnWidth, len("not_covered")+2)
+	}
+}
+
+func TestTestResultDelegate_RenderColumns(t *testing.T) {
+	file := "internal/controller/some/deeply/nested/package/and/more/tui_test_execution_model.go"
+
+	// The width minus id (6), status (13), type (12) and spacing (12) is left
+	// for the file.
+	for _, tt := range []struct{ width, fileWidth int }{{80, 37}, {100, 57}} {
+		t.Run(fmt.Sprint(tt.width), func(t *testing.T) {
+			delegate := testResultDelegate{}
+			items := []list.Item{testResult{id: "abcd1234", file: file, typ: "comparison", status: "not_covered"}}
+			m := list.New(items, delegate, tt.width, 5)
+			m.Select(1) // out of range: row 0 renders unselected
+
+			var buf strings.Builder
+			delegate.Render(&buf, m, 0, items[0])
+
+			want := "abcd    not_covered    comparison    " + truncateToWidth(file, tt.fileWidth)
+			if got := buf.String(); got != want {
+				t.Fatalf("row =\n%q\nwant\n%q", got, want)
+			}
+		})
+	}
+}
+
+func TestTestResultDelegate_BoldIDAndStatus(t *testing.T) {
+	delegate := testResultDelegate{}
+	result := testResult{id: "abcd", file: "a.go", typ: "comparison", status: "killed"}
+
+	for _, selected := range []bool{false, true} {
+		idStyle, statusStyle, _, _, _ := delegate.getStylesAndFile(result, selected, 20)
+		if !idStyle.GetBold() || !statusStyle.GetBold() {
+			t.Fatalf("selected=%v: id bold %v, status bold %v; want both bold", selected, idStyle.GetBold(), statusStyle.GetBold())
 		}
 	}
 }
