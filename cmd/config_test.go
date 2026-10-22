@@ -50,6 +50,7 @@ func TestConfigDefaults(t *testing.T) {
 		"threshold.diff.total":           0.0,
 		"threshold.diff.average":         0.0,
 		"threshold.diff.file":            0.0,
+		"report.format":                  "text",
 		"log.filename":                   ".gooze.log",
 		"log.level":                      "info",
 		"log.verbose":                    false,
@@ -116,6 +117,8 @@ func TestValidateConfig(t *testing.T) {
 		{key: config.KeyPathsExclude, value: []any{[]any{"x"}}, wantErr: "invalid paths.exclude: item a list is not a single value"},
 		{key: config.KeyPathsExclude, value: map[string]any{"a": "b"}, wantErr: "invalid paths.exclude: a mapping is not a list"},
 		{key: config.KeyRunWorkspace, value: "overly", wantErr: `invalid run.workspace: "overly" is not one of overlay, deep-copy`},
+		{key: config.KeyReportFormat, value: "github"},
+		{key: config.KeyReportFormat, value: "xml", wantErr: `invalid report.format: "xml" is not one of text, github`},
 		{key: config.KeyLogLevel, value: "-4"},
 	}
 
