@@ -31,7 +31,10 @@ func TestReportView(t *testing.T) {
 	defer viper.Reset()
 
 	wf := domainmocks.NewMockWorkflow(t)
-	wf.On("View", mock.Anything, domain.ViewArgs{Reports: m.Path("/tmp/reports"), Paths: []m.Path{}, Thresholds: domain.Thresholds{Key: "threshold"}}).Return(nil)
+	wf.On("View", mock.Anything, domain.ViewArgs{
+		Reports: m.Path("/tmp/reports"), Paths: []m.Path{},
+		Thresholds: domain.Thresholds{Key: "threshold"}, DiffThresholds: domain.Thresholds{Key: "threshold.diff"},
+	}).Return(nil)
 
 	deps := Deps{Workflow: wf, Publisher: domainmocks.NewMockReportPublisher(t), OutputKey: testOutputKey}
 
@@ -45,10 +48,11 @@ func TestReportView_PathsAndAll(t *testing.T) {
 
 	wf := domainmocks.NewMockWorkflow(t)
 	wf.On("View", mock.Anything, domain.ViewArgs{
-		Reports:    m.Path("/tmp/reports"),
-		Paths:      []m.Path{"./internal/...", "cmd/run.go"},
-		All:        true,
-		Thresholds: domain.Thresholds{Key: "threshold"},
+		Reports:        m.Path("/tmp/reports"),
+		Paths:          []m.Path{"./internal/...", "cmd/run.go"},
+		All:            true,
+		Thresholds:     domain.Thresholds{Key: "threshold"},
+		DiffThresholds: domain.Thresholds{Key: "threshold.diff"},
 	}).Return(nil)
 
 	deps := Deps{Workflow: wf, Publisher: domainmocks.NewMockReportPublisher(t), OutputKey: testOutputKey}

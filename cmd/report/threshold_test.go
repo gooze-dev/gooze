@@ -88,7 +88,7 @@ func TestReportViewAndMergePassThresholds(t *testing.T) {
 	want := domain.Thresholds{Key: "threshold", Total: 75, Average: 50}
 
 	wf := domainmocks.NewMockWorkflow(t)
-	wf.On("View", mock.Anything, domain.ViewArgs{Reports: "/tmp/reports", Paths: []m.Path{}, Thresholds: want}).Return(nil)
+	wf.On("View", mock.Anything, domain.ViewArgs{Reports: "/tmp/reports", Paths: []m.Path{}, Thresholds: want, DiffThresholds: domain.Thresholds{Key: "threshold.diff"}}).Return(nil)
 	wf.On("Merge", mock.Anything, domain.MergeArgs{Reports: "/tmp/reports", Thresholds: want}).Return(nil)
 
 	deps := Deps{Workflow: wf, Publisher: domainmocks.NewMockReportPublisher(t), OutputKey: testOutputKey}
@@ -99,6 +99,34 @@ func TestReportViewAndMergePassThresholds(t *testing.T) {
 	err := execReport(t, deps, "merge", "--threshold-file", "100.5")
 	assert.Equal(t, m.ExitUsage, codeOf(err))
 	wf.AssertNumberOfCalls(t, "Merge", 1)
+}
+
+func TestReportViewPassesDiffThresholds(t *testing.T) {
+	viper.Set(testOutputKey, "/tmp/reports")
+	viper.Set(config.KeyThresholdDiffAverage, 60)
+	defer viper.Reset()
+
+	wf := domainmocks.NewMockWorkflow(t)
+	wf.On("View", mock.Anything, domain.ViewArgs{
+		Reports: "/tmp/reports", Paths: []m.Path{},
+		Thresholds:     domain.Thresholds{Key: "threshold"},
+		DiffThresholds: domain.Thresholds{Key: "threshold.diff", Total: 100, Average: 60},
+	}).Return(nil)
+
+	deps := Deps{Workflow: wf, Publisher: domainmocks.NewMockReportPublisher(t), OutputKey: testOutputKey}
+
+	require.NoError(t, execReport(t, deps, "view", "--threshold-diff-total", "100"))
+
+	err := execReport(t, deps, "view", "--threshold-diff-file", "101")
+	assert.Equal(t, m.ExitUsage, codeOf(err))
+	wf.AssertNumberOfCalls(t, "View", 1)
+}
+
+func TestReportMergeHasNoDiffThresholds(t *testing.T) {
+	deps := Deps{Workflow: domainmocks.NewMockWorkflow(t), Publisher: domainmocks.NewMockReportPublisher(t), OutputKey: testOutputKey}
+
+	// Merge scores the whole codebase, so only the plain thresholds apply.
+	require.Error(t, execReport(t, deps, "merge", "--threshold-diff-total", "100"))
 }
 
 // codeOf returns the exit code err carries, or ExitFailure when none.

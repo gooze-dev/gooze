@@ -69,7 +69,27 @@ func (w *workflow) View(ctx context.Context, args ViewArgs) error {
 
 	w.progress.DisplayReportSummary(ctx, summary)
 
-	return args.Thresholds.Err(summary.Score)
+	thresholds, err := w.viewThresholds(ctx, args)
+	if err != nil {
+		return err
+	}
+
+	return thresholds.Err(summary.Score)
+}
+
+// viewThresholds returns the thresholds to check the viewed reports against:
+// the diff ones when a --diff run wrote them, the plain ones otherwise.
+func (w *workflow) viewThresholds(ctx context.Context, args ViewArgs) (Thresholds, error) {
+	selection, err := w.reports.LoadSelection(ctx, args.Reports)
+	if err != nil {
+		return Thresholds{}, fmt.Errorf("load the run's selection: %w", err)
+	}
+
+	if selection.Diff != "" {
+		return args.DiffThresholds, nil
+	}
+
+	return args.Thresholds, nil
 }
 
 // viewAll replays every mutation with its status, as a run displays them.
@@ -108,7 +128,12 @@ func (w *workflow) viewAll(ctx context.Context, args ViewArgs) error {
 
 		w.progress.DisplayMutationScore(ctx, score)
 
-		return args.Thresholds.Err(score)
+		thresholds, err := w.viewThresholds(ctx, args)
+		if err != nil {
+			return err
+		}
+
+		return thresholds.Err(score)
 	})
 }
 

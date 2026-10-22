@@ -152,10 +152,11 @@ type diffRunFixture struct {
 	store   *domainmocks.MockReportStore
 	fs      *domainmocks.MockSourceFSAdapter
 
-	mu      sync.Mutex
-	tested  []string
-	cleaned []string
-	saved   []m.Report
+	mu        sync.Mutex
+	tested    []string
+	cleaned   []string
+	saved     []m.Report
+	selection *rpt.Selection
 }
 
 var diffChanges = domain.ChangeSet{
@@ -237,6 +238,10 @@ func newDiffRunFixture(t *testing.T) *diffRunFixture {
 		})
 	}).Maybe()
 	f.store.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
+	f.store.EXPECT().SaveSelection(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, _ m.Path, sel rpt.Selection) error {
+		f.selection = &sel
+		return nil
+	}).Maybe()
 
 	f.wf = domain.NewWorkflow(f.fs, f.store, reporter, orchestrator, mutagen, domain.WithChangeDetector(f.changes))
 
@@ -262,6 +267,8 @@ func TestWorkflow_Test_DiffTestsOnlyChangedLines(t *testing.T) {
 	assert.ElementsMatch(t, []string{"c3a", "c3b", "t5"}, f.tested, "calc.go line 3 and all of tested.go")
 	// Only the sources a diff run tests lose their stored reports; same.go keeps its own.
 	assert.ElementsMatch(t, []string{"calc.go", "tested.go"}, f.cleaned)
+	assert.Equal(t, &rpt.Selection{Diff: "origin/main", Base: "1a2b3c4d"}, f.selection,
+		"the run records that it is a diff run, for report view's diff thresholds")
 
 	require.Len(t, f.saved, 3)
 
@@ -310,6 +317,7 @@ func TestWorkflow_Test_WithoutDiffTestsEverything(t *testing.T) {
 	}
 
 	f.changes.AssertNotCalled(t, "Changes", mock.Anything, mock.Anything, mock.Anything)
+	assert.Nil(t, f.selection, "a full run records no selection")
 }
 
 func TestWorkflow_Test_DiffErrorStopsTheRun(t *testing.T) {

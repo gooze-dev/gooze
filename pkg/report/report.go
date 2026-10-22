@@ -9,6 +9,24 @@ import "cmp"
 // IndexFileName is the name of the summary file in a reports directory.
 const IndexFileName = "_index.yaml"
 
+// SelectionFileName is the file in which a narrowed run records its Selection
+// next to its reports. It is JSON, so readers that take every YAML file in
+// the directory for a report skip it.
+const SelectionFileName = "_selection.json"
+
+// Selection records what a narrowed run (--diff, --run or --mutagens) chose to
+// test, so a later report view can tell a diff run's reports from others.
+type Selection struct {
+	// Diff is the git ref a --diff run took its changes against, and Base the
+	// merge-base commit it resolved to.
+	Diff string `json:"diff,omitempty"`
+	Base string `json:"base,omitempty"`
+	// Run is the --run pattern.
+	Run string `json:"run,omitempty"`
+	// Mutagens are the --mutagens names.
+	Mutagens []string `json:"mutagens,omitempty"`
+}
+
 // TestStatus is the outcome of testing one mutation. It is stored in report
 // files as its integer value.
 type TestStatus int

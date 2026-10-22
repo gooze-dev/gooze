@@ -98,6 +98,11 @@ type ReportStore interface {
 	// mutagens they hold results of; true re-tests the source.
 	CheckUpdates(ctx context.Context, path m.Path, sources pkg.FileSpill[rpt.Source], untested func(source rpt.Source, tested []string) bool) (changed, deleted pkg.FileSpill[rpt.Source], err error)
 	CleanReports(ctx context.Context, path m.Path, sources pkg.FileSpill[rpt.Source]) error
+	// SaveSelection records a narrowed run's selection in path.
+	SaveSelection(ctx context.Context, path m.Path, selection rpt.Selection) error
+	// LoadSelection returns the selection recorded in path, or an empty one
+	// when there is none.
+	LoadSelection(ctx context.Context, path m.Path) (rpt.Selection, error)
 }
 
 // RegistryOptions tweaks how the registry is contacted.

@@ -14,8 +14,12 @@ func newMergeCmd(deps Deps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "merge",
 		Short: "Merge sharded reports into a single directory",
-		Long:  "Merge reports from shard_* subdirectories into a single reports directory.",
-		Args:  cobra.ExactArgs(0),
+		Long: `Merge reports from shard_* subdirectories into a single reports directory.
+
+The merged reports score the whole codebase, so the plain --threshold-*
+minimums apply; the threshold.diff ones are for gooze run --diff and for
+report view of its reports.`,
+		Args: cobra.ExactArgs(0),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			minimums, err := thresholds.Read(cmd)
 			if err != nil {

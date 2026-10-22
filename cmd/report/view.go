@@ -20,12 +20,16 @@ arguments, relative to the module root:
   - ./pkg           files directly in pkg
   - ./pkg/file.go   a single file
 
-Use --all to list every mutation with its status and diff instead.`
+Use --all to list every mutation with its status and diff instead.
+
+Below a --threshold-* minimum, view exits with code 3. For the reports of a
+gooze run --diff (view -o .gooze-reports/run), the --threshold-diff-* minimums
+apply instead, as they do for the run.`
 
 func newViewCmd(deps Deps) *cobra.Command {
 	var (
-		all        bool
-		thresholds ThresholdFlags
+		all                        bool
+		thresholds, diffThresholds ThresholdFlags
 	)
 
 	cmd := &cobra.Command{
@@ -46,17 +50,24 @@ func newViewCmd(deps Deps) *cobra.Command {
 				return err
 			}
 
+			diffMinimums, err := diffThresholds.Read(cmd)
+			if err != nil {
+				return err
+			}
+
 			return deps.Workflow.View(cmd.Context(), domain.ViewArgs{
-				Reports:    m.Path(viper.GetString(deps.OutputKey)),
-				Paths:      paths,
-				All:        all,
-				Thresholds: minimums,
+				Reports:        m.Path(viper.GetString(deps.OutputKey)),
+				Paths:          paths,
+				All:            all,
+				Thresholds:     minimums,
+				DiffThresholds: diffMinimums,
 			})
 		},
 	}
 
 	cmd.Flags().BoolVar(&all, "all", false, "list every mutation with its status and diff instead of a per-file summary")
 	thresholds = AddThresholdFlags(cmd, "threshold", "threshold")
+	diffThresholds = AddThresholdFlags(cmd, "threshold.diff", "threshold-diff")
 
 	return cmd
 }

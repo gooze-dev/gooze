@@ -97,6 +97,56 @@ func TestWorkflow_View_ChecksThresholds(t *testing.T) {
 		"only the viewed files count")
 }
 
+func TestWorkflow_View_UsesDiffThresholdsForADiffRun(t *testing.T) {
+	ctx := context.Background()
+	store := adapter.NewReportStore()
+	args := func(dir string) domain.ViewArgs {
+		return domain.ViewArgs{
+			Reports:        m.Path(dir),
+			Thresholds:     domain.Thresholds{Key: "threshold", Total: 30},
+			DiffThresholds: domain.Thresholds{Key: "threshold.diff", Total: 100},
+		}
+	}
+
+	reporter := domainmocks.NewMockReporter(t)
+	reporter.EXPECT().DisplayReportSummary(mock.Anything, mock.Anything).Return()
+	wf := domain.NewWorkflow(nil, store, reporter, nil, nil)
+
+	diffRun := viewFixture(t)
+	require.NoError(t, store.SaveSelection(ctx, m.Path(diffRun), rpt.Selection{Diff: "origin/main", Base: "1a2b3c4d"}))
+
+	err := wf.View(ctx, args(diffRun))
+	require.EqualError(t, err, "mutation score 33.33% is below threshold.diff.total 100%")
+	assert.Equal(t, m.ExitBelowThreshold, exitCodeOf(err))
+
+	require.NoError(t, wf.View(ctx, args(viewFixture(t))), "main reports use the plain thresholds")
+
+	runOnly := viewFixture(t)
+	require.NoError(t, store.SaveSelection(ctx, m.Path(runOnly), rpt.Selection{Run: "^Add$"}))
+	require.NoError(t, wf.View(ctx, args(runOnly)), "a --run selection without --diff uses the plain thresholds")
+}
+
+func TestWorkflow_ViewAll_UsesDiffThresholdsForADiffRun(t *testing.T) {
+	ctx := context.Background()
+	store := adapter.NewReportStore()
+
+	reporter := domainmocks.NewMockReporter(t)
+	reporter.EXPECT().StartTest(ctx).Return(nil)
+	reporter.EXPECT().Close(ctx).Return()
+	reporter.EXPECT().Wait(ctx).Return().Maybe()
+	reporter.EXPECT().DisplayUpcomingTestsInfo(ctx, mock.Anything).Return()
+	reporter.EXPECT().DisplayStartingTestInfo(ctx, mock.Anything, mock.Anything).Return()
+	reporter.EXPECT().DisplayCompletedTestInfo(ctx, mock.Anything, mock.Anything).Return()
+	reporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Return()
+
+	dir := viewFixture(t)
+	require.NoError(t, store.SaveSelection(ctx, m.Path(dir), rpt.Selection{Diff: "main"}))
+
+	wf := domain.NewWorkflow(nil, store, reporter, nil, nil)
+	err := wf.View(ctx, domain.ViewArgs{Reports: m.Path(dir), All: true, DiffThresholds: domain.Thresholds{Key: "threshold.diff", Total: 50}})
+	require.EqualError(t, err, "mutation score 33.33% is below threshold.diff.total 50%")
+}
+
 func TestWorkflow_ViewAll_ChecksThresholds(t *testing.T) {
 	ctx := context.Background()
 	dir := viewFixture(t)
