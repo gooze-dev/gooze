@@ -71,6 +71,9 @@ type ViewArgs struct {
 	All bool
 	// Thresholds are the minimum scores of the viewed reports.
 	Thresholds Thresholds
+	// DiffThresholds replace Thresholds when the reports are a --diff run's,
+	// as they do for gooze run --diff.
+	DiffThresholds Thresholds
 }
 
 // MergeArgs contains the arguments for merging sharded mutation test reports.
@@ -290,6 +293,13 @@ func (w *workflow) finalizeReports(ctx context.Context, args TestArgs, sel Selec
 	}
 
 	slog.Debug("Regenerated reports index", "path", reportsDir)
+
+	if sel.Narrowed() {
+		if err := w.reports.SaveSelection(ctx, reportsDir, sel.record()); err != nil {
+			slog.Error("Failed to save the run's selection", "error", err, "path", reportsDir)
+			return fmt.Errorf("save selection: %w", err)
+		}
+	}
 
 	score, err := w.runScore(ctx, args, sel, reportsDir, sources, reports)
 	if err != nil {

@@ -4,6 +4,7 @@ package adapter
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -134,6 +135,52 @@ func (rs *LocalReportStore) writeIndex(dirPath string, builder *indexBuilder) er
 	}
 
 	return nil
+}
+
+// SaveSelection writes selection to rpt.SelectionFileName in path, which
+// SaveReports has created.
+func (rs *LocalReportStore) SaveSelection(ctx context.Context, path m.Path, selection rpt.Selection) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	data, err := json.Marshal(selection)
+	if err != nil {
+		return fmt.Errorf("marshal selection: %w", err)
+	}
+
+	file := filepath.Join(string(path), rpt.SelectionFileName)
+	if err := os.WriteFile(file, data, 0o600); err != nil {
+		return fmt.Errorf("write %s: %w", file, err)
+	}
+
+	return nil
+}
+
+// LoadSelection reads rpt.SelectionFileName from path; a missing file is an
+// empty selection.
+func (rs *LocalReportStore) LoadSelection(ctx context.Context, path m.Path) (rpt.Selection, error) {
+	if err := ctx.Err(); err != nil {
+		return rpt.Selection{}, err
+	}
+
+	file := filepath.Join(string(path), rpt.SelectionFileName)
+
+	data, err := os.ReadFile(file) //nolint:gosec // the path is the configured reports directory.
+	if errors.Is(err, os.ErrNotExist) {
+		return rpt.Selection{}, nil
+	}
+
+	if err != nil {
+		return rpt.Selection{}, fmt.Errorf("read %s: %w", file, err)
+	}
+
+	var selection rpt.Selection
+	if err := json.Unmarshal(data, &selection); err != nil {
+		return rpt.Selection{}, fmt.Errorf("parse %s: %w", file, err)
+	}
+
+	return selection, nil
 }
 
 // LoadSpillReports loads previously saved reports from disk into a FileSpill.

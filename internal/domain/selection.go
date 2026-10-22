@@ -27,6 +27,26 @@ type Selection struct {
 	Mutagens []mgen.Type
 }
 
+// record returns what a narrowed run records about its selection.
+func (s Selection) record() rpt.Selection {
+	var record rpt.Selection
+
+	if s.Diff != nil {
+		info := s.Diff.Info()
+		record.Diff, record.Base = info.Ref, info.Base
+	}
+
+	if s.Run != nil {
+		record.Run = s.Run.String()
+	}
+
+	for _, t := range s.Mutagens {
+		record.Mutagens = append(record.Mutagens, t.Name)
+	}
+
+	return record
+}
+
 // RunDirName is the directory, inside the reports directory, where a narrowed
 // run (--diff, --run or --mutagens) writes its reports, so the main reports
 // stay complete until `gooze report merge` folds them in.

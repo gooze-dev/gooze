@@ -145,6 +145,63 @@ func (_c *MockReportStore_CleanReports_Call) RunAndReturn(run func(context.Conte
 	return _c
 }
 
+// LoadSelection provides a mock function with given fields: ctx, path
+func (_m *MockReportStore) LoadSelection(ctx context.Context, path model.Path) (report.Selection, error) {
+	ret := _m.Called(ctx, path)
+
+	if len(ret) == 0 {
+		panic("no return value specified for LoadSelection")
+	}
+
+	var r0 report.Selection
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, model.Path) (report.Selection, error)); ok {
+		return rf(ctx, path)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, model.Path) report.Selection); ok {
+		r0 = rf(ctx, path)
+	} else {
+		r0 = ret.Get(0).(report.Selection)
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, model.Path) error); ok {
+		r1 = rf(ctx, path)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockReportStore_LoadSelection_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'LoadSelection'
+type MockReportStore_LoadSelection_Call struct {
+	*mock.Call
+}
+
+// LoadSelection is a helper method to define mock.On call
+//   - ctx context.Context
+//   - path model.Path
+func (_e *MockReportStore_Expecter) LoadSelection(ctx interface{}, path interface{}) *MockReportStore_LoadSelection_Call {
+	return &MockReportStore_LoadSelection_Call{Call: _e.mock.On("LoadSelection", ctx, path)}
+}
+
+func (_c *MockReportStore_LoadSelection_Call) Run(run func(ctx context.Context, path model.Path)) *MockReportStore_LoadSelection_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(model.Path))
+	})
+	return _c
+}
+
+func (_c *MockReportStore_LoadSelection_Call) Return(_a0 report.Selection, _a1 error) *MockReportStore_LoadSelection_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockReportStore_LoadSelection_Call) RunAndReturn(run func(context.Context, model.Path) (report.Selection, error)) *MockReportStore_LoadSelection_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // LoadSpillReports provides a mock function with given fields: ctx, path
 func (_m *MockReportStore) LoadSpillReports(ctx context.Context, path model.Path) (pkg.FileSpill[model.Report], error) {
 	ret := _m.Called(ctx, path)
@@ -295,6 +352,54 @@ func (_c *MockReportStore_SaveReports_Call) Return(_a0 error) *MockReportStore_S
 }
 
 func (_c *MockReportStore_SaveReports_Call) RunAndReturn(run func(context.Context, model.Path, pkg.FileSpill[model.Report]) error) *MockReportStore_SaveReports_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SaveSelection provides a mock function with given fields: ctx, path, selection
+func (_m *MockReportStore) SaveSelection(ctx context.Context, path model.Path, selection report.Selection) error {
+	ret := _m.Called(ctx, path, selection)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SaveSelection")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, model.Path, report.Selection) error); ok {
+		r0 = rf(ctx, path, selection)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockReportStore_SaveSelection_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SaveSelection'
+type MockReportStore_SaveSelection_Call struct {
+	*mock.Call
+}
+
+// SaveSelection is a helper method to define mock.On call
+//   - ctx context.Context
+//   - path model.Path
+//   - selection report.Selection
+func (_e *MockReportStore_Expecter) SaveSelection(ctx interface{}, path interface{}, selection interface{}) *MockReportStore_SaveSelection_Call {
+	return &MockReportStore_SaveSelection_Call{Call: _e.mock.On("SaveSelection", ctx, path, selection)}
+}
+
+func (_c *MockReportStore_SaveSelection_Call) Run(run func(ctx context.Context, path model.Path, selection report.Selection)) *MockReportStore_SaveSelection_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(model.Path), args[2].(report.Selection))
+	})
+	return _c
+}
+
+func (_c *MockReportStore_SaveSelection_Call) Return(_a0 error) *MockReportStore_SaveSelection_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockReportStore_SaveSelection_Call) RunAndReturn(run func(context.Context, model.Path, report.Selection) error) *MockReportStore_SaveSelection_Call {
 	_c.Call.Return(run)
 	return _c
 }

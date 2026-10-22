@@ -1366,3 +1366,32 @@ func TestLocalReportStore_CheckUpdates_AsksUntestedAboutCurrentSources(t *testin
 		"/abs/b.go": {"boolean"},
 	}, asked, "only sources whose reports are otherwise current are asked about, with their mutagens sorted")
 }
+
+func TestLocalReportStore_Selection(t *testing.T) {
+	ctx := context.Background()
+	dir := m.Path(t.TempDir())
+	rs := NewReportStore()
+
+	got, err := rs.LoadSelection(ctx, dir)
+	require.NoError(t, err)
+	assert.Equal(t, rpt.Selection{}, got, "no record is an empty selection")
+
+	want := rpt.Selection{Diff: "origin/main", Base: "1a2b3c4d", Run: "^Add$", Mutagens: []string{"comparison"}}
+	require.NoError(t, rs.SaveSelection(ctx, dir, want))
+
+	got, err = rs.LoadSelection(ctx, dir)
+	require.NoError(t, err)
+	assert.Equal(t, want, got)
+
+	reports, err := rs.LoadSpillReports(ctx, dir)
+	require.NoError(t, err)
+	assert.Equal(t, uint64(0), reports.Len(), "the record isn't a report")
+	require.NoError(t, reports.Close())
+
+	require.NoError(t, os.WriteFile(filepath.Join(string(dir), rpt.SelectionFileName), []byte("{"), 0o600))
+	_, err = rs.LoadSelection(ctx, dir)
+	require.Error(t, err, "a broken record is an error")
+
+	require.Error(t, rs.SaveSelection(ctx, m.Path(filepath.Join(string(dir), "missing")), want),
+		"the run's reports directory must exist")
+}
