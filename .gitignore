@@ -39,6 +39,8 @@ go.work.sum
 # Output directory for mutation testing reports
 .gooze-reports/
 gooze.yaml
+# The repo's own config (mutation testing in CI) is tracked.
+!/gooze.yaml
 *.log
 *.log.*
 gooze
