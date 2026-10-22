@@ -137,6 +137,17 @@ func checkSingle(value any) error {
 // fractional part, which cast would silently turn into 1 or truncate. On
 // error the int is meaningless.
 func wholeNumber(value any) (int, error) {
+	// Strings (env vars, quoted YAML) are read in base 10: cast reads a leading
+	// 0 as octal and 0x as hex, so "010" would be 8.
+	if s, ok := value.(string); ok {
+		n, err := strconv.Atoi(strings.TrimSpace(s))
+		if err != nil {
+			return n, fmt.Errorf("%s is not a whole number", describe(value))
+		}
+
+		return n, nil
+	}
+
 	n, err := cast.ToIntE(value)
 	_, isBool := value.(bool)
 	x, isFloat := value.(float64)
@@ -146,6 +157,14 @@ func wholeNumber(value any) (int, error) {
 	}
 
 	return n, nil
+}
+
+// configInt returns the whole-number value of key, read the way
+// validateConfig checks it (strings in base 10).
+func configInt(key string) int {
+	n, _ := wholeNumber(viper.Get(key))
+
+	return n
 }
 
 // checkEnum accepts one of field.Enum as written, or, for an IntEnum field
@@ -362,9 +381,9 @@ func configureLogger(logPath string, verbose bool) {
 
 	logWriter := &lumberjack.Logger{
 		Filename:   logPath,
-		MaxSize:    viper.GetInt(config.KeyLogMaxSize),
-		MaxBackups: viper.GetInt(config.KeyLogMaxBackups),
-		MaxAge:     viper.GetInt(config.KeyLogMaxAge),
+		MaxSize:    configInt(config.KeyLogMaxSize),
+		MaxBackups: configInt(config.KeyLogMaxBackups),
+		MaxAge:     configInt(config.KeyLogMaxAge),
 		Compress:   viper.GetBool(config.KeyLogCompress),
 	}
 

@@ -216,3 +216,31 @@ func TestSchemaDefault(t *testing.T) {
 	assert.Equal(t, "overlay", schemaDefault[string](config.KeyRunWorkspace))
 	assert.Empty(t, schemaDefault[string]("missing"))
 }
+
+func TestWholeNumber_StringsAreDecimal(t *testing.T) {
+	for _, tt := range []struct {
+		value   any
+		want    int
+		wantErr string
+	}{
+		{value: "010", want: 10},
+		{value: "08", want: 8},
+		{value: " 12 ", want: 12},
+		{value: "-3", want: -3},
+		{value: 7, want: 7},
+		{value: "0x10", wantErr: `"0x10" is not a whole number`},
+		{value: "0o7", wantErr: `"0o7" is not a whole number`},
+		{value: "1_000", wantErr: `"1_000" is not a whole number`},
+	} {
+		t.Run(fmt.Sprint(tt.value), func(t *testing.T) {
+			got, err := wholeNumber(tt.value)
+			if tt.wantErr != "" {
+				require.EqualError(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}

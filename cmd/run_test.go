@@ -564,6 +564,31 @@ func TestRunCmd_HelpShowsSchemaDefaults(t *testing.T) {
 	assert.NotContains(t, output.String(), "env-reports")
 }
 
+func TestRunCmd_MutationTimeoutEnvIsDecimal(t *testing.T) {
+	t.Setenv("GOOZE_RUN_MUTATION_TIMEOUT", "090")
+	t.Cleanup(func() { newRunCmd() })
+
+	mockWorkflow := domainmocks.NewMockWorkflow(t)
+
+	cmd := newRootCmd()
+	cmd.AddCommand(newRunCmd())
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+
+	originalWorkflow := workflow
+	workflow = mockWorkflow
+	defer func() { workflow = originalWorkflow }()
+
+	mockWorkflow.On("Test", mock.Anything, mock.MatchedBy(func(args domain.TestArgs) bool {
+		return args.MutationTimeout == 90*time.Second
+	})).Return(nil)
+
+	cmd.SetArgs([]string{"run", "./..."})
+	require.NoError(t, cmd.Execute())
+
+	mockWorkflow.AssertExpectations(t)
+}
+
 func TestRunCmd_ParallelPrecedence(t *testing.T) {
 	tests := []struct {
 		name string
@@ -576,6 +601,8 @@ func TestRunCmd_ParallelPrecedence(t *testing.T) {
 		{"yaml over default", "run:\n  parallel: 3\n", "", nil, 3},
 		{"env over yaml", "run:\n  parallel: 3\n", "5", nil, 5},
 		{"flag over env", "run:\n  parallel: 3\n", "5", []string{"--parallel", "7"}, 7},
+		{"env with a leading zero is decimal", "", "010", nil, 10},
+		{"yaml string with a leading zero is decimal", "run:\n  parallel: \"010\"\n", "", nil, 10},
 	}
 
 	t.Cleanup(func() { newRunCmd() })
