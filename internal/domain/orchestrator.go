@@ -287,8 +287,8 @@ type overlay struct {
 }
 
 func (ws *overlayWorkspace) Run(ctx context.Context, mutation m.Mutation) (m.Result, error) {
-	if err := ctx.Err(); err != nil {
-		return resultForStatus(mutation, rpt.Timeout), nil
+	if result, canceled := canceledResult(ctx, mutation); canceled {
+		return result, nil
 	}
 
 	if err := validateMutation(mutation); err != nil {
@@ -361,6 +361,16 @@ func (ws *overlayWorkspace) Close(ctx context.Context) {
 	}
 
 	ws.tmpDir = ""
+}
+
+// canceledResult reports whether ctx is done and, if so, the mutation's
+// result: a canceled run is a timeout, not an error.
+func canceledResult(ctx context.Context, mutation m.Mutation) (m.Result, bool) {
+	if ctx.Err() != nil {
+		return resultForStatus(mutation, rpt.Timeout), true
+	}
+
+	return nil, false
 }
 
 func validateMutation(mutation m.Mutation) error {

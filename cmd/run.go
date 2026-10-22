@@ -49,7 +49,6 @@ func newRunCmd() *cobra.Command {
 			}
 
 			estimateArgs := runEstimateArgs(args)
-			reportsPath := estimateArgs.Reports
 
 			if runEstimateFlag {
 				return workflow.Estimate(cmd.Context(), estimateArgs)
@@ -69,25 +68,29 @@ func newRunCmd() *cobra.Command {
 				return err
 			}
 
-			timeoutSeconds := viper.GetInt64(config.KeyRunMutationTimeout)
-
-			return workflow.Test(cmd.Context(), domain.TestArgs{
-				EstimateArgs:    estimateArgs,
-				Reports:         reportsPath,
-				Threads:         viper.GetInt(config.KeyRunParallel),
-				ShardIndex:      shardIndex,
-				TotalShardCount: totalShards,
-				MutationTimeout: time.Duration(timeoutSeconds) * time.Second,
-				CoverageProfile: m.Path(viper.GetString(config.KeyRunCoverageProfile)),
-				Workspace:       domain.WorkspaceMode(viper.GetString(config.KeyRunWorkspace)),
-				Thresholds:      minimums,
-			})
+			return workflow.Test(cmd.Context(), runTestArgs(estimateArgs, shardIndex, totalShards, minimums))
 		},
 	}
 
 	thresholds, diffThresholds = configureRunFlags(cmd)
 
 	return cmd
+}
+
+// runTestArgs builds the arguments of a test run from the parsed flags and
+// the config.
+func runTestArgs(estimateArgs domain.EstimateArgs, shardIndex, totalShards int, minimums domain.Thresholds) domain.TestArgs {
+	return domain.TestArgs{
+		EstimateArgs:    estimateArgs,
+		Reports:         estimateArgs.Reports,
+		Threads:         viper.GetInt(config.KeyRunParallel),
+		ShardIndex:      shardIndex,
+		TotalShardCount: totalShards,
+		MutationTimeout: time.Duration(viper.GetInt64(config.KeyRunMutationTimeout)) * time.Second,
+		CoverageProfile: m.Path(viper.GetString(config.KeyRunCoverageProfile)),
+		Workspace:       domain.WorkspaceMode(viper.GetString(config.KeyRunWorkspace)),
+		Thresholds:      minimums,
+	}
 }
 
 func init() {
