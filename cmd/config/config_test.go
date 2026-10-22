@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
+	"gooze.dev/pkg/gooze/pkg/config"
 )
 
 func execInit(t *testing.T, dir string) error {
@@ -46,7 +47,35 @@ func TestConfigInit_WritesFile(t *testing.T) {
 
 	data, err := os.ReadFile(filepath.Join(dir, "gooze.yaml"))
 	require.NoError(t, err)
-	require.NotEmpty(t, data)
+	require.Equal(t, string(config.DefaultFile()), string(data))
+}
+
+func TestConfigInit_IgnoresEnvAndFlags(t *testing.T) {
+	t.Setenv("GOOZE_RUN_PARALLEL", "8")
+	t.Setenv("GOOZE_PATHS_EXCLUDE", "a b")
+
+	dir := t.TempDir()
+
+	viper.Reset()
+	viper.SetEnvPrefix("GOOZE")
+	viper.AutomaticEnv()
+	viper.Set("no-cache", true)
+	t.Cleanup(viper.Reset)
+
+	cmd := New(Deps{Dir: dir, FileName: "gooze.yaml"})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{"init"})
+	require.NoError(t, cmd.Execute())
+
+	data, err := os.ReadFile(filepath.Join(dir, "gooze.yaml"))
+	require.NoError(t, err)
+	require.Equal(t, string(config.DefaultFile()), string(data))
+}
+
+func TestConfigInit_ReportsWriteFailure(t *testing.T) {
+	err := execInit(t, filepath.Join(t.TempDir(), "missing-dir"))
+	require.ErrorContains(t, err, "failed to write config file")
 }
 
 func TestConfigInit_ErrorsWhenFileExists(t *testing.T) {
@@ -54,7 +83,11 @@ func TestConfigInit_ErrorsWhenFileExists(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "gooze.yaml"), []byte("existing: true\n"), 0o600))
 
 	err := execInit(t, dir)
-	require.ErrorContains(t, err, filepath.Join(dir, "gooze.yaml")+" already exists")
+	require.EqualError(t, err, filepath.Join(dir, "gooze.yaml")+" already exists; edit it or remove it first")
+
+	data, readErr := os.ReadFile(filepath.Join(dir, "gooze.yaml"))
+	require.NoError(t, readErr)
+	require.Equal(t, "existing: true\n", string(data), "an existing file is never overwritten")
 }
 
 func TestConfigHasInitSubcommand(t *testing.T) {
