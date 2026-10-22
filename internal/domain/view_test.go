@@ -66,8 +66,8 @@ func TestWorkflow_View_SummarizesPerFileWithSurvivors(t *testing.T) {
 			{Path: "pkg/a.go", Total: 3, Killed: 1, Survived: 1, Error: 1},
 		},
 		Survivors: []domain.Survivor{
-			{Path: "cmd/b.go", Mutagen: "boolean", Status: rpt.NotCovered},
-			{Path: "pkg/a.go", Line: 10, Mutagen: "comparison", Status: rpt.Survived, Original: "if n < lo {", Mutated: "if n <= lo {"},
+			{Path: "cmd/b.go", Mutagen: "boolean", Status: rpt.NotCovered, MutationID: "b-1"},
+			{Path: "pkg/a.go", Line: 10, Mutagen: "comparison", Status: rpt.Survived, Original: "if n < lo {", Mutated: "if n <= lo {", MutationID: "a-2"},
 		},
 	}, summary)
 }
@@ -149,5 +149,5 @@ func TestWorkflow_View_SurvivorWithoutChangedLineHasNoLocation(t *testing.T) {
 	writeReports(t, dir, m.Report{Source: source, Result: m.Result{mgen.Boolean: {{MutationID: "a-1", Status: rpt.Survived}}}, Diff: &headersOnly})
 
 	summary := viewSummary(t, domain.ViewArgs{Reports: m.Path(dir)})
-	assert.Equal(t, []domain.Survivor{{Path: "a.go", Mutagen: "boolean", Status: rpt.Survived}}, summary.Survivors)
+	assert.Equal(t, []domain.Survivor{{Path: "a.go", Mutagen: "boolean", Status: rpt.Survived, MutationID: "a-1"}}, summary.Survivors)
 }

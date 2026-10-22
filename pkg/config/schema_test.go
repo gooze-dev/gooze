@@ -26,6 +26,7 @@ func TestDefaults(t *testing.T) {
 		KeyThresholdDiffTotal:   0.0,
 		KeyThresholdDiffAverage: 0.0,
 		KeyThresholdDiffFile:    0.0,
+		KeyReportFormat:         "text",
 		KeyLogFilename:          ".gooze.log",
 		KeyLogLevel:             "info",
 		KeyLogVerbose:           false,
@@ -96,6 +97,8 @@ func TestLookup_Kinds(t *testing.T) {
 		KeyThresholdTotal:     KindFloat,
 		"threshold.diff":      KindObject,
 		KeyThresholdDiffFile:  KindFloat,
+		"report":              KindObject,
+		KeyReportFormat:       KindEnum,
 		"log":                 KindObject,
 		KeyLogCompress:        KindBool,
 	}
@@ -201,6 +204,15 @@ func TestRunMutagensListsItsValues(t *testing.T) {
 		"bitwise", "increment", "assignment", "branch", "statement", "loop",
 	}, field.Enum, "each item of run.mutagens must be one of these")
 	assert.Equal(t, "Mutagens to run (arithmetic, boolean, numbers, comparison, logical, unary, bitwise, increment, assignment, branch, statement, loop); empty runs the default ones, all but branch, statement and loop.", field.Doc)
+}
+
+func TestReportFormatListsItsValues(t *testing.T) {
+	field, ok := Lookup(KeyReportFormat)
+	require.True(t, ok)
+	assert.Equal(t, KindEnum, field.Kind)
+	assert.False(t, field.IntEnum)
+	assert.Equal(t, "text", field.Default)
+	assert.Equal(t, []string{"text", "github"}, field.Enum)
 }
 
 func TestRunWorkspaceListsItsValues(t *testing.T) {

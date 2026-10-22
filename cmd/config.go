@@ -54,15 +54,20 @@ func init() {
 		viper.SetDefault(key, field.Default)
 	}
 
-	if err := viper.ReadInConfig(); err != nil {
-		var notFound viper.ConfigFileNotFoundError
-		// A missing config file is expected; only warn on real read errors.
-		if errors.As(err, &notFound) || errors.Is(err, os.ErrNotExist) {
-			return
-		}
+	readConfigFile()
+}
 
-		slog.Warn("failed to read config file", "error", err)
+// readConfigFile reads gooze.yaml into viper. A missing file is expected; any
+// other read error is logged as a warning.
+func readConfigFile() {
+	err := viper.ReadInConfig()
+
+	var notFound viper.ConfigFileNotFoundError
+	if err == nil || errors.As(err, &notFound) || errors.Is(err, os.ErrNotExist) {
+		return
 	}
+
+	slog.Warn("failed to read config file", "error", err)
 }
 
 // validateConfig checks the effective value of every key (from flags,
@@ -337,9 +342,6 @@ func editDistance(a, b string) int {
 
 func parseSlogLevel(value string, defaultLevel slog.Level) slog.Level {
 	level := strings.ToLower(strings.TrimSpace(value))
-	if level == "" {
-		return defaultLevel
-	}
 
 	switch level {
 	case "debug":

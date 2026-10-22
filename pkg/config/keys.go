@@ -19,6 +19,7 @@ const (
 	KeyThresholdDiffTotal   = "threshold.diff.total"
 	KeyThresholdDiffAverage = "threshold.diff.average"
 	KeyThresholdDiffFile    = "threshold.diff.file"
+	KeyReportFormat         = "report.format"
 	KeyLogFilename          = "log.filename"
 	KeyLogLevel             = "log.level"
 	KeyLogVerbose           = "log.verbose"
