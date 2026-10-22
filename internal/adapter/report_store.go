@@ -117,7 +117,8 @@ func (rs *LocalReportStore) rangeReportsInDir(dirPath string, fn func(m.Report) 
 
 func (rs *LocalReportStore) writeIndex(dirPath string, builder *indexBuilder) error {
 	indexPath := filepath.Join(dirPath, rpt.IndexFileName)
-	if builder.count == 0 {
+	// Equivalent: count only goes up from 0, so <= 0 is == 0.
+	if builder.count == 0 { //gooze:ignore comparison
 		if err := os.Remove(indexPath); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("remove index file %s: %w", indexPath, err)
 		}
@@ -248,7 +249,8 @@ func (rs *LocalReportStore) CleanReports(ctx context.Context, path m.Path, sourc
 }
 
 func (rs *LocalReportStore) cleanReportsIn(dirPath string, toCleanPaths, toCleanHashes map[string]bool) error {
-	if len(toCleanPaths) == 0 && len(toCleanHashes) == 0 {
+	// Equivalent: a length is never below 0, and with both matchers empty the walk below removes nothing either.
+	if len(toCleanPaths) == 0 && len(toCleanHashes) == 0 { //gooze:ignore comparison
 		return nil
 	}
 
@@ -278,11 +280,13 @@ func (rs *LocalReportStore) buildCleanMatchers(sources pkg.FileSpill[rpt.Source]
 			return nil
 		}
 
-		if key := src.Key(); key != "" {
+		// Equivalent: >= "" is always true, and an empty key never matches, since shouldCleanReport skips it.
+		if key := src.Key(); key != "" { //gooze:ignore comparison
 			paths[key] = true
 		}
 
-		if src.Origin.Hash != "" {
+		// Equivalent: >= "" is always true, and an empty hash is never looked up, since shouldCleanReport skips it.
+		if src.Origin.Hash != "" { //gooze:ignore comparison
 			hashes[src.Origin.Hash] = true
 		}
 
@@ -300,11 +304,13 @@ func (rs *LocalReportStore) shouldCleanReport(source rpt.Source, toCleanPaths ma
 		return false
 	}
 
-	if key := source.Key(); key != "" && toCleanPaths[key] {
+	// Equivalent: >= "" is always true, and "" is never in toCleanPaths (buildCleanMatchers skips it).
+	if key := source.Key(); key != "" && toCleanPaths[key] { //gooze:ignore comparison
 		return true
 	}
 
-	if source.Origin.Hash != "" {
+	// Equivalent: >= "" is always true, and "" is never in toCleanHashes (buildCleanMatchers skips it).
+	if source.Origin.Hash != "" { //gooze:ignore comparison
 		if toCleanHashes[source.Origin.Hash] {
 			return true
 		}
@@ -522,7 +528,8 @@ func (rs *LocalReportStore) mutatorsChanged(stored map[string]int) bool {
 	// Check if any mutator versions changed for mutators that were stored
 	for name, storedVersion := range stored {
 		// -1 indicates version mismatch across reports - needs re-run
-		if storedVersion == -1 {
+		// Equivalent: a shortcut: -1, like any stored version that isn't the current one, returns true below anyway.
+		if storedVersion == -1 { //gooze:ignore comparison, numbers
 			return true
 		}
 
@@ -560,7 +567,8 @@ func decodeReport(report rpt.Report) m.Report {
 }
 
 func encodeResult(result m.Result) []rpt.Result {
-	if len(result) == 0 {
+	// Equivalent: a shortcut: an empty result gives an empty, non-nil slice below too.
+	if len(result) == 0 { //gooze:ignore comparison
 		return []rpt.Result{}
 	}
 
@@ -571,10 +579,12 @@ func encodeResult(result m.Result) []rpt.Result {
 
 	sort.Slice(keys, func(i, j int) bool {
 		if keys[i].Name != keys[j].Name {
-			return keys[i].Name < keys[j].Name
+			// Equivalent: only reached when the names differ, so <= is <.
+			return keys[i].Name < keys[j].Name //gooze:ignore comparison
 		}
 
-		return keys[i].Version < keys[j].Version
+		// Equivalent: two map keys never share a name and a version, so <= is <.
+		return keys[i].Version < keys[j].Version //gooze:ignore comparison
 	})
 
 	entries := make([]rpt.Result, 0, len(keys))
@@ -606,7 +616,8 @@ func encodeResult(result m.Result) []rpt.Result {
 }
 
 func decodeResult(entries []rpt.Result) m.Result {
-	if len(entries) == 0 {
+	// Equivalent: a shortcut: no entries give an empty result below too.
+	if len(entries) == 0 { //gooze:ignore comparison
 		return m.Result{}
 	}
 

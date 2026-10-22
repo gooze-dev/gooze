@@ -99,7 +99,7 @@ func TestReportPull(t *testing.T) {
 	pub.On("Pull", mock.Anything, mock.MatchedBy(func(args domain.PullArgs) bool {
 		return args.Ref == "ghcr.io/org/repo:tag" &&
 			args.Reports == m.Path("/tmp/reports") &&
-			args.Insecure
+			args.Insecure && !args.PlainHTTP
 	})).Return(nil)
 
 	deps := Deps{Workflow: domainmocks.NewMockWorkflow(t), Publisher: pub, OutputKey: testOutputKey}
