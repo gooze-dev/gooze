@@ -137,6 +137,35 @@ func TestSelectionLine(t *testing.T) {
 	}
 }
 
+func TestFormatMutationScore_InterruptedRun(t *testing.T) {
+	score := domain.MutationScore{
+		Summary:     rpt.Summary{Total: 9, Killed: 5, Survived: 1},
+		Cached:      3,
+		Tested:      6,
+		Interrupted: true,
+		Planned:     130,
+	}
+
+	want := "55.56% (5 killed, 1 survived; 3 cached, 6 tested; interrupted after 6 of 130)"
+	if got := formatMutationScore(score); got != want {
+		t.Errorf("formatMutationScore() = %q, want %q", got, want)
+	}
+
+	score.Selection = "functions matching ^Add$"
+
+	want = "55.56% (5 killed, 1 survived; 3 cached, 6 tested; functions matching ^Add$; interrupted after 6 of 130)"
+	if got := formatMutationScore(score); got != want {
+		t.Errorf("formatMutationScore() = %q, want %q", got, want)
+	}
+
+	none := domain.MutationScore{Interrupted: true, Planned: 130}
+
+	want = "100.00% (no mutations; interrupted after 0 of 130)"
+	if got := formatMutationScore(none); got != want {
+		t.Errorf("formatMutationScore() = %q, want %q", got, want)
+	}
+}
+
 func TestFormatMutationScore_NarrowedRun(t *testing.T) {
 	score := domain.MutationScore{
 		Summary:   rpt.Summary{Total: 4, Killed: 2, Survived: 2},

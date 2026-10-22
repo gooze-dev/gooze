@@ -19,6 +19,10 @@ func formatMutationScore(score domain.MutationScore) string {
 		breakdown += "; " + score.Selection
 	}
 
+	if score.Interrupted {
+		breakdown += fmt.Sprintf("; interrupted after %d of %d", score.Tested, score.Planned)
+	}
+
 	return fmt.Sprintf("%.2f%% (%s)", score.Score()*100, breakdown)
 }
 
