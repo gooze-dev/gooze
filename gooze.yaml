@@ -1,0 +1,36 @@
+# gooze's own mutation testing settings. Every key is listed; the ones that
+# differ from the defaults are paths.exclude and threshold.diff.total.
+# Reference: https://gooze.dev/docs/config/
+version: 1                    # Config schema version.
+output: .gooze-reports        # Directory where mutation reports are written.
+no-cache: false               # Disable incremental caching and force a full re-run.
+no-update-check: false        # Disable the check for a newer gooze release.
+
+paths:                        # Path selection settings.
+  exclude: ['^vendor/', '^mock_'] # Regular-expression patterns of files to skip (e.g. '^vendor/').
+
+run:                          # Mutation run settings.
+  parallel: 1                 # Number of concurrent mutation workers.
+  mutation_timeout: 120       # Per-mutation timeout in seconds.
+  coverage_profile: ''        # Go coverage profile; mutations on uncovered lines are reported as not_covered without running tests.
+  diff: ''                    # Git ref to diff against; only lines changed since its merge base with HEAD are mutated. Requires git. Empty runs everything.
+  mutagens: []                # Mutagens to run (arithmetic, boolean, numbers, comparison, logical, unary, bitwise, increment, assignment, branch, statement, loop); empty runs the default ones, all but branch, statement and loop.
+  workspace: overlay          # How mutants are built: overlay tests them in the project through go test -overlay, without copying it; deep-copy tests them in a per-worker copy of the project, for tests that build the project's code in a subprocess, read its source files or write next to themselves.
+
+threshold:                    # Minimum mutation scores in percent; below one, gooze exits with code 3. 0 turns a threshold off.
+  total: 0                    # Minimum for the score of all mutations.
+  average: 0                  # Minimum for the average of the per-file scores.
+  file: 0                     # Minimum for the score every file must reach.
+  diff:                       # Thresholds for --diff runs, scored on the changed lines; they replace the ones above there.
+    total: 100                 # Minimum for the changed lines' score.
+    average: 0                # Minimum for the average of the changed files' scores.
+    file: 0                   # Minimum for the score every changed file must reach.
+
+log:                          # Logging settings.
+  filename: .gooze.log        # Log file path.
+  level: info                 # Log severity: debug, info, warn or error, or a numeric slog level (-4 debug, 0 info, 4 warn, 8 error).
+  verbose: false              # Enable debug-level logging.
+  max_size: 10                # Max log size in MiB before rotation.
+  max_backups: 3              # Number of rotated log files to retain.
+  max_age: 28                 # Days to keep rotated logs.
+  compress: true              # Gzip rotated logs.
