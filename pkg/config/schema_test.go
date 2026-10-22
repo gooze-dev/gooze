@@ -20,6 +20,7 @@ func TestDefaults(t *testing.T) {
 		KeyRunDiff:              "",
 		KeyRunMutagens:          []string{},
 		KeyRunWorkspace:         "overlay",
+		KeyRunEnumBounds:        false,
 		KeyThresholdTotal:       0.0,
 		KeyThresholdAverage:     0.0,
 		KeyThresholdFile:        0.0,
@@ -62,7 +63,7 @@ func TestLookup_Object(t *testing.T) {
 		names = append(names, child.Name)
 	}
 
-	assert.Equal(t, []string{"parallel", "mutation_timeout", "coverage_profile", "diff", "mutagens", "workspace"}, names)
+	assert.Equal(t, []string{"parallel", "mutation_timeout", "coverage_profile", "diff", "mutagens", "workspace", "enum_bounds"}, names)
 }
 
 func TestLookup_Missing(t *testing.T) {

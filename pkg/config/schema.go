@@ -74,6 +74,10 @@ func runField() Field {
 			Name: "workspace", Kind: KindEnum, Default: "overlay", Enum: []string{"overlay", "deep-copy"},
 			Doc: "How mutants are built: overlay tests them in the project through go test -overlay, without copying it; deep-copy tests them in a per-worker copy of the project, for tests that build the project's code in a subprocess, read its source files or write next to themselves.",
 		},
+		{
+			Name: "enum_bounds", Kind: KindBool, Default: false,
+			Doc: "Treat the lowest and highest constant of a defined integer type as its bounds, so v == Lowest isn't mutated to v <= Lowest. Only safe when no value of the type is converted from an arbitrary integer.",
+		},
 	}}
 }
 

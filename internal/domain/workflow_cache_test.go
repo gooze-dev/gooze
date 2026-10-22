@@ -59,7 +59,7 @@ func cachedRunWorkflow(t *testing.T, sources []rpt.Source, mutations map[string]
 	fs := domainmocks.NewMockSourceFSAdapter(t)
 	fs.EXPECT().Stream(mock.Anything, mock.Anything).Return(streamSources(sources))
 
-	stream := func(_ context.Context, source rpt.Source, fn func(m.Mutation) error, types ...mgen.Type) error {
+	stream := func(_ context.Context, source rpt.Source, _ domain.MutationOptions, fn func(m.Mutation) error, types ...mgen.Type) error {
 		for _, mutation := range mutations[source.Key()] {
 			// A mutation without a type is arithmetic, as in the fixture.
 			if !slices.Contains(types, cmp.Or(mutation.Type, mgen.Arithmetic)) {
@@ -83,10 +83,10 @@ func cachedRunWorkflow(t *testing.T, sources []rpt.Source, mutations map[string]
 
 	mutagen := domainmocks.NewMockMutagen(t)
 	mutagen.EXPECT().
-		StreamMutations(mock.Anything, mock.Anything, mock.Anything, typeArgs(domain.DefaultMutations)...).
+		StreamMutations(mock.Anything, mock.Anything, mock.Anything, mock.Anything, typeArgs(domain.DefaultMutations)...).
 		RunAndReturn(stream).Maybe()
 	mutagen.EXPECT().
-		StreamMutations(mock.Anything, mock.Anything, mock.Anything, typeArgs(missing)...).
+		StreamMutations(mock.Anything, mock.Anything, mock.Anything, mock.Anything, typeArgs(missing)...).
 		RunAndReturn(stream).Maybe()
 
 	workspace := domainmocks.NewMockWorkspace(t)
