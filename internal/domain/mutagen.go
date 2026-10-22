@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"go/ast"
+	"go/scanner"
 	"go/token"
 	"slices"
 
@@ -149,10 +150,12 @@ func (ix ignoreIndex) visit(n ast.Node, fset *token.FileSet, mutationType mgen.T
 	return true, true
 }
 
-// keepChanged drops the mutations that a line directive ignores on the line
-// they change, counted like the directives (honoring //line comments). Block
-// mutagens (increment, assignment) visit a block but change one of its
-// statements, so the ignore of the visited node's own line isn't enough.
+// keepChanged drops the mutations that a directive ignores where they change
+// the file: a line directive of the changed line, counted like the
+// directives (honoring //line comments), or a file or function directive that
+// lists the mutant's replacement (see replacementOf). Block mutagens
+// (increment, assignment) visit a block but change one of its statements, so
+// the ignore of the visited node's own line isn't enough.
 func (ix ignoreIndex) keepChanged(
 	mutations []m.Mutation,
 	fset *token.FileSet,
@@ -167,11 +170,43 @@ func (ix ignoreIndex) keepChanged(
 
 	return slices.DeleteFunc(mutations, func(mutation m.Mutation) bool {
 		// An unchanged mutation (offset -1) has no position, so no rule.
-		offset := firstDifference(content, mutation.MutatedCode)
-		rule, ok := ix.line[fset.PositionFor(tokenFile.Pos(offset), true).Line]
+		line := fset.PositionFor(tokenFile.Pos(firstDifference(content, mutation.MutatedCode)), true).Line
+		replacement := func() string { return replacementOf(content, mutation.MutatedCode) }
 
-		return ok && rule.ignores(mutationType)
+		return ix.line[line].ignoresMutant(mutationType, replacement) ||
+			ix.funcLine[line].ignoresMutant(mutationType, replacement) ||
+			ix.file.ignoresMutant(mutationType, replacement)
 	})
+}
+
+// replacementOf returns the token mutated writes where it differs from
+// original: the last Go token of mutated that starts at or before the first
+// difference, such as <=, --, false or 0.5, or "" when they don't differ.
+func replacementOf(original, mutated []byte) string {
+	offset := firstDifference(original, mutated)
+
+	fset := token.NewFileSet()
+	file := fset.AddFile("", fset.Base(), len(mutated))
+
+	var s scanner.Scanner
+
+	// Equivalent: the first difference is never inside a comment, so scanning
+	// comments (mode 1) finds the same token.
+	s.Init(file, mutated, nil, 0) //gooze:ignore numbers
+
+	found := ""
+
+	for {
+		pos, tok, lit := s.Scan()
+		if tok == token.EOF || file.Offset(pos) > offset {
+			return found
+		}
+
+		found = lit
+		if !tok.IsLiteral() {
+			found = tok.String()
+		}
+	}
 }
 
 // walkMutations visits the file once for mutationType and hands each mutation

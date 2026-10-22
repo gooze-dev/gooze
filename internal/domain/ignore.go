@@ -10,21 +10,39 @@ import (
 	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
 )
 
+// ignoreRule is what one scope's directives ignore: everything, or per
+// lower-case mutagen name either every mutant (a nil set) or the mutants that
+// write one of the listed replacements.
 type ignoreRule struct {
 	all   bool
-	names map[string]struct{}
+	names map[string]map[string]struct{}
 }
 
+// ignores reports whether the rule ignores every mutant of mutationType.
 func (r ignoreRule) ignores(mutationType mgen.Type) bool {
 	if r.all {
 		return true
 	}
 
-	if len(r.names) == 0 {
+	replacements, ok := r.names[strings.ToLower(mutationType.Name)]
+
+	return ok && replacements == nil
+}
+
+// ignoresMutant reports whether the rule ignores the mutant of mutationType
+// that writes replacement; replacement is only computed when the rule lists
+// replacements for mutationType.
+func (r ignoreRule) ignoresMutant(mutationType mgen.Type, replacement func() string) bool {
+	if r.ignores(mutationType) {
+		return true
+	}
+
+	replacements := r.names[strings.ToLower(mutationType.Name)]
+	if replacements == nil {
 		return false
 	}
 
-	_, ok := r.names[strings.ToLower(mutationType.Name)]
+	_, ok := replacements[replacement()]
 
 	return ok
 }
@@ -42,11 +60,32 @@ func mergeIgnoreRule(dst *ignoreRule, src ignoreRule) {
 	}
 
 	if dst.names == nil {
-		dst.names = make(map[string]struct{}, len(src.names))
+		dst.names = make(map[string]map[string]struct{}, len(src.names))
 	}
 
-	for name := range src.names {
-		dst.names[name] = struct{}{}
+	for name, replacements := range src.names {
+		mergeReplacements(dst.names, name, replacements)
+	}
+}
+
+// mergeReplacements adds to names that name ignores replacements; a nil set,
+// every mutant, wins over any list.
+func mergeReplacements(names map[string]map[string]struct{}, name string, replacements map[string]struct{}) {
+	current, listed := names[name]
+
+	switch {
+	case listed && current == nil:
+	case replacements == nil:
+		names[name] = nil
+	default:
+		if current == nil {
+			current = map[string]struct{}{}
+			names[name] = current
+		}
+
+		for replacement := range replacements {
+			current[replacement] = struct{}{}
+		}
 	}
 }
 
@@ -60,9 +99,17 @@ func parseIgnoreDirective(commentText string) (ignoreRule, bool) {
 		return ignoreRule{all: true}, true
 	}
 
-	rule := ignoreRule{names: make(map[string]struct{}, len(d.Names))}
+	rule := ignoreRule{names: make(map[string]map[string]struct{}, len(d.Names))}
 	for _, name := range d.Names {
-		rule.names[strings.ToLower(name.Text)] = struct{}{}
+		var replacements map[string]struct{}
+		if name.Replacements != nil {
+			replacements = map[string]struct{}{}
+			for _, replacement := range name.Replacements {
+				replacements[replacement] = struct{}{}
+			}
+		}
+
+		mergeReplacements(rule.names, strings.ToLower(name.Text), replacements)
 	}
 
 	return rule, true
@@ -71,7 +118,10 @@ func parseIgnoreDirective(commentText string) (ignoreRule, bool) {
 type ignoreIndex struct {
 	file      ignoreRule
 	funcByPos map[token.Pos]ignoreRule
-	line      map[int]ignoreRule
+	// funcLine is the rule of the function each line belongs to, for the
+	// rules that ignore single mutants (see keepChanged).
+	funcLine map[int]ignoreRule
+	line     map[int]ignoreRule
 }
 
 func buildIgnoreIndex(file *ast.File, fset *token.FileSet, content []byte) ignoreIndex {
@@ -79,7 +129,7 @@ func buildIgnoreIndex(file *ast.File, fset *token.FileSet, content []byte) ignor
 	fileRule := buildFileIgnoreRule(file)
 	lineRules := buildLineIgnoreRules(file, fset, content, funcDocGroups)
 
-	return ignoreIndex{file: fileRule, funcByPos: funcByPos, line: lineRules}
+	return ignoreIndex{file: fileRule, funcByPos: funcByPos, funcLine: funcLineRules(file, fset, funcByPos), line: lineRules}
 }
 
 func buildFuncIgnoreRules(file *ast.File) (map[token.Pos]ignoreRule, map[*ast.CommentGroup]struct{}) {
@@ -206,4 +256,28 @@ func isLeadingComment(line int, slashOffset int, lineStarts []int, content []byt
 	}
 
 	return true
+}
+
+// funcLineRules maps each line of a function with a rule to that rule, counted
+// like the line directives (honoring //line comments).
+func funcLineRules(file *ast.File, fset *token.FileSet, funcByPos map[token.Pos]ignoreRule) map[int]ignoreRule {
+	lines := map[int]ignoreRule{}
+
+	for _, decl := range file.Decls {
+		fd, ok := decl.(*ast.FuncDecl)
+		if !ok {
+			continue
+		}
+
+		rule, ok := funcByPos[fd.Pos()]
+		if !ok {
+			continue
+		}
+
+		for line := fset.PositionFor(fd.Pos(), true).Line; line <= fset.PositionFor(fd.End(), true).Line; line++ {
+			lines[line] = rule
+		}
+	}
+
+	return lines
 }
