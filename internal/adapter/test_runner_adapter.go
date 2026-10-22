@@ -33,7 +33,7 @@ func (a *LocalTestRunnerAdapter) RunGoTest(ctx context.Context, workDir, testFil
 
 	args = append(args, pkgDir)
 
-	cmd := exec.CommandContext(ctx, "go", args...) //nolint:gosec // pkgDir lies inside the project or its copy; overlay is gooze's own temp file.
+	cmd := exec.CommandContext(ctx, "go", args...)
 	cmd.Dir = workDir
 	cmd.WaitDelay = 5 * time.Second
 	setProcessGroup(cmd)

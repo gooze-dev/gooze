@@ -279,3 +279,16 @@ func TestOrchestrator_Overlay_CloseLogsRemoveFailure(t *testing.T) {
 	require.Contains(t, logs.String(), "Failed to cleanup temp dir")
 	require.Contains(t, logs.String(), "busy")
 }
+
+func TestOrchestrator_Overlay_ContextCancelledReturnsTimeout(t *testing.T) {
+	// No adapters: a canceled run must return before touching any of them.
+	orch := domain.NewOrchestrator(nil, nil)
+	mutation := makeTestMutation()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	result, err := orch.TestMutation(ctx, domain.WorkspaceOverlay, mutation)
+	require.NoError(t, err)
+	require.Equal(t, rpt.Timeout, result[mutation.Type][0].Status)
+}
