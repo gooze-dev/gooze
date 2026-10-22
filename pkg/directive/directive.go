@@ -2,12 +2,15 @@
 // line or block comment whose text starts with the keyword gooze:ignore,
 // followed by whitespace or the end of the comment, and an optional list of
 // mutagen names separated by commas or whitespace. Names are case-insensitive;
-// an empty list ignores every mutagen.
+// an empty list ignores every mutagen. A name may be followed by the
+// replacements it ignores in parentheses, comparison(!=, <=): only the
+// mutants that write one of them are ignored.
 package directive
 
 import (
 	"go/scanner"
 	"go/token"
+	"slices"
 	"strings"
 	"unicode"
 )
@@ -16,11 +19,16 @@ import (
 const Keyword = "gooze:ignore"
 
 // Name is a mutagen name listed in a directive, as written, with its byte
-// offsets [Start, End) in the parsed text.
+// offsets [Start, End) in the parsed text, which include its parentheses.
 type Name struct {
 	Text  string
 	Start int
 	End   int
+	// Replacements are the operators or values listed in parentheses after
+	// the name, as written: the directive ignores only the mutants that
+	// write one of them. Nil when the name has no parentheses, so every
+	// mutant of the mutagen is ignored.
+	Replacements []string
 }
 
 // Directive is a parsed //gooze:ignore comment. Offsets are byte offsets in
@@ -46,14 +54,32 @@ func (d Directive) IgnoresAll() bool {
 	}
 }
 
-// Ignores reports whether the directive ignores the named mutagen, ignoring case.
+// Ignores reports whether the directive ignores every mutant of the named
+// mutagen, ignoring case: it lists no names, or the name without parentheses.
 func (d Directive) Ignores(mutagen string) bool {
 	if d.IgnoresAll() {
 		return true
 	}
 
 	for _, n := range d.Names {
-		if strings.EqualFold(n.Text, mutagen) {
+		if strings.EqualFold(n.Text, mutagen) && n.Replacements == nil {
+			return true
+		}
+	}
+
+	return false
+}
+
+// IgnoresMutant reports whether the directive ignores the mutant of the named
+// mutagen that writes replacement: Ignores holds for the mutagen, or its name
+// lists replacement in parentheses.
+func (d Directive) IgnoresMutant(mutagen, replacement string) bool {
+	if d.Ignores(mutagen) {
+		return true
+	}
+
+	for _, n := range d.Names {
+		if strings.EqualFold(n.Text, mutagen) && slices.Contains(n.Replacements, replacement) {
 			return true
 		}
 	}
@@ -132,31 +158,68 @@ func (d Directive) shift(offset int) Directive {
 	return d
 }
 
+// parseNames splits text[lo:hi] into names at commas and whitespace; a name's
+// parentheses, which may hold commas and spaces, stay with it (see
+// withReplacements).
 func parseNames(text string, lo, hi int) []Name {
 	names := []Name{}
 
 	var (
 		start  int
 		inName bool
+		inList bool
 	)
 
 	for i, r := range text[lo:hi] {
-		separator := r == ',' || unicode.IsSpace(r)
+		separator := !inList && (r == ',' || unicode.IsSpace(r))
 
 		switch {
 		case separator && inName:
-			names = append(names, Name{Text: text[start : lo+i], Start: start, End: lo + i})
+			names = append(names, withReplacements(text, start, lo+i))
 			inName = false
 		case !separator && !inName:
 			start, inName = lo+i, true
 		}
+
+		inList = inParentheses(inList, inName, r)
 	}
 
 	if inName {
-		names = append(names, Name{Text: text[start:hi], Start: start, End: hi})
+		names = append(names, withReplacements(text, start, hi))
 	}
 
 	return names
+}
+
+// inParentheses returns whether the parser is inside a name's parentheses
+// after the rune r, given whether it was (inList) and is in a name (inName).
+func inParentheses(inList, inName bool, r rune) bool {
+	switch r {
+	case '(':
+		return inName
+	case ')':
+		return false
+	default:
+		return inList
+	}
+}
+
+// withReplacements returns the name text[start:end], split into the mutagen
+// name and the replacements its parentheses list (see Name.Replacements). A
+// missing closing parenthesis ends the list at end.
+func withReplacements(text string, start, end int) Name {
+	name := Name{Text: text[start:end], Start: start, End: end}
+
+	open := strings.IndexByte(name.Text, '(')
+	if open < 0 {
+		return name
+	}
+
+	list := strings.TrimSuffix(name.Text[open+1:], ")")
+	name.Text = name.Text[:open]
+	name.Replacements = strings.FieldsFunc(list, func(r rune) bool { return r == ',' || unicode.IsSpace(r) })
+
+	return name
 }
 
 func trimSpace(text string, lo, hi int) (int, int) {

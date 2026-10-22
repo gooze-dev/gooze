@@ -159,3 +159,65 @@ func TestDirective_IgnoresAllWithEmptyOrNilNames(t *testing.T) {
 	assert.True(t, Directive{Names: []Name{}}.IgnoresAll())
 	assert.False(t, Directive{Names: []Name{{Text: "a"}}}.IgnoresAll())
 }
+
+func TestParse_Replacements(t *testing.T) {
+	cases := []struct {
+		text         string
+		names        []string
+		replacements [][]string // per name; nil when it has no parentheses
+	}{
+		{text: "//gooze:ignore comparison(!=)", names: []string{"comparison"}, replacements: [][]string{{"!="}}},
+		{text: "//gooze:ignore comparison(!=,<=)", names: []string{"comparison"}, replacements: [][]string{{"!=", "<="}}},
+		{text: "//gooze:ignore arithmetic( - , * )", names: []string{"arithmetic"}, replacements: [][]string{{"-", "*"}}},
+		{text: "//gooze:ignore comparison(!=), numbers", names: []string{"comparison", "numbers"}, replacements: [][]string{{"!="}, nil}},
+		{text: "//gooze:ignore numbers boolean(false)", names: []string{"numbers", "boolean"}, replacements: [][]string{nil, {"false"}}},
+		{text: "//gooze:ignore numbers(0 1)", names: []string{"numbers"}, replacements: [][]string{{"0", "1"}}},
+		{text: "//gooze:ignore comparison()", names: []string{"comparison"}, replacements: [][]string{{}}},
+		{text: "//gooze:ignore comparison(!=", names: []string{"comparison"}, replacements: [][]string{{"!="}}},
+		{text: "/* gooze:ignore comparison(>=) */", names: []string{"comparison"}, replacements: [][]string{{">="}}},
+		{text: "//gooze:ignore (!=)", names: []string{""}, replacements: [][]string{{"!="}}},
+	}
+
+	for _, tc := range cases {
+		d, ok := Parse(tc.text)
+		require.True(t, ok, tc.text)
+		assert.Equal(t, tc.names, names(d), tc.text)
+
+		var got [][]string
+		for _, n := range d.Names {
+			got = append(got, n.Replacements)
+		}
+
+		assert.Equal(t, tc.replacements, got, tc.text)
+	}
+}
+
+func TestParse_ReplacementOffsets(t *testing.T) {
+	text := "// gooze:ignore comparison(!=, <=), numbers"
+
+	d, ok := Parse(text)
+	require.True(t, ok)
+	require.Len(t, d.Names, 2)
+	assert.Equal(t, "comparison(!=, <=)", text[d.Names[0].Start:d.Names[0].End])
+	assert.Equal(t, "numbers", text[d.Names[1].Start:d.Names[1].End])
+	assert.Equal(t, len(text), d.End)
+}
+
+func TestDirective_IgnoresMutant(t *testing.T) {
+	d, ok := Parse("//gooze:ignore comparison(!=), Numbers, boolean()")
+	require.True(t, ok)
+
+	assert.True(t, d.IgnoresMutant("comparison", "!="))
+	assert.True(t, d.IgnoresMutant("COMPARISON", "!="))
+	assert.False(t, d.IgnoresMutant("comparison", "<="))
+	assert.True(t, d.IgnoresMutant("numbers", "0"), "a name without parentheses ignores every mutant")
+	assert.False(t, d.IgnoresMutant("boolean", "false"), "empty parentheses ignore nothing")
+	assert.False(t, d.IgnoresMutant("arithmetic", "-"))
+
+	assert.False(t, d.Ignores("comparison"), "a list of replacements doesn't ignore the whole mutagen")
+	assert.True(t, d.Ignores("numbers"))
+
+	all, ok := Parse("//gooze:ignore")
+	require.True(t, ok)
+	assert.True(t, all.IgnoresMutant("comparison", "!="))
+}
