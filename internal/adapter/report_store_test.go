@@ -1583,3 +1583,32 @@ func TestEncodeResult_SortsByNameThenVersion(t *testing.T) {
 
 	assert.Equal(t, []string{"alpha/1", "alpha/2", "alpha/3", "beta/9", "mid/2", "zeta/1", "zeta/2"}, got)
 }
+
+// File modes are checked directly so the permission literals are pinned even
+// where permission bits don't restrict anything (tests running as root).
+func TestLocalReportStore_WritesPrivateFiles(t *testing.T) {
+	t.Parallel()
+
+	dir := filepath.Join(t.TempDir(), "reports")
+	rs := &LocalReportStore{}
+	ctx := context.Background()
+
+	files := saveCleanFixture(t, rs, dir, rpt.Source{Origin: &rpt.File{ShortPath: "a.go", Hash: "h1"}})
+	require.NoError(t, rs.RegenerateIndex(ctx, m.Path(dir)))
+	require.NoError(t, rs.SaveSelection(ctx, m.Path(dir), rpt.Selection{Diff: "main"}))
+
+	mode := func(path string) os.FileMode {
+		t.Helper()
+		info, err := os.Stat(path)
+		require.NoError(t, err)
+
+		return info.Mode().Perm()
+	}
+
+	// The umask can only clear bits, so these are upper bounds that the
+	// mutated literals (0 and 1) can't meet.
+	assert.Equal(t, os.FileMode(0o750), mode(dir)&0o750, "reports directory")
+	assert.Equal(t, os.FileMode(0o600), mode(files[0]), "report file")
+	assert.Equal(t, os.FileMode(0o600), mode(filepath.Join(dir, rpt.IndexFileName)), "index file")
+	assert.Equal(t, os.FileMode(0o600), mode(filepath.Join(dir, rpt.SelectionFileName)), "selection file")
+}
