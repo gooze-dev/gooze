@@ -118,10 +118,10 @@ func parseIgnoreDirective(commentText string) (ignoreRule, bool) {
 type ignoreIndex struct {
 	file      ignoreRule
 	funcByPos map[token.Pos]ignoreRule
-	// funcLine is the rule of the function each line belongs to, for the
-	// rules that ignore single mutants (see keepChanged).
-	funcLine map[int]ignoreRule
-	line     map[int]ignoreRule
+	// funcs are the lines of the functions with a rule, for the rules that
+	// ignore single mutants (see keepChanged).
+	funcs []funcLines
+	line  map[int]ignoreRule
 }
 
 func buildIgnoreIndex(file *ast.File, fset *token.FileSet, content []byte) ignoreIndex {
@@ -129,7 +129,7 @@ func buildIgnoreIndex(file *ast.File, fset *token.FileSet, content []byte) ignor
 	fileRule := buildFileIgnoreRule(file)
 	lineRules := buildLineIgnoreRules(file, fset, content, funcDocGroups)
 
-	return ignoreIndex{file: fileRule, funcByPos: funcByPos, funcLine: funcLineRules(file, fset, funcByPos), line: lineRules}
+	return ignoreIndex{file: fileRule, funcByPos: funcByPos, funcs: funcLineRules(file, fset, funcByPos), line: lineRules}
 }
 
 func buildFuncIgnoreRules(file *ast.File) (map[token.Pos]ignoreRule, map[*ast.CommentGroup]struct{}) {
@@ -258,10 +258,16 @@ func isLeadingComment(line int, slashOffset int, lineStarts []int, content []byt
 	return true
 }
 
-// funcLineRules maps each line of a function with a rule to that rule, counted
-// like the line directives (honoring //line comments).
-func funcLineRules(file *ast.File, fset *token.FileSet, funcByPos map[token.Pos]ignoreRule) map[int]ignoreRule {
-	lines := map[int]ignoreRule{}
+// funcLines is the rule of a function and its first and last line.
+type funcLines struct {
+	first, last int
+	rule        ignoreRule
+}
+
+// funcLineRules returns the lines of each function with a rule, counted like
+// the line directives (honoring //line comments).
+func funcLineRules(file *ast.File, fset *token.FileSet, funcByPos map[token.Pos]ignoreRule) []funcLines {
+	var funcs []funcLines
 
 	for _, decl := range file.Decls {
 		fd, ok := decl.(*ast.FuncDecl)
@@ -269,15 +275,25 @@ func funcLineRules(file *ast.File, fset *token.FileSet, funcByPos map[token.Pos]
 			continue
 		}
 
-		rule, ok := funcByPos[fd.Pos()]
-		if !ok {
-			continue
-		}
-
-		for line := fset.PositionFor(fd.Pos(), true).Line; line <= fset.PositionFor(fd.End(), true).Line; line++ {
-			lines[line] = rule
+		if rule, ok := funcByPos[fd.Pos()]; ok {
+			funcs = append(funcs, funcLines{
+				first: fset.PositionFor(fd.Pos(), true).Line,
+				last:  fset.PositionFor(fd.End(), true).Line,
+				rule:  rule,
+			})
 		}
 	}
 
-	return lines
+	return funcs
+}
+
+// funcRule returns the rule of the function line belongs to, if any.
+func (ix ignoreIndex) funcRule(line int) ignoreRule {
+	for _, f := range ix.funcs {
+		if f.first <= line && line <= f.last {
+			return f.rule
+		}
+	}
+
+	return ignoreRule{}
 }
