@@ -25,6 +25,8 @@ type Selection struct {
 	Run *regexp.Regexp
 	// Mutagens are the mutagens to run; nil means DefaultMutations.
 	Mutagens []mgen.Type
+	// Options tune the generated mutations; they don't narrow the run.
+	Options MutationOptions
 }
 
 // record returns what a narrowed run records about its selection.
@@ -160,7 +162,7 @@ func ParseMutagens(values []string) ([]mgen.Type, error) {
 // selection resolves the run's Selection from args: the diff scope, the
 // --run pattern and the mutagen names. Errors come before any scan.
 func (w *workflow) selection(ctx context.Context, args EstimateArgs) (Selection, error) {
-	var sel Selection
+	sel := Selection{Options: args.mutationOptions()}
 
 	if args.Run != "" {
 		re, err := regexp.Compile(args.Run)

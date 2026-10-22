@@ -18,12 +18,22 @@ import (
 
 // Mutagen defines the interface for mutation generation.
 type Mutagen interface {
-	// GenerateMutation returns every mutation for a source as a slice.
+	// GenerateMutation returns every mutation for a source as a slice, with
+	// the zero MutationOptions.
 	GenerateMutation(ctx context.Context, source rpt.Source, mutationTypes ...mgen.Type) ([]m.Mutation, error)
 	// StreamMutations invokes fn for each generated mutation without retaining
 	// them, so callers can process mutations one at a time. If fn returns an
 	// error, streaming stops and that error is returned.
-	StreamMutations(ctx context.Context, source rpt.Source, fn func(m.Mutation) error, mutationTypes ...mgen.Type) error
+	StreamMutations(ctx context.Context, source rpt.Source, opts MutationOptions, fn func(m.Mutation) error, mutationTypes ...mgen.Type) error
+}
+
+// MutationOptions tune which mutations StreamMutations generates. The zero
+// value generates them all.
+type MutationOptions struct {
+	// EnumBounds skips the comparison mutants that are equivalent when an
+	// enum's lowest and highest constants bound its type (run.enum_bounds,
+	// see enumBoundMutants).
+	EnumBounds bool
 }
 
 // mutagen handles pure mutation generation logic.
@@ -45,7 +55,7 @@ func NewMutagen(goFileAdapter GoFileAdapter, sourceFSAdapter SourceFSAdapter, di
 func (mg *mutagen) GenerateMutation(ctx context.Context, source rpt.Source, mutationTypes ...mgen.Type) ([]m.Mutation, error) {
 	mutations := make([]m.Mutation, 0)
 
-	err := mg.StreamMutations(ctx, source, func(mutation m.Mutation) error {
+	err := mg.StreamMutations(ctx, source, MutationOptions{}, func(mutation m.Mutation) error {
 		mutations = append(mutations, mutation)
 		return nil
 	}, mutationTypes...)
@@ -56,7 +66,7 @@ func (mg *mutagen) GenerateMutation(ctx context.Context, source rpt.Source, muta
 	return mutations, nil
 }
 
-func (mg *mutagen) StreamMutations(ctx context.Context, source rpt.Source, fn func(m.Mutation) error, mutationTypes ...mgen.Type) error {
+func (mg *mutagen) StreamMutations(ctx context.Context, source rpt.Source, opts MutationOptions, fn func(m.Mutation) error, mutationTypes ...mgen.Type) error {
 	if err := validateSource(source); err != nil {
 		return err
 	}
@@ -76,6 +86,10 @@ func (mg *mutagen) StreamMutations(ctx context.Context, source rpt.Source, fn fu
 	}
 
 	ignore := buildIgnoreIndex(file, fset, content)
+	if opts.EnumBounds {
+		ignore.enumBounds = mg.enumBoundMutants(ctx, source, fset, file)
+	}
+
 	funcs := buildFuncIndex(file, fset)
 
 	for _, mutationType := range mutationTypes {
@@ -150,12 +164,13 @@ func (ix ignoreIndex) visit(n ast.Node, fset *token.FileSet, mutationType mgen.T
 	return true, true
 }
 
-// keepChanged drops the mutations that a directive ignores where they change
-// the file: a line directive of the changed line, counted like the
-// directives (honoring //line comments), or a file or function directive that
-// lists the mutant's replacement (see replacementOf). Block mutagens
-// (increment, assignment) visit a block but change one of its statements, so
-// the ignore of the visited node's own line isn't enough.
+// keepChanged drops the enum bound mutants (see isEnumBoundMutant) and the
+// mutations that a directive ignores where they change the file: a line
+// directive of the changed line, counted like the directives (honoring //line
+// comments), or a file or function directive that lists the mutant's
+// replacement (see replacementOf). Block mutagens (increment, assignment)
+// visit a block but change one of its statements, so the ignore of the
+// visited node's own line isn't enough.
 func (ix ignoreIndex) keepChanged(
 	mutations []m.Mutation,
 	fset *token.FileSet,
@@ -170,10 +185,12 @@ func (ix ignoreIndex) keepChanged(
 
 	return slices.DeleteFunc(mutations, func(mutation m.Mutation) bool {
 		// An unchanged mutation (offset -1) has no position, so no rule.
-		line := fset.PositionFor(tokenFile.Pos(firstDifference(content, mutation.MutatedCode)), true).Line
+		offset := firstDifference(content, mutation.MutatedCode)
+		line := fset.PositionFor(tokenFile.Pos(offset), true).Line
 		replacement := func() string { return replacementOf(content, mutation.MutatedCode) }
 
-		return ix.line[line].ignoresMutant(mutationType, replacement) ||
+		return ix.isEnumBoundMutant(mutationType, offset, mutation.MutatedCode) ||
+			ix.line[line].ignoresMutant(mutationType, replacement) ||
 			ix.funcRule(line).ignoresMutant(mutationType, replacement) ||
 			ix.file.ignoresMutant(mutationType, replacement)
 	})

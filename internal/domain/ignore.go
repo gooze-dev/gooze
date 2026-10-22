@@ -122,6 +122,9 @@ type ignoreIndex struct {
 	// ignore single mutants (see keepChanged).
 	funcs []funcLines
 	line  map[int]ignoreRule
+	// enumBounds holds the equivalent enum bound mutants (see
+	// enumBoundMutants), when run.enum_bounds is on.
+	enumBounds map[int]string
 }
 
 func buildIgnoreIndex(file *ast.File, fset *token.FileSet, content []byte) ignoreIndex {

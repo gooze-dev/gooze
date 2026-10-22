@@ -42,6 +42,14 @@ type EstimateArgs struct {
 	// Mutagens names the mutagens to run (items may be comma-separated);
 	// empty runs all of DefaultMutations.
 	Mutagens []string
+	// EnumBounds skips the comparison mutants that are equivalent when an
+	// enum's lowest and highest constants bound its type (run.enum_bounds).
+	EnumBounds bool
+}
+
+// mutationOptions returns the options of the mutations args generates.
+func (a EstimateArgs) mutationOptions() MutationOptions {
+	return MutationOptions{EnumBounds: a.EnumBounds}
 }
 
 // TestArgs contains the arguments for running mutation tests.
@@ -242,7 +250,7 @@ func (w *workflow) generateMutations(ctx context.Context, sources pkg.FileSpill[
 	total := 0
 
 	err = sources.Range(func(_ uint64, source rpt.Source) error {
-		return w.mutagen.StreamMutations(ctx, source, func(mutation m.Mutation) error {
+		return w.mutagen.StreamMutations(ctx, source, sel.Options, func(mutation m.Mutation) error {
 			if (include != nil && !include(mutation)) || !sel.Includes(mutation) {
 				return nil
 			}
@@ -726,7 +734,7 @@ func (w *workflow) resolveSources(ctx context.Context, args EstimateArgs, types 
 		return sourceSet{scanned: scanned, changed: scanned}, nil
 	}
 
-	changed, deleted, err := w.reports.CheckUpdates(ctx, args.Reports, scanned, w.untested(ctx, types))
+	changed, deleted, err := w.reports.CheckUpdates(ctx, args.Reports, scanned, w.untested(ctx, args.mutationOptions(), types))
 	if err != nil {
 		closeSpill("scanned sources", scanned)
 		return sourceSet{}, fmt.Errorf("check updates: %w", err)
@@ -741,7 +749,7 @@ var errFound = errors.New("found a mutation")
 // untested reports whether any of types that a source's stored reports hold
 // no results of generates a mutation for it. A source that can't be read or
 // parsed counts as untested, so the run reports the error.
-func (w *workflow) untested(ctx context.Context, types []mgen.Type) func(rpt.Source, []string) bool {
+func (w *workflow) untested(ctx context.Context, opts MutationOptions, types []mgen.Type) func(rpt.Source, []string) bool {
 	return func(source rpt.Source, tested []string) bool {
 		missing := slices.DeleteFunc(slices.Clone(types), func(t mgen.Type) bool {
 			return slices.Contains(tested, t.Name)
@@ -750,7 +758,7 @@ func (w *workflow) untested(ctx context.Context, types []mgen.Type) func(rpt.Sou
 			return false
 		}
 
-		err := w.mutagen.StreamMutations(ctx, source, func(m.Mutation) error { return errFound }, missing...)
+		err := w.mutagen.StreamMutations(ctx, source, opts, func(m.Mutation) error { return errFound }, missing...)
 
 		return err != nil
 	}
@@ -845,7 +853,7 @@ func (w *workflow) countMutations(ctx context.Context, sources pkg.FileSpill[rpt
 
 		cached := isCached(source)
 
-		return w.mutagen.StreamMutations(ctx, source, func(mutation m.Mutation) error {
+		return w.mutagen.StreamMutations(ctx, source, sel.Options, func(mutation m.Mutation) error {
 			if sel.Includes(mutation) {
 				tally.add(mutation, cached)
 			}

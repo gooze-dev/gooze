@@ -13,6 +13,7 @@ const (
 	KeyRunDiff              = "run.diff"
 	KeyRunMutagens          = "run.mutagens"
 	KeyRunWorkspace         = "run.workspace"
+	KeyRunEnumBounds        = "run.enum_bounds"
 	KeyThresholdTotal       = "threshold.total"
 	KeyThresholdAverage     = "threshold.average"
 	KeyThresholdFile        = "threshold.file"
