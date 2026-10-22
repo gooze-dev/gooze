@@ -328,3 +328,276 @@ func lineWith(src, s string) string {
 
 	return ""
 }
+
+func TestGenerateComparisonMutations_SkipsEquivalentMutantsOfNonNegativeCallsAndCounters(t *testing.T) {
+	tests := []struct {
+		name    string
+		src     string
+		cond    string // the comparison, as written on its own line
+		skipped string // the equivalent mutant; "" keeps all five
+	}{
+		// Standard-library functions that never return a negative value.
+		{
+			name: "strings.Count", cond: "strings.Count(s, \"a\") > 0", skipped: "strings.Count(s, \"a\") != 0",
+			src: "package p\nimport \"strings\"\nfunc f(s string) bool {\n\treturn strings.Count(s, \"a\") > 0\n}\n",
+		},
+		{
+			name: "utf8.RuneCountInString", cond: "utf8.RuneCountInString(s) == 0", skipped: "utf8.RuneCountInString(s) <= 0",
+			src: "package p\nimport \"unicode/utf8\"\nfunc f(s string) bool {\n\treturn utf8.RuneCountInString(s) == 0\n}\n",
+		},
+		{
+			name: "flag.NArg", cond: "flag.NArg() == 0", skipped: "flag.NArg() <= 0",
+			src: "package p\nimport \"flag\"\nfunc f() bool {\n\treturn flag.NArg() == 0\n}\n",
+		},
+		{
+			name: "renamed import", cond: "str.Count(s, \"a\") > 0", skipped: "str.Count(s, \"a\") != 0",
+			src: "package p\nimport str \"strings\"\nfunc f(s string) bool {\n\treturn str.Count(s, \"a\") > 0\n}\n",
+		},
+		{
+			name: "function that can return -1", cond: "utf8.RuneLen(r) > 0",
+			src: "package p\nimport \"unicode/utf8\"\nfunc f(r rune) bool {\n\treturn utf8.RuneLen(r) > 0\n}\n",
+		},
+		{
+			name: "strings.Index", cond: "strings.Index(s, \"a\") == 0",
+			src: "package p\nimport \"strings\"\nfunc f(s string) bool {\n\treturn strings.Index(s, \"a\") == 0\n}\n",
+		},
+		{
+			name: "package name shadowed by a variable", cond: "strings.Count(s, \"a\") > 0",
+			src: "package p\nimport \"strings\"\ntype counter struct{}\nfunc (counter) Count(string, string) int { return -1 }\nfunc f(s string) bool {\n\t_ = strings.ToUpper\n\t{\n\t\tstrings := counter{}\n\t\treturn strings.Count(s, \"a\") > 0\n\t}\n}\n",
+		},
+		{
+			name: "Count of a package that isn't imported", cond: "strings.Count(s, \"a\") > 0",
+			src: "package p\nfunc f(s string) bool {\n\treturn strings.Count(s, \"a\") > 0\n}\n",
+		},
+		// Methods, when the receiver's type is visible.
+		{
+			name: "Builder variable", cond: "b.Len() == 0", skipped: "b.Len() <= 0",
+			src: "package p\nimport \"strings\"\nfunc f() bool {\n\tvar b strings.Builder\n\treturn b.Len() == 0\n}\n",
+		},
+		{
+			name: "Buffer pointer parameter", cond: "b.Len() > 0", skipped: "b.Len() != 0",
+			src: "package p\nimport \"bytes\"\nfunc f(b *bytes.Buffer) bool {\n\treturn b.Len() > 0\n}\n",
+		},
+		{
+			name: "Builder from a composite literal", cond: "b.Cap() > 0", skipped: "b.Cap() != 0",
+			src: "package p\nimport \"strings\"\nfunc f() bool {\n\tb := &strings.Builder{}\n\treturn b.Cap() > 0\n}\n",
+		},
+		{
+			name: "FlagSet from NewFlagSet", cond: "fs.NArg() == 0", skipped: "fs.NArg() <= 0",
+			src: "package p\nimport \"flag\"\nfunc f() bool {\n\tfs := flag.NewFlagSet(\"x\", flag.ContinueOnError)\n\treturn fs.NArg() == 0\n}\n",
+		},
+		{
+			name: "Reader from strings.NewReader", cond: "r.Len() == 0", skipped: "r.Len() <= 0",
+			src: "package p\nimport \"strings\"\nfunc f(s string) bool {\n\tr := strings.NewReader(s)\n\treturn r.Len() == 0\n}\n",
+		},
+		{
+			name: "Len of an own type", cond: "b.Len() == 0",
+			src: "package p\ntype buf struct{}\nfunc (buf) Len() int { return -1 }\nfunc f(b buf) bool {\n\treturn b.Len() == 0\n}\n",
+		},
+		{
+			name: "Len of a field", cond: "s.b.Len() == 0",
+			src: "package p\nimport \"strings\"\ntype t struct{ b strings.Builder }\nfunc f(s *t) bool {\n\treturn s.b.Len() == 0\n}\n",
+		},
+		{
+			name: "a method the allowlist doesn't name", cond: "b.Grow(1) == 0",
+			src: "package p\nimport \"strings\"\nfunc f(b *strings.Builder) bool {\n\treturn b.Grow(1) == 0\n}\n",
+		},
+		{
+			name: "Builder from new", cond: "b.Len() == 0",
+			src: "package p\nimport \"strings\"\nfunc f() bool {\n\tb := new(strings.Builder)\n\treturn b.Len() == 0\n}\n",
+		},
+		{
+			name: "constructor called on a field", cond: "r.Len() == 0",
+			src: "package p\ntype t struct{ x x }\ntype x struct{}\nfunc (x) NewReader(string) *reader { return nil }\ntype reader struct{}\nfunc (*reader) Len() int { return -1 }\nfunc f(v t, s string) bool {\n\tr := v.x.NewReader(s)\n\treturn r.Len() == 0\n}\n",
+		},
+		{
+			name: "a field compared with 0", cond: "v.n == 0",
+			src: "package p\ntype t struct{ n int }\nfunc f(v t) bool {\n\treturn v.n == 0\n}\n",
+		},
+		// Counters that only go up.
+		{
+			name: "counter incremented", cond: "c > 0", skipped: "c != 0",
+			src: "package p\nfunc f(s []int) bool {\n\tc := 0\n\tfor range s {\n\t\tc++\n\t}\n\treturn c > 0\n}\n",
+		},
+		{
+			name: "counter increased by a constant", cond: "c == 0", skipped: "c <= 0",
+			src: "package p\nfunc f(s []int) bool {\n\tc := 0\n\tfor range s {\n\t\tc += 2\n\t}\n\treturn c == 0\n}\n",
+		},
+		{
+			name: "counter declared with var", cond: "c == 0", skipped: "c <= 0",
+			src: "package p\nfunc f(s []int) bool {\n\tvar c int\n\tfor range s {\n\t\tc++\n\t}\n\treturn c == 0\n}\n",
+		},
+		{
+			name: "length increased", cond: "n > 0", skipped: "n != 0",
+			src: "package p\nfunc f(s []int) bool {\n\tn := len(s)\n\tn++\n\treturn n > 0\n}\n",
+		},
+		{
+			name: "counter from a non-negative call", cond: "n > 0", skipped: "n != 0",
+			src: "package p\nimport \"strings\"\nfunc f(s string) bool {\n\tn := strings.Count(s, \"a\")\n\tn++\n\treturn n > 0\n}\n",
+		},
+		{
+			name: "counter decremented", cond: "c > 0",
+			src: "package p\nfunc f(s []int) bool {\n\tc := 0\n\tc++\n\tc--\n\treturn c > 0\n}\n",
+		},
+		{
+			name: "counter decreased", cond: "c > 0",
+			src: "package p\nfunc f() bool {\n\tc := 0\n\tc -= 1\n\treturn c > 0\n}\n",
+		},
+		{
+			name: "counter increased by a variable", cond: "c > 0",
+			src: "package p\nfunc f(k int) bool {\n\tc := 0\n\tc += k\n\treturn c > 0\n}\n",
+		},
+		{
+			name: "counter assigned a constant", cond: "c > 0",
+			src: "package p\nfunc f() bool {\n\tc := 0\n\tc = 5\n\treturn c > 0\n}\n",
+		},
+		{
+			name: "counter whose address is taken", cond: "c > 0",
+			src: "package p\nfunc set(p *int) { *p = -1 }\nfunc f() bool {\n\tc := 0\n\tset(&c)\n\treturn c > 0\n}\n",
+		},
+		{
+			name: "counter starting negative", cond: "c > 0",
+			src: "package p\nfunc f() bool {\n\tc := -1\n\tc++\n\treturn c > 0\n}\n",
+		},
+		{
+			name: "counter starting from a parameter", cond: "c > 0",
+			src: "package p\nfunc f(k int) bool {\n\tc := k\n\tc++\n\treturn c > 0\n}\n",
+		},
+		{
+			name: "package-level counter", cond: "c > 0",
+			src: "package p\nvar c int\nfunc f() bool {\n\tc++\n\treturn c > 0\n}\n",
+		},
+		{
+			name: "var with a value", cond: "c > 0", skipped: "c != 0",
+			src: "package p\nfunc f() bool {\n\tvar c = 0\n\tc++\n\treturn c > 0\n}\n",
+		},
+		{
+			name: "var after a name that sorts before it", cond: "c > 0", skipped: "c != 0",
+			src: "package p\nfunc f() bool {\n\tvar a, c = -1, 0\n\t_ = a\n\tc++\n\treturn c > 0\n}\n",
+		},
+		{
+			name: "var after a name that sorts after it", cond: "c > 0", skipped: "c != 0",
+			src: "package p\nfunc f() bool {\n\tvar z, c = -1, 0\n\t_ = z\n\tc++\n\treturn c > 0\n}\n",
+		},
+		{
+			name: "var given its value by a call", cond: "c > 0",
+			src: "package p\nfunc two() (int, int) { return -1, -1 }\nfunc f() bool {\n\tvar a, c = two()\n\t_ = a\n\tc++\n\treturn c > 0\n}\n",
+		},
+		{
+			name: "float counter", cond: "c > 0", skipped: "c != 0",
+			src: "package p\nfunc f() bool {\n\tc := 0.5\n\tc += 1.5\n\treturn c > 0\n}\n",
+		},
+		{
+			name: "package-level counter declared after the function", cond: "c > 0",
+			src: "package p\nfunc f() bool {\n\tc++\n\treturn c > 0\n}\nvar c int\n",
+		},
+		{
+			name: "var with a negative value", cond: "c > 0",
+			src: "package p\nfunc f() bool {\n\tvar c = -1\n\tc++\n\treturn c > 0\n}\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			x, op, y := splitComparison(tt.cond)
+
+			var want []string
+			for _, alt := range []string{"<", ">", "<=", ">=", "==", "!="} {
+				if alt == op {
+					continue
+				}
+
+				mutant := x + " " + alt + " " + y
+				if mutant == tt.skipped {
+					continue
+				}
+
+				line := strings.Replace(strings.TrimSpace(lineWith(tt.src, tt.cond)), tt.cond, mutant, 1)
+				want = append(want, line)
+			}
+
+			slices.Sort(want)
+
+			if got := comparisonMutantLines(t, tt.src); !slices.Equal(got, want) {
+				t.Fatalf("mutants of %s:\n got %q\nwant %q", tt.cond, got, want)
+			}
+		})
+	}
+}
+
+// splitComparison splits "x op y" at its comparison operator; x may contain
+// spaces (a call with several arguments).
+func splitComparison(cond string) (x, op, y string) {
+	for _, candidate := range []string{" == ", " != ", " <= ", " >= ", " < ", " > "} {
+		if i := strings.LastIndex(cond, candidate); i >= 0 {
+			return cond[:i], strings.TrimSpace(candidate), cond[i+len(candidate):]
+		}
+	}
+
+	return cond, "", ""
+}
+
+// TestNonNegativeAllowlists checks that every entry of the allowlists makes 0
+// the minimum of its call, so a typo or a removed entry shows.
+func TestNonNegativeAllowlists(t *testing.T) {
+	type check struct{ name, src, cond, skipped string }
+
+	var checks []check
+
+	for fn := range nonNegativeFuncs {
+		path, name := fn[0], fn[1]
+		pkg := path[strings.LastIndex(path, "/")+1:]
+		call := pkg + "." + name + "(x)"
+		checks = append(checks, check{
+			name: path + "." + name, cond: call + " == 0", skipped: call + " <= 0",
+			src: "package p\nimport \"" + path + "\"\nfunc f(x int) bool {\n\treturn " + call + " == 0\n}\n",
+		})
+	}
+
+	for method := range nonNegativeMethods {
+		path, typ := splitType(method[0])
+		pkg := path[strings.LastIndex(path, "/")+1:]
+		call := "r." + method[1] + "()"
+		checks = append(checks, check{
+			name: method[0] + "." + method[1], cond: call + " == 0", skipped: call + " <= 0",
+			src: "package p\nimport \"" + path + "\"\nfunc f(r *" + pkg + "." + typ + ") bool {\n\treturn " + call + " == 0\n}\n",
+		})
+	}
+
+	for ctor, typ := range constructors {
+		path, name := ctor[0], ctor[1]
+		pkg := path[strings.LastIndex(path, "/")+1:]
+		call := "r." + methodOf(typ) + "()"
+		checks = append(checks, check{
+			name: path + "." + name, cond: call + " == 0", skipped: call + " <= 0",
+			src: "package p\nimport \"" + path + "\"\nfunc f(x int) bool {\n\tr := " + pkg + "." + name + "(x)\n\treturn " + call + " == 0\n}\n",
+		})
+	}
+
+	for _, c := range checks {
+		t.Run(c.name, func(t *testing.T) {
+			line := strings.TrimSpace(lineWith(c.src, c.cond))
+			if got := comparisonMutantLines(t, c.src); slices.Contains(got, strings.Replace(line, c.cond, c.skipped, 1)) {
+				t.Fatalf("%s: the equivalent mutant %s is still generated", c.name, c.skipped)
+			}
+		})
+	}
+}
+
+// splitType splits "import/path.Type" into its import path and type name.
+func splitType(qualified string) (path, typ string) {
+	i := strings.LastIndex(qualified, ".")
+
+	return qualified[:i], qualified[i+1:]
+}
+
+// methodOf returns a method of typ in nonNegativeMethods.
+func methodOf(typ string) string {
+	for method := range nonNegativeMethods {
+		if method[0] == typ {
+			return method[1]
+		}
+	}
+
+	return ""
+}
