@@ -84,12 +84,15 @@ type ViewArgs struct {
 	// as they do for gooze run --diff.
 	DiffThresholds Thresholds
 	// Format selects how survivors are written to Output: as text in the
-	// summary (the default) or as GitHub annotations before it.
+	// summary (the default), as GitHub annotations before it, or as SARIF
+	// instead of it.
 	Format ViewFormat
 	Output io.Writer
-	// PathPrefix is prepended to report paths in GitHub output to make them
-	// relative to the repository root.
+	// PathPrefix is prepended to report paths in GitHub and SARIF output to
+	// make them relative to the repository root.
 	PathPrefix string
+	// ToolVersion is gooze's version, recorded in SARIF output.
+	ToolVersion string
 }
 
 // MergeArgs contains the arguments for merging sharded mutation test reports.
