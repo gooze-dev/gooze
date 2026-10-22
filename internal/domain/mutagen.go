@@ -194,7 +194,10 @@ func walkMutations(
 
 	var walkErr error
 
+	// Nodes the walk skips: type constraints, and subtrees whose every mutant
+	// is equivalent.
 	constraints := map[ast.Node]bool{}
+	markEquivalentSubtrees(file, constraints)
 
 	ast.Inspect(file, func(n ast.Node) bool {
 		if n == nil || walkErr != nil {
