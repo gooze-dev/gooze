@@ -333,6 +333,37 @@ func TestMutagen_LineIgnoreHonoursLineDirectives(t *testing.T) {
 	require.Empty(t, streamTypesFromSource(t, src, mgen.Arithmetic))
 }
 
+func TestMutagen_LineIgnoreSkipsBlockStatementMutagens(t *testing.T) {
+	// increment and assignment visit a block and change one of its
+	// statements, so the ignore must be checked on the changed line.
+	const src = "package p\n\n" +
+		"func f(n int) int {\n" +
+		"\tc := 0\n" +
+		"\tc++ //gooze:ignore increment\n" +
+		"\tc-- //gooze:ignore\n" +
+		"\tc++\n" +
+		"\tc += n //gooze:ignore assignment\n" +
+		"\tc -= n\n" +
+		"\treturn c\n" +
+		"}\n"
+
+	require.Equal(t, []int{7}, linesOf(streamTypesFromSource(t, src, mgen.Increment)),
+		"only the c++ without a directive is mutated")
+	require.Equal(t, []int{9, 9}, linesOf(streamTypesFromSource(t, src, mgen.Assignment)),
+		"only c -= n is mutated, to c += n and c = n")
+}
+
+func TestMutagen_LineIgnoreSkipsBlockStatementMutagensWithLineDirectives(t *testing.T) {
+	const src = "package p\n\n" +
+		"//line other.go:100\n" +
+		"func f(c int) int {\n" +
+		"\tc++ //gooze:ignore increment\n" +
+		"\treturn c\n" +
+		"}\n"
+
+	require.Empty(t, streamTypesFromSource(t, src, mgen.Increment))
+}
+
 func TestMutagen_GenerateMutation_SkipsTypeConstraints(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "generic.go")
 	code := `package generic
