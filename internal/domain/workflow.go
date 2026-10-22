@@ -43,7 +43,7 @@ type EstimateArgs struct {
 	// empty runs all of DefaultMutations.
 	Mutagens []string
 	// EnumBounds skips the comparison mutants that are equivalent when an
-	// enum's lowest and highest constants bound its type (run.enum_bounds).
+	// enum's lowest and highest constants bound its type (mutagen.comparison.enum_bounds).
 	EnumBounds bool
 }
 

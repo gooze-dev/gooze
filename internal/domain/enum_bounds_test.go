@@ -50,6 +50,9 @@ func TestMutagen_EnumBounds(t *testing.T) {
 		{name: "!= lowest", files: map[string]string{"p.go": kinds + "func f(k Kind) bool {\n\treturn k != KindA\n}\n"}, skip: []string{"return k > KindA"}},
 		{name: "== highest", files: map[string]string{"p.go": kinds + "func f(k Kind) bool {\n\treturn k == KindC\n}\n"}, skip: []string{"return k >= KindC"}},
 		{name: "!= highest", files: map[string]string{"p.go": kinds + "func f(k Kind) bool {\n\treturn k != KindC\n}\n"}, skip: []string{"return k < KindC"}},
+		// The operator is read at its offset: without spaces, the next token
+		// follows it directly.
+		{name: "!= highest without spaces", files: map[string]string{"p.go": kinds + "func f(k Kind) bool {\n\treturn k!=KindC\n}\n"}, skip: []string{"return k<KindC"}},
 		{name: "lowest ==", files: map[string]string{"p.go": kinds + "func f(k Kind) bool {\n\treturn KindA == k\n}\n"}, skip: []string{"return KindA >= k"}},
 		{name: "lowest !=", files: map[string]string{"p.go": kinds + "func f(k Kind) bool {\n\treturn KindA != k\n}\n"}, skip: []string{"return KindA < k"}},
 		{name: "highest ==", files: map[string]string{"p.go": kinds + "func f(k Kind) bool {\n\treturn KindC == k\n}\n"}, skip: []string{"return KindC <= k"}},

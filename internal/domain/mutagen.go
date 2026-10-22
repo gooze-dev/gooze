@@ -38,7 +38,7 @@ type MutagenWithOptions interface {
 // zero value generates them all.
 type MutationOptions struct {
 	// EnumBounds skips the comparison mutants that are equivalent when an
-	// enum's lowest and highest constants bound its type (run.enum_bounds,
+	// enum's lowest and highest constants bound its type (mutagen.comparison.enum_bounds,
 	// see enumBoundMutants).
 	EnumBounds bool
 }

@@ -5,7 +5,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
@@ -13,21 +13,40 @@ import (
 	domainmocks "gooze.dev/pkg/gooze/internal/domain/mocks"
 )
 
-func TestRunCmd_EnumBoundsFlag(t *testing.T) {
+// setConfigEnumBounds sets mutagen.comparison.enum_bounds in viper's
+// config-file layer, as gooze.yaml does.
+func setConfigEnumBounds(t *testing.T, on bool) {
+	t.Helper()
+
+	set := func(v bool) map[string]any {
+		return map[string]any{"mutagen": map[string]any{"comparison": map[string]any{"enum_bounds": v}}}
+	}
+
+	require.NoError(t, viper.MergeConfigMap(set(on)))
+	t.Cleanup(func() { _ = viper.MergeConfigMap(set(false)) })
+}
+
+func TestRunCmd_EnumBoundsConfig(t *testing.T) {
 	for _, tt := range []struct {
-		name string
-		args []string
-		env  string
-		want bool
+		name   string
+		args   []string
+		env    string
+		config bool // enum_bounds: true in the config-file layer
+		want   bool
 	}{
 		{name: "default", args: []string{"run", "./..."}, want: false},
-		{name: "flag", args: []string{"run", "--enum-bounds", "./..."}, want: true},
+		{name: "config file", args: []string{"run", "./..."}, config: true, want: true},
 		{name: "env", args: []string{"run", "./..."}, env: "true", want: true},
-		{name: "estimate", args: []string{"run", "--estimate", "--enum-bounds", "./..."}, want: true},
+		{name: "env over config file", args: []string{"run", "./..."}, env: "false", config: true, want: false},
+		{name: "estimate", args: []string{"run", "--estimate", "./..."}, env: "true", want: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.config {
+				setConfigEnumBounds(t, true)
+			}
+
 			if tt.env != "" {
-				t.Setenv("GOOZE_RUN_ENUM_BOUNDS", tt.env)
+				t.Setenv("GOOZE_MUTAGEN_COMPARISON_ENUM_BOUNDS", tt.env)
 			}
 
 			mockWorkflow := domainmocks.NewMockWorkflow(t)
@@ -40,8 +59,6 @@ func TestRunCmd_EnumBoundsFlag(t *testing.T) {
 			originalWorkflow := workflow
 			workflow = mockWorkflow
 			defer func() { workflow = originalWorkflow }()
-			// Rebind run.enum_bounds to a fresh, unset flag so later tests see the default.
-			defer newRunCmd()
 
 			if slices.Contains(tt.args, "--estimate") {
 				mockWorkflow.On("Estimate", mock.Anything, mock.MatchedBy(func(args domain.EstimateArgs) bool {
@@ -60,6 +77,6 @@ func TestRunCmd_EnumBoundsFlag(t *testing.T) {
 	}
 }
 
-func TestRunCmd_EnumBoundsFlagDefaultMatchesSchema(t *testing.T) {
-	assert.Equal(t, "false", newRunCmd().Flags().Lookup(enumBoundsFlagName).DefValue)
+func TestRunCmd_NoEnumBoundsFlag(t *testing.T) {
+	require.Nil(t, newRunCmd().Flags().Lookup("enum-bounds"))
 }

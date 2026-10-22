@@ -28,7 +28,6 @@ var runDiffFlag string
 var runPatternFlag string
 var runMutagensFlag []string
 var runWorkspaceFlag string
-var runEnumBoundsFlag bool
 
 // errRunWithShard rejects --run with --shard: a run of a few functions is too
 // small to split across jobs.
@@ -119,9 +118,6 @@ func configureRunFlags(cmd *cobra.Command) (report.ThresholdFlags, report.Thresh
 	cmd.Flags().StringVar(&runWorkspaceFlag, workspaceFlagName, schemaDefault[string](config.KeyRunWorkspace), "how mutants are built: overlay (go test -overlay in the project) or deep-copy (a copy of the project per worker, for tests that build the code in a subprocess or read source files)")
 	bindFlagToConfig(cmd.Flags().Lookup(workspaceFlagName), config.KeyRunWorkspace)
 
-	cmd.Flags().BoolVar(&runEnumBoundsFlag, enumBoundsFlagName, schemaDefault[bool](config.KeyRunEnumBounds), "treat the lowest and highest constant of a defined integer type as its bounds and skip the comparison mutants that are equivalent then; only safe when no value of the type is converted from an arbitrary integer")
-	bindFlagToConfig(cmd.Flags().Lookup(enumBoundsFlagName), config.KeyRunEnumBounds)
-
 	return report.AddThresholdFlags(cmd, "threshold", "threshold"),
 		report.AddThresholdFlags(cmd, "threshold.diff", "threshold-diff")
 }
@@ -164,7 +160,7 @@ func runEstimateArgs(args []string) domain.EstimateArgs {
 		Run:      runPatternFlag,
 		Mutagens: viper.GetStringSlice(config.KeyRunMutagens),
 
-		EnumBounds: viper.GetBool(config.KeyRunEnumBounds),
+		EnumBounds: viper.GetBool(config.KeyMutagenComparisonEnumBounds),
 	}
 }
 

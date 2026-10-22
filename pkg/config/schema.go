@@ -48,6 +48,7 @@ func Schema() []Field {
 		{Name: KeyNoUpdateCheck, Kind: KindBool, Default: false, Doc: "Disable the check for a newer gooze release."},
 		pathsField(),
 		runField(),
+		mutagenField(),
 		thresholdField(),
 		logField(),
 	}
@@ -56,6 +57,17 @@ func Schema() []Field {
 func pathsField() Field {
 	return Field{Name: "paths", Kind: KindObject, Doc: "Path selection settings.", Children: []Field{
 		{Name: "exclude", Kind: KindStringList, Default: []string{}, Doc: "Regular-expression patterns of files to skip (e.g. '^vendor/')."},
+	}}
+}
+
+func mutagenField() Field {
+	return Field{Name: "mutagen", Kind: KindObject, Doc: "Per-mutagen settings.", Children: []Field{
+		{Name: "comparison", Kind: KindObject, Doc: "Settings of the comparison mutagen.", Children: []Field{
+			{
+				Name: "enum_bounds", Kind: KindBool, Default: false,
+				Doc: "Treat the lowest and highest constant of a defined integer type as its bounds, so v == Lowest isn't mutated to v <= Lowest. Only safe when no value of the type is converted from an arbitrary integer.",
+			},
+		}},
 	}}
 }
 
@@ -73,10 +85,6 @@ func runField() Field {
 		{
 			Name: "workspace", Kind: KindEnum, Default: "overlay", Enum: []string{"overlay", "deep-copy"},
 			Doc: "How mutants are built: overlay tests them in the project through go test -overlay, without copying it; deep-copy tests them in a per-worker copy of the project, for tests that build the project's code in a subprocess, read its source files or write next to themselves.",
-		},
-		{
-			Name: "enum_bounds", Kind: KindBool, Default: false,
-			Doc: "Treat the lowest and highest constant of a defined integer type as its bounds, so v == Lowest isn't mutated to v <= Lowest. Only safe when no value of the type is converted from an arbitrary integer.",
 		},
 	}}
 }

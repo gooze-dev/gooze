@@ -9,31 +9,31 @@ import (
 
 func TestDefaults(t *testing.T) {
 	want := map[string]any{
-		KeyVersion:              1,
-		KeyOutput:               DefaultReportsDir,
-		KeyNoCache:              false,
-		KeyNoUpdateCheck:        false,
-		KeyPathsExclude:         []string{},
-		KeyRunParallel:          1,
-		KeyRunMutationTimeout:   120,
-		KeyRunCoverageProfile:   "",
-		KeyRunDiff:              "",
-		KeyRunMutagens:          []string{},
-		KeyRunWorkspace:         "overlay",
-		KeyRunEnumBounds:        false,
-		KeyThresholdTotal:       0.0,
-		KeyThresholdAverage:     0.0,
-		KeyThresholdFile:        0.0,
-		KeyThresholdDiffTotal:   0.0,
-		KeyThresholdDiffAverage: 0.0,
-		KeyThresholdDiffFile:    0.0,
-		KeyLogFilename:          ".gooze.log",
-		KeyLogLevel:             "info",
-		KeyLogVerbose:           false,
-		KeyLogMaxSize:           10,
-		KeyLogMaxBackups:        3,
-		KeyLogMaxAge:            28,
-		KeyLogCompress:          true,
+		KeyVersion:                     1,
+		KeyOutput:                      DefaultReportsDir,
+		KeyNoCache:                     false,
+		KeyNoUpdateCheck:               false,
+		KeyPathsExclude:                []string{},
+		KeyRunParallel:                 1,
+		KeyRunMutationTimeout:          120,
+		KeyRunCoverageProfile:          "",
+		KeyRunDiff:                     "",
+		KeyRunMutagens:                 []string{},
+		KeyRunWorkspace:                "overlay",
+		KeyMutagenComparisonEnumBounds: false,
+		KeyThresholdTotal:              0.0,
+		KeyThresholdAverage:            0.0,
+		KeyThresholdFile:               0.0,
+		KeyThresholdDiffTotal:          0.0,
+		KeyThresholdDiffAverage:        0.0,
+		KeyThresholdDiffFile:           0.0,
+		KeyLogFilename:                 ".gooze.log",
+		KeyLogLevel:                    "info",
+		KeyLogVerbose:                  false,
+		KeyLogMaxSize:                  10,
+		KeyLogMaxBackups:               3,
+		KeyLogMaxAge:                   28,
+		KeyLogCompress:                 true,
 	}
 
 	for _, key := range Keys() {
@@ -63,7 +63,7 @@ func TestLookup_Object(t *testing.T) {
 		names = append(names, child.Name)
 	}
 
-	assert.Equal(t, []string{"parallel", "mutation_timeout", "coverage_profile", "diff", "mutagens", "workspace", "enum_bounds"}, names)
+	assert.Equal(t, []string{"parallel", "mutation_timeout", "coverage_profile", "diff", "mutagens", "workspace"}, names)
 }
 
 func TestLookup_Missing(t *testing.T) {
