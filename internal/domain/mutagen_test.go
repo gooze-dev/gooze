@@ -265,7 +265,7 @@ func TestMutagen_StreamMutations_BuildsMutationsLazily(t *testing.T) {
 	stop := errors.New("stop")
 	delivered := 0
 
-	err = mg.StreamMutations(context.Background(), source, domain.MutationOptions{}, func(m.Mutation) error {
+	err = mg.StreamMutations(context.Background(), source, func(m.Mutation) error {
 		delivered++
 		return stop
 	}, mgen.Arithmetic)
