@@ -1395,3 +1395,191 @@ func TestLocalReportStore_Selection(t *testing.T) {
 	require.Error(t, rs.SaveSelection(ctx, m.Path(filepath.Join(string(dir), "missing")), want),
 		"the run's reports directory must exist")
 }
+
+func TestLocalReportStore_EmptyPathIsRejectedBeforeTouchingDisk(t *testing.T) {
+	t.Parallel()
+
+	rs := &LocalReportStore{}
+	ctx := context.Background()
+
+	err := rs.SaveReports(ctx, "", reportSpill(t))
+	require.EqualError(t, err, "reports directory path is required")
+
+	err = rs.RegenerateIndex(ctx, "")
+	require.EqualError(t, err, "reports directory path is required")
+
+	_, err = rs.LoadSpillReports(ctx, "")
+	require.EqualError(t, err, "reports directory path is required")
+}
+
+func TestLocalReportStore_ReportsDirExists_StatErrorIsNotAnExistingDir(t *testing.T) {
+	t.Parallel()
+
+	file := filepath.Join(t.TempDir(), "file")
+	require.NoError(t, os.WriteFile(file, []byte("x"), 0o600))
+
+	rs := &LocalReportStore{}
+
+	exists, err := rs.reportsDirExists(file)
+	require.Error(t, err)
+	assert.False(t, exists)
+}
+
+func TestLocalReportStore_RegenerateIndex_NoReportsAndNoIndexIsFine(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	rs := &LocalReportStore{}
+
+	require.NoError(t, rs.RegenerateIndex(context.Background(), m.Path(dir)))
+
+	_, err := os.Stat(filepath.Join(dir, rpt.IndexFileName))
+	assert.True(t, os.IsNotExist(err))
+}
+
+func TestIndexBuilder_CountsAddedReports(t *testing.T) {
+	t.Parallel()
+
+	b := newIndexBuilder(&LocalReportStore{})
+	report := m.Report{
+		Source: rpt.Source{Origin: &rpt.File{FullPath: "/abs/a.go", Hash: "h"}},
+		Result: m.Result{mgen.Boolean: {{MutationID: "b1", Status: rpt.Killed}}},
+	}
+
+	b.add(report)
+	b.add(report)
+
+	assert.Equal(t, 2, b.count)
+}
+
+// saveCleanFixture stores one report per source and returns their file paths.
+func saveCleanFixture(t *testing.T, rs *LocalReportStore, dir string, sources ...rpt.Source) []string {
+	t.Helper()
+
+	reports := make([]m.Report, 0, len(sources))
+	files := make([]string, 0, len(sources))
+
+	for i, src := range sources {
+		report := m.Report{
+			Source: src,
+			Result: m.Result{mgen.Boolean: {{MutationID: "id" + string(rune('a'+i)), Status: rpt.Killed}}},
+		}
+		reports = append(reports, report)
+		files = append(files, filepath.Join(dir, rs.computeReportHash(report.Result)+".yaml"))
+	}
+
+	require.NoError(t, rs.SaveReports(context.Background(), m.Path(dir), reportSpill(t, reports...)))
+
+	return files
+}
+
+func TestLocalReportStore_CleanReports_MatchesByPathOnly(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	rs := &LocalReportStore{}
+
+	files := saveCleanFixture(t, rs, dir,
+		rpt.Source{Origin: &rpt.File{ShortPath: "a.go", Hash: "h1"}},
+		rpt.Source{Origin: &rpt.File{ShortPath: "b.go", Hash: "h2"}},
+	)
+
+	// A source with a path and no hash: only the path can match.
+	require.NoError(t, rs.CleanReports(context.Background(), m.Path(dir),
+		sourceSpill(t, rpt.Source{Origin: &rpt.File{ShortPath: "a.go"}})))
+
+	assert.NoFileExists(t, files[0])
+	assert.FileExists(t, files[1])
+}
+
+func TestLocalReportStore_CleanReports_MatchesByHashOnly(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	rs := &LocalReportStore{}
+
+	files := saveCleanFixture(t, rs, dir,
+		rpt.Source{Origin: &rpt.File{ShortPath: "a.go", Hash: "h1"}},
+		rpt.Source{Origin: &rpt.File{ShortPath: "b.go", Hash: "h2"}},
+	)
+
+	// A source with a hash and no path: only the hash can match.
+	require.NoError(t, rs.CleanReports(context.Background(), m.Path(dir),
+		sourceSpill(t, rpt.Source{Origin: &rpt.File{Hash: "h1"}})))
+
+	assert.NoFileExists(t, files[0])
+	assert.FileExists(t, files[1])
+}
+
+func TestLocalReportStore_ShouldCleanReport_NeverReportsWithoutOrigin(t *testing.T) {
+	t.Parallel()
+
+	rs := &LocalReportStore{}
+
+	assert.False(t, rs.shouldCleanReport(rpt.Source{}, map[string]bool{"": true}, map[string]bool{"": true}))
+}
+
+func TestSourceFileExists_NoOrigin(t *testing.T) {
+	t.Parallel()
+
+	assert.False(t, sourceFileExists(rpt.Source{}))
+}
+
+func TestLocalReportStore_SourceHashChanged_EitherDirection(t *testing.T) {
+	t.Parallel()
+
+	rs := &LocalReportStore{}
+	file := func(hash string) *rpt.File { return &rpt.File{FullPath: "/abs/a.go", Hash: hash} }
+
+	for _, tc := range []struct {
+		name            string
+		stored, current rpt.Source
+	}{
+		{"origin hash sorts before", rpt.Source{Origin: file("a")}, rpt.Source{Origin: file("b")}},
+		{"origin hash sorts after", rpt.Source{Origin: file("b")}, rpt.Source{Origin: file("a")}},
+		{"test hash sorts before", rpt.Source{Origin: file("o"), Test: file("a")}, rpt.Source{Origin: file("o"), Test: file("b")}},
+		{"test hash sorts after", rpt.Source{Origin: file("o"), Test: file("b")}, rpt.Source{Origin: file("o"), Test: file("a")}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			assert.True(t, rs.sourceHashChanged(tc.stored, tc.current))
+		})
+	}
+
+	assert.False(t, rs.sourceHashChanged(rpt.Source{Origin: file("o"), Test: file("t")}, rpt.Source{Origin: file("o"), Test: file("t")}))
+}
+
+func TestLocalReportStore_MutatorsChanged_NewerStoredVersion(t *testing.T) {
+	t.Parallel()
+
+	rs := &LocalReportStore{}
+	current := mgen.Versions()
+
+	assert.True(t, rs.mutatorsChanged(map[string]int{mgen.Boolean.Name: current[mgen.Boolean.Name] + 1}))
+	assert.True(t, rs.mutatorsChanged(map[string]int{mgen.Boolean.Name: current[mgen.Boolean.Name] - 1}))
+	assert.False(t, rs.mutatorsChanged(map[string]int{mgen.Boolean.Name: current[mgen.Boolean.Name]}))
+}
+
+func TestEncodeResult_SortsByNameThenVersion(t *testing.T) {
+	t.Parallel()
+
+	result := m.Result{}
+	for _, mt := range []mgen.Type{
+		{Name: "zeta", Version: 1},
+		{Name: "alpha", Version: 3},
+		{Name: "mid", Version: 2},
+		{Name: "alpha", Version: 1},
+		{Name: "zeta", Version: 2},
+		{Name: "alpha", Version: 2},
+		{Name: "beta", Version: 9},
+	} {
+		result[mt] = nil
+	}
+
+	var got []string
+	for _, entry := range encodeResult(result) {
+		got = append(got, entry.Name+"/"+string(rune('0'+entry.Version)))
+	}
+
+	assert.Equal(t, []string{"alpha/1", "alpha/2", "alpha/3", "beta/9", "mid/2", "zeta/1", "zeta/2"}, got)
+}
