@@ -13,7 +13,7 @@ import (
 func TestExitCodesAreStable(t *testing.T) {
 	codes := []m.ExitCode{
 		m.ExitOK, m.ExitFailure, m.ExitUsage, m.ExitBelowThreshold,
-		m.ExitGit, m.ExitRegistry, m.ExitNoReports, m.ExitInterrupted,
+		m.ExitGit, m.ExitRegistry, m.ExitNoReports, m.ExitTestsFail, m.ExitInterrupted,
 	}
 
 	got := make([]int, 0, len(codes))
@@ -21,7 +21,7 @@ func TestExitCodesAreStable(t *testing.T) {
 		got = append(got, int(code))
 	}
 
-	assert.Equal(t, []int{0, 1, 2, 3, 4, 5, 6, 130}, got)
+	assert.Equal(t, []int{0, 1, 2, 3, 4, 5, 6, 7, 130}, got)
 }
 
 func TestCodedError(t *testing.T) {

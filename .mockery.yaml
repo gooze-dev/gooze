@@ -13,6 +13,7 @@ packages:
       Mutagen:
       Reporter:
       Workspace:
+      TestChecker:
       ReportPublisher:
       GoFileAdapter:
       SourceFSAdapter:

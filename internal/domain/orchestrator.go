@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"path/filepath"
 	"strings"
 
 	m "gooze.dev/pkg/gooze/internal/model"
@@ -133,6 +134,25 @@ func (ws *workspace) Run(ctx context.Context, mutation m.Mutation) (m.Result, er
 	return resultForStatus(mutation, status), nil
 }
 
+// CheckTests runs the tests of mutation's package in the workspace's copy of
+// the project, without the mutation.
+func (ws *workspace) CheckTests(ctx context.Context, mutation m.Mutation) error {
+	if err := validateMutation(mutation); err != nil {
+		return err
+	}
+
+	if err := ws.ensurePrepared(ctx, m.Path(mutation.Source.Origin.FullPath)); err != nil {
+		return err
+	}
+
+	tmpTestPath, err := ws.tmpPath(ctx, m.Path(mutation.Source.Test.FullPath))
+	if err != nil {
+		return err
+	}
+
+	return runUnmutatedTests(ctx, ws.testAdapter, ws.tmpDir, tmpTestPath, mutation)
+}
+
 // Close removes the workspace's temporary copy, if any.
 func (ws *workspace) Close(ctx context.Context) {
 	// Use a cancellation-free context so cleanup still happens even if the run
@@ -252,6 +272,33 @@ func testStatus(ctx context.Context, testAdapter TestRunnerAdapter, workDir, tes
 	return rpt.Survived
 }
 
+// runUnmutatedTests runs the tests of testPath's package in workDir without an
+// overlay and returns a *FailingTestsError for mutation's package when they
+// fail or don't finish before ctx ends.
+func runUnmutatedTests(ctx context.Context, testAdapter TestRunnerAdapter, workDir, testPath m.Path, mutation m.Mutation) error {
+	output, err := testAdapter.RunGoTest(ctx, string(workDir), string(testPath), "")
+	if err == nil {
+		return nil
+	}
+
+	return &FailingTestsError{
+		Package:  packageOf(mutation.Source.Origin.ShortPath),
+		Output:   output,
+		TimedOut: ctx.Err() != nil,
+	}
+}
+
+// packageOf returns the directory of a source's short path as go test names
+// a package: ./internal/domain, or . for the working directory.
+func packageOf(shortPath string) string {
+	dir := filepath.Dir(shortPath)
+	if filepath.IsAbs(dir) || dir == "." {
+		return dir
+	}
+
+	return "." + string(filepath.Separator) + dir
+}
+
 func isBuildFailure(output string) bool {
 	return strings.Contains(output, "[build failed]") || strings.Contains(output, "[setup failed]")
 }
@@ -348,6 +395,24 @@ func (ws *overlayWorkspace) writeOverlay(ctx context.Context, sourcePath m.Path,
 	}
 
 	return overlayPath, nil
+}
+
+// CheckTests runs the tests of mutation's package in the project itself,
+// without an overlay.
+func (ws *overlayWorkspace) CheckTests(ctx context.Context, mutation m.Mutation) error {
+	if err := validateMutation(mutation); err != nil {
+		return err
+	}
+
+	sourcePath := m.Path(mutation.Source.Origin.FullPath)
+
+	root, err := ws.fsAdapter.FindProjectRoot(ctx, sourcePath)
+	if err != nil {
+		slog.Error("Failed to find project root", "sourcePath", sourcePath, "error", err)
+		return fmt.Errorf("failed to find project root: %w", err)
+	}
+
+	return runUnmutatedTests(ctx, ws.testAdapter, root, sourcePath, mutation)
 }
 
 // Close removes the worker's temp dir, if any.
