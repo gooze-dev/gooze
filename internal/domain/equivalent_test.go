@@ -164,3 +164,61 @@ func TestMutagen_SkipsOtherResultsOfErrorAndCommaOkReturns(t *testing.T) {
 		})
 	}
 }
+
+func TestMutagen_SkipsMapSizeHints(t *testing.T) {
+	tests := []struct {
+		name         string
+		src          string
+		mutationType mgen.Type
+		want         []int // the mutated lines
+	}{
+		{
+			name: "map size hint", mutationType: mgen.Arithmetic,
+			src: "package p\n\nfunc f(n int) map[string]int {\n\treturn make(map[string]int, n*2)\n}\n",
+		},
+		{
+			name: "map size hint literal", mutationType: mgen.Numbers,
+			src: "package p\n\nfunc f() map[string]int {\n\treturn make(map[string]int, 8)\n}\n",
+		},
+		{
+			name: "map size hint dividing by a variable", mutationType: mgen.Arithmetic, want: []int{4, 4, 4, 4},
+			src: "package p\n\nfunc f(n, k int) map[string]int {\n\treturn make(map[string]int, n+k)\n}\n",
+		},
+		{
+			name: "map without a size hint", mutationType: mgen.Arithmetic, want: []int{5, 5, 5, 5},
+			src: "package p\n\nfunc f(n int) (map[string]int, int) {\n\tm := make(map[string]int)\n\treturn m, n + 1\n}\n",
+		},
+		{
+			name: "slice capacity, which can panic below the length", mutationType: mgen.Arithmetic, want: []int{4, 4, 4, 4},
+			src: "package p\n\nfunc f(n int) []int {\n\treturn make([]int, 0, n+1)\n}\n",
+		},
+		{
+			name: "channel buffer size", mutationType: mgen.Arithmetic, want: []int{4, 4, 4, 4},
+			src: "package p\n\nfunc f(n int) chan int {\n\treturn make(chan int, n+1)\n}\n",
+		},
+		{
+			name: "named map type", mutationType: mgen.Arithmetic, want: []int{6, 6, 6, 6},
+			src: "package p\n\ntype index map[string]int\n\nfunc f(n int) index {\n\treturn make(index, n+1)\n}\n",
+		},
+		{
+			name: "a function named make", mutationType: mgen.Arithmetic, want: []int{6, 6, 6, 6},
+			src: "package p\n\nfunc make(m map[string]int, n int) map[string]int { return m }\n\nfunc f(n int) map[string]int {\n\treturn make(nil, n*2)\n}\n",
+		},
+		{
+			name: "a function literal in the hint", mutationType: mgen.Numbers, want: []int{4},
+			src: "package p\n\nfunc f() map[string]int {\n\treturn make(map[string]int, func() int { return 1 }())\n}\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := mutatedLines(t, tt.src, tt.mutationType)
+			if len(tt.want) == 0 {
+				require.Empty(t, got)
+				return
+			}
+
+			require.Equal(t, tt.want, got)
+		})
+	}
+}

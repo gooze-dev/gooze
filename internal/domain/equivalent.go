@@ -8,20 +8,67 @@ import (
 // markEquivalentSubtrees adds to skip the expressions of file whose every
 // mutant is equivalent, so the walk generates nothing inside them: the
 // constant values returned next to a non-nil error or a false ok, which
-// callers don't read (see markIgnoredResults).
+// callers don't read (see markIgnoredResults), and the size hints of
+// make(map[K]V, n), which only change allocation (see markMapSizeHint).
 func markEquivalentSubtrees(file *ast.File, skip map[ast.Node]bool) {
 	ast.Inspect(file, func(n ast.Node) bool {
-		switch fn := n.(type) {
+		switch node := n.(type) {
 		case *ast.FuncDecl:
-			if fn.Body != nil {
-				markIgnoredResults(fn.Type, fn.Body, skip)
+			if node.Body != nil {
+				markIgnoredResults(node.Type, node.Body, skip)
 			}
 		case *ast.FuncLit:
-			markIgnoredResults(fn.Type, fn.Body, skip)
+			markIgnoredResults(node.Type, node.Body, skip)
+		case *ast.CallExpr:
+			markMapSizeHint(node, skip)
 		}
 
 		return true
 	})
+}
+
+// markMapSizeHint marks the size hint of make(map[K]V, n): it only changes how
+// much is allocated, and a negative hint doesn't panic. A slice's capacity is
+// left alone, because a mutant that drops it below the length or 0 panics
+// (makeslice: cap out of range), as are channel buffer sizes, which are
+// behavior. The map type is recognized from the syntax, so a named map type
+// keeps its mutants.
+func markMapSizeHint(call *ast.CallExpr, skip map[ast.Node]bool) {
+	if !isPredeclared(call.Fun, "make") {
+		return
+	}
+
+	// A switch, not len(args) == 2, which would add the equivalent >= mutant
+	// (make never takes three arguments for a map).
+	switch args := call.Args; len(args) { //nolint:gocritic // see above
+	case 2:
+		if _, ok := args[0].(*ast.MapType); ok && isSafeHint(args[1]) {
+			skip[args[1]] = true
+		}
+	}
+}
+
+// isSafeHint reports whether no mutant of the hint e can panic: e holds no
+// function literal, whose body is code of its own, and each binary operator
+// in it has a literal right operand, so swapping it for / or % can't divide
+// by zero.
+func isSafeHint(e ast.Expr) bool {
+	safe := true
+
+	ast.Inspect(e, func(n ast.Node) bool {
+		switch node := n.(type) {
+		case *ast.FuncLit:
+			safe = false
+		case *ast.BinaryExpr:
+			if _, ok := node.Y.(*ast.BasicLit); !ok {
+				safe = false
+			}
+		}
+
+		return safe
+	})
+
+	return safe
 }
 
 // markIgnoredResults marks, in the return statements of one function body,
