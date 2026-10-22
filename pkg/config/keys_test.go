@@ -18,6 +18,7 @@ func TestKeys(t *testing.T) {
 		KeyRunCoverageProfile,
 		KeyRunDiff,
 		KeyRunMutagens,
+		KeyRunWorkspace,
 		KeyThresholdTotal,
 		KeyThresholdAverage,
 		KeyThresholdFile,
@@ -38,6 +39,7 @@ func TestKeyValues(t *testing.T) {
 	assert.Equal(t, []string{
 		"version", "output", "no-cache", "no-update-check", "paths.exclude",
 		"run.parallel", "run.mutation_timeout", "run.coverage_profile", "run.diff", "run.mutagens",
+		"run.workspace",
 		"threshold.total", "threshold.average", "threshold.file",
 		"threshold.diff.total", "threshold.diff.average", "threshold.diff.file",
 		"log.filename", "log.level", "log.verbose", "log.max_size",

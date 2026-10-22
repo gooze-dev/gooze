@@ -53,6 +53,9 @@ type TestArgs struct {
 	TotalShardCount int
 	MutationTimeout time.Duration
 	CoverageProfile m.Path
+	// Workspace selects how mutants are built: through -overlay in the project
+	// (the default) or in a per-worker deep copy of it.
+	Workspace WorkspaceMode
 	// Thresholds are the minimum scores the run must reach. A shard doesn't
 	// check them: report merge does, on all the results.
 	Thresholds Thresholds
@@ -183,7 +186,7 @@ func (w *workflow) Test(ctx context.Context, args TestArgs) error {
 			return fmt.Errorf("load coverage profile: %w", err)
 		}
 
-		reports, err := w.testReports(ctx, mutations, gate, sel, args.Threads, args.MutationTimeout)
+		reports, err := w.testReports(ctx, mutations, gate, sel, args.Threads, args.MutationTimeout, args.Workspace)
 		if err != nil {
 			slog.Error("Failed to run mutation tests", "error", err)
 			return fmt.Errorf("run mutation tests: %w", err)
@@ -991,6 +994,7 @@ func (w *workflow) testReports(
 	sel Selection,
 	threads int,
 	mutationTimeout time.Duration,
+	workspace WorkspaceMode,
 ) (pkg.FileSpill[m.Report], error) {
 	reports, err := pkg.NewFileSpill[m.Report]()
 	if err != nil {
@@ -1020,7 +1024,7 @@ func (w *workflow) testReports(
 	group.Go(w.dispatchMutations(ctx, mutations, gate, queues, results))
 
 	for threadID := range effectiveThreads {
-		group.Go(w.consumeMutations(ctx, queues[threadID], threadID, mutationTimeout, results))
+		group.Go(w.consumeMutations(ctx, queues[threadID], threadID, mutationTimeout, workspace, results))
 	}
 
 	runErr := group.Wait()
@@ -1189,7 +1193,7 @@ func closeQueues(queues []chan m.Mutation) {
 }
 
 // consumeMutations returns a worker task that owns a single reusable workspace
-// (so the project is copied once per worker, not once per mutation), tests each
+// (so its setup happens once per worker, not once per mutation), tests each
 // mutation arriving on its dedicated queue, and sends the outcome to the shared
 // results channel.
 func (w *workflow) consumeMutations(
@@ -1197,10 +1201,11 @@ func (w *workflow) consumeMutations(
 	queue <-chan m.Mutation,
 	threadID int,
 	mutationTimeout time.Duration,
+	workspace WorkspaceMode,
 	results chan<- mutationOutcome,
 ) func() error {
 	return func() error {
-		ws := w.orchestrator.NewWorkspace()
+		ws := w.orchestrator.NewWorkspace(workspace)
 		defer ws.Close(ctx)
 
 		for mutation := range queue {

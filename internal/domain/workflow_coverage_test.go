@@ -54,7 +54,7 @@ func TestWorkflow_Test_CoverageGateSkipsUncovered(t *testing.T) {
 		RunAndReturn(streamMutationsFn([]m.Mutation{covered, uncovered}))
 
 	// Only the covered mutation reaches a workspace.
-	mockOrchestrator.EXPECT().NewWorkspace().Return(mockWorkspace).Maybe()
+	mockOrchestrator.EXPECT().NewWorkspace(mock.Anything).Return(mockWorkspace).Maybe()
 	mockWorkspace.EXPECT().Close(mock.Anything).Return().Maybe()
 	mockWorkspace.EXPECT().
 		Run(mock.Anything, mock.MatchedBy(func(mut m.Mutation) bool { return mut.ID == "covered" })).

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -32,6 +33,8 @@ const (
 	diffFlagName     = "diff"
 	runFlagName      = "run"
 	mutagensFlagName = "mutagens"
+
+	workspaceFlagName = "workspace"
 
 	envPrefix = "GOOZE"
 )
@@ -75,9 +78,16 @@ func validateConfig() error {
 }
 
 // validateValue checks the value of key against field's bounds: a whole
-// number for a bounded KindInt field, a number for a KindFloat one.
+// number for a bounded KindInt field, a number for a KindFloat one, one of the
+// listed values for a KindEnum one that doesn't take integers.
 func validateValue(field config.Field, key string) error {
 	switch field.Kind {
+	case config.KindEnum:
+		if value := viper.GetString(key); !field.IntEnum && !slices.Contains(field.Enum, value) {
+			return fmt.Errorf("%q is not one of %s", value, strings.Join(field.Enum, ", "))
+		}
+
+		return nil
 	case config.KindFloat:
 		x, err := cast.ToFloat64E(viper.Get(key))
 		if err != nil {

@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -10,22 +11,35 @@ import (
 	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
-// Orchestrator coordinates applying a mutation to a temporary copy of
-// the project and running the corresponding tests to determine whether the
-// mutation is killed or survives.
+// WorkspaceMode selects how a worker builds a mutant without changing the
+// project's files.
+type WorkspaceMode string
+
+const (
+	// WorkspaceOverlay tests each mutant in the project itself: go test reads
+	// the mutated file through -overlay. Nothing is copied, and the build cache
+	// of the project's real paths is reused. The empty mode means overlay.
+	WorkspaceOverlay WorkspaceMode = "overlay"
+	// WorkspaceDeepCopy tests each mutant in a per-worker copy of the project, for
+	// tests that don't see an overlay: ones that build the project's code in a
+	// subprocess or read its source files, or that write next to themselves.
+	WorkspaceDeepCopy WorkspaceMode = "deep-copy"
+)
+
+// Orchestrator coordinates applying a mutation and running the corresponding
+// tests to determine whether the mutation is killed or survives.
 type Orchestrator interface {
 	// TestMutation runs a single mutation in a throwaway workspace.
-	TestMutation(ctx context.Context, mutation m.Mutation) (m.Result, error)
+	TestMutation(ctx context.Context, mode WorkspaceMode, mutation m.Mutation) (m.Result, error)
 	// NewWorkspace returns a reusable workspace. Each worker goroutine should
-	// own one so the project is copied once per worker instead of once per
-	// mutation. A Workspace is NOT safe for concurrent use.
-	NewWorkspace() Workspace
+	// own one, so its temporary files (and, in deep-copy mode, the project copy) are
+	// made once per worker instead of once per mutation. A Workspace is NOT safe
+	// for concurrent use.
+	NewWorkspace(mode WorkspaceMode) Workspace
 }
 
-// Workspace is a per-worker copy of a project in which mutations are applied and
-// tested. It lazily copies the project the first time it sees a mutation for a
-// given project root and reuses that copy for subsequent mutations of the same
-// project, restoring the mutated file after each run.
+// Workspace tests mutations of a project for one worker, in the way its
+// WorkspaceMode selects.
 type Workspace interface {
 	Run(ctx context.Context, mutation m.Mutation) (m.Result, error)
 	Close(ctx context.Context)
@@ -45,22 +59,33 @@ func NewOrchestrator(fsAdapter SourceFSAdapter, testAdapter TestRunnerAdapter) O
 	}
 }
 
-// NewWorkspace returns a fresh reusable workspace.
-func (to *orchestrator) NewWorkspace() Workspace {
-	return &workspace{
+// NewWorkspace returns a fresh reusable workspace for mode.
+func (to *orchestrator) NewWorkspace(mode WorkspaceMode) Workspace {
+	if mode == WorkspaceDeepCopy {
+		return &workspace{
+			fsAdapter:   to.fsAdapter,
+			testAdapter: to.testAdapter,
+		}
+	}
+
+	return &overlayWorkspace{
 		fsAdapter:   to.fsAdapter,
 		testAdapter: to.testAdapter,
 	}
 }
 
 // TestMutation runs a single mutation in a throwaway workspace.
-func (to *orchestrator) TestMutation(ctx context.Context, mutation m.Mutation) (m.Result, error) {
-	ws := to.NewWorkspace()
+func (to *orchestrator) TestMutation(ctx context.Context, mode WorkspaceMode, mutation m.Mutation) (m.Result, error) {
+	ws := to.NewWorkspace(mode)
 	defer ws.Close(ctx)
 
 	return ws.Run(ctx, mutation)
 }
 
+// workspace is a per-worker copy of a project in which mutations are applied
+// and tested. It lazily copies the project the first time it sees a mutation
+// for a given project root and reuses that copy for subsequent mutations of the
+// same project, restoring the mutated file after each run.
 type workspace struct {
 	fsAdapter   SourceFSAdapter
 	testAdapter TestRunnerAdapter
@@ -186,7 +211,11 @@ func (ws *workspace) applyMutation(ctx context.Context, path m.Path, mutatedCode
 }
 
 func (ws *workspace) writeFile(ctx context.Context, path m.Path, content []byte) error {
-	if err := ws.fsAdapter.WriteFile(ctx, path, content, 0o600); err != nil {
+	return writeFile(ctx, ws.fsAdapter, path, content)
+}
+
+func writeFile(ctx context.Context, fsAdapter SourceFSAdapter, path m.Path, content []byte) error {
+	if err := fsAdapter.WriteFile(ctx, path, content, 0o600); err != nil {
 		slog.Error("Failed to write file", "path", path, "error", err)
 		return fmt.Errorf("failed to write file: %w", err)
 	}
@@ -195,11 +224,18 @@ func (ws *workspace) writeFile(ctx context.Context, path m.Path, content []byte)
 }
 
 func (ws *workspace) runTests(ctx context.Context, testPath m.Path) rpt.TestStatus {
+	return testStatus(ctx, ws.testAdapter, ws.tmpDir, testPath, "")
+}
+
+// testStatus runs the tests of testPath's package in workDir, reading the
+// files mapped in overlay (if any) instead of their originals, and classifies
+// the outcome.
+func testStatus(ctx context.Context, testAdapter TestRunnerAdapter, workDir, testPath, overlay m.Path) rpt.TestStatus {
 	if err := ctx.Err(); err != nil {
 		return rpt.Timeout
 	}
 
-	output, testErr := ws.testAdapter.RunGoTest(ctx, string(ws.tmpDir), string(testPath))
+	output, testErr := testAdapter.RunGoTest(ctx, string(workDir), string(testPath), string(overlay))
 	if testErr != nil {
 		if ctx.Err() != nil {
 			return rpt.Timeout
@@ -231,6 +267,100 @@ func (ws *workspace) cleanup(ctx context.Context) {
 
 	ws.tmpDir = ""
 	ws.projectRoot = ""
+}
+
+// overlayWorkspace tests mutations in the project itself. It writes the
+// mutated source and an overlay file mapping the original path to it into a
+// per-worker temp dir, so go test builds the mutant while no file of the
+// project is written or copied.
+type overlayWorkspace struct {
+	fsAdapter   SourceFSAdapter
+	testAdapter TestRunnerAdapter
+
+	tmpDir m.Path
+}
+
+// overlay is the JSON file go build -overlay reads: each path in Replace is
+// built from the file it maps to.
+type overlay struct {
+	Replace map[string]string
+}
+
+func (ws *overlayWorkspace) Run(ctx context.Context, mutation m.Mutation) (m.Result, error) {
+	if err := ctx.Err(); err != nil {
+		return resultForStatus(mutation, rpt.Timeout), nil
+	}
+
+	if err := validateMutation(mutation); err != nil {
+		return m.Result{}, err
+	}
+
+	if mutation.Source.Test == nil {
+		return resultForNoTest(mutation), nil
+	}
+
+	sourcePath := m.Path(mutation.Source.Origin.FullPath)
+
+	root, err := ws.fsAdapter.FindProjectRoot(ctx, sourcePath)
+	if err != nil {
+		slog.Error("Failed to find project root", "sourcePath", sourcePath, "error", err)
+		return m.Result{}, fmt.Errorf("failed to find project root: %w", err)
+	}
+
+	overlayPath, err := ws.writeOverlay(ctx, sourcePath, mutation.MutatedCode)
+	if err != nil {
+		return m.Result{}, err
+	}
+
+	// The source lives in the same package as its test and its path is
+	// absolute, so it selects the package to test from the project root.
+	status := testStatus(ctx, ws.testAdapter, root, sourcePath, overlayPath)
+
+	return resultForStatus(mutation, status), nil
+}
+
+// writeOverlay writes mutatedCode and an overlay that maps sourcePath to it
+// into the worker's temp dir, and returns the overlay's path.
+func (ws *overlayWorkspace) writeOverlay(ctx context.Context, sourcePath m.Path, mutatedCode []byte) (m.Path, error) {
+	if ws.tmpDir == "" {
+		tmpDir, err := ws.fsAdapter.CreateTempDir(ctx, "gooze-overlay-*")
+		if err != nil {
+			slog.Error("Failed to create temp dir", "error", err)
+			return "", fmt.Errorf("failed to create temp dir: %w", err)
+		}
+
+		ws.tmpDir = tmpDir
+	}
+
+	mutantPath := ws.fsAdapter.JoinPath(ctx, string(ws.tmpDir), "mutant.go")
+	if err := writeFile(ctx, ws.fsAdapter, mutantPath, mutatedCode); err != nil {
+		return "", err
+	}
+
+	content, err := json.Marshal(overlay{Replace: map[string]string{string(sourcePath): string(mutantPath)}})
+	if err != nil {
+		return "", fmt.Errorf("failed to encode overlay: %w", err)
+	}
+
+	overlayPath := ws.fsAdapter.JoinPath(ctx, string(ws.tmpDir), "overlay.json")
+	if err := writeFile(ctx, ws.fsAdapter, overlayPath, content); err != nil {
+		return "", err
+	}
+
+	return overlayPath, nil
+}
+
+// Close removes the worker's temp dir, if any.
+func (ws *overlayWorkspace) Close(ctx context.Context) {
+	if ws.tmpDir == "" {
+		return
+	}
+
+	if err := ws.fsAdapter.RemoveAll(context.WithoutCancel(ctx), ws.tmpDir); err != nil {
+		slog.Error("Failed to cleanup temp dir", "tmpDir", ws.tmpDir, "error", err)
+	}
+
+	ws.tmpDir = ""
 }
 
 func validateMutation(mutation m.Mutation) error {

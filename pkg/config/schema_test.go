@@ -19,6 +19,7 @@ func TestDefaults(t *testing.T) {
 		KeyRunCoverageProfile:   "",
 		KeyRunDiff:              "",
 		KeyRunMutagens:          []string{},
+		KeyRunWorkspace:         "overlay",
 		KeyThresholdTotal:       0.0,
 		KeyThresholdAverage:     0.0,
 		KeyThresholdFile:        0.0,
@@ -61,7 +62,7 @@ func TestLookup_Object(t *testing.T) {
 		names = append(names, child.Name)
 	}
 
-	assert.Equal(t, []string{"parallel", "mutation_timeout", "coverage_profile", "diff", "mutagens"}, names)
+	assert.Equal(t, []string{"parallel", "mutation_timeout", "coverage_profile", "diff", "mutagens", "workspace"}, names)
 }
 
 func TestLookup_Missing(t *testing.T) {
@@ -90,6 +91,7 @@ func TestLookup_Kinds(t *testing.T) {
 		KeyRunCoverageProfile: KindString,
 		KeyRunDiff:            KindString,
 		KeyRunMutagens:        KindStringList,
+		KeyRunWorkspace:       KindEnum,
 		"threshold":           KindObject,
 		KeyThresholdTotal:     KindFloat,
 		"threshold.diff":      KindObject,
@@ -199,6 +201,15 @@ func TestRunMutagensListsItsValues(t *testing.T) {
 		"bitwise", "increment", "assignment", "branch", "statement", "loop",
 	}, field.Enum, "each item of run.mutagens must be one of these")
 	assert.Equal(t, "Mutagens to run (arithmetic, boolean, numbers, comparison, logical, unary, bitwise, increment, assignment, branch, statement, loop); empty runs the default ones, all but branch, statement and loop.", field.Doc)
+}
+
+func TestRunWorkspaceListsItsValues(t *testing.T) {
+	field, ok := Lookup(KeyRunWorkspace)
+	require.True(t, ok)
+	assert.Equal(t, KindEnum, field.Kind)
+	assert.False(t, field.IntEnum)
+	assert.Equal(t, "overlay", field.Default)
+	assert.Equal(t, []string{"overlay", "deep-copy"}, field.Enum)
 }
 
 var thresholdKeys = []string{
