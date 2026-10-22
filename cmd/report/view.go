@@ -26,8 +26,9 @@ Use --all to list every mutation with its status and diff instead.
 
 --format github writes a GitHub workflow annotation for each line with
 surviving mutants before the summary, so they show on the pull request's
-changed files. Paths are relative to the git repository root. report.format in
-gooze.yaml sets the default.
+changed files; --format sarif writes a SARIF 2.1.0 log instead of the summary,
+for code scanning. Paths in both are relative to the git repository root.
+report.format in gooze.yaml sets the default.
 
 Below a --threshold-* minimum, view exits with code 3. For the reports of a
 gooze run --diff (view -o .gooze-reports/run), the --threshold-diff-* minimums
@@ -108,8 +109,9 @@ func viewFormatArgs(cmd *cobra.Command, all bool) (domain.ViewArgs, error) {
 	}
 
 	return domain.ViewArgs{
-		Format:     format,
-		Output:     cmd.OutOrStdout(),
-		PathPrefix: repoPathPrefix(cmd.Context()),
+		Format:      format,
+		Output:      cmd.OutOrStdout(),
+		PathPrefix:  repoPathPrefix(cmd.Context()),
+		ToolVersion: toolVersion(),
 	}, nil
 }

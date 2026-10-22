@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime/debug"
 	"testing"
 
 	"github.com/spf13/viper"
@@ -56,22 +57,23 @@ func TestReportView_FormatGitHub(t *testing.T) {
 	assert.Equal(t, domain.FormatGitHub, got.Format)
 	assert.Equal(t, "sub/mod/", got.PathPrefix)
 	assert.NotNil(t, got.Output)
+	assert.NotEmpty(t, got.ToolVersion)
 	assert.Equal(t, m.Path("/tmp/reports"), got.Reports)
 }
 
 func TestReportView_FormatFromConfig(t *testing.T) {
 	viper.Set(testOutputKey, "/tmp/reports")
-	viper.Set(config.KeyReportFormat, "github")
+	viper.Set(config.KeyReportFormat, "sarif")
 	defer viper.Reset()
 
 	stubShowPrefix(t, "", nil)
 
-	assert.Equal(t, domain.FormatGitHub, viewArgsFor(t).Format)
+	assert.Equal(t, domain.FormatSARIF, viewArgsFor(t).Format)
 }
 
 func TestReportView_FormatFlagOverridesConfig(t *testing.T) {
 	viper.Set(testOutputKey, "/tmp/reports")
-	viper.Set(config.KeyReportFormat, "github")
+	viper.Set(config.KeyReportFormat, "sarif")
 	defer viper.Reset()
 
 	got := viewArgsFor(t, "--format", "text")
@@ -99,7 +101,7 @@ func TestReportView_RejectsUnknownFormat(t *testing.T) {
 	deps := Deps{Workflow: domainmocks.NewMockWorkflow(t), Publisher: domainmocks.NewMockReportPublisher(t), OutputKey: testOutputKey}
 	err := execReport(t, deps, "view", "--format", "xml")
 
-	require.EqualError(t, err, `invalid --format "xml": must be one of text, github`)
+	require.EqualError(t, err, `invalid --format "xml": must be one of text, github, sarif`)
 	assert.Equal(t, m.ExitUsage, codeOf(err))
 }
 
@@ -108,9 +110,9 @@ func TestReportView_AllWithFormatFlagIsAUsageError(t *testing.T) {
 	defer viper.Reset()
 
 	deps := Deps{Workflow: domainmocks.NewMockWorkflow(t), Publisher: domainmocks.NewMockReportPublisher(t), OutputKey: testOutputKey}
-	err := execReport(t, deps, "view", "--all", "--format", "github")
+	err := execReport(t, deps, "view", "--all", "--format", "sarif")
 
-	require.EqualError(t, err, "--all lists every mutation as text; it can't be combined with --format github")
+	require.EqualError(t, err, "--all lists every mutation as text; it can't be combined with --format sarif")
 	assert.Equal(t, m.ExitUsage, codeOf(err))
 }
 
@@ -219,4 +221,27 @@ func TestShowPrefix(t *testing.T) {
 		_, err := showPrefix(context.Background())
 		assert.Error(t, err)
 	})
+}
+
+func TestToolVersion(t *testing.T) {
+	tests := []struct {
+		name string
+		info *debug.BuildInfo
+		ok   bool
+		want string
+	}{
+		{name: "module version", info: &debug.BuildInfo{Main: debug.Module{Version: "v1.3.0"}}, ok: true, want: "v1.3.0"},
+		{name: "no module version", info: &debug.BuildInfo{}, ok: true, want: "(devel)"},
+		{name: "no build info", ok: false, want: "(devel)"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			original := readBuildInfo
+			readBuildInfo = func() (*debug.BuildInfo, bool) { return tt.info, tt.ok }
+			t.Cleanup(func() { readBuildInfo = original })
+
+			assert.Equal(t, tt.want, toolVersion())
+		})
+	}
 }

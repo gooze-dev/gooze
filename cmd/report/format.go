@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime/debug"
 	"slices"
 	"strings"
 
@@ -20,7 +21,7 @@ import (
 const formatFlagName = "format"
 
 // writesOutput holds the formats that write more than the text summary.
-var writesOutput = map[domain.ViewFormat]bool{domain.FormatGitHub: true}
+var writesOutput = map[domain.ViewFormat]bool{domain.FormatGitHub: true, domain.FormatSARIF: true}
 
 // addFormatFlag adds --format, whose default comes from report.format in the
 // schema; gooze.yaml and GOOZE_REPORT_FORMAT set it without the flag.
@@ -62,7 +63,7 @@ var showPrefix = func(ctx context.Context) (string, error) {
 }
 
 // repoPathPrefix returns what to prepend to report paths, which are relative
-// to the working directory, so GitHub finds the files: the
+// to the working directory, so GitHub and SARIF tools find the files: the
 // directory's path in its git repository, else in $GITHUB_WORKSPACE, else
 // nothing.
 func repoPathPrefix(ctx context.Context) string {
@@ -88,4 +89,16 @@ func repoPathPrefix(ctx context.Context) string {
 	}
 
 	return filepath.ToSlash(rel) + "/"
+}
+
+// readBuildInfo is debug.ReadBuildInfo, replaced in tests.
+var readBuildInfo = debug.ReadBuildInfo
+
+// toolVersion returns gooze's module version, for SARIF output.
+func toolVersion() string {
+	if info, ok := readBuildInfo(); ok && info.Main.Version != "" {
+		return info.Main.Version
+	}
+
+	return "(devel)"
 }

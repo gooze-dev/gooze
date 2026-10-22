@@ -212,7 +212,7 @@ func TestReportFormatListsItsValues(t *testing.T) {
 	assert.Equal(t, KindEnum, field.Kind)
 	assert.False(t, field.IntEnum)
 	assert.Equal(t, "text", field.Default)
-	assert.Equal(t, []string{"text", "github"}, field.Enum)
+	assert.Equal(t, []string{"text", "github", "sarif"}, field.Enum)
 }
 
 func TestRunWorkspaceListsItsValues(t *testing.T) {

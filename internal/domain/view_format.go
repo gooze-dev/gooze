@@ -18,6 +18,8 @@ const (
 	// FormatGitHub writes a GitHub workflow annotation per line with survivors,
 	// then the text summary.
 	FormatGitHub ViewFormat = "github"
+	// FormatSARIF writes a SARIF 2.1.0 log instead of the text summary.
+	FormatSARIF ViewFormat = "sarif"
 )
 
 // displayView writes summary in args.Format.
@@ -29,6 +31,8 @@ func (w *workflow) displayView(ctx context.Context, args ViewArgs, summary Repor
 				return fmt.Errorf("write annotations: %w", err)
 			}
 		}
+	case FormatSARIF:
+		return writeSARIF(args.Output, summary.Survivors, args.PathPrefix, args.ToolVersion)
 	case FormatText:
 	}
 
