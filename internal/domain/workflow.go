@@ -228,7 +228,7 @@ func (w *workflow) testAndFinalize(ctx context.Context, args TestArgs, sel Selec
 		return fmt.Errorf("load coverage profile: %w", err)
 	}
 
-	reports, err := w.testReports(ctx, mutations, gate, sel, args.Threads, args.MutationTimeout, args.Workspace)
+	reports, untested, err := w.testReports(ctx, mutations, gate, sel, args.Threads, args.MutationTimeout, args.Workspace)
 	if err != nil {
 		slog.Error("Failed to run mutation tests", "error", err)
 		return fmt.Errorf("run mutation tests: %w", err)
@@ -239,7 +239,23 @@ func (w *workflow) testAndFinalize(ctx context.Context, args TestArgs, sel Selec
 
 	slog.Info("Completed mutation tests", "reportsCount", reports.Len(), "interrupted", run.interrupted)
 
-	return w.finishRun(ctx, args, sel, reportsDir, sources, run)
+	return untestedErr(w.finishRun(ctx, args, sel, reportsDir, sources, run), untested)
+}
+
+// untestedErr returns the error a run ends with: failing tests outrank a
+// breached threshold, since the score leaves out the packages whose mutants
+// weren't tested, and any other error outranks both.
+func untestedErr(err error, untested *untestedPackages) error {
+	var breach *ThresholdError
+	if err != nil && !errors.As(err, &breach) {
+		return err
+	}
+
+	if failing := untested.err(); failing != nil {
+		return failing
+	}
+
+	return err
 }
 
 // finishRun saves and scores the run's results. An interrupted run saves them
@@ -1094,11 +1110,11 @@ func (w *workflow) testReports(
 	threads int,
 	mutationTimeout time.Duration,
 	workspace WorkspaceMode,
-) (pkg.FileSpill[m.Report], error) {
+) (pkg.FileSpill[m.Report], *untestedPackages, error) {
 	reports, err := pkg.NewFileSpill[m.Report]()
 	if err != nil {
 		slog.Error("failed to create reports filespill", "error", err)
-		return nil, fmt.Errorf("create reports filespill: %w", err)
+		return nil, nil, fmt.Errorf("create reports filespill: %w", err)
 	}
 
 	effectiveThreads := threads
@@ -1122,20 +1138,22 @@ func (w *workflow) testReports(
 
 	group.Go(w.dispatchMutations(ctx, mutations, gate, queues, results))
 
+	checks := newTestChecks()
 	for threadID := range effectiveThreads {
-		group.Go(w.consumeMutations(ctx, queues[threadID], threadID, mutationTimeout, workspace, results))
+		group.Go(w.consumeMutations(ctx, queues[threadID], threadID, mutationTimeout, workspace, checks, results))
 	}
 
 	runErr := group.Wait()
 
 	close(results)
 
-	if err := runError(ctx, runErr, <-collected); err != nil {
+	outcome := <-collected
+	if err := runError(ctx, runErr, outcome); err != nil {
 		closeSpill("reports", reports)
-		return nil, err
+		return nil, nil, err
 	}
 
-	return reports, nil
+	return reports, &outcome.untested, nil
 }
 
 // runError returns the run's error. An interrupted run has none, so that the
@@ -1177,6 +1195,7 @@ func testRunError(runErr error, outcome collectorResult) error {
 type collectorResult struct {
 	errs     []error
 	fatalErr error
+	untested untestedPackages
 }
 
 // collectResults drains the results channel until it is closed, spilling a
@@ -1192,6 +1211,12 @@ func (w *workflow) collectResults(
 
 	for outcome := range results {
 		if outcome.dropped {
+			continue
+		}
+
+		var failing *FailingTestsError
+		if errors.As(outcome.err, &failing) {
+			collected.untested.add(failing)
 			continue
 		}
 
@@ -1315,6 +1340,7 @@ func (w *workflow) consumeMutations(
 	threadID int,
 	mutationTimeout time.Duration,
 	workspace WorkspaceMode,
+	checks *testChecks,
 	results chan<- mutationOutcome,
 ) func() error {
 	return func() error {
@@ -1325,7 +1351,7 @@ func (w *workflow) consumeMutations(
 			// The collector drains results until they are closed, so this
 			// send never blocks for good, and an outcome finished before an
 			// interruption is not lost.
-			results <- w.runMutation(ctx, ws, mutation, threadID, mutationTimeout)
+			results <- w.runMutation(ctx, ws, checks, mutation, threadID, mutationTimeout)
 		}
 
 		return ctx.Err()
@@ -1338,10 +1364,17 @@ func (w *workflow) consumeMutations(
 func (w *workflow) runMutation(
 	ctx context.Context,
 	ws Workspace,
+	checks *testChecks,
 	mutation m.Mutation,
 	threadID int,
 	mutationTimeout time.Duration,
 ) mutationOutcome {
+	if err := checkTests(ctx, checks, ws, mutation, mutationTimeout); err != nil {
+		mutation.MutatedCode = nil
+
+		return mutationOutcome{mutation: mutation, err: err}
+	}
+
 	w.progress.DisplayStartingTestInfo(ctx, mutation, threadID)
 
 	mutationCtx := ctx

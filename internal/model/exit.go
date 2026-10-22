@@ -21,6 +21,9 @@ const (
 	ExitRegistry ExitCode = 5
 	// ExitNoReports: there are no reports to view or merge.
 	ExitNoReports ExitCode = 6
+	// ExitTestsFail: a package's tests fail without any mutation, so its
+	// mutants were not tested.
+	ExitTestsFail ExitCode = 7
 	// ExitInterrupted: the command was stopped by SIGINT or SIGTERM, as a
 	// shell reports for SIGINT (128+2).
 	ExitInterrupted ExitCode = 130
