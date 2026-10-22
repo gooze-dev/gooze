@@ -2,6 +2,7 @@ package mutagens
 
 import (
 	"go/ast"
+	"go/parser"
 	"go/token"
 	"slices"
 
@@ -18,7 +19,7 @@ func GenerateComparisonMutations(n ast.Node, fset *token.FileSet, content []byte
 
 	if expr, ok := n.(*ast.BinaryExpr); ok {
 		// Equivalent mutants: token.ILLEGAL is the lowest token.
-		if skip := equivalentMutantOp(expr); skip != token.ILLEGAL { //gooze:ignore comparison
+		if skip := equivalentMutantOp(expr, fset, content); skip != token.ILLEGAL { //gooze:ignore comparison
 			alternatives = func(op token.Token) []token.Token {
 				return slices.DeleteFunc(getComparisonAlternatives(op), func(alt token.Token) bool { return alt == skip })
 			}
@@ -52,11 +53,11 @@ func getComparisonAlternatives(original token.Token) []token.Token {
 // token.ILLEGAL. Nothing is below m, so "v == m" behaves as "v <= m",
 // "v != m" as "v > m", and the other way around; mirrored when m is on the
 // left.
-func equivalentMutantOp(expr *ast.BinaryExpr) token.Token {
+func equivalentMutantOp(expr *ast.BinaryExpr, fset *token.FileSet, content []byte) token.Token {
 	switch {
-	case isMinimumOf(expr.Y, expr.X):
+	case isMinimumOf(expr.Y, expr.X, fset, content):
 		return equivalentOpWithMinimumRight(expr.Op)
-	case isMinimumOf(expr.X, expr.Y):
+	case isMinimumOf(expr.X, expr.Y, fset, content):
 		return equivalentOpWithMinimumLeft(expr.Op)
 	default:
 		return token.ILLEGAL
@@ -94,9 +95,9 @@ func equivalentOpWithMinimumLeft(op token.Token) token.Token {
 }
 
 // isMinimumOf reports whether minimum is a literal no value of v can be below:
-// the empty string, or 0 compared with a len or cap call. Without type
-// information, unsigned integers are not recognized.
-func isMinimumOf(minimum, v ast.Expr) bool {
+// the empty string, or 0 compared with a value that is never negative (see
+// isNonNegative). v was parsed from content with fset.
+func isMinimumOf(minimum, v ast.Expr, fset *token.FileSet, content []byte) bool {
 	lit, ok := minimum.(*ast.BasicLit)
 	if !ok {
 		return false
@@ -107,7 +108,7 @@ func isMinimumOf(minimum, v ast.Expr) bool {
 		return lit.Value == `""` || lit.Value == "``"
 	case token.INT:
 		// Equivalent mutants: no integer literal sorts before "0".
-		return lit.Value == "0" && isLenOrCapCall(v) //gooze:ignore comparison
+		return lit.Value == "0" && isNonNegative(v, fset, content) //gooze:ignore comparison
 	default:
 		return false
 	}
@@ -122,4 +123,122 @@ func isLenOrCapCall(e ast.Expr) bool {
 	ident, ok := call.Fun.(*ast.Ident)
 
 	return ok && (ident.Name == "len" || ident.Name == "cap")
+}
+
+// isNonNegative reports whether e is never negative, judged from the syntax
+// alone: a len or cap call, a variable declared with an unsigned type, or a
+// variable defined from len or cap and never written again in content.
+func isNonNegative(e ast.Expr, fset *token.FileSet, content []byte) bool {
+	if isLenOrCapCall(e) {
+		return true
+	}
+
+	ident, ok := e.(*ast.Ident)
+
+	return ok && isNonNegativeVar(ident, fset, content)
+}
+
+// isNonNegativeVar reports whether ident is never negative: a variable or
+// constant declared with an unsigned type, or a variable defined from len or
+// cap and never written again.
+func isNonNegativeVar(ident *ast.Ident, fset *token.FileSet, content []byte) bool {
+	if ident.Obj == nil {
+		return false
+	}
+
+	switch decl := ident.Obj.Decl.(type) {
+	case *ast.Field:
+		return isUnsignedType(decl.Type)
+	case *ast.ValueSpec:
+		return isUnsignedType(decl.Type)
+	case *ast.AssignStmt:
+		value := definedValue(decl, ident.Name)
+
+		return value != nil && isLenOrCapCall(value) && !isWrittenAfterDefinition(fset, content, decl, ident.Name)
+	default:
+		return false
+	}
+}
+
+// unsignedTypes are the predeclared integer types without negative values.
+var unsignedTypes = map[string]bool{
+	"uint": true, "uint8": true, "uint16": true, "uint32": true, "uint64": true, "uintptr": true, "byte": true,
+}
+
+// isUnsignedType reports whether t names a predeclared unsigned integer type;
+// a type of the same name declared in the file is resolved to it and doesn't
+// count.
+func isUnsignedType(t ast.Expr) bool {
+	ident, ok := t.(*ast.Ident)
+
+	return ok && ident.Obj == nil && unsignedTypes[ident.Name]
+}
+
+// definedValue returns the value the := statement assign gives name, or nil
+// when one call defines several names.
+func definedValue(assign *ast.AssignStmt, name string) ast.Expr {
+	// Equivalent: := never has more values than names, so != is >.
+	if len(assign.Lhs) != len(assign.Rhs) { //gooze:ignore comparison
+		return nil
+	}
+
+	for i, lhs := range assign.Lhs {
+		if ident, ok := lhs.(*ast.Ident); ok && ident.Name == name {
+			return assign.Rhs[i]
+		}
+	}
+
+	return nil
+}
+
+// isWrittenAfterDefinition reports whether content writes the variable name
+// that def defines anywhere but in def itself: assigned (also by a later :=
+// or a range clause), incremented, decremented or its address taken. The file
+// is parsed again because a mutagen only sees the node it mutates.
+func isWrittenAfterDefinition(fset *token.FileSet, content []byte, def *ast.AssignStmt, name string) bool {
+	defOffset := fset.Position(def.Pos()).Offset
+	reparsed := token.NewFileSet()
+
+	// content already parsed once, so this can't fail.
+	file, _ := parser.ParseFile(reparsed, "", content, 0)
+
+	// In the new tree, def is the := statement at the same offset.
+	written := false
+
+	ast.Inspect(file, func(n ast.Node) bool {
+		for _, target := range writeTargets(n) {
+			ident, ok := target.(*ast.Ident)
+			if !ok || ident.Name != name || ident.Obj == nil {
+				continue
+			}
+
+			decl, ok := ident.Obj.Decl.(*ast.AssignStmt)
+			if ok && reparsed.Position(decl.Pos()).Offset == defOffset && n != ast.Node(decl) {
+				written = true
+			}
+		}
+
+		return !written
+	})
+
+	return written
+}
+
+// writeTargets returns the expressions n writes to. A range clause's key and
+// value count even when it defines them: new variables never match def.
+func writeTargets(n ast.Node) []ast.Expr {
+	switch stmt := n.(type) {
+	case *ast.AssignStmt:
+		return stmt.Lhs
+	case *ast.IncDecStmt:
+		return []ast.Expr{stmt.X}
+	case *ast.UnaryExpr:
+		if stmt.Op == token.AND {
+			return []ast.Expr{stmt.X}
+		}
+	case *ast.RangeStmt:
+		return []ast.Expr{stmt.Key, stmt.Value}
+	}
+
+	return nil
 }

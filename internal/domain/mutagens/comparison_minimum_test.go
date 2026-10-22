@@ -119,3 +119,212 @@ func TestGenerateComparisonMutations_SkipsEquivalentMutantsAgainstMinimum(t *tes
 		})
 	}
 }
+
+// comparisonMutantLines returns the changed line of each comparison mutant of
+// the file src, trimmed and sorted.
+func comparisonMutantLines(t *testing.T, src string) []string {
+	t.Helper()
+
+	fset := token.NewFileSet()
+
+	file, err := parser.ParseFile(fset, "test.go", src, parser.ParseComments)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	var lines []string
+
+	ast.Inspect(file, func(n ast.Node) bool {
+		for _, mutation := range GenerateComparisonMutations(n, fset, []byte(src), rpt.Source{}) {
+			original := strings.Split(src, "\n")
+			for i, line := range strings.Split(string(mutation.MutatedCode), "\n") {
+				if i < len(original) && line != original[i] {
+					lines = append(lines, strings.TrimSpace(line))
+				}
+			}
+		}
+
+		return true
+	})
+
+	slices.Sort(lines)
+
+	return lines
+}
+
+func TestGenerateComparisonMutations_SkipsEquivalentMutantsOfNonNegativeVariables(t *testing.T) {
+	tests := []struct {
+		name    string
+		src     string
+		cond    string // the comparison, as written on its own line
+		skipped string // the equivalent mutant; "" keeps all five
+	}{
+		{
+			name: "unsigned parameter", cond: "u <= 0", skipped: "u == 0",
+			src: "package p\nfunc f(u uint16) bool {\n\treturn u <= 0\n}\n",
+		},
+		{
+			name: "byte parameter", cond: "b > 0", skipped: "b != 0",
+			src: "package p\nfunc f(b byte) bool {\n\treturn b > 0\n}\n",
+		},
+		{
+			name: "unsigned var", cond: "x == 0", skipped: "x <= 0",
+			src: "package p\nfunc f() bool {\n\tvar x uint\n\treturn x == 0\n}\n",
+		},
+		{
+			name: "length in a variable", cond: "n > 0", skipped: "n != 0",
+			src: "package p\nfunc f(s []int) bool {\n\tn := len(s)\n\treturn n > 0\n}\n",
+		},
+		{
+			name: "length in an if init", cond: "n > 0", skipped: "n != 0",
+			src: "package p\nfunc f(s []int) bool {\n\tif n := len(s); n > 0 {\n\t\treturn true\n\t}\n\treturn false\n}\n",
+		},
+		{
+			name: "capacity on the left", cond: "0 < c", skipped: "0 != c",
+			src: "package p\nfunc f(s []int) bool {\n\tc := cap(s)\n\treturn 0 < c\n}\n",
+		},
+		{
+			name: "uint8 parameter", cond: "u > 0", skipped: "u != 0",
+			src: "package p\nfunc f(u uint8) bool {\n\treturn u > 0\n}\n",
+		},
+		{
+			name: "uint32 parameter", cond: "u > 0", skipped: "u != 0",
+			src: "package p\nfunc f(u uint32) bool {\n\treturn u > 0\n}\n",
+		},
+		{
+			name: "uint64 parameter", cond: "u > 0", skipped: "u != 0",
+			src: "package p\nfunc f(u uint64) bool {\n\treturn u > 0\n}\n",
+		},
+		{
+			name: "uintptr parameter", cond: "u > 0", skipped: "u != 0",
+			src: "package p\nfunc f(u uintptr) bool {\n\treturn u > 0\n}\n",
+		},
+		{
+			name: "unsigned constant", cond: "k == 0", skipped: "k <= 0",
+			src: "package p\nconst k uint = 3\nfunc f() bool {\n\treturn k == 0\n}\n",
+		},
+		{
+			name: "type named like an unsigned type", cond: "u > 0",
+			src: "package p\ntype uint16 int\nfunc f(u uint16) bool {\n\treturn u > 0\n}\n",
+		},
+		{
+			name: "function", cond: "g > 0",
+			src: "package p\nfunc f() bool {\n\treturn g > 0\n}\nfunc g() {}\n",
+		},
+		{
+			name: "length defined after a name that sorts before", cond: "n > 0", skipped: "n != 0",
+			src: "package p\nfunc f(s []int) bool {\n\tk, n := 5, len(s)\n\tk--\n\t_ = k\n\treturn n > 0\n}\n",
+		},
+		{
+			name: "length defined before a name that sorts after", cond: "n > 0", skipped: "n != 0",
+			src: "package p\nfunc f(s []int) bool {\n\tn, z := len(s), 5\n\tz--\n\t_ = z\n\treturn n > 0\n}\n",
+		},
+		{
+			name: "not a length next to one that sorts after", cond: "n > 0",
+			src: "package p\nfunc f(s []int) bool {\n\tn, z := -1, len(s)\n\t_ = z\n\treturn n > 0\n}\n",
+		},
+		{
+			name: "not a length next to one that sorts before", cond: "n > 0",
+			src: "package p\nfunc f(s []int) bool {\n\tk, n := len(s), -1\n\t_ = k\n\treturn n > 0\n}\n",
+		},
+		{
+			name: "not a length next to one that sorts after it first", cond: "n > 0",
+			src: "package p\nfunc f(s []int) bool {\n\tz, n := len(s), -1\n\t_ = z\n\treturn n > 0\n}\n",
+		},
+		{
+			name: "variable from another file", cond: "x > 0",
+			src: "package p\nfunc f() bool {\n\treturn x > 0\n}\n",
+		},
+		{
+			name: "two values from one call", cond: "n > 0",
+			src: "package p\nfunc f(s []int) bool {\n\tk, n := two(s)\n\t_ = k\n\treturn n > 0\n}\nfunc two(s []int) (int, int) { return len(s), -1 }\n",
+		},
+		{
+			name: "length read with unary operators", cond: "n > 0", skipped: "n != 0",
+			src: "package p\nfunc f(s []int) bool {\n\tn := len(s)\n\t_, _ = -n, ^n\n\treturn n > 0\n}\n",
+		},
+		{
+			name: "same name written in other functions", cond: "n > 0", skipped: "n != 0",
+			src: "package p\nfunc a(s []int) {\n\tn := len(s)\n\tn--\n\t_ = n\n}\nfunc f(s []int) bool {\n\tn := len(s)\n\treturn n > 0\n}\nfunc b(s []int) {\n\tn := len(s)\n\tn--\n\t_ = n\n}\n",
+		},
+		{
+			name: "pointer written before the length", cond: "m > 0",
+			src: "package p\nfunc set(p *int) { *p = 1 }\nfunc f(s []int) bool {\n\tm := len(s)\n\tset(&m)\n\treturn m > 0\n}\n",
+		},
+		{
+			name: "length assigned by range", cond: "m > 0",
+			src: "package p\nfunc f(s []int) bool {\n\tm := len(s)\n\tfor m = range s {\n\t}\n\treturn m > 0\n}\n",
+		},
+		{
+			name: "length redefined by :=", cond: "m > 0",
+			src: "package p\nfunc f(s []int) bool {\n\tm := len(s)\n\tm, err := -1, error(nil)\n\t_ = err\n\treturn m > 0\n}\n",
+		},
+		{
+			name: "length decremented", cond: "m > 0",
+			src: "package p\nfunc f(s []int) bool {\n\tm := len(s)\n\tm--\n\treturn m > 0\n}\n",
+		},
+		{
+			name: "length reassigned", cond: "m > 0",
+			src: "package p\nfunc f(s []int) bool {\n\tm := len(s)\n\tm = -1\n\treturn m > 0\n}\n",
+		},
+		{
+			name: "length reassigned with an operator", cond: "m > 0",
+			src: "package p\nfunc f(s []int) bool {\n\tm := len(s)\n\tm -= 2\n\treturn m > 0\n}\n",
+		},
+		{
+			name: "length whose address is taken", cond: "m > 0",
+			src: "package p\nfunc f(s []int) bool {\n\tm := len(s)\n\tdec(&m)\n\treturn m > 0\n}\nfunc dec(p *int) { *p-- }\n",
+		},
+		{
+			name: "signed parameter", cond: "i > 0",
+			src: "package p\nfunc f(i int) bool {\n\treturn i > 0\n}\n",
+		},
+		{
+			name: "unsigned parameter shadowed by an int", cond: "u <= 0",
+			src: "package p\nfunc f(u uint16) bool {\n\t{\n\t\tu := -1\n\t\treturn u <= 0\n\t}\n}\n",
+		},
+		{
+			name: "not a length", cond: "k > 0",
+			src: "package p\nfunc f(s []int) bool {\n\tk := s[0]\n\treturn k > 0\n}\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parts := strings.Fields(tt.cond)
+			x, op, y := parts[0], parts[1], parts[2]
+
+			var want []string
+			for _, alt := range []string{"<", ">", "<=", ">=", "==", "!="} {
+				if alt == op {
+					continue
+				}
+
+				mutant := x + " " + alt + " " + y
+				if mutant == tt.skipped {
+					continue
+				}
+
+				line := strings.Replace(strings.TrimSpace(lineWith(tt.src, tt.cond)), tt.cond, mutant, 1)
+				want = append(want, line)
+			}
+
+			slices.Sort(want)
+
+			if got := comparisonMutantLines(t, tt.src); !slices.Equal(got, want) {
+				t.Fatalf("mutants of %s:\n got %q\nwant %q", tt.cond, got, want)
+			}
+		})
+	}
+}
+
+// lineWith returns the line of src containing s.
+func lineWith(src, s string) string {
+	for _, line := range strings.Split(src, "\n") {
+		if strings.Contains(line, s) {
+			return line
+		}
+	}
+
+	return ""
+}
