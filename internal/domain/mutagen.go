@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"slices"
 
 	"gooze.dev/pkg/gooze/internal/domain/mutagens"
 	m "gooze.dev/pkg/gooze/internal/model"
@@ -148,6 +149,31 @@ func (ix ignoreIndex) visit(n ast.Node, fset *token.FileSet, mutationType mgen.T
 	return true, true
 }
 
+// keepChanged drops the mutations that a line directive ignores on the line
+// they change, counted like the directives (honoring //line comments). Block
+// mutagens (increment, assignment) visit a block but change one of its
+// statements, so the ignore of the visited node's own line isn't enough.
+func (ix ignoreIndex) keepChanged(
+	mutations []m.Mutation,
+	fset *token.FileSet,
+	file *ast.File,
+	content []byte,
+	mutationType mgen.Type,
+) []m.Mutation {
+	tokenFile := fset.File(file.Pos())
+	if tokenFile == nil {
+		return mutations
+	}
+
+	return slices.DeleteFunc(mutations, func(mutation m.Mutation) bool {
+		// An unchanged mutation (offset -1) has no position, so no rule.
+		offset := firstDifference(content, mutation.MutatedCode)
+		rule, ok := ix.line[fset.PositionFor(tokenFile.Pos(offset), true).Line]
+
+		return ok && rule.ignores(mutationType)
+	})
+}
+
 // walkMutations visits the file once for mutationType and hands each mutation
 // to fn as soon as it is generated, completing its line and diff only then.
 // The walk stops at the first error fn returns.
@@ -184,7 +210,8 @@ func walkMutations(
 			return descend
 		}
 
-		for _, mutation := range generateMutationsForNode(mutationType, n, fset, content, source) {
+		mutations := ignore.keepChanged(generateMutationsForNode(mutationType, n, fset, content, source), fset, file, content, mutationType)
+		for _, mutation := range mutations {
 			mutation.Line = lineForOffset(content, firstDifference(content, mutation.MutatedCode))
 			mutation.Funcs = funcs.at(mutation.Line)
 			mutation.DiffCode = differ.Diff(content, mutation.MutatedCode)

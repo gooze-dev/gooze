@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	m "gooze.dev/pkg/gooze/internal/model"
 	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
 )
 
@@ -152,5 +153,32 @@ func TestBuildIgnoreIndex_LeadingDirectiveWithFollowingCommentLine(t *testing.T)
 	rule, ok := idx.line[6]
 	if !ok || !rule.ignores(mgen.Arithmetic) {
 		t.Fatalf("expected line 6 to ignore arithmetic, got %+v (ok=%v)", rule, ok)
+	}
+}
+
+func TestKeepChanged_DropsOnlyIgnoredChangedLines(t *testing.T) {
+	const src = "package p\n\n" +
+		"func f(c int) int {\n" +
+		"\tc++ //gooze:ignore increment\n" +
+		"\tc++\n" +
+		"\treturn c\n" +
+		"}\n"
+
+	content := []byte(src)
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "test.go", content, parser.ParseComments)
+	if err != nil {
+		t.Fatalf("parse failed: %v", err)
+	}
+
+	idx := buildIgnoreIndex(file, fset, content)
+	ignored := m.Mutation{MutatedCode: []byte(strings.Replace(src, "\tc++ //", "\tc-- //", 1))}
+	kept := m.Mutation{MutatedCode: []byte(strings.Replace(src, "\tc++\n\treturn", "\tc--\n\treturn", 1))}
+	unchanged := m.Mutation{MutatedCode: content}
+
+	got := idx.keepChanged([]m.Mutation{ignored, kept, unchanged}, fset, file, content, mgen.Increment)
+
+	if len(got) != 2 || string(got[0].MutatedCode) != string(kept.MutatedCode) || string(got[1].MutatedCode) != src {
+		t.Fatalf("expected the mutation on the unignored line and the unchanged one, got %d mutations", len(got))
 	}
 }
