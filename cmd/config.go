@@ -35,8 +35,7 @@ const (
 	runFlagName      = "run"
 	mutagensFlagName = "mutagens"
 
-	workspaceFlagName  = "workspace"
-	enumBoundsFlagName = "enum-bounds"
+	workspaceFlagName = "workspace"
 
 	envPrefix = "GOOZE"
 )

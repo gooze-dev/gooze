@@ -17,6 +17,10 @@ run:                          # Mutation run settings.
   mutagens: []                # Mutagens to run (arithmetic, boolean, numbers, comparison, logical, unary, bitwise, increment, assignment, branch, statement, loop); empty runs the default ones, all but branch, statement and loop.
   workspace: overlay          # How mutants are built: overlay tests them in the project through go test -overlay, without copying it; deep-copy tests them in a per-worker copy of the project, for tests that build the project's code in a subprocess, read its source files or write next to themselves.
 
+mutagen:                      # Per-mutagen settings.
+  comparison:                 # Settings of the comparison mutagen.
+    enum_bounds: false        # Treat the lowest and highest constant of a defined integer type as its bounds, so v == Lowest isn't mutated to v <= Lowest. Only safe when no value of the type is converted from an arbitrary integer.
+
 threshold:                    # Minimum mutation scores in percent; below one, gooze exits with code 3. 0 turns a threshold off.
   total: 0                    # Minimum for the score of all mutations.
   average: 0                  # Minimum for the average of the per-file scores.

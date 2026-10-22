@@ -31,14 +31,10 @@ func (ix ignoreIndex) isEnumBoundMutant(mutationType mgen.Type, offset int, muta
 // enumBoundMutants returns, by the offset of their operator, the comparison
 // mutants of file that are equivalent when each enum's lowest and highest
 // values bound its type: v == Lowest written as v <= Lowest, v != Highest as
-// v < Highest, and so on (see enums.boundMutant). It returns nil when a file
-// of the package can't be read or parsed.
+// v < Highest, and so on (see enums.boundMutant). There are none when a
+// file of the package can't be read or parsed.
 func (mg *mutagen) enumBoundMutants(ctx context.Context, source rpt.Source, fset *token.FileSet, file *ast.File) map[int]string {
-	enums, ok := mg.cachedEnums(ctx, source, file)
-	if !ok {
-		return nil
-	}
-
+	enums := mg.cachedEnums(ctx, source, file)
 	specs := topLevelValueSpecs(file)
 	tokenFile := fset.File(file.Pos())
 	mutants := map[int]string{}
@@ -59,13 +55,14 @@ func (mg *mutagen) enumBoundMutants(ctx context.Context, source rpt.Source, fset
 // cachedEnums returns the enums of file's package. Mutations are generated
 // several times per source and for each file of a package, so the enums are
 // kept by the package name and the contents of the .go files next to source,
-// and the package is parsed again only when one of them changes.
-func (mg *mutagen) cachedEnums(ctx context.Context, source rpt.Source, file *ast.File) (enums, bool) {
+// and the package is parsed again only when one of them changes. A package
+// whose files can't be read or parsed has no enums.
+func (mg *mutagen) cachedEnums(ctx context.Context, source rpt.Source, file *ast.File) enums {
 	dir := filepath.Dir(filepath.Clean(source.Origin.FullPath))
 
-	contents, ok := mg.goFiles(ctx, dir)
-	if !ok {
-		return enums{}, false
+	contents, err := mg.goFiles(ctx, dir)
+	if err != nil {
+		return enums{}
 	}
 
 	hash := sha256.New()
@@ -83,12 +80,12 @@ func (mg *mutagen) cachedEnums(ctx context.Context, source rpt.Source, file *ast
 	defer mg.enumsMu.Unlock()
 
 	if e, ok := mg.enums[key]; ok {
-		return e, true
+		return e
 	}
 
-	files, ok := mg.packageFiles(ctx, source, file, contents)
-	if !ok {
-		return enums{}, false
+	files, err := mg.packageFiles(ctx, source, file, contents)
+	if err != nil {
+		return enums{}
 	}
 
 	if mg.enums == nil {
@@ -97,11 +94,11 @@ func (mg *mutagen) cachedEnums(ctx context.Context, source rpt.Source, file *ast
 
 	mg.enums[key] = packageEnums(files)
 
-	return mg.enums[key], true
+	return mg.enums[key]
 }
 
 // goFiles returns the contents of the .go files in dir, by path.
-func (mg *mutagen) goFiles(ctx context.Context, dir string) (map[string][]byte, bool) {
+func (mg *mutagen) goFiles(ctx context.Context, dir string) (map[string][]byte, error) {
 	contents := map[string][]byte{}
 
 	err := mg.Walk(ctx, m.Path(dir), false, func(path string, info os.FileInfo, err error) error {
@@ -115,14 +112,14 @@ func (mg *mutagen) goFiles(ctx context.Context, dir string) (map[string][]byte, 
 		return err
 	})
 
-	return contents, err == nil
+	return contents, err
 }
 
 // packageFiles returns file and the other files of its package among
 // contents, the .go files next to source: those with the same package
 // clause, so tests of the package count and external tests (package p_test)
 // don't.
-func (mg *mutagen) packageFiles(ctx context.Context, source rpt.Source, file *ast.File, contents map[string][]byte) ([]*ast.File, bool) {
+func (mg *mutagen) packageFiles(ctx context.Context, source rpt.Source, file *ast.File, contents map[string][]byte) ([]*ast.File, error) {
 	files := []*ast.File{file}
 	self := filepath.Clean(source.Origin.FullPath)
 
@@ -133,7 +130,7 @@ func (mg *mutagen) packageFiles(ctx context.Context, source rpt.Source, file *as
 
 		other, err := mg.Parse(ctx, token.NewFileSet(), path, contents[path])
 		if err != nil {
-			return nil, false
+			return nil, err
 		}
 
 		if other.Name.Name == file.Name.Name {
@@ -141,7 +138,7 @@ func (mg *mutagen) packageFiles(ctx context.Context, source rpt.Source, file *as
 		}
 	}
 
-	return files, true
+	return files, nil
 }
 
 // enumConst is a named constant of an enum: its type and value.
@@ -399,8 +396,15 @@ func evalConst(e ast.Expr, index int64) (int64, bool) {
 
 		return evalBinary(v.Op, x, y, okX && okY)
 	default:
-		return 0, false
+		return notConstant()
 	}
+}
+
+// notConstant is the result of evaluating an expression that isn't a
+// constant this tracks.
+func notConstant() (int64, bool) {
+	// Equivalent: the value is never read when ok is false.
+	return 0, false //gooze:ignore numbers
 }
 
 func evalUnary(op token.Token, x int64, ok bool) (int64, bool) {
@@ -410,7 +414,7 @@ func evalUnary(op token.Token, x int64, ok bool) (int64, bool) {
 	case token.ADD:
 		return x, ok
 	default:
-		return 0, false
+		return notConstant()
 	}
 }
 
@@ -424,12 +428,12 @@ func evalBinary(op token.Token, x, y int64, ok bool) (int64, bool) {
 		return x * y, ok
 	case token.SHL:
 		if y < 0 || y > 62 {
-			return 0, false
+			return notConstant()
 		}
 
 		return x << y, ok
 	default:
-		return 0, false
+		return notConstant()
 	}
 }
 

@@ -123,7 +123,7 @@ type ignoreIndex struct {
 	funcs []funcLines
 	line  map[int]ignoreRule
 	// enumBounds holds the equivalent enum bound mutants (see
-	// enumBoundMutants), when run.enum_bounds is on.
+	// enumBoundMutants), when mutagen.comparison.enum_bounds is on.
 	enumBounds map[int]string
 }
 
