@@ -117,6 +117,9 @@ type Scope struct {
 	Run string `yaml:"run,omitempty"`
 	// Mutagens are the only mutagens the run used.
 	Mutagens []string `yaml:"mutagens,omitempty"`
+	// Interrupted is set when the run was stopped before it tested every
+	// mutation of the source; the next run tests the rest.
+	Interrupted bool `yaml:"interrupted,omitempty"`
 }
 
 // LineRange is an inclusive range of 1-based line numbers.

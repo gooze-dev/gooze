@@ -188,36 +188,72 @@ func (w *workflow) Test(ctx context.Context, args TestArgs) error {
 			return err
 		}
 
-		inThisShard := func(mutation m.Mutation) bool {
-			return inShard(mutation.ID, args.ShardIndex, args.TotalShardCount)
-		}
-
-		mutations, total, err := w.generateMutations(ctx, sources.changed, inThisShard, sel)
-		if err != nil {
-			slog.Error("Failed to generate mutations", "error", err)
-			return fmt.Errorf("generate mutations: %w", err)
-		}
-
-		defer closeSpill("mutations", mutations)
-
-		w.progress.DisplayUpcomingTestsInfo(ctx, total)
-
-		gate, err := w.loadCoverage(ctx, args.CoverageProfile)
-		if err != nil {
-			slog.Error("Failed to load coverage profile", "error", err)
-			return fmt.Errorf("load coverage profile: %w", err)
-		}
-
-		reports, err := w.testReports(ctx, mutations, gate, sel, args.Threads, args.MutationTimeout, args.Workspace)
-		if err != nil {
-			slog.Error("Failed to run mutation tests", "error", err)
-			return fmt.Errorf("run mutation tests: %w", err)
-		}
-
-		slog.Info("Completed mutation tests", "reportsCount", reports.Len())
-
-		return w.finalizeReports(ctx, args, sel, reportsDir, sources, reports)
+		return w.testAndFinalize(ctx, args, sel, reportsDir, sources)
 	})
+}
+
+// testAndFinalize tests the mutations of the changed sources and saves and
+// scores the results. An interrupted run saves the results of the mutants it
+// finished and returns the interruption.
+func (w *workflow) testAndFinalize(ctx context.Context, args TestArgs, sel Selection, reportsDir m.Path, sources sourceSet) error {
+	stored, err := w.storedReports(ctx, args, sel, sources)
+	if err != nil {
+		return err
+	}
+
+	defer closeSpill("stored reports", stored)
+
+	resumed, err := resumeFrom(stored, sel, sources)
+	if err != nil {
+		return err
+	}
+
+	include := func(mutation m.Mutation) bool {
+		return inShard(mutation.ID, args.ShardIndex, args.TotalShardCount) && !resumed.has(mutation)
+	}
+
+	mutations, total, err := w.generateMutations(ctx, sources.changed, include, sel)
+	if err != nil {
+		slog.Error("Failed to generate mutations", "error", err)
+		return fmt.Errorf("generate mutations: %w", err)
+	}
+
+	defer closeSpill("mutations", mutations)
+
+	w.progress.DisplayUpcomingTestsInfo(ctx, total)
+
+	gate, err := w.loadCoverage(ctx, args.CoverageProfile)
+	if err != nil {
+		slog.Error("Failed to load coverage profile", "error", err)
+		return fmt.Errorf("load coverage profile: %w", err)
+	}
+
+	reports, err := w.testReports(ctx, mutations, gate, sel, args.Threads, args.MutationTimeout, args.Workspace)
+	if err != nil {
+		slog.Error("Failed to run mutation tests", "error", err)
+		return fmt.Errorf("run mutation tests: %w", err)
+	}
+
+	// The run was interrupted when it returns results on a canceled context.
+	run := testedRun{reports: reports, mutations: mutations, planned: total, interrupted: ctx.Err() != nil, stored: stored, resumed: resumed}
+
+	slog.Info("Completed mutation tests", "reportsCount", reports.Len(), "interrupted", run.interrupted)
+
+	return w.finishRun(ctx, args, sel, reportsDir, sources, run)
+}
+
+// finishRun saves and scores the run's results. An interrupted run saves them
+// on a cancellation-free context and then returns the interruption.
+func (w *workflow) finishRun(ctx context.Context, args TestArgs, sel Selection, reportsDir m.Path, sources sourceSet, run testedRun) error {
+	if !run.interrupted {
+		return w.finalizeReports(ctx, args, sel, reportsDir, sources, run)
+	}
+
+	if err := w.finalizeReports(context.WithoutCancel(ctx), args, sel, reportsDir, sources, run); err != nil {
+		return err
+	}
+
+	return fmt.Errorf("run mutation tests: %w", ctx.Err())
 }
 
 // prepareReportsDir returns the directory the run writes to. A full run first
@@ -290,10 +326,47 @@ func closeSpill[T any](name string, spill pkg.FileSpill[T]) {
 }
 
 // finalizeReports replaces previous reports for the tested sources with the
-// spilled ones, regenerates the reports index and displays the run's score.
-func (w *workflow) finalizeReports(ctx context.Context, args TestArgs, sel Selection, reportsDir m.Path, sources sourceSet, reports pkg.FileSpill[m.Report]) error {
+// run's, regenerates the reports index and displays the run's score. The
+// thresholds are not checked on an interrupted run.
+func (w *workflow) finalizeReports(ctx context.Context, args TestArgs, sel Selection, reportsDir m.Path, sources sourceSet, run testedRun) error {
+	defer closeSpill("tested reports", run.reports)
+
+	reports, err := completeReports(run)
+	if err != nil {
+		return fmt.Errorf("complete reports: %w", err)
+	}
+
 	defer closeSpill("reports", reports)
 
+	if err := w.saveReports(ctx, sel, reportsDir, sources, reports); err != nil {
+		return err
+	}
+
+	score, err := runScore(sel, reportsDir, sources, reports, run)
+	if err != nil {
+		return fmt.Errorf("calculate mutation score: %w", err)
+	}
+
+	score.ThresholdsSkipped = args.Thresholds.Set() && args.TotalShardCount > 1
+	score.Interrupted = run.interrupted
+
+	if run.interrupted {
+		score.Planned = run.planned
+	}
+
+	slog.Info("Calculated mutation score", "score", score.Score(), "cached", score.Cached, "tested", score.Tested)
+	w.progress.DisplayMutationScore(ctx, score)
+
+	if score.ThresholdsSkipped || score.Interrupted {
+		return nil
+	}
+
+	return args.Thresholds.Err(score)
+}
+
+// saveReports replaces the stored reports of the changed sources with reports
+// and regenerates the index; a narrowed run also records its selection.
+func (w *workflow) saveReports(ctx context.Context, sel Selection, reportsDir m.Path, sources sourceSet, reports pkg.FileSpill[m.Report]) error {
 	if err := w.reports.CleanReports(ctx, reportsDir, sources.changed); err != nil {
 		slog.Error("Failed to clean stale reports", "error", err, "path", reportsDir)
 		return fmt.Errorf("clean stale reports: %w", err)
@@ -320,34 +393,26 @@ func (w *workflow) finalizeReports(ctx context.Context, args TestArgs, sel Selec
 		}
 	}
 
-	score, err := w.runScore(ctx, args, sel, reportsDir, sources, reports)
-	if err != nil {
-		return fmt.Errorf("calculate mutation score: %w", err)
-	}
-
-	score.ThresholdsSkipped = args.Thresholds.Set() && args.TotalShardCount > 1
-
-	slog.Info("Calculated mutation score", "score", score.Score(), "cached", score.Cached, "tested", score.Tested)
-	w.progress.DisplayMutationScore(ctx, score)
-
-	if score.ThresholdsSkipped {
-		return nil
-	}
-
-	return args.Thresholds.Err(score)
+	return nil
 }
 
 // runScore scores a run over every source in its scope: the results tested now
 // plus, for an unsharded cached run, the stored results of unchanged sources.
+// reports are the run's results as saved, and include those it resumed.
 // A shard scores only its own results, and a narrowed run only its selection;
 // `report merge` scores the whole set.
-func (w *workflow) runScore(ctx context.Context, args TestArgs, sel Selection, reportsDir m.Path, sources sourceSet, tested pkg.FileSpill[m.Report]) (MutationScore, error) {
-	score, err := scoreReports(tested, nil)
+func runScore(sel Selection, reportsDir m.Path, sources sourceSet, reports pkg.FileSpill[m.Report], run testedRun) (MutationScore, error) {
+	score, err := scoreReports(reports, nil)
 	if err != nil {
 		return MutationScore{}, err
 	}
 
-	score.Tested = score.Total
+	tested, err := scoreReports(run.reports, nil)
+	if err != nil {
+		return MutationScore{}, err
+	}
+
+	score.Tested = tested.Total
 
 	if sel.Narrowed() {
 		score.Selection = sel.Describe()
@@ -356,26 +421,18 @@ func (w *workflow) runScore(ctx context.Context, args TestArgs, sel Selection, r
 		return score, nil
 	}
 
-	if !sources.cached || args.TotalShardCount > 1 {
+	if run.stored == nil {
 		return score, nil
 	}
 
-	inScope, err := sourceKeys(sources.scanned)
+	all, err := reportsInScope(run.stored, reports, sources)
 	if err != nil {
 		return MutationScore{}, err
 	}
 
-	stored, err := w.reports.LoadSpillReports(ctx, args.Reports)
-	if err != nil {
-		return MutationScore{}, fmt.Errorf("load reports: %w", err)
-	}
+	defer closeSpill("reports in scope", all)
 
-	defer closeSpill("stored reports", stored)
-
-	scope, err := scoreReports(stored, func(source rpt.Source) bool {
-		_, ok := inScope[source.Key()]
-		return ok
-	})
+	scope, err := scoreReports(all, nil)
 	if err != nil {
 		return MutationScore{}, err
 	}
@@ -1000,6 +1057,9 @@ type mutationOutcome struct {
 	mutation m.Mutation
 	result   m.Result
 	err      error
+	// dropped is set for a mutant the run was interrupted in: its result is
+	// not known.
+	dropped bool
 }
 
 // testReports runs mutation testing as a fan-out/fan-in channel pipeline:
@@ -1070,12 +1130,22 @@ func (w *workflow) testReports(
 
 	close(results)
 
-	if err := testRunError(runErr, <-collected); err != nil {
+	if err := runError(ctx, runErr, <-collected); err != nil {
 		closeSpill("reports", reports)
 		return nil, err
 	}
 
 	return reports, nil
+}
+
+// runError returns the run's error. An interrupted run has none, so that the
+// results of the finished mutants are kept, unless a mutant failed before.
+func runError(ctx context.Context, runErr error, outcome collectorResult) error {
+	if ctx.Err() != nil && outcome.fatalErr == nil && len(outcome.errs) == 0 {
+		return nil
+	}
+
+	return testRunError(runErr, outcome)
 }
 
 func makeQueues(n int) []chan m.Mutation {
@@ -1121,6 +1191,10 @@ func (w *workflow) collectResults(
 	var collected collectorResult
 
 	for outcome := range results {
+		if outcome.dropped {
+			continue
+		}
+
 		if outcome.err != nil {
 			collected.errs = append(collected.errs, outcome.err)
 			continue
@@ -1248,16 +1322,13 @@ func (w *workflow) consumeMutations(
 		defer ws.Close(ctx)
 
 		for mutation := range queue {
-			outcome := w.runMutation(ctx, ws, mutation, threadID, mutationTimeout)
-
-			select {
-			case results <- outcome:
-			case <-ctx.Done():
-				return ctx.Err()
-			}
+			// The collector drains results until they are closed, so this
+			// send never blocks for good, and an outcome finished before an
+			// interruption is not lost.
+			results <- w.runMutation(ctx, ws, mutation, threadID, mutationTimeout)
 		}
 
-		return nil
+		return ctx.Err()
 	}
 }
 
@@ -1287,6 +1358,10 @@ func (w *workflow) runMutation(
 	}
 
 	mutation.MutatedCode = nil
+
+	if ctx.Err() != nil {
+		return mutationOutcome{mutation: mutation, dropped: true}
+	}
 
 	return mutationOutcome{mutation: mutation, result: result, err: err}
 }

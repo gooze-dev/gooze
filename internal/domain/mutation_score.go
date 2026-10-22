@@ -28,6 +28,10 @@ type MutationScore struct {
 	// ThresholdsSkipped is set on a shard's score when thresholds are set:
 	// a shard holds only part of the results, so report merge checks them.
 	ThresholdsSkipped bool
+	// Interrupted is set when the run was stopped before it tested every
+	// mutation; Planned is then how many it was to test.
+	Interrupted bool
+	Planned     int
 }
 
 // scoreReports counts the results of the reports whose source include
