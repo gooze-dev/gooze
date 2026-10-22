@@ -7,7 +7,7 @@ into your Go source and running tests to see which changes are caught. It suppor
 Go path patterns (like `./...`) for fast targeting and can parallelize mutation runs
 to speed up larger projects.
 
-**Choosing a tool?** See [COMPARISON.md](./COMPARISON.md).
+**Choosing a tool?** See the [comparison of Go mutation testing tools](https://gooze.dev/docs/comparison/).
 
 ## Install
 
