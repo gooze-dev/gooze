@@ -174,7 +174,7 @@ func (ix ignoreIndex) keepChanged(
 		replacement := func() string { return replacementOf(content, mutation.MutatedCode) }
 
 		return ix.line[line].ignoresMutant(mutationType, replacement) ||
-			ix.funcLine[line].ignoresMutant(mutationType, replacement) ||
+			ix.funcRule(line).ignoresMutant(mutationType, replacement) ||
 			ix.file.ignoresMutant(mutationType, replacement)
 	})
 }
@@ -183,30 +183,46 @@ func (ix ignoreIndex) keepChanged(
 // original: the last Go token of mutated that starts at or before the first
 // difference, such as <=, --, false or 0.5, or "" when they don't differ.
 func replacementOf(original, mutated []byte) string {
-	offset := firstDifference(original, mutated)
+	return tokenAt(mutated, firstDifference(original, mutated))
+}
 
+// tokenAt returns the last Go token of src that starts at or before offset,
+// or "" when none does (offset -1).
+func tokenAt(src []byte, offset int) string {
 	fset := token.NewFileSet()
-	file := fset.AddFile("", fset.Base(), len(mutated))
+	file := fset.AddFile("", fset.Base(), len(src))
 
 	var s scanner.Scanner
 
 	// Equivalent: the first difference is never inside a comment, so scanning
 	// comments (mode 1) finds the same token.
-	s.Init(file, mutated, nil, 0) //gooze:ignore numbers
+	s.Init(file, src, nil, 0) //gooze:ignore numbers
 
 	found := ""
 
-	for {
+	// Every token takes at least one byte but EOF and the semicolon Go
+	// inserts at the end of the file, so the scan ends within len(src)+1
+	// tokens even when offset is at the end of the file.
+	for range len(src) + 1 {
 		pos, tok, lit := s.Scan()
 		if tok == token.EOF || file.Offset(pos) > offset {
-			return found
+			break
 		}
 
-		found = lit
-		if !tok.IsLiteral() {
-			found = tok.String()
-		}
+		found = tokenText(tok, lit)
 	}
+
+	return found
+}
+
+// tokenText returns how tok is written: lit for a literal or identifier,
+// the token itself, such as <= or ;, otherwise.
+func tokenText(tok token.Token, lit string) string {
+	if tok.IsLiteral() {
+		return lit
+	}
+
+	return tok.String()
 }
 
 // walkMutations visits the file once for mutationType and hands each mutation
