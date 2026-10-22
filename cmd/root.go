@@ -134,7 +134,11 @@ func baseRootCmd() *cobra.Command {
 			configureLogger(logPath, verbose)
 			startUpdateCheck(cmd)
 
-			return nil
+			for _, warning := range unknownConfigKeys(viper.AllKeys()) {
+				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "Warning: "+warning)
+			}
+
+			return validateConfig()
 		},
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			slog.Info("No command specified. Use --help to see available commands.")

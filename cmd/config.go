@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -64,8 +65,9 @@ func init() {
 	}
 }
 
-// validateConfig checks the effective value of every bounded key (from flags,
-// environment, gooze.yaml or defaults) against the schema.
+// validateConfig checks the effective value of every key (from flags,
+// environment, gooze.yaml or defaults) against the schema: its type, and its
+// bounds or listed values.
 func validateConfig() error {
 	for _, key := range config.Keys() {
 		field, _ := config.Lookup(key)
@@ -77,29 +79,236 @@ func validateConfig() error {
 	return nil
 }
 
-// validateValue checks the value of key against field's bounds: a whole
-// number for a bounded KindInt field, a number for a KindFloat one, one of the
-// listed values for a KindEnum one that doesn't take integers.
+// validateValue checks the value of key against field: a whole number within
+// the bounds for KindInt, a number within them for KindFloat, true or false
+// for KindBool, a listed value (or, with IntEnum, an integer) for KindEnum, a
+// single value for KindString and a list of single values for KindStringList.
 func validateValue(field config.Field, key string) error {
+	value := viper.Get(key)
+
 	switch field.Kind {
-	case config.KindEnum:
-		if value := viper.GetString(key); !field.IntEnum && !slices.Contains(field.Enum, value) {
-			return fmt.Errorf("%q is not one of %s", value, strings.Join(field.Enum, ", "))
+	case config.KindInt:
+		n, err := wholeNumber(value)
+		if err != nil {
+			return err
 		}
 
-		return nil
+		return field.CheckInt(n)
 	case config.KindFloat:
-		x, err := cast.ToFloat64E(viper.Get(key))
+		x, err := cast.ToFloat64E(value)
 		if err != nil {
-			return fmt.Errorf("%q is not a number", viper.GetString(key))
+			return fmt.Errorf("%s is not a number", describe(value))
 		}
 
 		return field.CheckFloat(x)
-	case config.KindInt:
-		return field.CheckInt(viper.GetInt(key))
-	default:
+	case config.KindBool:
+		return checkBool(value)
+	case config.KindEnum:
+		return checkEnum(field, value)
+	case config.KindString:
+		return checkSingle(value)
+	case config.KindStringList:
+		return checkStringList(value)
+	case config.KindObject:
+		// config.Keys lists only values, never objects.
 		return nil
 	}
+
+	return nil
+}
+
+func checkBool(value any) error {
+	if _, err := cast.ToBoolE(value); err != nil {
+		return fmt.Errorf("%s is not true or false", describe(value))
+	}
+
+	return nil
+}
+
+func checkSingle(value any) error {
+	if !isScalar(value) {
+		return fmt.Errorf("%s is not a single value", describe(value))
+	}
+
+	return nil
+}
+
+// wholeNumber returns value as an int, rejecting booleans and numbers with a
+// fractional part, which cast would silently turn into 1 or truncate.
+func wholeNumber(value any) (int, error) {
+	if x, ok := value.(float64); ok && x != math.Trunc(x) {
+		return 0, fmt.Errorf("%s is not a whole number", describe(value))
+	}
+
+	if _, ok := value.(bool); ok {
+		return 0, fmt.Errorf("%s is not a whole number", describe(value))
+	}
+
+	n, err := cast.ToIntE(value)
+	if err != nil {
+		return 0, fmt.Errorf("%s is not a whole number", describe(value))
+	}
+
+	return n, nil
+}
+
+// checkEnum accepts one of field.Enum as written, or, for an IntEnum field
+// such as log.level, a listed name in any case, an integer, or nothing (the
+// default), the way parseSlogLevel reads it.
+func checkEnum(field config.Field, value any) error {
+	names := strings.Join(field.Enum, ", ")
+
+	if !field.IntEnum {
+		if s, ok := value.(string); ok && slices.Contains(field.Enum, s) {
+			return nil
+		}
+
+		return fmt.Errorf("%s is not one of %s", describe(value), names)
+	}
+
+	if isScalar(value) {
+		s := strings.ToLower(strings.TrimSpace(cast.ToString(value)))
+		if _, err := strconv.Atoi(s); s == "" || err == nil || slices.Contains(field.Enum, s) {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("%s is not one of %s, or an integer", describe(value), names)
+}
+
+// checkStringList accepts a list of single values, or one string, which is
+// how a list arrives from an environment variable ("a b").
+func checkStringList(value any) error {
+	switch v := value.(type) {
+	case string, []string:
+		return nil
+	case []any:
+		for _, item := range v {
+			if !isScalar(item) {
+				return fmt.Errorf("item %s is not a single value", describe(item))
+			}
+		}
+
+		return nil
+	default:
+		return fmt.Errorf("%s is not a list", describe(value))
+	}
+}
+
+// isScalar reports whether value is a single YAML value, not a list or a
+// mapping.
+func isScalar(value any) bool {
+	switch value.(type) {
+	case []any, []string, map[string]any:
+		return false
+	default:
+		return true
+	}
+}
+
+// describe renders a config value for an error message: strings quoted,
+// lists and mappings by their shape.
+func describe(value any) string {
+	switch v := value.(type) {
+	case string:
+		return strconv.Quote(v)
+	case []any, []string:
+		return "a list"
+	case map[string]any:
+		return "a mapping"
+	default:
+		return fmt.Sprint(v)
+	}
+}
+
+// unknownConfigKeys returns a warning for every one of keys (viper.AllKeys,
+// the keys set in gooze.yaml plus the schema's defaults) that the schema
+// doesn't have, in key order, naming the key it most likely meant.
+func unknownConfigKeys(keys []string) []string {
+	var warnings []string
+
+	for _, key := range keys {
+		if _, ok := config.Lookup(key); ok {
+			continue
+		}
+
+		msg := fmt.Sprintf("unknown gooze config key %q in %s", key, config.FileName)
+		if match := suggestKey(key); match != "" {
+			msg += fmt.Sprintf("; did you mean %q?", match)
+		}
+
+		warnings = append(warnings, msg)
+	}
+
+	slices.Sort(warnings)
+
+	return warnings
+}
+
+// maxTypoDistance is the largest edit distance between an unknown key and a
+// schema key for the schema key to be suggested.
+const maxTypoDistance = 2
+
+// suggestKey returns the schema key an unknown dotted key most likely meant,
+// or "" when there is no single good match: the only key with the same last
+// name ("parallel" → "run.parallel"), else the only closest key within
+// maxTypoDistance edits ("run.paralel" → "run.parallel"). goozels suggests
+// the same way in the editor.
+func suggestKey(key string) string {
+	keys := config.Keys()
+	leaf := lastName(key)
+
+	sameLeaf := slices.DeleteFunc(slices.Clone(keys), func(k string) bool { return lastName(k) != leaf })
+	if len(sameLeaf) == 1 {
+		return sameLeaf[0]
+	}
+
+	best, bestDist, ties := "", maxTypoDistance+1, 0
+
+	for _, k := range keys {
+		switch d := editDistance(key, k); {
+		case d < bestDist:
+			best, bestDist, ties = k, d, 1
+		case d == bestDist:
+			ties++
+		}
+	}
+
+	if ties != 1 {
+		return ""
+	}
+
+	return best
+}
+
+func lastName(key string) string {
+	return key[strings.LastIndexByte(key, '.')+1:]
+}
+
+// editDistance is the Levenshtein distance between a and b, in bytes.
+func editDistance(a, b string) int {
+	prev := make([]int, len(b)+1)
+	for j := range prev {
+		prev[j] = j
+	}
+
+	for i := 1; i <= len(a); i++ {
+		cur := make([]int, len(b)+1)
+		cur[0] = i
+
+		for j := 1; j <= len(b); j++ {
+			cost := 1
+			if a[i-1] == b[j-1] {
+				cost = 0
+			}
+
+			cur[j] = min(prev[j]+1, cur[j-1]+1, prev[j-1]+cost)
+		}
+
+		prev = cur
+	}
+
+	return prev[len(b)]
 }
 
 func parseSlogLevel(value string, defaultLevel slog.Level) slog.Level {

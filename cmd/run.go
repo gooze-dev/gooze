@@ -44,10 +44,6 @@ func newRunCmd() *cobra.Command {
 		Short: "Run mutation testing",
 		Long:  runLongDescription,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := validateConfig(); err != nil {
-				return err
-			}
-
 			estimateArgs := runEstimateArgs(args)
 
 			if runEstimateFlag {
