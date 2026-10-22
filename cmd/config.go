@@ -134,19 +134,15 @@ func checkSingle(value any) error {
 }
 
 // wholeNumber returns value as an int, rejecting booleans and numbers with a
-// fractional part, which cast would silently turn into 1 or truncate.
+// fractional part, which cast would silently turn into 1 or truncate. On
+// error the int is meaningless.
 func wholeNumber(value any) (int, error) {
-	if x, ok := value.(float64); ok && x != math.Trunc(x) {
-		return 0, fmt.Errorf("%s is not a whole number", describe(value))
-	}
-
-	if _, ok := value.(bool); ok {
-		return 0, fmt.Errorf("%s is not a whole number", describe(value))
-	}
-
 	n, err := cast.ToIntE(value)
-	if err != nil {
-		return 0, fmt.Errorf("%s is not a whole number", describe(value))
+	_, isBool := value.(bool)
+	x, isFloat := value.(float64)
+
+	if err != nil || isBool || isFloat && x != math.Trunc(x) {
+		return n, fmt.Errorf("%s is not a whole number", describe(value))
 	}
 
 	return n, nil
@@ -263,22 +259,31 @@ func suggestKey(key string) string {
 		return sameLeaf[0]
 	}
 
-	best, bestDist, ties := "", maxTypoDistance+1, 0
+	// closest holds the keys at bestDist, the smallest distance seen so far
+	// within reach.
+	var closest []string
+
+	bestDist := maxTypoDistance
 
 	for _, k := range keys {
-		switch d := editDistance(key, k); {
-		case d < bestDist:
-			best, bestDist, ties = k, d, 1
-		case d == bestDist:
-			ties++
+		d := editDistance(key, k)
+		if d > bestDist {
+			continue
 		}
+
+		// Equivalent: d > bestDist was skipped above, so != is <.
+		if d < bestDist { //gooze:ignore comparison
+			closest, bestDist = closest[:0], d
+		}
+
+		closest = append(closest, k)
 	}
 
-	if ties != 1 {
+	if len(closest) != 1 {
 		return ""
 	}
 
-	return best
+	return closest[0]
 }
 
 func lastName(key string) string {

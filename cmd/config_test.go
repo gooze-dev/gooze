@@ -94,6 +94,7 @@ func TestValidateConfig(t *testing.T) {
 		{key: config.KeyRunMutationTimeout, value: "abc", wantErr: `invalid run.mutation_timeout: "abc" is not a whole number`},
 		{key: config.KeyRunParallel, value: "8"},
 		{key: config.KeyRunParallel, value: 1.5, wantErr: "invalid run.parallel: 1.5 is not a whole number"},
+		{key: config.KeyRunParallel, value: -1.5, wantErr: "invalid run.parallel: -1.5 is not a whole number"},
 		{key: config.KeyRunParallel, value: 2.0},
 		{key: config.KeyRunParallel, value: true, wantErr: "invalid run.parallel: true is not a whole number"},
 		{key: config.KeyLogLevel, value: "loud", wantErr: `invalid log.level: "loud" is not one of debug, info, warn, warning, error, or an integer`},
@@ -158,6 +159,10 @@ func TestSuggestKey(t *testing.T) {
 		"bogus":            "",
 		"log.max_sizes":    "log.max_size",
 		"threshold.diff.x": "", // threshold.diff.file is 3 edits away
+		"log.max_sqe":      "", // 2 edits from both log.max_size and log.max_age
+		"log.max_sizee":    "log.max_size",
+		"log.max_xxx":      "",            // the closest, log.max_age, is 3 edits away
+		"log.max_sge":      "log.max_age", // 1 edit; log.max_size, listed first, is 2
 	}
 
 	for key, want := range tests {
