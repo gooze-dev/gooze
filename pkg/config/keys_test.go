@@ -26,6 +26,7 @@ func TestKeys(t *testing.T) {
 		KeyThresholdDiffTotal,
 		KeyThresholdDiffAverage,
 		KeyThresholdDiffFile,
+		KeyReportFormat,
 		KeyLogFilename,
 		KeyLogLevel,
 		KeyLogVerbose,
@@ -43,6 +44,7 @@ func TestKeyValues(t *testing.T) {
 		"run.workspace", "mutagen.comparison.enum_bounds",
 		"threshold.total", "threshold.average", "threshold.file",
 		"threshold.diff.total", "threshold.diff.average", "threshold.diff.file",
+		"report.format",
 		"log.filename", "log.level", "log.verbose", "log.max_size",
 		"log.max_backups", "log.max_age", "log.compress",
 	}, Keys())

@@ -42,6 +42,8 @@ type Survivor struct {
 	Status   rpt.TestStatus
 	Original string // the original line, trimmed
 	Mutated  string // the mutated line, trimmed; "" when the line was removed
+	// MutationID identifies the mutation across runs.
+	MutationID string
 }
 
 func (w *workflow) View(ctx context.Context, args ViewArgs) error {
@@ -67,7 +69,9 @@ func (w *workflow) View(ctx context.Context, args ViewArgs) error {
 		return WithExitCode(m.ExitNoReports, fmt.Errorf("no reports in %s match %s", args.Reports, joinPaths(args.Paths)))
 	}
 
-	w.progress.DisplayReportSummary(ctx, summary)
+	if err := w.displayView(ctx, args, summary); err != nil {
+		return err
+	}
 
 	thresholds, err := w.viewThresholds(ctx, args)
 	if err != nil {
@@ -230,12 +234,13 @@ func reportSurvivors(report m.Report) []Survivor {
 			}
 
 			survivors = append(survivors, Survivor{
-				Path:     report.Source.Key(),
-				Line:     change.Line,
-				Mutagen:  mutationType.Name,
-				Status:   entry.Status,
-				Original: strings.TrimSpace(change.Original),
-				Mutated:  strings.TrimSpace(change.Mutated),
+				Path:       report.Source.Key(),
+				Line:       change.Line,
+				Mutagen:    mutationType.Name,
+				Status:     entry.Status,
+				Original:   strings.TrimSpace(change.Original),
+				Mutated:    strings.TrimSpace(change.Mutated),
+				MutationID: entry.MutationID,
 			})
 		}
 	}

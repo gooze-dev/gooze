@@ -1,6 +1,8 @@
 package report
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"gooze.dev/pkg/gooze/internal/domain"
@@ -21,6 +23,11 @@ arguments, relative to the module root:
   - ./pkg/file.go   a single file
 
 Use --all to list every mutation with its status and diff instead.
+
+--format github writes a GitHub workflow annotation for each line with
+surviving mutants before the summary, so they show on the pull request's
+changed files. Paths are relative to the git repository root. report.format in
+gooze.yaml sets the default.
 
 Below a --threshold-* minimum, view exits with code 3. For the reports of a
 gooze run --diff (view -o .gooze-reports/run), the --threshold-diff-* minimums
@@ -55,19 +62,54 @@ func newViewCmd(deps Deps) *cobra.Command {
 				return err
 			}
 
-			return deps.Workflow.View(cmd.Context(), domain.ViewArgs{
-				Reports:        m.Path(viper.GetString(deps.OutputKey)),
-				Paths:          paths,
-				All:            all,
-				Thresholds:     minimums,
-				DiffThresholds: diffMinimums,
-			})
+			view, err := viewFormatArgs(cmd, all)
+			if err != nil {
+				return err
+			}
+
+			view.Reports = m.Path(viper.GetString(deps.OutputKey))
+			view.Paths = paths
+			view.All = all
+			view.Thresholds = minimums
+			view.DiffThresholds = diffMinimums
+
+			return deps.Workflow.View(cmd.Context(), view)
 		},
 	}
 
 	cmd.Flags().BoolVar(&all, "all", false, "list every mutation with its status and diff instead of a per-file summary")
+	addFormatFlag(cmd)
 	thresholds = AddThresholdFlags(cmd, "threshold", "threshold")
 	diffThresholds = AddThresholdFlags(cmd, "threshold.diff", "threshold-diff")
 
 	return cmd
+}
+
+// viewFormatArgs returns the view's format settings. Text leaves them empty,
+// so the view prints as it always has. --all lists mutations as text, so it
+// ignores report.format and rejects --format.
+func viewFormatArgs(cmd *cobra.Command, all bool) (domain.ViewArgs, error) {
+	format, err := readFormat(cmd)
+	if err != nil {
+		return domain.ViewArgs{}, err
+	}
+
+	if !writesOutput[format] {
+		return domain.ViewArgs{}, nil
+	}
+
+	if all {
+		if cmd.Flags().Changed(formatFlagName) {
+			return domain.ViewArgs{}, domain.WithExitCode(m.ExitUsage,
+				fmt.Errorf("--all lists every mutation as text; it can't be combined with --format %s", format))
+		}
+
+		return domain.ViewArgs{}, nil
+	}
+
+	return domain.ViewArgs{
+		Format:     format,
+		Output:     cmd.OutOrStdout(),
+		PathPrefix: repoPathPrefix(cmd.Context()),
+	}, nil
 }

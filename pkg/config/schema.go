@@ -50,6 +50,7 @@ func Schema() []Field {
 		runField(),
 		mutagenField(),
 		thresholdField(),
+		reportField(),
 		logField(),
 	}
 }
@@ -107,6 +108,15 @@ func thresholdFields(total, average, file string) []Field {
 	}
 
 	return []Field{percent("total", total), percent("average", average), percent("file", file)}
+}
+
+func reportField() Field {
+	return Field{Name: "report", Kind: KindObject, Doc: "Report output settings.", Children: []Field{
+		{
+			Name: "format", Kind: KindEnum, Default: "text", Enum: []string{"text", "github"},
+			Doc: "How gooze report view writes surviving mutants: text, or github (workflow annotations on the lines, then the text summary).",
+		},
+	}}
 }
 
 func logField() Field {
