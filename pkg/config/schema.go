@@ -113,8 +113,8 @@ func thresholdFields(total, average, file string) []Field {
 func reportField() Field {
 	return Field{Name: "report", Kind: KindObject, Doc: "Report output settings.", Children: []Field{
 		{
-			Name: "format", Kind: KindEnum, Default: "text", Enum: []string{"text", "github"},
-			Doc: "How gooze report view writes surviving mutants: text, or github (workflow annotations on the lines, then the text summary).",
+			Name: "format", Kind: KindEnum, Default: "text", Enum: []string{"text", "github", "sarif"},
+			Doc: "How gooze report view writes surviving mutants: text, github (workflow annotations on the lines, then the text summary) or sarif (a SARIF 2.1.0 log for code scanning).",
 		},
 	}}
 }
