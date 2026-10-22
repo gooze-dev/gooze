@@ -65,18 +65,21 @@ jobs:
   # changed lines, so it stays small.
   diff:
     if: github.event_name == 'pull_request'
+    # On the runner, not in the golang container: the container runs as root,
+    # where tests that rely on file permissions skip themselves, so the gate
+    # would report survivors a local run kills.
     runs-on: ubuntu-latest
-    container: golang:1.27
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         fetch-depth: 0         # diff mode needs the merge base with the base branch
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      with:
+        go-version-file: go.mod
     - name: Install gooze
       run: go install gooze.dev/pkg/gooze@v1.3.0
     - name: Changed lines must be fully killed
-      run: |
-        git config --global --add safe.directory "$GITHUB_WORKSPACE"
-        gooze run -p 2 --diff "origin/${{ github.base_ref }}" -x '^vendor/' -x '^mock_' ./...
+      run: gooze run -p 2 --diff "origin/${{ github.base_ref }}" -x '^vendor/' -x '^mock_' ./...
 
   merge:
     needs: test
