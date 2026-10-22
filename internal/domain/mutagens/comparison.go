@@ -16,17 +16,16 @@ import (
 )
 
 // GenerateComparisonMutations generates comparison operator mutations for the
-// given AST node, leaving out the mutant that is equivalent because one operand
-// is the minimum of the other (see equivalentMutantOp).
+// given AST node, leaving out the mutants that are equivalent because one
+// operand is the minimum of the other (see equivalentMutantOp) or because the
+// comparison stops a counting loop (see countingLoopMutantOp).
 func GenerateComparisonMutations(n ast.Node, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
 	alternatives := getComparisonAlternatives
 
-	if expr, ok := n.(*ast.BinaryExpr); ok {
-		// Equivalent mutants: token.ILLEGAL is the lowest token.
-		if skip := equivalentMutantOp(expr, fset, content); skip != token.ILLEGAL { //gooze:ignore comparison
-			alternatives = func(op token.Token) []token.Token {
-				return slices.DeleteFunc(getComparisonAlternatives(op), func(alt token.Token) bool { return alt == skip })
-			}
+	if expr, ok := n.(*ast.BinaryExpr); ok && isComparisonOp(expr.Op) {
+		skip := []token.Token{equivalentMutantOp(expr, fset, content), countingLoopMutantOp(expr, fset, content)}
+		alternatives = func(op token.Token) []token.Token {
+			return slices.DeleteFunc(getComparisonAlternatives(op), func(alt token.Token) bool { return slices.Contains(skip, alt) })
 		}
 	}
 
@@ -513,4 +512,233 @@ func writeTargets(n ast.Node) []ast.Expr {
 	}
 
 	return nil
+}
+
+// countingLoopMutantOp returns token.NEQ when expr stops a counting loop, so
+// its != mutant is equivalent, and token.ILLEGAL otherwise. A counter that
+// starts at or below its bound and steps by one can't jump past the bound, so
+// "i < bound" behaves as "i != bound" (see countsUpTo); counting down to 0,
+// "i > 0" behaves as "i != 0" (see countsDownTo0).
+func countingLoopMutantOp(expr *ast.BinaryExpr, fset *token.FileSet, content []byte) token.Token {
+	file, reparsed := reparse(content)
+	offset := fset.Position(expr.Pos()).Offset
+
+	var loop *ast.ForStmt
+
+	var cond *ast.BinaryExpr
+
+	// In the new tree, expr is the conjunct of a for condition at the same
+	// offset.
+	ast.Inspect(file, func(n ast.Node) bool {
+		if f, ok := n.(*ast.ForStmt); ok {
+			for _, c := range conjuncts(f.Cond) {
+				if loop == nil && reparsed.Position(c.Pos()).Offset == offset {
+					loop, cond = f, c
+				}
+			}
+		}
+
+		return loop == nil
+	})
+
+	if loop == nil || !countsToBound(loop, cond, reparsed, content) {
+		return token.ILLEGAL
+	}
+
+	return token.NEQ
+}
+
+// conjuncts returns the comparisons cond requires together: cond itself, or
+// the operands of its top-level && chain.
+func conjuncts(cond ast.Expr) []*ast.BinaryExpr {
+	if paren, ok := cond.(*ast.ParenExpr); ok {
+		return conjuncts(paren.X)
+	}
+
+	bin, ok := cond.(*ast.BinaryExpr)
+	if !ok {
+		return nil
+	}
+
+	// A switch, not ==, which would add the equivalent <= mutant: no boolean
+	// operator sorts below &&.
+	switch bin.Op {
+	case token.LAND:
+		return append(conjuncts(bin.X), conjuncts(bin.Y)...)
+	default:
+		return []*ast.BinaryExpr{bin}
+	}
+}
+
+// countsToBound reports whether cond, a conjunct of loop's condition, compares
+// a counter of loop with its bound: "v < bound" or "bound > v" counting up
+// from 0 (see countsUpTo), or "v > 0" or "0 < v" counting down (see
+// countsDownTo0).
+func countsToBound(loop *ast.ForStmt, cond *ast.BinaryExpr, fset *token.FileSet, content []byte) bool {
+	switch cond.Op {
+	case token.LSS:
+		return countsUpTo(loop, cond.X, cond.Y, fset, content) || countsDownTo0(loop, cond.Y, cond.X, fset, content)
+	case token.GTR:
+		return countsUpTo(loop, cond.Y, cond.X, fset, content) || countsDownTo0(loop, cond.X, cond.Y, fset, content)
+	default:
+		return false
+	}
+}
+
+// countsUpTo reports whether counter starts at 0 and its only write is one
+// step of +1 per iteration of loop (see stepsOnce), and bound never drops
+// below the counter: a literal, len or cap of a variable that is never
+// written, or a variable isNonNegativeVar accepts, which only grows.
+func countsUpTo(loop *ast.ForStmt, counter, bound ast.Expr, fset *token.FileSet, content []byte) bool {
+	v, ok := counter.(*ast.Ident)
+	if !ok || v.Obj == nil {
+		return false
+	}
+
+	start, ok := counterStart(v)
+	if !ok || !isZero(start) || !stepsOnce(loop, v, token.INC, token.ADD_ASSIGN, fset, content) {
+		return false
+	}
+
+	return isStableBound(bound, fset, content)
+}
+
+// countsDownTo0 reports whether zero is 0 and counter starts non-negative and
+// its only write is one step of -1 per iteration of loop (see stepsOnce).
+func countsDownTo0(loop *ast.ForStmt, counter, zero ast.Expr, fset *token.FileSet, content []byte) bool {
+	v, ok := counter.(*ast.Ident)
+	if !ok || v.Obj == nil || !isZero(zero) {
+		return false
+	}
+
+	start, ok := counterStart(v)
+
+	return ok && start != nil && isNonNegativeStart(start, content) && stepsOnce(loop, v, token.DEC, token.SUB_ASSIGN, fset, content)
+}
+
+// counterStart returns the value the counter v is defined with by := or a
+// local var: nil for a var without a value (the zero value), and false for
+// any other declaration.
+func counterStart(v *ast.Ident) (ast.Expr, bool) {
+	switch decl := v.Obj.Decl.(type) {
+	case *ast.AssignStmt:
+		value := definedValue(decl, v.Name)
+
+		return value, value != nil
+	case *ast.ValueSpec:
+		return specValue(decl, v.Name)
+	default:
+		return nil, false
+	}
+}
+
+// isZero reports whether e is the integer literal 0; a var's zero value is
+// passed as nil and counts too.
+func isZero(e ast.Expr) bool {
+	return e == nil || isLiteral(e, "0")
+}
+
+// isLiteral reports whether e is the basic literal written as value. A switch,
+// not ==, keeps the ordering mutants of string comparison away: no literal
+// sorts below "0" but strings and floats such as .5, which are not 0.
+func isLiteral(e ast.Expr, value string) bool {
+	lit, ok := e.(*ast.BasicLit)
+	if !ok {
+		return false
+	}
+
+	switch lit.Value {
+	case value:
+		return true
+	default:
+		return false
+	}
+}
+
+// stepsOnce reports whether the counter v has exactly one write besides its
+// declaration, and it is v++ (or v--, per inc) or v += 1 (v -= 1, per add):
+// either loop's post statement or a statement in loop's body that no nested
+// loop or function literal repeats.
+func stepsOnce(loop *ast.ForStmt, v *ast.Ident, inc, add token.Token, fset *token.FileSet, content []byte) bool {
+	decl, _ := v.Obj.Decl.(ast.Node)
+	writes := writesAfterDefinition(fset, content, decl, v.Name)
+
+	if len(writes) != 1 || !isStep(writes[0], inc, add) {
+		return false
+	}
+
+	return writes[0] == loop.Post || isOncePerIteration(loop.Body, writes[0])
+}
+
+// isStep reports whether write is a ++/-- of token inc, or a +=/-= of token
+// add with the literal 1. Tokens are matched by switch, so no ordering mutant
+// of a token comparison is generated.
+func isStep(write ast.Node, inc, add token.Token) bool {
+	switch w := write.(type) {
+	case *ast.IncDecStmt:
+		switch w.Tok {
+		case inc:
+			return true
+		default:
+			return false
+		}
+	case *ast.AssignStmt:
+		switch w.Tok {
+		case add:
+			return isLiteral(w.Rhs[0], "1")
+		default:
+			return false
+		}
+	default:
+		return false
+	}
+}
+
+// isOncePerIteration reports whether stmt is in body outside any nested loop
+// or function literal, so it runs at most once per iteration.
+func isOncePerIteration(body *ast.BlockStmt, stmt ast.Node) bool {
+	found := false
+
+	ast.Inspect(body, func(n ast.Node) bool {
+		switch n.(type) {
+		case *ast.ForStmt, *ast.RangeStmt, *ast.FuncLit:
+			return false
+		}
+
+		if n == stmt {
+			found = true
+		}
+
+		return !found
+	})
+
+	return found
+}
+
+// isStableBound reports whether bound never drops below a counter that
+// started at 0: a literal, len or cap of a variable that is never written, or
+// a variable isNonNegativeVar accepts.
+func isStableBound(bound ast.Expr, fset *token.FileSet, content []byte) bool {
+	switch b := bound.(type) {
+	case *ast.BasicLit:
+		return true
+	case *ast.CallExpr:
+		if !isLenOrCapCall(b) {
+			return false
+		}
+
+		// len and cap take exactly one argument.
+		arg, ok := b.Args[0].(*ast.Ident)
+		if !ok || arg.Obj == nil {
+			return false
+		}
+
+		decl, _ := arg.Obj.Decl.(ast.Node)
+
+		return len(writesAfterDefinition(fset, content, decl, arg.Name)) == 0
+	case *ast.Ident:
+		return isNonNegativeVar(b, fset, content)
+	default:
+		return false
+	}
 }
