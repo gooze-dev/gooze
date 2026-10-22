@@ -2,6 +2,8 @@ package domain_test
 
 import (
 	"context"
+	"go/ast"
+	"go/token"
 	"os"
 	"path/filepath"
 	"slices"
@@ -10,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"gooze.dev/pkg/gooze/internal/adapter"
 	domain "gooze.dev/pkg/gooze/internal/domain"
 	m "gooze.dev/pkg/gooze/internal/model"
 	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
@@ -233,4 +236,49 @@ func TestMutagen_EnumBoundsInADirectoryNamedLikeAGoFile(t *testing.T) {
 
 	assert.NotContains(t, enumMutants(t, dir, true), "return k >= KindC")
 	assert.Contains(t, enumMutants(t, dir, false), "return k >= KindC")
+}
+
+// countingParser counts the files it parses.
+type countingParser struct {
+	domain.GoFileAdapter
+	parsed int
+}
+
+func (p *countingParser) Parse(ctx context.Context, fileSet *token.FileSet, filename string, src []byte) (*ast.File, error) {
+	p.parsed++
+	return p.GoFileAdapter.Parse(ctx, fileSet, filename, src)
+}
+
+func TestMutagen_EnumBoundsCachedPerPackage(t *testing.T) {
+	dir := t.TempDir()
+	kindsPath := filepath.Join(dir, "kinds.go")
+	require.NoError(t, os.WriteFile(kindsPath, []byte(kinds), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "p.go"), []byte("package p\n\nfunc f(k Kind) bool {\n\treturn k == KindC\n}\n"), 0o600))
+
+	parser := &countingParser{GoFileAdapter: adapter.NewLocalGoFileAdapter()}
+	mg := domain.NewMutagen(parser, adapter.NewLocalSourceFSAdapter(), adapter.NewUnifiedDiffer())
+	source := makeSourceV2(t, filepath.Join(dir, "p.go"))
+
+	stream := func() []string {
+		var mutations []m.Mutation
+
+		err := mg.StreamMutations(context.Background(), source, domain.MutationOptions{EnumBounds: true}, func(mutation m.Mutation) error {
+			mutations = append(mutations, mutation)
+			return nil
+		}, mgen.Comparison)
+		require.NoError(t, err)
+
+		return mutatedLineTexts(mutations)
+	}
+
+	assert.NotContains(t, stream(), "return k >= KindC")
+	assert.Equal(t, 2, parser.parsed, "p.go, then kinds.go for the enums")
+
+	assert.NotContains(t, stream(), "return k >= KindC")
+	assert.Equal(t, 3, parser.parsed, "only p.go: the enums are cached")
+
+	// KindC is no longer the highest value once the package changes.
+	require.NoError(t, os.WriteFile(kindsPath, []byte(kinds+"const KindD Kind = 3\n"), 0o600))
+	assert.Contains(t, stream(), "return k >= KindC")
+	assert.Equal(t, 5, parser.parsed, "p.go and the changed kinds.go")
 }

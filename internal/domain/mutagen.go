@@ -9,6 +9,7 @@ import (
 	"go/scanner"
 	"go/token"
 	"slices"
+	"sync"
 
 	"gooze.dev/pkg/gooze/internal/domain/mutagens"
 	m "gooze.dev/pkg/gooze/internal/model"
@@ -41,6 +42,11 @@ type mutagen struct {
 	GoFileAdapter
 	SourceFSAdapter
 	differ Differ
+
+	// enumsMu guards enums, the enums of each package by its files (see
+	// cachedEnums).
+	enumsMu sync.Mutex
+	enums   map[string]enums
 }
 
 // NewMutagen creates a new Mutagen instance.

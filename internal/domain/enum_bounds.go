@@ -2,11 +2,15 @@ package domain
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"go/ast"
 	"go/constant"
 	"go/token"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	m "gooze.dev/pkg/gooze/internal/model"
@@ -30,12 +34,11 @@ func (ix ignoreIndex) isEnumBoundMutant(mutationType mgen.Type, offset int, muta
 // v < Highest, and so on (see enums.boundMutant). It returns nil when a file
 // of the package can't be read or parsed.
 func (mg *mutagen) enumBoundMutants(ctx context.Context, source rpt.Source, fset *token.FileSet, file *ast.File) map[int]string {
-	files, ok := mg.packageFiles(ctx, source, file)
+	enums, ok := mg.cachedEnums(ctx, source, file)
 	if !ok {
 		return nil
 	}
 
-	enums := packageEnums(files)
 	specs := topLevelValueSpecs(file)
 	tokenFile := fset.File(file.Pos())
 	mutants := map[int]string{}
@@ -53,36 +56,92 @@ func (mg *mutagen) enumBoundMutants(ctx context.Context, source rpt.Source, fset
 	return mutants
 }
 
-// packageFiles returns file and the other files of its package: the .go files
-// next to source with the same package clause, so tests of the package
-// count and external tests (package p_test) don't.
-func (mg *mutagen) packageFiles(ctx context.Context, source rpt.Source, file *ast.File) ([]*ast.File, bool) {
-	files := []*ast.File{file}
-	self := filepath.Clean(source.Origin.FullPath)
+// cachedEnums returns the enums of file's package. Mutations are generated
+// several times per source and for each file of a package, so the enums are
+// kept by the package name and the contents of the .go files next to source,
+// and the package is parsed again only when one of them changes.
+func (mg *mutagen) cachedEnums(ctx context.Context, source rpt.Source, file *ast.File) (enums, bool) {
+	dir := filepath.Dir(filepath.Clean(source.Origin.FullPath))
 
-	err := mg.Walk(ctx, m.Path(filepath.Dir(self)), false, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() || !strings.HasSuffix(path, ".go") || filepath.Clean(path) == self {
+	contents, ok := mg.goFiles(ctx, dir)
+	if !ok {
+		return enums{}, false
+	}
+
+	hash := sha256.New()
+	hash.Write([]byte(file.Name.Name))
+
+	for _, path := range slices.Sorted(maps.Keys(contents)) {
+		sum := sha256.Sum256(contents[path])
+		hash.Write([]byte(path))
+		hash.Write(sum[:])
+	}
+
+	key := dir + "\x00" + hex.EncodeToString(hash.Sum(nil))
+
+	mg.enumsMu.Lock()
+	defer mg.enumsMu.Unlock()
+
+	if e, ok := mg.enums[key]; ok {
+		return e, true
+	}
+
+	files, ok := mg.packageFiles(ctx, source, file, contents)
+	if !ok {
+		return enums{}, false
+	}
+
+	if mg.enums == nil {
+		mg.enums = map[string]enums{}
+	}
+
+	mg.enums[key] = packageEnums(files)
+
+	return mg.enums[key], true
+}
+
+// goFiles returns the contents of the .go files in dir, by path.
+func (mg *mutagen) goFiles(ctx context.Context, dir string) (map[string][]byte, bool) {
+	contents := map[string][]byte{}
+
+	err := mg.Walk(ctx, m.Path(dir), false, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() || !strings.HasSuffix(path, ".go") {
 			return err
 		}
 
 		content, err := mg.ReadFile(ctx, m.Path(path))
-		if err != nil {
-			return err
+		contents[filepath.Clean(path)] = content
+
+		return err
+	})
+
+	return contents, err == nil
+}
+
+// packageFiles returns file and the other files of its package among
+// contents, the .go files next to source: those with the same package
+// clause, so tests of the package count and external tests (package p_test)
+// don't.
+func (mg *mutagen) packageFiles(ctx context.Context, source rpt.Source, file *ast.File, contents map[string][]byte) ([]*ast.File, bool) {
+	files := []*ast.File{file}
+	self := filepath.Clean(source.Origin.FullPath)
+
+	for _, path := range slices.Sorted(maps.Keys(contents)) {
+		if path == self {
+			continue
 		}
 
-		other, err := mg.Parse(ctx, token.NewFileSet(), path, content)
+		other, err := mg.Parse(ctx, token.NewFileSet(), path, contents[path])
 		if err != nil {
-			return err
+			return nil, false
 		}
 
 		if other.Name.Name == file.Name.Name {
 			files = append(files, other)
 		}
+	}
 
-		return nil
-	})
-
-	return files, err == nil
+	return files, true
 }
 
 // enumConst is a named constant of an enum: its type and value.
