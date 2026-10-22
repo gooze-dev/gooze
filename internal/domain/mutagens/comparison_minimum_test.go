@@ -601,3 +601,198 @@ func methodOf(typ string) string {
 
 	return ""
 }
+
+func TestGenerateComparisonMutations_SkipsNotEqualForCountingLoops(t *testing.T) {
+	tests := []struct {
+		name    string
+		src     string
+		cond    string // the comparison, as written in the source
+		skipped string // the equivalent mutant; "" keeps all five
+	}{
+		{
+			name: "for clause up to len", cond: "i < len(s)", skipped: "i != len(s)",
+			src: "package p\nfunc f(s []int) {\n\tfor i := 0; i < len(s); i++ {\n\t}\n}\n",
+		},
+		{
+			name: "while loop with a second condition", cond: "i < len(s)", skipped: "i != len(s)",
+			src: "package p\nfunc f(s []int) int {\n\ti := 0\n\tfor i < len(s) && s[i] == 0 {\n\t\ti++\n\t}\n\treturn i\n}\n",
+		},
+		{
+			name: "bound on the left", cond: "len(s) > i", skipped: "len(s) != i",
+			src: "package p\nfunc f(s []int) {\n\tfor i := 0; len(s) > i; i++ {\n\t}\n}\n",
+		},
+		{
+			name: "literal bound", cond: "i < 10", skipped: "i != 10",
+			src: "package p\nfunc f() {\n\tfor i := 0; i < 10; i++ {\n\t}\n}\n",
+		},
+		{
+			name: "increased by += 1", cond: "i < len(s)", skipped: "i != len(s)",
+			src: "package p\nfunc f(s []int) {\n\tfor i := 0; i < len(s); i += 1 {\n\t}\n}\n",
+		},
+		{
+			name: "var counter", cond: "i < len(s)", skipped: "i != len(s)",
+			src: "package p\nfunc f(s []int) {\n\tvar i int\n\tfor i < len(s) {\n\t\ti++\n\t}\n}\n",
+		},
+		{
+			name: "non-negative bound variable", cond: "i < n", skipped: "i != n",
+			src: "package p\nfunc f(s []int) {\n\tn := len(s)\n\tfor i := 0; i < n; i++ {\n\t}\n}\n",
+		},
+		{
+			name: "increment inside an if", cond: "i < len(s)", skipped: "i != len(s)",
+			src: "package p\nfunc f(s []int, b bool) {\n\ti := 0\n\tfor i < len(s) {\n\t\tif b {\n\t\t\ti++\n\t\t}\n\t}\n}\n",
+		},
+		{
+			name: "counting down", cond: "i > 0", skipped: "i != 0",
+			src: "package p\nfunc f(s []int) {\n\tfor i := len(s); i > 0; i-- {\n\t}\n}\n",
+		},
+		{
+			name: "counting down, zero on the left", cond: "0 < i", skipped: "0 != i",
+			src: "package p\nfunc f(s []int) {\n\tfor i := len(s); 0 < i; i -= 1 {\n\t}\n}\n",
+		},
+		{
+			name: "a later loop", cond: "j < len(s)",
+			src: "package p\nfunc f(s []int) {\n\tfor i := 0; i < len(s); i++ {\n\t}\n\tfor j := 1; j < len(s); j++ {\n\t}\n}\n",
+		},
+		{
+			name: "counting down to 1", cond: "i > 1",
+			src: "package p\nfunc f(s []int) {\n\tfor i := len(s); i > 1; i-- {\n\t}\n}\n",
+		},
+		{
+			name: "float counter starting at .5", cond: "i < 10",
+			src: "package p\nfunc f() {\n\tfor i := .5; i < 10; i++ {\n\t}\n}\n",
+		},
+		{
+			name: "counter never written", cond: "i < len(s)",
+			src: "package p\nfunc f(s []int) {\n\ti := 0\n\tfor i < len(s) {\n\t\tbreak\n\t}\n}\n",
+		},
+		{
+			name: "counting up with --", cond: "i < len(s)",
+			src: "package p\nfunc f(s []int) {\n\tfor i := 0; i < len(s); i-- {\n\t}\n}\n",
+		},
+		{
+			name: "counter only written through its address", cond: "i < len(s)",
+			src: "package p\nfunc g(*int) {}\nfunc f(s []int) {\n\ti := 0\n\tfor i < len(s) {\n\t\tg(&i)\n\t}\n}\n",
+		},
+		{
+			name: "bound from another call", cond: "i < n()",
+			src: "package p\nfunc n() int { return -1 }\nfunc f() {\n\tfor i := 0; i < n(); i++ {\n\t}\n}\n",
+		},
+		{
+			name: "bound from the length of a field", cond: "i < len(v.s)",
+			src: "package p\ntype t struct{ s []int }\nfunc f(v t) {\n\tfor i := 0; i < len(v.s); i++ {\n\t}\n}\n",
+		},
+		{
+			name: "bound from arithmetic", cond: "i < n-1",
+			src: "package p\nfunc f(n int) {\n\tfor i := 0; i < n-1; i++ {\n\t}\n}\n",
+		},
+		{
+			name: "starting at a variable", cond: "i < len(s)",
+			src: "package p\nfunc f(s []int, k int) {\n\tfor i := k; i < len(s); i++ {\n\t}\n}\n",
+		},
+		{
+			name: "step of a variable", cond: "i < len(s)",
+			src: "package p\nfunc f(s []int, k int) {\n\tfor i := 0; i < len(s); i += k {\n\t}\n}\n",
+		},
+		{
+			name: "counting up with -= 1", cond: "i < len(s)",
+			src: "package p\nfunc f(s []int) {\n\tfor i := 0; i < len(s); i -= 1 {\n\t}\n}\n",
+		},
+		{
+			name: "step of two", cond: "i < len(s)",
+			src: "package p\nfunc f(s []int) {\n\tfor i := 0; i < len(s); i += 2 {\n\t}\n}\n",
+		},
+		{
+			name: "two increments", cond: "i < len(s)",
+			src: "package p\nfunc f(s []int) {\n\ti := 0\n\tfor i < len(s) {\n\t\ti++\n\t\ti++\n\t}\n}\n",
+		},
+		{
+			name: "increment in a nested loop", cond: "i < len(s)",
+			src: "package p\nfunc f(s []int) {\n\ti := 0\n\tfor i < len(s) {\n\t\tfor range s {\n\t\t\ti++\n\t\t}\n\t}\n}\n",
+		},
+		{
+			name: "increment in a function literal", cond: "i < len(s)",
+			src: "package p\nfunc f(s []int) {\n\ti := 0\n\tfor i < len(s) {\n\t\tfunc() { i++ }()\n\t}\n}\n",
+		},
+		{
+			name: "increment outside the loop", cond: "i < len(s)",
+			src: "package p\nfunc f(s []int) {\n\ti := 0\n\ti++\n\tfor i < len(s) {\n\t}\n}\n",
+		},
+		{
+			name: "starting at 1", cond: "i < len(s)",
+			src: "package p\nfunc f(s []int) {\n\tfor i := 1; i < len(s); i++ {\n\t}\n}\n",
+		},
+		{
+			name: "starting at a parameter", cond: "i < len(s)",
+			src: "package p\nfunc f(s []int, i int) {\n\tfor ; i < len(s); i++ {\n\t}\n}\n",
+		},
+		{
+			name: "slice shortened in the loop", cond: "i < len(s)",
+			src: "package p\nfunc f(s []int) {\n\tfor i := 0; i < len(s); i++ {\n\t\ts = s[1:]\n\t}\n}\n",
+		},
+		{
+			name: "bound that may be negative", cond: "i < n",
+			src: "package p\nfunc f(n int) {\n\tfor i := 0; i < n; i++ {\n\t}\n}\n",
+		},
+		{
+			name: "or in the condition", cond: "i < len(s)",
+			src: "package p\nfunc f(s []int, b bool) {\n\tfor i := 0; i < len(s) || b; i++ {\n\t}\n}\n",
+		},
+		{
+			name: "counter reset in the loop", cond: "i < len(s)",
+			src: "package p\nfunc f(s []int) {\n\tfor i := 0; i < len(s); i++ {\n\t\ti = 0\n\t}\n}\n",
+		},
+		{
+			name: "counter whose address is taken", cond: "i < len(s)",
+			src: "package p\nfunc g(*int) {}\nfunc f(s []int) {\n\tfor i := 0; i < len(s); i++ {\n\t\tg(&i)\n\t}\n}\n",
+		},
+		{
+			name: "not a loop condition", cond: "i < len(s)",
+			src: "package p\nfunc f(s []int) bool {\n\ti := 0\n\ti++\n\treturn i < len(s)\n}\n",
+		},
+		{
+			name: "if before a counting loop", cond: "i < len(s)",
+			src: "package p\nfunc f(s []int, i int) bool {\n\tif i < len(s) {\n\t\treturn true\n\t}\n\tfor j := 0; j < len(s); j++ {\n\t}\n\treturn false\n}\n",
+		},
+		{
+			name: "counting down by two", cond: "i > 0",
+			src: "package p\nfunc f(s []int) {\n\tfor i := len(s); i > 0; i -= 2 {\n\t}\n}\n",
+		},
+		{
+			name: "counting down from a parameter", cond: "i > 0",
+			src: "package p\nfunc f(i int) {\n\tfor ; i > 0; i-- {\n\t}\n}\n",
+		},
+		{
+			name: "counter from a length that only goes up (non-negative)", cond: "i > 0", skipped: "i != 0",
+			src: "package p\nfunc f(s []int) {\n\tfor i := len(s); i > 0; i++ {\n\t}\n}\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			x, op, y := splitComparison(tt.cond)
+			line := strings.TrimSpace(lineWith(tt.src, tt.cond))
+
+			// cond's mutants; other comparisons on the line are left out.
+			var want, ofCond []string
+			for _, alt := range []string{"<", ">", "<=", ">=", "==", "!="} {
+				mutant := x + " " + alt + " " + y
+				if alt == op {
+					continue
+				}
+
+				ofCond = append(ofCond, strings.Replace(line, tt.cond, mutant, 1))
+				if mutant != tt.skipped {
+					want = append(want, strings.Replace(line, tt.cond, mutant, 1))
+				}
+			}
+
+			got := slices.DeleteFunc(comparisonMutantLines(t, tt.src), func(l string) bool { return !slices.Contains(ofCond, l) })
+
+			slices.Sort(want)
+
+			if !slices.Equal(got, want) {
+				t.Fatalf("mutants of %s:\n got %q\nwant %q", tt.cond, got, want)
+			}
+		})
+	}
+}
