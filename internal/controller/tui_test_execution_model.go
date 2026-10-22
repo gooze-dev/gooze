@@ -11,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"gooze.dev/pkg/gooze/internal/domain"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 // testResult holds information about a completed mutation test.
@@ -25,6 +26,30 @@ type testResult struct {
 // Implement list.Item interface for testResult.
 func (r testResult) FilterValue() string {
 	return r.id + " " + r.file + " " + r.typ + " " + r.status
+}
+
+// Widths of the result columns, padding included. The status column fits the
+// longest status label (not_covered), so no row wraps onto a second line.
+const (
+	idColumnWidth   = 6
+	typeColumnWidth = 12
+	// columnSpacing is the gaps between the four columns plus a right margin.
+	columnSpacing = 12
+)
+
+var statusColumnWidth = longestStatusLabel() + 2
+
+// longestStatusLabel returns the length of the longest TestStatus name.
+func longestStatusLabel() int {
+	// Equivalent: every label is longer than 1, so starting at 1 changes nothing.
+	longest := 0 //gooze:ignore numbers
+	// Equivalent: every status label sorts before "unknown", so < stops at
+	// the same place as !=.
+	for status := rpt.Killed; status.String() != "unknown"; status++ { //gooze:ignore comparison
+		longest = max(longest, len(status.String()))
+	}
+
+	return longest
 }
 
 // testResultDelegate is the delegate for rendering test results in the list.
@@ -45,13 +70,13 @@ func (d testResultDelegate) Render(w io.Writer, m list.Model, index int, item li
 	}
 
 	isSelected := index == m.Index()
-	fileWidth := m.Width() - 40 // Reserve space for ID, Status, Type columns and spacing
+	fileWidth := m.Width() - (idColumnWidth + statusColumnWidth + typeColumnWidth + columnSpacing)
 
 	idStyle, statusStyle, typeStyle, fileStyle, displayFile := d.getStylesAndFile(result, isSelected, fileWidth)
 
 	line := fmt.Sprintf("%s  %s  %s  %s",
 		idStyle.Render(fmt.Sprintf("%-4s", result.id[:4])),
-		statusStyle.Render(fmt.Sprintf("%-8s", result.status)),
+		statusStyle.Render(result.status),
 		typeStyle.Render(fmt.Sprintf("%-10s", result.typ)),
 		fileStyle.Render(displayFile),
 	)
@@ -62,16 +87,16 @@ func (d testResultDelegate) getStylesAndFile(result testResult, isSelected bool,
 	if isSelected {
 		base := lipgloss.NewStyle().Foreground(lipgloss.Color("0")).Background(lipgloss.Color("6")).Bold(true)
 
-		return base.Width(6).Align(lipgloss.Left),
-			base.Width(10).Align(lipgloss.Left),
-			base.Width(12).Align(lipgloss.Left),
+		return base.Width(idColumnWidth).Align(lipgloss.Left),
+			base.Width(statusColumnWidth).Align(lipgloss.Left),
+			base.Width(typeColumnWidth).Align(lipgloss.Left),
 			base,
 			animateScroll(result.file, fileWidth, d.offset)
 	}
 
-	idStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Bold(true).Width(6).Align(lipgloss.Left)
-	statusStyle := lipgloss.NewStyle().Foreground(statusColor(result.status)).Bold(true).Width(10).Align(lipgloss.Left)
-	typeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("5")).Width(12).Align(lipgloss.Left)
+	idStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Bold(true).Width(idColumnWidth).Align(lipgloss.Left)
+	statusStyle := lipgloss.NewStyle().Foreground(statusColor(result.status)).Bold(true).Width(statusColumnWidth).Align(lipgloss.Left)
+	typeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("5")).Width(typeColumnWidth).Align(lipgloss.Left)
 	fileStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
 
 	return idStyle, statusStyle, typeStyle, fileStyle, truncateToWidth(result.file, fileWidth)
