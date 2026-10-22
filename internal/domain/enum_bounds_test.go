@@ -25,7 +25,10 @@ func enumMutants(t *testing.T, dir string, enumBounds bool) []string {
 
 	var mutations []m.Mutation
 
-	err := newTestMutagen().StreamMutations(context.Background(), makeSourceV2(t, filepath.Join(dir, "p.go")),
+	mg, ok := newTestMutagen().(domain.MutagenWithOptions)
+	require.True(t, ok)
+
+	err := mg.StreamMutationsWith(context.Background(), makeSourceV2(t, filepath.Join(dir, "p.go")),
 		domain.MutationOptions{EnumBounds: enumBounds}, func(mutation m.Mutation) error {
 			mutations = append(mutations, mutation)
 			return nil
@@ -256,13 +259,15 @@ func TestMutagen_EnumBoundsCachedPerPackage(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "p.go"), []byte("package p\n\nfunc f(k Kind) bool {\n\treturn k == KindC\n}\n"), 0o600))
 
 	parser := &countingParser{GoFileAdapter: adapter.NewLocalGoFileAdapter()}
-	mg := domain.NewMutagen(parser, adapter.NewLocalSourceFSAdapter(), adapter.NewUnifiedDiffer())
+	mg, ok := domain.NewMutagen(parser, adapter.NewLocalSourceFSAdapter(), adapter.NewUnifiedDiffer()).(domain.MutagenWithOptions)
+	require.True(t, ok)
+
 	source := makeSourceV2(t, filepath.Join(dir, "p.go"))
 
 	stream := func() []string {
 		var mutations []m.Mutation
 
-		err := mg.StreamMutations(context.Background(), source, domain.MutationOptions{EnumBounds: true}, func(mutation m.Mutation) error {
+		err := mg.StreamMutationsWith(context.Background(), source, domain.MutationOptions{EnumBounds: true}, func(mutation m.Mutation) error {
 			mutations = append(mutations, mutation)
 			return nil
 		}, mgen.Comparison)

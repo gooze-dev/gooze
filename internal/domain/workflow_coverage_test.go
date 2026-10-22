@@ -50,7 +50,7 @@ func TestWorkflow_Test_CoverageGateSkipsUncovered(t *testing.T) {
 	mockFSAdapter.EXPECT().ReadFile(ctx, m.Path("cov.out")).Return(profile, nil)
 
 	mockMutagen.EXPECT().
-		StreamMutations(ctx, mock.Anything, mock.Anything, mock.Anything, typeArgs(domain.DefaultMutations)...).
+		StreamMutations(ctx, mock.Anything, mock.Anything, typeArgs(domain.DefaultMutations)...).
 		RunAndReturn(streamMutationsFn([]m.Mutation{covered, uncovered}))
 
 	// Only the covered mutation reaches a workspace.

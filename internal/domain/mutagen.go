@@ -19,17 +19,23 @@ import (
 
 // Mutagen defines the interface for mutation generation.
 type Mutagen interface {
-	// GenerateMutation returns every mutation for a source as a slice, with
-	// the zero MutationOptions.
+	// GenerateMutation returns every mutation for a source as a slice.
 	GenerateMutation(ctx context.Context, source rpt.Source, mutationTypes ...mgen.Type) ([]m.Mutation, error)
 	// StreamMutations invokes fn for each generated mutation without retaining
 	// them, so callers can process mutations one at a time. If fn returns an
 	// error, streaming stops and that error is returned.
-	StreamMutations(ctx context.Context, source rpt.Source, opts MutationOptions, fn func(m.Mutation) error, mutationTypes ...mgen.Type) error
+	StreamMutations(ctx context.Context, source rpt.Source, fn func(m.Mutation) error, mutationTypes ...mgen.Type) error
 }
 
-// MutationOptions tune which mutations StreamMutations generates. The zero
-// value generates them all.
+// MutagenWithOptions is a Mutagen that also streams with MutationOptions;
+// StreamMutations is StreamMutationsWith the zero options.
+type MutagenWithOptions interface {
+	Mutagen
+	StreamMutationsWith(ctx context.Context, source rpt.Source, opts MutationOptions, fn func(m.Mutation) error, mutationTypes ...mgen.Type) error
+}
+
+// MutationOptions tune which mutations StreamMutationsWith generates. The
+// zero value generates them all.
 type MutationOptions struct {
 	// EnumBounds skips the comparison mutants that are equivalent when an
 	// enum's lowest and highest constants bound its type (run.enum_bounds,
@@ -61,7 +67,7 @@ func NewMutagen(goFileAdapter GoFileAdapter, sourceFSAdapter SourceFSAdapter, di
 func (mg *mutagen) GenerateMutation(ctx context.Context, source rpt.Source, mutationTypes ...mgen.Type) ([]m.Mutation, error) {
 	mutations := make([]m.Mutation, 0)
 
-	err := mg.StreamMutations(ctx, source, MutationOptions{}, func(mutation m.Mutation) error {
+	err := mg.StreamMutations(ctx, source, func(mutation m.Mutation) error {
 		mutations = append(mutations, mutation)
 		return nil
 	}, mutationTypes...)
@@ -72,7 +78,11 @@ func (mg *mutagen) GenerateMutation(ctx context.Context, source rpt.Source, muta
 	return mutations, nil
 }
 
-func (mg *mutagen) StreamMutations(ctx context.Context, source rpt.Source, opts MutationOptions, fn func(m.Mutation) error, mutationTypes ...mgen.Type) error {
+func (mg *mutagen) StreamMutations(ctx context.Context, source rpt.Source, fn func(m.Mutation) error, mutationTypes ...mgen.Type) error {
+	return mg.StreamMutationsWith(ctx, source, MutationOptions{}, fn, mutationTypes...)
+}
+
+func (mg *mutagen) StreamMutationsWith(ctx context.Context, source rpt.Source, opts MutationOptions, fn func(m.Mutation) error, mutationTypes ...mgen.Type) error {
 	if err := validateSource(source); err != nil {
 		return err
 	}

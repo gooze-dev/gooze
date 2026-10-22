@@ -6,7 +6,6 @@ import (
 	context "context"
 
 	mock "github.com/stretchr/testify/mock"
-	domain "gooze.dev/pkg/gooze/internal/domain"
 
 	model "gooze.dev/pkg/gooze/internal/model"
 
@@ -102,14 +101,14 @@ func (_c *MockMutagen_GenerateMutation_Call) RunAndReturn(run func(context.Conte
 	return _c
 }
 
-// StreamMutations provides a mock function with given fields: ctx, source, opts, fn, mutationTypes
-func (_m *MockMutagen) StreamMutations(ctx context.Context, source report.Source, opts domain.MutationOptions, fn func(model.Mutation) error, mutationTypes ...mutagen.Type) error {
+// StreamMutations provides a mock function with given fields: ctx, source, fn, mutationTypes
+func (_m *MockMutagen) StreamMutations(ctx context.Context, source report.Source, fn func(model.Mutation) error, mutationTypes ...mutagen.Type) error {
 	_va := make([]interface{}, len(mutationTypes))
 	for _i := range mutationTypes {
 		_va[_i] = mutationTypes[_i]
 	}
 	var _ca []interface{}
-	_ca = append(_ca, ctx, source, opts, fn)
+	_ca = append(_ca, ctx, source, fn)
 	_ca = append(_ca, _va...)
 	ret := _m.Called(_ca...)
 
@@ -118,8 +117,8 @@ func (_m *MockMutagen) StreamMutations(ctx context.Context, source report.Source
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, report.Source, domain.MutationOptions, func(model.Mutation) error, ...mutagen.Type) error); ok {
-		r0 = rf(ctx, source, opts, fn, mutationTypes...)
+	if rf, ok := ret.Get(0).(func(context.Context, report.Source, func(model.Mutation) error, ...mutagen.Type) error); ok {
+		r0 = rf(ctx, source, fn, mutationTypes...)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -135,23 +134,22 @@ type MockMutagen_StreamMutations_Call struct {
 // StreamMutations is a helper method to define mock.On call
 //   - ctx context.Context
 //   - source report.Source
-//   - opts domain.MutationOptions
 //   - fn func(model.Mutation) error
 //   - mutationTypes ...mutagen.Type
-func (_e *MockMutagen_Expecter) StreamMutations(ctx interface{}, source interface{}, opts interface{}, fn interface{}, mutationTypes ...interface{}) *MockMutagen_StreamMutations_Call {
+func (_e *MockMutagen_Expecter) StreamMutations(ctx interface{}, source interface{}, fn interface{}, mutationTypes ...interface{}) *MockMutagen_StreamMutations_Call {
 	return &MockMutagen_StreamMutations_Call{Call: _e.mock.On("StreamMutations",
-		append([]interface{}{ctx, source, opts, fn}, mutationTypes...)...)}
+		append([]interface{}{ctx, source, fn}, mutationTypes...)...)}
 }
 
-func (_c *MockMutagen_StreamMutations_Call) Run(run func(ctx context.Context, source report.Source, opts domain.MutationOptions, fn func(model.Mutation) error, mutationTypes ...mutagen.Type)) *MockMutagen_StreamMutations_Call {
+func (_c *MockMutagen_StreamMutations_Call) Run(run func(ctx context.Context, source report.Source, fn func(model.Mutation) error, mutationTypes ...mutagen.Type)) *MockMutagen_StreamMutations_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		variadicArgs := make([]mutagen.Type, len(args)-4)
-		for i, a := range args[4:] {
+		variadicArgs := make([]mutagen.Type, len(args)-3)
+		for i, a := range args[3:] {
 			if a != nil {
 				variadicArgs[i] = a.(mutagen.Type)
 			}
 		}
-		run(args[0].(context.Context), args[1].(report.Source), args[2].(domain.MutationOptions), args[3].(func(model.Mutation) error), variadicArgs...)
+		run(args[0].(context.Context), args[1].(report.Source), args[2].(func(model.Mutation) error), variadicArgs...)
 	})
 	return _c
 }
@@ -161,7 +159,7 @@ func (_c *MockMutagen_StreamMutations_Call) Return(_a0 error) *MockMutagen_Strea
 	return _c
 }
 
-func (_c *MockMutagen_StreamMutations_Call) RunAndReturn(run func(context.Context, report.Source, domain.MutationOptions, func(model.Mutation) error, ...mutagen.Type) error) *MockMutagen_StreamMutations_Call {
+func (_c *MockMutagen_StreamMutations_Call) RunAndReturn(run func(context.Context, report.Source, func(model.Mutation) error, ...mutagen.Type) error) *MockMutagen_StreamMutations_Call {
 	_c.Call.Return(run)
 	return _c
 }

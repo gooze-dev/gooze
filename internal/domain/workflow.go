@@ -250,7 +250,7 @@ func (w *workflow) generateMutations(ctx context.Context, sources pkg.FileSpill[
 	total := 0
 
 	err = sources.Range(func(_ uint64, source rpt.Source) error {
-		return w.mutagen.StreamMutations(ctx, source, sel.Options, func(mutation m.Mutation) error {
+		return w.streamMutations(ctx, source, sel.Options, func(mutation m.Mutation) error {
 			if (include != nil && !include(mutation)) || !sel.Includes(mutation) {
 				return nil
 			}
@@ -746,6 +746,16 @@ func (w *workflow) resolveSources(ctx context.Context, args EstimateArgs, types 
 // errFound stops a mutation stream at the first mutation.
 var errFound = errors.New("found a mutation")
 
+// streamMutations streams the mutations of source with opts, or without them
+// when the mutagen can't take options.
+func (w *workflow) streamMutations(ctx context.Context, source rpt.Source, opts MutationOptions, fn func(m.Mutation) error, types ...mgen.Type) error {
+	if mg, ok := w.mutagen.(MutagenWithOptions); ok {
+		return mg.StreamMutationsWith(ctx, source, opts, fn, types...)
+	}
+
+	return w.mutagen.StreamMutations(ctx, source, fn, types...)
+}
+
 // untested reports whether any of types that a source's stored reports hold
 // no results of generates a mutation for it. A source that can't be read or
 // parsed counts as untested, so the run reports the error.
@@ -758,7 +768,7 @@ func (w *workflow) untested(ctx context.Context, opts MutationOptions, types []m
 			return false
 		}
 
-		err := w.mutagen.StreamMutations(ctx, source, opts, func(m.Mutation) error { return errFound }, missing...)
+		err := w.streamMutations(ctx, source, opts, func(m.Mutation) error { return errFound }, missing...)
 
 		return err != nil
 	}
@@ -853,7 +863,7 @@ func (w *workflow) countMutations(ctx context.Context, sources pkg.FileSpill[rpt
 
 		cached := isCached(source)
 
-		return w.mutagen.StreamMutations(ctx, source, sel.Options, func(mutation m.Mutation) error {
+		return w.streamMutations(ctx, source, sel.Options, func(mutation m.Mutation) error {
 			if sel.Includes(mutation) {
 				tally.add(mutation, cached)
 			}

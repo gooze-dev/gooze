@@ -55,8 +55,8 @@ func typeArgs(types []mgen.Type) []any {
 
 // expectStream makes the mutagen stream calcMutations for exactly types.
 func expectStream(mutagen *domainmocks.MockMutagen, types ...mgen.Type) {
-	mutagen.EXPECT().StreamMutations(mock.Anything, mock.Anything, mock.Anything, mock.Anything, typeArgs(types)...).RunAndReturn(func(ctx context.Context, source rpt.Source, _ domain.MutationOptions, fn func(m.Mutation) error, ts ...mgen.Type) error {
-		return streamMutationsFn(calcMutations(ts...))(ctx, source, domain.MutationOptions{}, fn, ts...)
+	mutagen.EXPECT().StreamMutations(mock.Anything, mock.Anything, mock.Anything, typeArgs(types)...).RunAndReturn(func(ctx context.Context, source rpt.Source, fn func(m.Mutation) error, ts ...mgen.Type) error {
+		return streamMutationsFn(calcMutations(ts...))(ctx, source, fn, ts...)
 	})
 }
 
