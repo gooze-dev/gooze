@@ -115,6 +115,17 @@ jobs:
     - name: Merge shards
       run: gooze report merge -o "$REPORTS_DIR"
 
+      # Survivors as annotations on the pull request's changed lines. Only
+      # display: the gate below stays on the pinned release. --format github
+      # isn't in a release yet, so this gooze comes from main, never from the
+      # pull request; switch to the pinned one when a release has the flag.
+      # Runs before the gate, and a low score (exit 3) doesn't fail it.
+    - name: Annotate survivors
+      if: github.event_name == 'pull_request'
+      run: |
+        GOBIN="$RUNNER_TEMP/gooze-main" go install gooze.dev/pkg/gooze@main
+        "$RUNNER_TEMP/gooze-main/gooze" report view -o "$REPORTS_DIR" --format github || [ $? -eq 3 ]
+
       # The merged run/ holds only the changed lines' mutants, so the plain
       # total threshold is the diff gate. It's passed as a flag because
       # gooze v1.3.0 doesn't apply threshold.diff.* from gooze.yaml to merged
