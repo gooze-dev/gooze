@@ -30,6 +30,9 @@ threshold:                    # Minimum mutation scores in percent; below one, g
     average: 0                # Minimum for the average of the changed files' scores.
     file: 0                   # Minimum for the score every changed file must reach.
 
+report:                       # Report output settings.
+  format: text                # How gooze report view writes surviving mutants: text, github (workflow annotations on the lines, then the text summary), sarif (a SARIF 2.1.0 log for code scanning) or codeclimate (a Code Climate JSON report for GitLab Code Quality; gitlab is the same).
+
 log:                          # Logging settings.
   filename: .gooze.log        # Log file path.
   level: info                 # Log severity: debug, info, warn or error, or a numeric slog level (-4 debug, 0 info, 4 warn, 8 error).

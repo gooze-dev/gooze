@@ -61,6 +61,34 @@ func TestReportView_FormatGitHub(t *testing.T) {
 	assert.Equal(t, m.Path("/tmp/reports"), got.Reports)
 }
 
+func TestReportView_FormatGitLabAndCodeClimate(t *testing.T) {
+	for _, format := range []domain.ViewFormat{domain.FormatGitLab, domain.FormatCodeClimate} {
+		t.Run(string(format), func(t *testing.T) {
+			viper.Set(testOutputKey, "/tmp/reports")
+			defer viper.Reset()
+
+			stubShowPrefix(t, "sub/mod/", nil)
+
+			got := viewArgsFor(t, "--format", string(format))
+
+			assert.Equal(t, format, got.Format)
+			assert.Equal(t, "sub/mod/", got.PathPrefix)
+			assert.NotNil(t, got.Output)
+		})
+	}
+}
+
+func TestReportView_AllWithGitLabFormatIsAUsageError(t *testing.T) {
+	viper.Set(testOutputKey, "/tmp/reports")
+	defer viper.Reset()
+
+	deps := Deps{Workflow: domainmocks.NewMockWorkflow(t), Publisher: domainmocks.NewMockReportPublisher(t), OutputKey: testOutputKey}
+	err := execReport(t, deps, "view", "--all", "--format", "gitlab")
+
+	require.EqualError(t, err, "--all lists every mutation as text; it can't be combined with --format gitlab")
+	assert.Equal(t, m.ExitUsage, codeOf(err))
+}
+
 func TestReportView_FormatFromConfig(t *testing.T) {
 	viper.Set(testOutputKey, "/tmp/reports")
 	viper.Set(config.KeyReportFormat, "sarif")
@@ -101,7 +129,7 @@ func TestReportView_RejectsUnknownFormat(t *testing.T) {
 	deps := Deps{Workflow: domainmocks.NewMockWorkflow(t), Publisher: domainmocks.NewMockReportPublisher(t), OutputKey: testOutputKey}
 	err := execReport(t, deps, "view", "--format", "xml")
 
-	require.EqualError(t, err, `invalid --format "xml": must be one of text, github, sarif`)
+	require.EqualError(t, err, `invalid --format "xml": must be one of text, github, gitlab, sarif, codeclimate`)
 	assert.Equal(t, m.ExitUsage, codeOf(err))
 }
 
@@ -147,6 +175,32 @@ func TestRepoPathPrefix(t *testing.T) {
 		assert.Equal(t, "tools/lint/", repoPathPrefix(ctx))
 	})
 
+	t.Run("from CI_PROJECT_DIR outside a git repo", func(t *testing.T) {
+		stubShowPrefix(t, "", errors.New("not a git repository"))
+
+		project := t.TempDir()
+		module := filepath.Join(project, "svc")
+		require.NoError(t, os.MkdirAll(module, 0o755))
+		t.Chdir(module)
+		t.Setenv("GITHUB_WORKSPACE", "")
+		t.Setenv("CI_PROJECT_DIR", project)
+
+		assert.Equal(t, "svc/", repoPathPrefix(ctx))
+	})
+
+	t.Run("GITHUB_WORKSPACE before CI_PROJECT_DIR", func(t *testing.T) {
+		stubShowPrefix(t, "", errors.New("not a git repository"))
+
+		workspace := t.TempDir()
+		module := filepath.Join(workspace, "svc")
+		require.NoError(t, os.MkdirAll(module, 0o755))
+		t.Chdir(module)
+		t.Setenv("GITHUB_WORKSPACE", workspace)
+		t.Setenv("CI_PROJECT_DIR", t.TempDir())
+
+		assert.Equal(t, "svc/", repoPathPrefix(ctx))
+	})
+
 	t.Run("at the workspace root", func(t *testing.T) {
 		stubShowPrefix(t, "", errors.New("not a git repository"))
 
@@ -169,6 +223,7 @@ func TestRepoPathPrefix(t *testing.T) {
 	t.Run("no git and no workspace", func(t *testing.T) {
 		stubShowPrefix(t, "", errors.New("not a git repository"))
 		t.Setenv("GITHUB_WORKSPACE", "")
+		t.Setenv("CI_PROJECT_DIR", "")
 
 		assert.Empty(t, repoPathPrefix(ctx))
 	})

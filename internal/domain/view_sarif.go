@@ -161,14 +161,21 @@ func sarifLineResult(line survivorLine, prefix string) sarifResult {
 	}
 
 	slices.Sort(properties.MutationIDs)
-	sum := sha256.Sum256([]byte(strings.Join(properties.MutationIDs, ",")))
 
 	return sarifResult{
 		RuleID:              lineRule(line),
 		Level:               level,
 		Message:             sarifMessage{Text: lineMessage(line)},
 		Locations:           []sarifLocation{{PhysicalLocation: location}},
-		PartialFingerprints: map[string]string{"goozeMutationIds/v1": hex.EncodeToString(sum[:])},
+		PartialFingerprints: map[string]string{"goozeMutationIds/v1": fingerprintOf(properties.MutationIDs)},
 		Properties:          properties,
 	}
+}
+
+// fingerprintOf identifies the mutants of a line across runs: a hash of their
+// sorted mutation IDs.
+func fingerprintOf(sortedIDs []string) string {
+	sum := sha256.Sum256([]byte(strings.Join(sortedIDs, ",")))
+
+	return hex.EncodeToString(sum[:])
 }

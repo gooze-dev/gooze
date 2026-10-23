@@ -27,7 +27,9 @@ Use --all to list every mutation with its status and diff instead.
 --format github writes a GitHub workflow annotation for each line with
 surviving mutants before the summary, so they show on the pull request's
 changed files; --format sarif writes a SARIF 2.1.0 log instead of the summary,
-for code scanning. Paths in both are relative to the git repository root.
+for code scanning; --format codeclimate (or gitlab) writes a Code Climate
+JSON report instead of the summary, for GitLab Code Quality. Paths in all of
+them are relative to the git repository root.
 report.format in gooze.yaml sets the default.
 
 Below a --threshold-* minimum, view exits with code 3. For the reports of a
