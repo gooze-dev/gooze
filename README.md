@@ -1,4 +1,15 @@
-![logo](./logo.png)
+[![Gooze](./logo.png)](https://gooze.dev)
+
+[![Website](https://img.shields.io/badge/website-gooze.dev-7DBC23)](https://gooze.dev)
+[![Docs](https://img.shields.io/badge/docs-gooze.dev%2Fdocs-4CB8B8)](https://gooze.dev/docs)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/gooze-dev/gooze/badge)](https://scorecard.dev/viewer/?uri=github.com/gooze-dev/gooze)
+[![codecov](https://codecov.io/gh/gooze-dev/gooze/graph/badge.svg)](https://app.codecov.io/gh/gooze-dev/gooze)
+[![Go Report Card](https://goreportcard.com/badge/github.com/gooze-dev/gooze)](https://goreportcard.com/report/github.com/gooze-dev/gooze)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=gooze-dev_gooze&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=gooze-dev_gooze)
+[![DeepSource](https://app.deepsource.com/gh/gooze-dev/gooze.svg/?label=active+issues&show_trend=true)](https://app.deepsource.com/gh/gooze-dev/gooze/)
+[![CodeFactor](https://www.codefactor.io/repository/github/gooze-dev/gooze/badge)](https://www.codefactor.io/repository/github/gooze-dev/gooze)
+[![Known Vulnerabilities](https://snyk.io/test/github/gooze-dev/gooze/badge.svg)](https://snyk.io/test/github/gooze-dev/gooze)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fgooze-dev%2Fgooze.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fgooze-dev%2Fgooze?ref=badge_shield)
 
 A Golang mutation testing tool inspired by TMNT "ooze" mutagen.
 
@@ -9,7 +20,7 @@ to speed up larger projects.
 
 **Choosing a tool?** See the [comparison of Go mutation testing tools](https://gooze.dev/docs/comparison/).
 
-## Install
+## [Install](https://gooze.dev/docs/install/)
 
 ```bash
 go install gooze.dev/pkg/gooze@latest
@@ -18,7 +29,7 @@ go install gooze.dev/pkg/gooze@latest
 `gooze.dev/pkg/gooze` is a vanity import path: `https://gooze.dev/pkg/gooze?go-get=1`
 serves a `go-import` meta tag pointing at this repository.
 
-## Quick start
+## [Quick start](https://gooze.dev/docs/quick-start/)
 
 ```bash
 gooze run --estimate ./...   # preview files and mutation counts, no tests run
@@ -47,7 +58,7 @@ Paths filter the files like `gooze run` arguments, relative to the module root
 (`./internal/...`, `./cmd`, `./cmd/run.go`). `--all` lists every mutation with its
 status and diff instead.
 
-## Documentation
+## [Documentation](https://gooze.dev/docs/)
 
 The full documentation lives at <https://gooze.dev/docs>:
 
