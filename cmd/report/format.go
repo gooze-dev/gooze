@@ -21,7 +21,9 @@ import (
 const formatFlagName = "format"
 
 // writesOutput holds the formats that write more than the text summary.
-var writesOutput = map[domain.ViewFormat]bool{domain.FormatGitHub: true, domain.FormatSARIF: true}
+var writesOutput = map[domain.ViewFormat]bool{
+	domain.FormatGitHub: true, domain.FormatGitLab: true, domain.FormatSARIF: true, domain.FormatCodeClimate: true,
+}
 
 // addFormatFlag adds --format, whose default comes from report.format in the
 // schema; gooze.yaml and GOOZE_REPORT_FORMAT set it without the flag.
@@ -63,15 +65,29 @@ var showPrefix = func(ctx context.Context) (string, error) {
 }
 
 // repoPathPrefix returns what to prepend to report paths, which are relative
-// to the working directory, so GitHub and SARIF tools find the files: the
-// directory's path in its git repository, else in $GITHUB_WORKSPACE, else
-// nothing.
+// to the working directory, so GitHub, GitLab and SARIF tools find the files:
+// the directory's path in its git repository, else in $GITHUB_WORKSPACE or
+// $CI_PROJECT_DIR (GitLab's checkout), else nothing.
 func repoPathPrefix(ctx context.Context) string {
 	if prefix, err := showPrefix(ctx); err == nil {
 		return prefix
 	}
 
-	workspace := os.Getenv("GITHUB_WORKSPACE")
+	return prefixIn(ciWorkspace())
+}
+
+// ciWorkspace returns the CI job's checkout directory, or "" outside CI.
+func ciWorkspace() string {
+	if workspace := os.Getenv("GITHUB_WORKSPACE"); workspace != "" {
+		return workspace
+	}
+
+	return os.Getenv("CI_PROJECT_DIR")
+}
+
+// prefixIn returns the working directory's path in workspace with a trailing
+// slash, or "" at its root, outside it, or without a workspace.
+func prefixIn(workspace string) string {
 	// Equivalent: no name sorts before "", and filepath.Rel rejects an empty
 	// base below anyway.
 	if workspace == "" { //gooze:ignore comparison

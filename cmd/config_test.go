@@ -118,7 +118,9 @@ func TestValidateConfig(t *testing.T) {
 		{key: config.KeyPathsExclude, value: map[string]any{"a": "b"}, wantErr: "invalid paths.exclude: a mapping is not a list"},
 		{key: config.KeyRunWorkspace, value: "overly", wantErr: `invalid run.workspace: "overly" is not one of overlay, deep-copy`},
 		{key: config.KeyReportFormat, value: "sarif"},
-		{key: config.KeyReportFormat, value: "xml", wantErr: `invalid report.format: "xml" is not one of text, github, sarif`},
+		{key: config.KeyReportFormat, value: "gitlab"},
+		{key: config.KeyReportFormat, value: "codeclimate"},
+		{key: config.KeyReportFormat, value: "xml", wantErr: `invalid report.format: "xml" is not one of text, github, gitlab, sarif, codeclimate`},
 		{key: config.KeyLogLevel, value: "-4"},
 	}
 

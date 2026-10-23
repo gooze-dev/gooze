@@ -20,6 +20,12 @@ const (
 	FormatGitHub ViewFormat = "github"
 	// FormatSARIF writes a SARIF 2.1.0 log instead of the text summary.
 	FormatSARIF ViewFormat = "sarif"
+	// FormatCodeClimate writes a Code Climate JSON report, which GitLab reads
+	// as a Code Quality report, instead of the text summary.
+	FormatCodeClimate ViewFormat = "codeclimate"
+	// FormatGitLab is FormatCodeClimate under the name of the platform that
+	// reads it.
+	FormatGitLab ViewFormat = "gitlab"
 )
 
 // displayView writes summary in args.Format.
@@ -33,6 +39,8 @@ func (w *workflow) displayView(ctx context.Context, args ViewArgs, summary Repor
 		}
 	case FormatSARIF:
 		return writeSARIF(args.Output, summary.Survivors, args.PathPrefix, args.ToolVersion)
+	case FormatCodeClimate, FormatGitLab:
+		return writeCodeClimate(args.Output, summary.Survivors, args.PathPrefix)
 	case FormatText:
 	}
 
