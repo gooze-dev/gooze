@@ -591,7 +591,7 @@ func (a *LocalSourceFSAdapter) buildTestFile(ctx context.Context, testPath m.Pat
 		return nil, err
 	}
 
-	testHash, err := a.HashFile(ctx, testPath)
+	testHash, err := a.packageTestHash(ctx, testPath)
 	if err != nil {
 		return nil, err
 	}
@@ -604,6 +604,42 @@ func (a *LocalSourceFSAdapter) buildTestFile(ctx context.Context, testPath m.Pat
 	}
 
 	return file, nil
+}
+
+// packageTestHash hashes testPath, then every other _test.go file next to it,
+// by name and content: go test compiles them all, so any of them can kill a
+// mutant. With no other test file it is testPath's own hash.
+func (a *LocalSourceFSAdapter) packageTestHash(ctx context.Context, testPath m.Path) (string, error) {
+	content, err := a.ReadFile(ctx, testPath)
+	if err != nil {
+		return "", err
+	}
+
+	others, err := filepath.Glob(filepath.Join(filepath.Dir(string(testPath)), "*_test.go"))
+	if err != nil {
+		return "", err
+	}
+
+	sort.Strings(others)
+
+	h := sha256.New()
+	h.Write(content)
+
+	for _, other := range others {
+		if other == string(testPath) {
+			continue
+		}
+
+		content, err := a.ReadFile(ctx, m.Path(other))
+		if err != nil {
+			return "", err
+		}
+
+		_, _ = fmt.Fprintf(h, "\x00%s\x00%d\x00", filepath.Base(other), len(content))
+		h.Write(content)
+	}
+
+	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }
 
 func (a *LocalSourceFSAdapter) validateGoFile(ctx context.Context, path m.Path) error {
