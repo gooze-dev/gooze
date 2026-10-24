@@ -128,8 +128,7 @@ func configureRunFlags(cmd *cobra.Command) (report.ThresholdFlags, report.Thresh
 		report.AddThresholdFlags(cmd, "threshold.diff", "threshold-diff")
 }
 
-// runThresholds returns the quality gates of a run: a --diff run is scored on
-// its changed lines, so it has its own minimum scores.
+// runThresholds returns the thresholds of a run, the --diff ones for a --diff run.
 func runThresholds(cmd *cobra.Command, diff bool, plain, diffOnly report.ThresholdFlags) (domain.Thresholds, error) {
 	minimums, diffMinimums, err := report.ReadGates(cmd, plain, diffOnly)
 	if err != nil {
@@ -172,14 +171,12 @@ func parseShardFlag(shard string) (int, int, error) {
 
 	var index, total int
 
-	// Sscanf fails unless it reads both numbers.
 	_, err := fmt.Sscanf(shard, "%d/%d", &index, &total)
 	if err != nil || fmt.Sprintf("%d/%d", index, total) != strings.TrimSpace(shard) {
 		// Equivalent: callers ignore the numbers when err is set.
 		return 0, 0, usageError(fmt.Errorf("invalid --shard %q: expected INDEX/TOTAL (e.g. 0/3)", shard)) //gooze:ignore numbers
 	}
 
-	// 0 <= index < total also rules out a total below 1.
 	if index < 0 || index >= total {
 		// Equivalent: callers ignore the numbers when err is set.
 		return 0, 0, usageError(fmt.Errorf("invalid --shard %q: index must satisfy 0 <= INDEX < TOTAL", shard)) //gooze:ignore numbers

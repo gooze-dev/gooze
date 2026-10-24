@@ -84,8 +84,7 @@ func (fx interruptFixture) run(t *testing.T, after int) (error, []string, domain
 	return err, ws.ran, score
 }
 
-// runWith tests the fixture in ws with args and returns the run's error and
-// the score it displayed.
+// runWith tests the fixture in ws and returns the error and displayed score.
 func (fx interruptFixture) runWith(ctx context.Context, t *testing.T, ws domain.Workspace, args domain.TestArgs) (error, domain.MutationScore) {
 	t.Helper()
 
@@ -166,8 +165,7 @@ func (fx interruptFixture) stored(t *testing.T) map[string]*rpt.Scope {
 
 var interrupted = &rpt.Scope{Interrupted: true}
 
-// fixtureCoverage is a coverage profile of the fixture in which no test runs
-// lines 1 and 2 of a.go, the lines of a-1 and a-2.
+// fixtureCoverage leaves a-1 and a-2 uncovered.
 var fixtureCoverage = []byte("mode: set\nmod/a.go:1.1,2.20 1 0\nmod/a.go:3.1,4.20 1 1\nmod/c.go:1.1,2.20 1 1\n")
 
 func TestWorkflow_Test_InterruptedRunSavesFinishedMutants(t *testing.T) {

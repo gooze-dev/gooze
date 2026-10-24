@@ -1,8 +1,6 @@
 # gooze's own mutation testing settings. Every key is listed; the ones that
 # differ from the defaults are paths.exclude, run.fail_fast and
-# threshold.diff.total. Any survivor on a changed line fails the 100% diff
-# gate, so runs stop at the first one; main's baseline run in
-# .github/workflows/mutation.yml turns fail-fast off to test every mutant.
+# threshold.diff.total.
 # Reference: https://gooze.dev/docs/config/
 version: 1                    # Config schema version.
 output: .gooze-reports        # Directory where mutation reports are written.

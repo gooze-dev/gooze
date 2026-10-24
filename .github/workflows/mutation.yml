@@ -53,11 +53,7 @@ jobs:
       if: github.event_name != 'pull_request'
       run: gooze report pull "$REPORTS_REF" || echo "no baseline yet"
 
-      # gooze.yaml sets run.fail_fast: first, so a pull request shard stops at
-      # its first survivor and exits 3; the merge job still runs and gates on
-      # what was tested. The baseline on main must hold every mutant, so its
-      # shards turn fail-fast off. gooze v1.3.0 has no fail-fast yet; it takes
-      # effect when the pin is bumped.
+      # Fail-fast (gooze.yaml) can exit 3; the merge job gates. main's baseline needs every mutant.
     - name: Run shard ${{ matrix.shard }} (changed lines)
       if: github.event_name == 'pull_request'
       run: gooze run -p 2 -s ${{ matrix.shard }}/6 --diff "origin/${{ github.base_ref }}" -x '^vendor/' -x '^mock_' ./... || [ $? -eq 3 ]

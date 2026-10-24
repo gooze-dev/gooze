@@ -72,7 +72,7 @@ func mutagenField() Field {
 	}}
 }
 
-// failFastPolicies are the values of run.fail_fast; the first is the default.
+// failFastPolicies are run.fail_fast's values, the default first.
 var failFastPolicies = []string{"off", "gate", "file", "first"}
 
 func runField() Field {
@@ -97,8 +97,7 @@ func runField() Field {
 	}}
 }
 
-// thresholdField holds the quality gates: minimum mutation scores, in percent,
-// and the most surviving mutants allowed. A command that fails one exits with
+// thresholdField holds the quality gates. A command that fails one exits with
 // code 3; 0 turns a threshold off.
 func thresholdField() Field {
 	return Field{Name: "threshold", Kind: KindObject, Doc: "Quality gates: minimum mutation scores in percent and the most surviving mutants allowed; failing one, gooze exits with code 3. 0 turns a threshold off.", Children: append(

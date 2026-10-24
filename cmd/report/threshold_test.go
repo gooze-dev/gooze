@@ -80,8 +80,6 @@ func TestThresholdFlags_OutOfRange(t *testing.T) {
 	require.EqualError(t, err, `invalid threshold.diff.file: "lots" is not a number`)
 }
 
-// readMaxSurvivors parses args for a command with the plain threshold flags
-// and returns the max survivors they read.
 func readMaxSurvivors(t *testing.T, args ...string) (int, error) {
 	t.Helper()
 
@@ -111,7 +109,6 @@ func TestMaxSurvivorsFlag(t *testing.T) {
 	require.NoError(t, err)
 	assert.Zero(t, got, "a flag of 0 turns the config value off")
 
-	// Env vars and quoted YAML are strings, read in base 10.
 	viper.Set(config.KeyThresholdMaxSurvivors, "010")
 
 	got, err = readMaxSurvivors(t)
@@ -164,8 +161,6 @@ func TestReportViewAndMergePassMaxSurvivors(t *testing.T) {
 	defer viper.Reset()
 
 	wf := domainmocks.NewMockWorkflow(t)
-	// A --diff run's reports count the survivors on their changed lines, so
-	// view checks the same maximum against them.
 	wf.On("View", mock.Anything, domain.ViewArgs{
 		Reports: "/tmp/reports", Paths: []m.Path{},
 		Thresholds:     domain.Thresholds{Key: "threshold", MaxSurvivors: 3},
