@@ -224,8 +224,8 @@ func unfinishedSources(run testedRun) (map[string]bool, error) {
 
 // completeReports returns the reports to save: the run's results and the
 // resumed ones. The reports of a source some of whose mutants an interrupted
-// or fail-fast run left untested are marked interrupted, so the next run
-// tests the rest; the others are complete.
+// run left untested are marked interrupted, so the next run tests the rest;
+// the others are complete.
 func completeReports(run testedRun) (pkg.FileSpill[m.Report], error) {
 	unfinished := map[string]bool{}
 

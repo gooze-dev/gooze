@@ -571,8 +571,6 @@ func TestRunCmd_DiffThresholdsReplaceThePlainOnes(t *testing.T) {
 func TestRunCmd_MaxSurvivors(t *testing.T) {
 	assert.Equal(t, domain.Thresholds{Key: "threshold", Total: 80, MaxSurvivors: 5},
 		thresholdsOfRun(t, "--threshold-total", "80", "--threshold-max-survivors", "5", "./..."))
-	// A --diff run counts the survivors on its changed lines against the same
-	// maximum.
 	assert.Equal(t, domain.Thresholds{Key: "threshold.diff", MaxSurvivors: 5},
 		thresholdsOfRun(t, "--diff", "main", "--threshold-max-survivors", "5", "./..."))
 }

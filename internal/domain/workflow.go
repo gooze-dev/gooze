@@ -68,8 +68,7 @@ type TestArgs struct {
 	// Thresholds are the minimum scores the run must reach. A shard doesn't
 	// check them: report merge does, on all the results.
 	Thresholds Thresholds
-	// FailFast is when the run stops testing before it has tested every
-	// mutant; empty is FailFastOff.
+	// FailFast is when the run stops early; empty is FailFastOff.
 	FailFast FailFast
 }
 
@@ -237,9 +236,7 @@ func (w *workflow) testAndFinalize(ctx context.Context, args TestArgs, sel Selec
 	return untestedErr(w.finishRun(ctx, args, sel, reportsDir, sources, run), untested)
 }
 
-// testMutations tests run's mutations and records in run what the test pass
-// produced: the results, and whether an interruption or a fail-fast policy
-// left mutants untested.
+// testMutations tests run's mutations and records the results in run.
 func (w *workflow) testMutations(ctx context.Context, args TestArgs, sel Selection, sources sourceSet, run *testedRun) (*untestedPackages, error) {
 	gate, err := w.loadCoverage(ctx, args.CoverageProfile)
 	if err != nil {
@@ -247,8 +244,7 @@ func (w *workflow) testMutations(ctx context.Context, args TestArgs, sel Selecti
 		return nil, fmt.Errorf("load coverage profile: %w", err)
 	}
 
-	// A fail-fast stop cancels runCtx with its verdict; an interruption
-	// cancels ctx.
+	// Fail-fast cancels runCtx with its verdict; an interruption cancels ctx.
 	runCtx, stop := context.WithCancelCause(ctx)
 	defer stop(nil)
 
@@ -280,9 +276,8 @@ func (w *workflow) testMutations(ctx context.Context, args TestArgs, sel Selecti
 }
 
 // untestedErr returns the error a run ends with: failing tests outrank a
-// gate's verdict (a breached threshold or a fail-fast stop), since the score
-// leaves out the packages whose mutants weren't tested, and any other error
-// outranks both.
+// gate's verdict (exit 3), since the score leaves out the packages whose
+// mutants weren't tested, and any other error outranks both.
 func untestedErr(err error, untested *untestedPackages) error {
 	var verdict *m.CodedError
 	if err != nil && (!errors.As(err, &verdict) || verdict.Code != m.ExitBelowThreshold) {
@@ -416,9 +411,8 @@ func (w *workflow) finalizeReports(ctx context.Context, args TestArgs, sel Selec
 		return nil
 	}
 
-	// A fail-fast stop's verdict is a breach of the run's own gates, which
-	// the results so far fail too; it stands alone when no gate is checked
-	// (a shard, or the first policy without thresholds).
+	// The results so far fail the gate a stop breached; the stop's own
+	// verdict counts where no gate is checked.
 	if !score.ThresholdsSkipped {
 		if err := args.Thresholds.Err(score); err != nil {
 			return err
@@ -428,8 +422,7 @@ func (w *workflow) finalizeReports(ctx context.Context, args TestArgs, sel Selec
 	return codedStop(run.stop)
 }
 
-// codedStop returns the verdict a fail-fast stop ended the run with, as an
-// error ending the command with ExitBelowThreshold, or nil.
+// codedStop returns a fail-fast stop's verdict with exit code 3, or nil.
 func codedStop(stop error) error {
 	var stopped *FailFastError
 	if errors.As(stop, &stopped) {
@@ -1321,8 +1314,8 @@ func buildReport(mutation m.Mutation, result m.Result, scope *rpt.Scope) m.Repor
 
 // dispatchMutations returns a task that replays the generated mutations and
 // hands each one to a ready worker queue, short-circuiting mutations on lines
-// the coverage profile marks as uncovered, skipping those of files the
-// fail-fast watch gave up on, and closes every queue when done so the workers
+// the coverage profile marks as uncovered, skipping files the fail-fast
+// watch gave up on, and closes every queue when done so the workers
 // terminate.
 func (w *workflow) dispatchMutations(
 	ctx context.Context,
@@ -1344,7 +1337,6 @@ func (w *workflow) dispatchMutations(
 				mutation.MutatedCode = nil
 				result := resultForStatus(mutation, rpt.NotCovered)
 
-				// Recorded once sent, so a stop it causes doesn't drop it.
 				if err := sendOutcome(ctx, results, mutationOutcome{mutation: mutation, result: result}); err != nil {
 					return err
 				}
@@ -1420,16 +1412,12 @@ func (w *workflow) consumeMutations(
 		defer ws.Close(ctx)
 
 		for mutation := range queue {
-			// A stop or a file given up on since the mutation was queued
-			// leaves it untested.
 			if ctx.Err() != nil || watch.skips(mutation.Source.Key()) {
 				continue
 			}
 
 			outcome := w.runMutation(ctx, ws, checks, mutation, threadID, mutationTimeout)
-			// The worker records the result before it takes the next
-			// mutation, so a stop it causes starts no other test. A dropped
-			// or failed outcome has none.
+			// Recorded before the next mutation, so a stop starts no other test.
 			if outcome.result != nil {
 				watch.record(outcome.mutation, outcome.result)
 			}

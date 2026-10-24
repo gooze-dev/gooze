@@ -12,8 +12,7 @@ import (
 // "87.50% (14 killed, 2 survived; 16 cached, 0 tested)". Statuses other than
 // killed and survived appear only when present; the cached/tested split only
 // for a run.
-// A narrowed run's score names its selection last, then whether an
-// interruption or a fail-fast policy left mutants untested.
+// A narrowed run's score names its selection, then what was left untested.
 func formatMutationScore(score domain.MutationScore) string {
 	breakdown := scoreBreakdown(score)
 	if score.Selection != "" {

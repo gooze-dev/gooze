@@ -21,13 +21,12 @@ func TestNewFailFastWatch(t *testing.T) {
 		sharded bool
 		want    *Thresholds // nil: no watch
 	}{
-		"off":                              {FailFastOff, all, false, nil},
-		"empty is off":                     {"", all, false, nil},
-		"unknown is off":                   {"later", all, false, nil},
-		"gate checks every gate":           {FailFastGate, all, false, &all},
-		"gate without gates":               {FailFastGate, Thresholds{Key: "threshold"}, false, nil},
-		"gate on a shard counts survivors": {FailFastGate, all, true, &Thresholds{Key: "threshold", MaxSurvivors: 3}},
-		// A shard's scores say nothing of the merged ones.
+		"off":                                    {FailFastOff, all, false, nil},
+		"empty is off":                           {"", all, false, nil},
+		"unknown is off":                         {"later", all, false, nil},
+		"gate checks every gate":                 {FailFastGate, all, false, &all},
+		"gate without gates":                     {FailFastGate, Thresholds{Key: "threshold"}, false, nil},
+		"gate on a shard counts survivors":       {FailFastGate, all, true, &Thresholds{Key: "threshold", MaxSurvivors: 3}},
 		"gate on a shard without a survivor cap": {FailFastGate, Thresholds{Key: "threshold", Total: 80}, true, nil},
 		"file checks the file threshold only":    {FailFastFile, all, false, &Thresholds{Key: "threshold", File: 60}},
 		"file without a file threshold":          {FailFastFile, Thresholds{Key: "threshold", Total: 80}, false, nil},

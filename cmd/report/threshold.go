@@ -14,18 +14,16 @@ import (
 	"gooze.dev/pkg/gooze/pkg/config"
 )
 
-// ThresholdFlags are a command's quality gate flags, shared by gooze run and
-// report view and merge: --<prefix>-total, --<prefix>-average and
-// --<prefix>-file, and --<prefix>-max-survivors when key has
-// max_survivors. Each defaults to the config key of the same name under key,
-// so gooze.yaml and GOOZE_* env vars set them too.
+// ThresholdFlags are a command's quality gate flags, shared by gooze run
+// and report view and merge: --<prefix>-total, --<prefix>-average,
+// --<prefix>-file and, under threshold, --<prefix>-max-survivors. Each
+// defaults to the config key of the same name under key.
 type ThresholdFlags struct {
 	key       string
 	prefix    string
 	survivors bool
 }
 
-// maxSurvivors is the name of the survivor cap under a threshold key.
 const maxSurvivors = "max_survivors"
 
 // thresholdHelp describes each threshold flag.
@@ -110,8 +108,7 @@ func (f ThresholdFlags) value(cmd *cobra.Command, name string) (float64, error) 
 	return value, nil
 }
 
-// survivorCap returns the most surviving mutants allowed, from its flag or
-// the config, checked to be 0 or more.
+// survivorCap returns threshold.max_survivors from its flag or the config.
 func (f ThresholdFlags) survivorCap(cmd *cobra.Command) (int, error) {
 	key := f.key + "." + maxSurvivors
 	field, _ := config.Lookup(key)
@@ -126,13 +123,11 @@ func (f ThresholdFlags) survivorCap(cmd *cobra.Command) (int, error) {
 		return value, nil
 	}
 
-	// Unset is off, as for the scores.
 	if !viper.IsSet(key) {
 		return 0, nil
 	}
 
-	// Strings (env vars, quoted YAML) are read in base 10, like every whole
-	// number gooze reads: cast would read "010" as octal.
+	// Base 10: cast would read "010" as octal.
 	text := strings.TrimSpace(viper.GetString(key))
 
 	value, err := strconv.Atoi(text)
@@ -149,10 +144,8 @@ func (f ThresholdFlags) survivorCap(cmd *cobra.Command) (int, error) {
 	return value, nil
 }
 
-// ReadGates returns the quality gates of a command with both sets of
-// thresholds: the plain ones and those of a --diff run. threshold.max_survivors
-// has no diff copy, so both sets share it: a --diff run counts the survivors
-// on its changed lines.
+// ReadGates returns the plain and the --diff thresholds; both share
+// threshold.max_survivors.
 func ReadGates(cmd *cobra.Command, plain, diff ThresholdFlags) (domain.Thresholds, domain.Thresholds, error) {
 	minimums, err := plain.Read(cmd)
 	if err != nil {

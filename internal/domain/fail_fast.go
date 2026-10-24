@@ -10,23 +10,21 @@ import (
 	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
-// FailFast is when a run stops testing mutants before it has tested them all.
+// FailFast is when a run stops before testing every mutant.
 type FailFast string
 
 const (
-	// FailFastOff tests every mutant, then checks the quality gates.
+	// FailFastOff tests every mutant.
 	FailFastOff FailFast = "off"
-	// FailFastGate stops the run once a quality gate can no longer be met.
+	// FailFastGate stops once a quality gate can no longer be met.
 	FailFastGate FailFast = "gate"
-	// FailFastFile skips the rest of a file's mutants once the file can no
-	// longer meet threshold.file.
+	// FailFastFile skips the rest of a file that can't meet threshold.file.
 	FailFastFile FailFast = "file"
-	// FailFastFirst stops the run at the first surviving mutant.
+	// FailFastFirst stops at the first surviving mutant.
 	FailFastFirst FailFast = "first"
 )
 
-// FailFastError is the verdict of a run that FailFastFirst stopped: the
-// mutant at Position survived.
+// FailFastError is the verdict of a run FailFastFirst stopped.
 type FailFastError struct {
 	Position string
 }
@@ -35,15 +33,14 @@ func (e *FailFastError) Error() string {
 	return fmt.Sprintf("stopped at the first surviving mutant, %s (fail-fast %s)", e.Position, FailFastFirst)
 }
 
-// fileTally is what a file's results so far allow: the results of the run
-// and the stored ones it scores, and how many of its mutants are untested.
+// fileTally counts a file's results so far and its untested mutants.
 type fileTally struct {
 	rpt.Summary
 
 	untested int
 }
 
-// best is the file's best possible results: every untested mutant killed.
+// best counts every untested mutant as killed.
 func (t fileTally) best() rpt.Summary {
 	best := t.Summary
 	best.Total += t.untested
@@ -52,10 +49,8 @@ func (t fileTally) best() rpt.Summary {
 	return best
 }
 
-// failFastWatch applies a fail-fast policy to the results of a run as they
-// come in. A stop cancels the run with its verdict as the cause; a file the
-// file policy gave up on is skipped. Its methods are safe on a nil watch,
-// which never acts.
+// failFastWatch applies a fail-fast policy to a run's results as they come
+// in. A nil watch never acts.
 type failFastWatch struct {
 	policy FailFast
 	gates  Thresholds
@@ -67,10 +62,8 @@ type failFastWatch struct {
 	acted   bool
 }
 
-// newFailFastWatch returns the watch of a run with the given policy and
-// gates, or nil when the policy can't act. A shard holds only part of the
-// results, so on one the gate policy checks only the survivor count, which
-// merging can only raise, and the file policy doesn't act.
+// newFailFastWatch returns nil when the policy can't act. On a shard only the
+// survivor count is meaningful, since merging can only raise it.
 func newFailFastWatch(policy FailFast, gates Thresholds, sharded bool, stop context.CancelCauseFunc) *failFastWatch {
 	switch policy {
 	case FailFastGate:
@@ -97,8 +90,7 @@ func newFailFastWatch(policy FailFast, gates Thresholds, sharded bool, stop cont
 	return &failFastWatch{policy: policy, gates: gates, stop: stop, files: map[string]*fileTally{}, skipped: map[string]bool{}}
 }
 
-// plan counts the run's untested mutants per file and adds the stored
-// results it scores with them (nil: none).
+// plan counts the untested mutants per file and adds the scored stored results.
 func (f *failFastWatch) plan(mutations pkg.FileSpill[m.Mutation], scored pkg.FileSpill[m.Report]) error {
 	if f == nil {
 		return nil
@@ -128,8 +120,7 @@ func (f *failFastWatch) file(key string) *fileTally {
 	return tally
 }
 
-// record counts the result of a tested mutation and acts when the policy
-// says so.
+// record counts a mutation's result and acts on it.
 func (f *failFastWatch) record(mutation m.Mutation, result m.Result) {
 	if f == nil {
 		return
@@ -138,9 +129,11 @@ func (f *failFastWatch) record(mutation m.Mutation, result m.Result) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
+	status := getMutationStatus(result, mutation)
+
 	var counted rpt.Summary
 
-	counted.Add(getMutationStatus(result, mutation))
+	counted.Add(status)
 
 	key := mutation.Source.Key()
 	tally := f.file(key)
@@ -149,8 +142,7 @@ func (f *failFastWatch) record(mutation m.Mutation, result m.Result) {
 
 	switch f.policy {
 	case FailFastFirst:
-		// Equivalent: counts are never negative, so > 0 is != 0.
-		if counted.Survived > 0 { //gooze:ignore comparison
+		if status == rpt.Survived {
 			f.halt(&FailFastError{Position: fmt.Sprintf("%s:%d", key, mutation.Line)})
 		}
 	case FailFastGate:
@@ -168,7 +160,7 @@ func (f *failFastWatch) record(mutation m.Mutation, result m.Result) {
 	}
 }
 
-// halt stops the run with verdict, once.
+// halt stops the run once.
 func (f *failFastWatch) halt(verdict error) {
 	if f.acted {
 		return
@@ -178,8 +170,7 @@ func (f *failFastWatch) halt(verdict error) {
 	f.stop(verdict)
 }
 
-// bestScore is the best score the run can still reach: every untested
-// mutant killed.
+// bestScore counts every untested mutant as killed.
 func (f *failFastWatch) bestScore() MutationScore {
 	var score MutationScore
 
@@ -192,7 +183,7 @@ func (f *failFastWatch) bestScore() MutationScore {
 	return score
 }
 
-// skips reports whether the file policy gave up on the file of source key.
+// skips reports whether the file policy gave up on key.
 func (f *failFastWatch) skips(key string) bool {
 	if f == nil {
 		return false
@@ -220,10 +211,8 @@ func (f *failFastWatch) actedOn() FailFast {
 	return f.policy
 }
 
-// failFastWatch returns the fail-fast watch of a run, or nil when its policy
-// can't act, with the results it scores planned: the mutants it tests, and,
-// for a cached run, the stored results of unchanged files and the resumed
-// ones.
+// failFastWatch returns the run's watch, planned with the mutants to test and
+// the cached and resumed results it scores.
 func (w *workflow) failFastWatch(
 	args TestArgs,
 	mutations pkg.FileSpill[m.Mutation],
