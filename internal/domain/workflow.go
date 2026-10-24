@@ -539,8 +539,19 @@ func (w *workflow) Merge(ctx context.Context, args MergeArgs) error {
 			return err
 		}
 
+		selection, err := w.shardSelection(ctx, shardDirs)
+		if err != nil {
+			return err
+		}
+
 		if err := w.mergeShards(ctx, base, shardDirs); err != nil {
 			return err
+		}
+
+		if !sameSelection(selection, rpt.Selection{}) {
+			if err := w.reports.SaveSelection(ctx, base, selection); err != nil {
+				return fmt.Errorf("save selection: %w", err)
+			}
 		}
 
 		if err := w.mergeRunReports(ctx, base); err != nil {
@@ -553,6 +564,34 @@ func (w *workflow) Merge(ctx context.Context, args MergeArgs) error {
 }
 
 // mergeShards moves the shard reports into base and removes the shard dirs.
+// shardSelection returns the selection the shards of a narrowed run share, so
+// the merged reports keep it, or an error when they differ.
+func (w *workflow) shardSelection(ctx context.Context, shardDirs []string) (rpt.Selection, error) {
+	var (
+		selection rpt.Selection
+		previous  string
+	)
+
+	for _, dir := range shardDirs {
+		shard, err := w.reports.LoadSelection(ctx, m.Path(dir))
+		if err != nil {
+			return rpt.Selection{}, fmt.Errorf("load the selection of %s: %w", dir, err)
+		}
+
+		if previous != "" && !sameSelection(shard, selection) {
+			return rpt.Selection{}, fmt.Errorf("shards were run with different selections: %s and %s", previous, dir)
+		}
+
+		selection, previous = shard, dir
+	}
+
+	return selection, nil
+}
+
+func sameSelection(a, b rpt.Selection) bool {
+	return a.Diff == b.Diff && a.Base == b.Base && a.Run == b.Run && slices.Equal(a.Mutagens, b.Mutagens)
+}
+
 func (w *workflow) mergeShards(ctx context.Context, base m.Path, shardDirs []string) error {
 	if err := w.mergeReports(ctx, base, shardDirs); err != nil {
 		slog.Error("Failed to merge shard reports", "error", err, "basePath", base)
