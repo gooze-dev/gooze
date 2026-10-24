@@ -17,15 +17,16 @@ func NewLocalTestRunnerAdapter() *LocalTestRunnerAdapter {
 	return &LocalTestRunnerAdapter{}
 }
 
-// RunGoTest runs 'go test' for the package that contains testFile, with
-// -overlay when overlay is set.
+// RunGoTest runs 'go test -vet=off' for the package that contains testFile,
+// with -overlay when overlay is set.
 func (a *LocalTestRunnerAdapter) RunGoTest(ctx context.Context, workDir, testFile, overlay string) (string, error) {
 	pkgDir := filepath.Dir(testFile)
 	if rel, err := filepath.Rel(workDir, pkgDir); err == nil && !filepath.IsAbs(rel) {
 		pkgDir = "." + string(filepath.Separator) + rel
 	}
 
-	args := []string{"test", "-count=1", "-v"}
+	// Vet would reject common mutants (x == a && x == b) before the tests run.
+	args := []string{"test", "-count=1", "-vet=off", "-v"}
 	// Equivalent: go test treats -overlay "" as no overlay.
 	if overlay != "" { //gooze:ignore comparison
 		args = append(args, "-overlay", overlay)
