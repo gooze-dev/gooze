@@ -342,12 +342,12 @@ func (w *workflow) cleanDeleted(ctx context.Context, base, reportsDir m.Path, de
 // keeping those include accepts and sel selects, and spills them so the test
 // pass can replay them without regenerating or holding them in memory.
 func (w *workflow) generateMutations(ctx context.Context, sources pkg.FileSpill[rpt.Source], include func(m.Mutation) bool, sel Selection) (pkg.FileSpill[m.Mutation], int, error) {
+	var total int
+
 	mutations, err := pkg.NewFileSpill[m.Mutation]()
 	if err != nil {
-		return nil, 0, fmt.Errorf("create mutations spill: %w", err)
+		return nil, total, fmt.Errorf("create mutations spill: %w", err)
 	}
-
-	total := 0
 
 	err = sources.Range(func(_ uint64, source rpt.Source) error {
 		return w.streamMutations(ctx, source, sel.Options, func(mutation m.Mutation) error {
@@ -362,7 +362,7 @@ func (w *workflow) generateMutations(ctx context.Context, sources pkg.FileSpill[
 	})
 	if err != nil {
 		closeSpill("mutations", mutations)
-		return nil, 0, err
+		return nil, total, err
 	}
 
 	return mutations, total, nil
