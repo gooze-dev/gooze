@@ -1,5 +1,8 @@
 # gooze's own mutation testing settings. Every key is listed; the ones that
-# differ from the defaults are paths.exclude and threshold.diff.total.
+# differ from the defaults are paths.exclude, run.fail_fast and
+# threshold.diff.total. Any survivor on a changed line fails the 100% diff
+# gate, so runs stop at the first one; main's baseline run in
+# .github/workflows/mutation.yml turns fail-fast off to test every mutant.
 # Reference: https://gooze.dev/docs/config/
 version: 1                    # Config schema version.
 output: .gooze-reports        # Directory where mutation reports are written.
@@ -16,7 +19,7 @@ run:                          # Mutation run settings.
   diff: ''                    # Git ref to diff against; only lines changed since its merge base with HEAD are mutated. Requires git. Empty runs everything.
   mutagens: []                # Mutagens to run (arithmetic, boolean, numbers, comparison, logical, unary, bitwise, increment, assignment, branch, statement, loop); empty runs the default ones, all but branch, statement and loop.
   workspace: overlay          # How mutants are built: overlay tests them in the project through go test -overlay, without copying it; deep-copy tests them in a per-worker copy of the project, for tests that build the project's code in a subprocess, read its source files or write next to themselves.
-  fail_fast: "off"            # When a run stops before testing every mutant: off tests them all; gate stops once a threshold can no longer be met; file skips the rest of a file once it can no longer meet threshold.file; first stops at the first surviving mutant. Untested mutants are tested by the next run.
+  fail_fast: first            # When a run stops before testing every mutant: off tests them all; gate stops once a threshold can no longer be met; file skips the rest of a file once it can no longer meet threshold.file; first stops at the first surviving mutant. Untested mutants are tested by the next run.
 
 mutagen:                      # Per-mutagen settings.
   comparison:                 # Settings of the comparison mutagen.
@@ -28,7 +31,7 @@ threshold:                    # Quality gates: minimum mutation scores in percen
   file: 0                     # Minimum for the score every file must reach.
   max_survivors: 0            # Most surviving mutants allowed; a --diff run counts the ones on its changed lines.
   diff:                       # Thresholds for --diff runs, scored on the changed lines; they replace the scores above there.
-    total: 100                 # Minimum for the changed lines' score.
+    total: 100                # Minimum for the changed lines' score.
     average: 0                # Minimum for the average of the changed files' scores.
     file: 0                   # Minimum for the score every changed file must reach.
 
