@@ -1,8 +1,10 @@
 package domain
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -318,7 +320,8 @@ func (w *workflow) prepareReportsDir(ctx context.Context, args TestArgs, sel Sel
 }
 
 func (w *workflow) cleanDeleted(ctx context.Context, base, reportsDir m.Path, deleted pkg.FileSpill[rpt.Source]) error {
-	if deleted == nil || deleted.Len() == 0 {
+	// Equivalent: Len is never negative, so == 0 is <= 0.
+	if deleted == nil || deleted.Len() == 0 { //gooze:ignore comparison
 		return nil
 	}
 
@@ -327,7 +330,8 @@ func (w *workflow) cleanDeleted(ctx context.Context, base, reportsDir m.Path, de
 		return fmt.Errorf("clean reports: %w", err)
 	}
 
-	if base == reportsDir {
+	// Equivalent: reportsDir is base or a shard dir inside it, which sorts after base.
+	if base == reportsDir { //gooze:ignore comparison
 		return nil
 	}
 
@@ -523,7 +527,7 @@ func (w *workflow) Merge(ctx context.Context, args MergeArgs) error {
 	base := args.Reports
 	slog.Info("Merging sharded mutation test reports", "basePath", base)
 
-	if string(base) == "" {
+	if len(base) == 0 {
 		slog.Error("Reports directory path is required but not provided")
 		return fmt.Errorf("reports directory path is required")
 	}
@@ -729,7 +733,7 @@ func shardSourcesInCheckout(shardReports pkg.FileSpill[m.Report], add func(rpt.S
 	checked, resolvable := false, true
 
 	err := shardReports.Range(func(_ uint64, report m.Report) error {
-		if report.Source.Origin != nil && report.Source.Origin.ShortPath != "" {
+		if report.Source.Origin != nil && len(report.Source.Origin.ShortPath) > 0 {
 			checked = true
 			resolvable = resolvable && sourceFileExists(report.Source)
 		}
@@ -763,10 +767,6 @@ func sourceFileExists(source rpt.Source) bool {
 	}
 
 	for _, candidate := range []string{source.Origin.ShortPath, source.Origin.FullPath} {
-		if candidate == "" {
-			continue
-		}
-
 		if _, err := os.Stat(candidate); err == nil {
 			return true
 		}
@@ -866,7 +866,7 @@ func (w *workflow) resolveSources(ctx context.Context, args EstimateArgs, types 
 		return sourceSet{}, err
 	}
 
-	if !args.UseCache || args.Reports == "" {
+	if !args.UseCache || len(args.Reports) == 0 {
 		return sourceSet{scanned: scanned, changed: scanned}, nil
 	}
 
@@ -1075,13 +1075,8 @@ func (t *estimateTally) estimation() Estimation {
 		estimation.Files = append(estimation.Files, *t.byKey[key])
 	}
 
-	sort.Slice(estimation.Files, func(i, j int) bool {
-		files := estimation.Files
-		if files[i].Path != files[j].Path {
-			return files[i].Path < files[j].Path
-		}
-
-		return files[i].Count < files[j].Count
+	slices.SortFunc(estimation.Files, func(a, b FileEstimate) int {
+		return cmp.Or(strings.Compare(a.Path, b.Path), cmp.Compare(a.Count, b.Count))
 	})
 
 	return estimation
@@ -1094,29 +1089,17 @@ func fileKey(mutation m.Mutation) (string, string) {
 
 	path := mutation.Source.Origin.ShortPath
 
-	key := mutation.Source.Origin.Hash
-	if key == "" {
-		key = path
-	}
+	key := cmp.Or(mutation.Source.Origin.Hash, path)
 
 	return key, path
 }
 
 // inShard reports whether a mutation ID is assigned to the given shard. A
-// non-positive total means sharding is disabled and everything is included.
+// total below 1 means sharding is disabled and everything is included.
 func inShard(id string, shardIndex int, totalShardCount int) bool {
-	if totalShardCount <= 0 {
-		return true
-	}
-
 	h := sha256.Sum256([]byte(id))
 
-	hashValue := int(h[0])<<24 + int(h[1])<<16 + int(h[2])<<8 + int(h[3])
-	if hashValue < 0 {
-		hashValue = -hashValue
-	}
-
-	return hashValue%totalShardCount == shardIndex
+	return int(binary.BigEndian.Uint32(h[:4]))%max(totalShardCount, 1) == shardIndex
 }
 
 // mutationOutcome is the result of testing one mutation, carried over the
@@ -1170,10 +1153,7 @@ func (w *workflow) testReports(
 		return nil, nil, fmt.Errorf("create reports filespill: %w", err)
 	}
 
-	effectiveThreads := threads
-	if effectiveThreads <= 0 {
-		effectiveThreads = 1
-	}
+	effectiveThreads := max(threads, 1)
 
 	// Unbuffered per-thread queues (count == --parallel): reflect.Select can only
 	// hand a mutation to a thread whose worker is idle, giving true load balancing.
@@ -1181,7 +1161,7 @@ func (w *workflow) testReports(
 	results := make(chan mutationOutcome, effectiveThreads)
 
 	// Collector drains results into the spill while the dispatcher and workers run.
-	collected := make(chan collectorResult, 1)
+	collected := make(chan collectorResult)
 
 	go func() {
 		collected <- w.collectResults(ctx, results, reports, sel.ReportScope)
@@ -1281,9 +1261,7 @@ func (w *workflow) collectResults(
 		if err := reports.Append(buildReport(outcome.mutation, outcome.result, scopeOf(outcome.mutation.Source))); err != nil {
 			slog.Error("failed to append report to filespill", "error", err)
 
-			if collected.fatalErr == nil {
-				collected.fatalErr = fmt.Errorf("append report to filespill: %w", err)
-			}
+			collected.fatalErr = cmp.Or(collected.fatalErr, fmt.Errorf("append report to filespill: %w", err))
 
 			continue
 		}
@@ -1304,7 +1282,8 @@ func buildReport(mutation m.Mutation, result m.Result, scope *rpt.Scope) m.Repor
 		Scope:  scope,
 	}
 
-	if getMutationStatus(result, mutation) != rpt.Killed {
+	// Equivalent: Killed is the lowest status, so != is >.
+	if getMutationStatus(result, mutation) != rpt.Killed { //gooze:ignore comparison
 		diff := mutation.DiffCode
 		report.Diff = &diff
 	}
@@ -1365,27 +1344,23 @@ func sendOutcome(ctx context.Context, results chan<- mutationOutcome, outcome mu
 // blocking only when every queue is full. It returns the context error if the
 // context is canceled while waiting.
 func dispatch(ctx context.Context, queues []chan m.Mutation, mutation m.Mutation) error {
-	cases := make([]reflect.SelectCase, 0, len(queues)+1)
-	for _, queue := range queues {
-		cases = append(cases, reflect.SelectCase{
-			Dir:  reflect.SelectSend,
-			Chan: reflect.ValueOf(queue),
-			Send: reflect.ValueOf(mutation),
-		})
+	if len(queues) == 0 {
+		return errNoWorkers
 	}
 
-	cases = append(cases, reflect.SelectCase{
-		Dir:  reflect.SelectRecv,
-		Chan: reflect.ValueOf(ctx.Done()),
-	})
-
-	chosen, _, _ := reflect.Select(cases)
-	if chosen == len(queues) {
-		return ctx.Err()
+	cases := make([]reflect.SelectCase, len(queues)+1)
+	for i, queue := range queues {
+		cases[i] = reflect.SelectCase{Dir: reflect.SelectSend, Chan: reflect.ValueOf(queue), Send: reflect.ValueOf(mutation)}
 	}
 
-	return nil
+	cases[len(queues)] = reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(ctx.Done())}
+
+	reflect.Select(cases)
+
+	return ctx.Err()
 }
+
+var errNoWorkers = errors.New("no workers to test mutations")
 
 func closeQueues(queues []chan m.Mutation) {
 	for _, queue := range queues {
@@ -1451,18 +1426,7 @@ func (w *workflow) runMutation(
 
 	w.progress.DisplayStartingTestInfo(ctx, mutation, threadID)
 
-	mutationCtx := ctx
-
-	var cancel context.CancelFunc
-	if mutationTimeout > 0 {
-		mutationCtx, cancel = context.WithTimeout(ctx, mutationTimeout)
-	}
-
-	result, err := ws.Run(mutationCtx, mutation)
-
-	if cancel != nil {
-		cancel()
-	}
+	result, err := runWithin(ctx, ws, mutation, mutationTimeout)
 
 	mutation.MutatedCode = nil
 
@@ -1473,13 +1437,20 @@ func (w *workflow) runMutation(
 	return mutationOutcome{mutation: mutation, result: result, err: err}
 }
 
-func getMutationStatus(result m.Result, mutation m.Mutation) rpt.TestStatus {
-	entries, ok := result[mutation.Type]
-	if !ok || len(entries) < 1 {
-		return rpt.Error
+// runWithin runs mutation in ws, within timeout when it is positive.
+func runWithin(ctx context.Context, ws Workspace, mutation m.Mutation, timeout time.Duration) (m.Result, error) {
+	if timeout <= 0 {
+		return ws.Run(ctx, mutation)
 	}
 
-	for _, entry := range entries {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	return ws.Run(ctx, mutation)
+}
+
+func getMutationStatus(result m.Result, mutation m.Mutation) rpt.TestStatus {
+	for _, entry := range result[mutation.Type] {
 		if entry.MutationID == mutation.ID {
 			return entry.Status
 		}
