@@ -28,6 +28,7 @@ var runDiffFlag string
 var runPatternFlag string
 var runMutagensFlag []string
 var runWorkspaceFlag string
+var runFailFastFlag string
 
 // errRunWithShard rejects --run with --shard: a run of a few functions is too
 // small to split across jobs.
@@ -87,6 +88,7 @@ func runTestArgs(estimateArgs domain.EstimateArgs, shardIndex, totalShards int, 
 		CoverageProfile: m.Path(viper.GetString(config.KeyRunCoverageProfile)),
 		Workspace:       domain.WorkspaceMode(viper.GetString(config.KeyRunWorkspace)),
 		Thresholds:      minimums,
+		FailFast:        domain.FailFast(viper.GetString(config.KeyRunFailFast)),
 	}
 }
 
@@ -118,6 +120,9 @@ func configureRunFlags(cmd *cobra.Command) (report.ThresholdFlags, report.Thresh
 
 	cmd.Flags().StringVar(&runWorkspaceFlag, workspaceFlagName, schemaDefault[string](config.KeyRunWorkspace), "how mutants are built: overlay (go test -overlay in the project) or deep-copy (a copy of the project per worker, for tests that build the code in a subprocess or read source files)")
 	bindFlagToConfig(cmd.Flags().Lookup(workspaceFlagName), config.KeyRunWorkspace)
+
+	cmd.Flags().StringVar(&runFailFastFlag, failFastFlagName, schemaDefault[string](config.KeyRunFailFast), "when to stop before testing every mutant: off, gate (once a --threshold-* gate can't be met), file (skip a file once it can't meet --threshold-file) or first (at the first survivor)")
+	bindFlagToConfig(cmd.Flags().Lookup(failFastFlagName), config.KeyRunFailFast)
 
 	return report.AddThresholdFlags(cmd, "threshold", "threshold"),
 		report.AddThresholdFlags(cmd, "threshold.diff", "threshold-diff")

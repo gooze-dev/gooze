@@ -79,9 +79,22 @@ func (fx interruptFixture) run(t *testing.T, after int) (error, []string, domain
 	defer cancel()
 
 	ws := &interruptingWorkspace{after: after, cancel: cancel}
+	err, score := fx.runWith(ctx, t, ws, cachedTestArgs(fx.reports))
+
+	return err, ws.ran, score
+}
+
+// runWith tests the fixture in ws with args and returns the run's error and
+// the score it displayed.
+func (fx interruptFixture) runWith(ctx context.Context, t *testing.T, ws domain.Workspace, args domain.TestArgs) (error, domain.MutationScore) {
+	t.Helper()
 
 	fs := domainmocks.NewMockSourceFSAdapter(t)
 	fs.EXPECT().Stream(mock.Anything, mock.Anything).Return(streamSources(fx.sources))
+
+	if args.CoverageProfile != "" {
+		fs.EXPECT().ReadFile(mock.Anything, args.CoverageProfile).Return(fixtureCoverage, nil)
+	}
 
 	stream := func(_ context.Context, source rpt.Source, fn func(m.Mutation) error, types ...mgen.Type) error {
 		if !slices.Contains(types, mgen.Arithmetic) {
@@ -122,9 +135,9 @@ func (fx interruptFixture) run(t *testing.T, after int) (error, []string, domain
 		Run(func(_ context.Context, s domain.MutationScore) { score = s }).Maybe()
 
 	wf := domain.NewWorkflow(fs, adapter.NewReportStore(), reporter, orchestrator, mutagen)
-	err := wf.Test(ctx, cachedTestArgs(fx.reports))
+	err := wf.Test(ctx, args)
 
-	return err, ws.ran, score
+	return err, score
 }
 
 // stored returns the scope of each stored mutation, by mutation ID.
@@ -152,6 +165,10 @@ func (fx interruptFixture) stored(t *testing.T) map[string]*rpt.Scope {
 }
 
 var interrupted = &rpt.Scope{Interrupted: true}
+
+// fixtureCoverage is a coverage profile of the fixture in which no test runs
+// lines 1 and 2 of a.go, the lines of a-1 and a-2.
+var fixtureCoverage = []byte("mode: set\nmod/a.go:1.1,2.20 1 0\nmod/a.go:3.1,4.20 1 1\nmod/c.go:1.1,2.20 1 1\n")
 
 func TestWorkflow_Test_InterruptedRunSavesFinishedMutants(t *testing.T) {
 	fx := newInterruptFixture(t)

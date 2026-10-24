@@ -20,8 +20,15 @@ type testedRun struct {
 	mutations   pkg.FileSpill[m.Mutation] // the mutants the run was to test
 	planned     int                       // how many there are
 	interrupted bool                      // the run was stopped before testing them all
+	failFast    FailFast                  // the fail-fast policy that left mutants untested, or ""
+	stop        error                     // the verdict of a fail-fast stop, or nil
 	stored      pkg.FileSpill[m.Report]   // the stored reports before the run, or nil
 	resumed     resumedFiles
+}
+
+// partial reports whether the run left mutants untested.
+func (r testedRun) partial() bool {
+	return r.interrupted || r.failFast != ""
 }
 
 // storedReports loads the stored reports that a full, unsharded run with the
@@ -217,12 +224,12 @@ func unfinishedSources(run testedRun) (map[string]bool, error) {
 
 // completeReports returns the reports to save: the run's results and the
 // resumed ones. The reports of a source some of whose mutants an interrupted
-// run left untested are marked interrupted, so the next run tests the rest;
-// the others are complete.
+// or fail-fast run left untested are marked interrupted, so the next run
+// tests the rest; the others are complete.
 func completeReports(run testedRun) (pkg.FileSpill[m.Report], error) {
 	unfinished := map[string]bool{}
 
-	if run.interrupted {
+	if run.partial() {
 		var err error
 		if unfinished, err = unfinishedSources(run); err != nil {
 			return nil, err

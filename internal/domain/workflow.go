@@ -68,6 +68,9 @@ type TestArgs struct {
 	// Thresholds are the minimum scores the run must reach. A shard doesn't
 	// check them: report merge does, on all the results.
 	Thresholds Thresholds
+	// FailFast is when the run stops testing before it has tested every
+	// mutant; empty is FailFastOff.
+	FailFast FailFast
 }
 
 // ViewArgs contains the arguments for viewing mutation test reports.
@@ -222,32 +225,67 @@ func (w *workflow) testAndFinalize(ctx context.Context, args TestArgs, sel Selec
 
 	w.progress.DisplayUpcomingTestsInfo(ctx, total)
 
-	gate, err := w.loadCoverage(ctx, args.CoverageProfile)
+	run := testedRun{mutations: mutations, planned: total, stored: stored, resumed: resumed}
+
+	untested, err := w.testMutations(ctx, args, sel, sources, &run)
 	if err != nil {
-		slog.Error("Failed to load coverage profile", "error", err)
-		return fmt.Errorf("load coverage profile: %w", err)
+		return err
 	}
 
-	reports, untested, err := w.testReports(ctx, mutations, gate, sel, args.Threads, args.MutationTimeout, args.Workspace)
-	if err != nil {
-		slog.Error("Failed to run mutation tests", "error", err)
-		return fmt.Errorf("run mutation tests: %w", err)
-	}
-
-	// The run was interrupted when it returns results on a canceled context.
-	run := testedRun{reports: reports, mutations: mutations, planned: total, interrupted: ctx.Err() != nil, stored: stored, resumed: resumed}
-
-	slog.Info("Completed mutation tests", "reportsCount", reports.Len(), "interrupted", run.interrupted)
+	slog.Info("Completed mutation tests", "reportsCount", run.reports.Len(), "interrupted", run.interrupted, "failFast", run.failFast)
 
 	return untestedErr(w.finishRun(ctx, args, sel, reportsDir, sources, run), untested)
 }
 
+// testMutations tests run's mutations and records in run what the test pass
+// produced: the results, and whether an interruption or a fail-fast policy
+// left mutants untested.
+func (w *workflow) testMutations(ctx context.Context, args TestArgs, sel Selection, sources sourceSet, run *testedRun) (*untestedPackages, error) {
+	gate, err := w.loadCoverage(ctx, args.CoverageProfile)
+	if err != nil {
+		slog.Error("Failed to load coverage profile", "error", err)
+		return nil, fmt.Errorf("load coverage profile: %w", err)
+	}
+
+	// A fail-fast stop cancels runCtx with its verdict; an interruption
+	// cancels ctx.
+	runCtx, stop := context.WithCancelCause(ctx)
+	defer stop(nil)
+
+	watch, err := w.failFastWatch(args, run.mutations, run.stored, run.resumed, sources, stop)
+	if err != nil {
+		return nil, fmt.Errorf("plan fail-fast: %w", err)
+	}
+
+	if watch == nil {
+		runCtx = ctx
+	}
+
+	reports, untested, err := w.testReports(runCtx, run.mutations, gate, sel, args.Threads, args.MutationTimeout, args.Workspace, watch)
+	if err != nil {
+		slog.Error("Failed to run mutation tests", "error", err)
+		return nil, fmt.Errorf("run mutation tests: %w", err)
+	}
+
+	run.reports = reports
+	// The run was interrupted when it returns results on a canceled context.
+	run.interrupted = ctx.Err() != nil
+
+	if !run.interrupted {
+		run.failFast = watch.actedOn()
+		run.stop = context.Cause(runCtx)
+	}
+
+	return untested, nil
+}
+
 // untestedErr returns the error a run ends with: failing tests outrank a
-// breached threshold, since the score leaves out the packages whose mutants
-// weren't tested, and any other error outranks both.
+// gate's verdict (a breached threshold or a fail-fast stop), since the score
+// leaves out the packages whose mutants weren't tested, and any other error
+// outranks both.
 func untestedErr(err error, untested *untestedPackages) error {
-	var breach *ThresholdError
-	if err != nil && !errors.As(err, &breach) {
+	var verdict *m.CodedError
+	if err != nil && (!errors.As(err, &verdict) || verdict.Code != m.ExitBelowThreshold) {
 		return err
 	}
 
@@ -365,19 +403,40 @@ func (w *workflow) finalizeReports(ctx context.Context, args TestArgs, sel Selec
 
 	score.ThresholdsSkipped = args.Thresholds.Set() && args.TotalShardCount > 1
 	score.Interrupted = run.interrupted
+	score.FailFast = run.failFast
 
-	if run.interrupted {
+	if run.partial() {
 		score.Planned = run.planned
 	}
 
 	slog.Info("Calculated mutation score", "score", score.Score(), "cached", score.Cached, "tested", score.Tested)
 	w.progress.DisplayMutationScore(ctx, score)
 
-	if score.ThresholdsSkipped || score.Interrupted {
+	if score.Interrupted {
 		return nil
 	}
 
-	return args.Thresholds.Err(score)
+	// A fail-fast stop's verdict is a breach of the run's own gates, which
+	// the results so far fail too; it stands alone when no gate is checked
+	// (a shard, or the first policy without thresholds).
+	if !score.ThresholdsSkipped {
+		if err := args.Thresholds.Err(score); err != nil {
+			return err
+		}
+	}
+
+	return codedStop(run.stop)
+}
+
+// codedStop returns the verdict a fail-fast stop ended the run with, as an
+// error ending the command with ExitBelowThreshold, or nil.
+func codedStop(stop error) error {
+	var stopped *FailFastError
+	if errors.As(stop, &stopped) {
+		return WithExitCode(m.ExitBelowThreshold, stop)
+	}
+
+	return stop
 }
 
 // saveReports replaces the stored reports of the changed sources with reports
@@ -1110,6 +1169,7 @@ func (w *workflow) testReports(
 	threads int,
 	mutationTimeout time.Duration,
 	workspace WorkspaceMode,
+	watch *failFastWatch,
 ) (pkg.FileSpill[m.Report], *untestedPackages, error) {
 	reports, err := pkg.NewFileSpill[m.Report]()
 	if err != nil {
@@ -1136,11 +1196,11 @@ func (w *workflow) testReports(
 
 	var group errgroup.Group
 
-	group.Go(w.dispatchMutations(ctx, mutations, gate, queues, results))
+	group.Go(w.dispatchMutations(ctx, mutations, gate, watch, queues, results))
 
 	checks := newTestChecks()
 	for threadID := range effectiveThreads {
-		group.Go(w.consumeMutations(ctx, queues[threadID], threadID, mutationTimeout, workspace, checks, results))
+		group.Go(w.consumeMutations(ctx, queues[threadID], threadID, mutationTimeout, workspace, checks, watch, results))
 	}
 
 	runErr := group.Wait()
@@ -1261,12 +1321,14 @@ func buildReport(mutation m.Mutation, result m.Result, scope *rpt.Scope) m.Repor
 
 // dispatchMutations returns a task that replays the generated mutations and
 // hands each one to a ready worker queue, short-circuiting mutations on lines
-// the coverage profile marks as uncovered, and closes every queue when done so
-// the workers terminate.
+// the coverage profile marks as uncovered, skipping those of files the
+// fail-fast watch gave up on, and closes every queue when done so the workers
+// terminate.
 func (w *workflow) dispatchMutations(
 	ctx context.Context,
 	mutations pkg.FileSpill[m.Mutation],
 	gate *CoverageIndex,
+	watch *failFastWatch,
 	queues []chan m.Mutation,
 	results chan<- mutationOutcome,
 ) func() error {
@@ -1274,13 +1336,22 @@ func (w *workflow) dispatchMutations(
 		defer closeQueues(queues)
 
 		return mutations.Range(func(_ uint64, mutation m.Mutation) error {
+			if watch.skips(mutation.Source.Key()) {
+				return nil
+			}
+
 			if gate != nil && gate.Uncovered(mutation.Source.Origin.ShortPath, mutation.Line) {
 				mutation.MutatedCode = nil
+				result := resultForStatus(mutation, rpt.NotCovered)
 
-				return sendOutcome(ctx, results, mutationOutcome{
-					mutation: mutation,
-					result:   resultForStatus(mutation, rpt.NotCovered),
-				})
+				// Recorded once sent, so a stop it causes doesn't drop it.
+				if err := sendOutcome(ctx, results, mutationOutcome{mutation: mutation, result: result}); err != nil {
+					return err
+				}
+
+				watch.record(mutation, result)
+
+				return nil
 			}
 
 			return dispatch(ctx, queues, mutation)
@@ -1341,6 +1412,7 @@ func (w *workflow) consumeMutations(
 	mutationTimeout time.Duration,
 	workspace WorkspaceMode,
 	checks *testChecks,
+	watch *failFastWatch,
 	results chan<- mutationOutcome,
 ) func() error {
 	return func() error {
@@ -1348,10 +1420,24 @@ func (w *workflow) consumeMutations(
 		defer ws.Close(ctx)
 
 		for mutation := range queue {
+			// A stop or a file given up on since the mutation was queued
+			// leaves it untested.
+			if ctx.Err() != nil || watch.skips(mutation.Source.Key()) {
+				continue
+			}
+
+			outcome := w.runMutation(ctx, ws, checks, mutation, threadID, mutationTimeout)
+			// The worker records the result before it takes the next
+			// mutation, so a stop it causes starts no other test. A dropped
+			// or failed outcome has none.
+			if outcome.result != nil {
+				watch.record(outcome.mutation, outcome.result)
+			}
+
 			// The collector drains results until they are closed, so this
 			// send never blocks for good, and an outcome finished before an
 			// interruption is not lost.
-			results <- w.runMutation(ctx, ws, checks, mutation, threadID, mutationTimeout)
+			results <- outcome
 		}
 
 		return ctx.Err()
