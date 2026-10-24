@@ -32,6 +32,9 @@ type MutationScore struct {
 	// mutation; Planned is then how many it was to test.
 	Interrupted bool
 	Planned     int
+	// FailFast is the policy that left mutants untested, if any; Planned is
+	// then how many the run was to test.
+	FailFast FailFast
 }
 
 // scoreReports counts the results of the reports whose source include

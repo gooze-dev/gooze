@@ -43,6 +43,7 @@ func TestConfigDefaults(t *testing.T) {
 		"run.diff":                       "",
 		"run.mutagens":                   []string{},
 		"run.workspace":                  "overlay",
+		"run.fail_fast":                  "off",
 		"mutagen.comparison.enum_bounds": false,
 		"threshold.total":                0.0,
 		"threshold.average":              0.0,

@@ -72,6 +72,9 @@ func mutagenField() Field {
 	}}
 }
 
+// failFastPolicies are the values of run.fail_fast; the first is the default.
+var failFastPolicies = []string{"off", "gate", "file", "first"}
+
 func runField() Field {
 	return Field{Name: "run", Kind: KindObject, Doc: "Mutation run settings.", Children: []Field{
 		{Name: "parallel", Kind: KindInt, Default: 1, Min: new(1), Doc: "Number of concurrent mutation workers."},
@@ -86,6 +89,10 @@ func runField() Field {
 		{
 			Name: "workspace", Kind: KindEnum, Default: "overlay", Enum: []string{"overlay", "deep-copy"},
 			Doc: "How mutants are built: overlay tests them in the project through go test -overlay, without copying it; deep-copy tests them in a per-worker copy of the project, for tests that build the project's code in a subprocess, read its source files or write next to themselves.",
+		},
+		{
+			Name: "fail_fast", Kind: KindEnum, Default: failFastPolicies[0], Enum: slices.Clone(failFastPolicies),
+			Doc: "When a run stops before testing every mutant: off tests them all; gate stops once a threshold can no longer be met; file skips the rest of a file once it can no longer meet threshold.file; first stops at the first surviving mutant. Untested mutants are tested by the next run.",
 		},
 	}}
 }

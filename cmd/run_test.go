@@ -78,6 +78,65 @@ func TestRunCmd_WorkspaceFlag(t *testing.T) {
 	}
 }
 
+func TestRunCmd_FailFastFlag(t *testing.T) {
+	for _, tt := range []struct {
+		args []string
+		env  string
+		want domain.FailFast
+	}{
+		{args: []string{"run", "./..."}, want: domain.FailFastOff},
+		{args: []string{"run", "--fail-fast", "gate", "./..."}, want: domain.FailFastGate},
+		{args: []string{"run", "--fail-fast", "first", "./..."}, want: domain.FailFastFirst},
+		{args: []string{"run", "./..."}, env: "file", want: domain.FailFastFile},
+	} {
+		t.Run(string(tt.want), func(t *testing.T) {
+			if tt.env != "" {
+				t.Setenv("GOOZE_RUN_FAIL_FAST", tt.env)
+			}
+
+			mockWorkflow := domainmocks.NewMockWorkflow(t)
+
+			cmd := newRootCmd()
+			cmd.AddCommand(newRunCmd())
+			cmd.SetOut(&bytes.Buffer{})
+			cmd.SetErr(&bytes.Buffer{})
+
+			originalWorkflow := workflow
+			workflow = mockWorkflow
+			defer func() { workflow = originalWorkflow }()
+			// Rebind run.fail_fast to a fresh, unset flag so later tests see the default.
+			defer newRunCmd()
+
+			mockWorkflow.On("Test", mock.Anything, mock.MatchedBy(func(args domain.TestArgs) bool {
+				return args.FailFast == tt.want
+			})).Return(nil)
+
+			cmd.SetArgs(tt.args)
+			require.NoError(t, cmd.Execute())
+			mockWorkflow.AssertExpectations(t)
+		})
+	}
+}
+
+func TestRunCmd_RejectsUnknownFailFast(t *testing.T) {
+	mockWorkflow := domainmocks.NewMockWorkflow(t)
+
+	cmd := newRootCmd()
+	cmd.AddCommand(newRunCmd())
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+
+	originalWorkflow := workflow
+	workflow = mockWorkflow
+	defer func() { workflow = originalWorkflow }()
+	defer newRunCmd()
+
+	cmd.SetArgs([]string{"run", "--fail-fast", "always", "./..."})
+	err := cmd.Execute()
+	require.EqualError(t, err, `invalid run.fail_fast: "always" is not one of off, gate, file, first`)
+	assert.Equal(t, m.ExitUsage, exitCode(context.Background(), err, false))
+}
+
 func TestRunCmd_RejectsUnknownWorkspace(t *testing.T) {
 	mockWorkflow := domainmocks.NewMockWorkflow(t)
 
@@ -549,6 +608,7 @@ func TestRunCmd_FlagDefaultsMatchSchema(t *testing.T) {
 	t.Setenv("GOOZE_RUN_WORKSPACE", "deep-copy")
 	t.Setenv("GOOZE_RUN_DIFF", "origin/main")
 	t.Setenv("GOOZE_RUN_MUTAGENS", "comparison")
+	t.Setenv("GOOZE_RUN_FAIL_FAST", "gate")
 
 	for _, cmd := range []*cobra.Command{runCmd, newRunCmd()} {
 		assert.Equal(t, "1", cmd.Flags().Lookup(runParallelFlagName).DefValue)
@@ -557,6 +617,7 @@ func TestRunCmd_FlagDefaultsMatchSchema(t *testing.T) {
 		assert.Empty(t, cmd.Flags().Lookup(diffFlagName).DefValue)
 		assert.Equal(t, "[]", cmd.Flags().Lookup(mutagensFlagName).DefValue)
 		assert.Equal(t, "overlay", cmd.Flags().Lookup(workspaceFlagName).DefValue)
+		assert.Equal(t, "off", cmd.Flags().Lookup(failFastFlagName).DefValue)
 	}
 }
 

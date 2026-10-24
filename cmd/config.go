@@ -36,6 +36,7 @@ const (
 	mutagensFlagName = "mutagens"
 
 	workspaceFlagName = "workspace"
+	failFastFlagName  = "fail-fast"
 
 	envPrefix = "GOOZE"
 )

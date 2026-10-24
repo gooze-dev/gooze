@@ -166,6 +166,21 @@ func TestFormatMutationScore_InterruptedRun(t *testing.T) {
 	}
 }
 
+func TestFormatMutationScore_FailFastRun(t *testing.T) {
+	cases := map[domain.FailFast]string{
+		domain.FailFastGate:  "50.00% (1 killed, 1 survived; 0 cached, 2 tested; stopped early by fail-fast gate after 2 of 6)",
+		domain.FailFastFirst: "50.00% (1 killed, 1 survived; 0 cached, 2 tested; stopped early by fail-fast first after 2 of 6)",
+		domain.FailFastFile:  "50.00% (1 killed, 1 survived; 0 cached, 2 tested; fail-fast file skipped 4 of 6)",
+	}
+
+	for policy, want := range cases {
+		score := domain.MutationScore{Summary: rpt.Summary{Total: 2, Killed: 1, Survived: 1}, Tested: 2, Planned: 6, FailFast: policy}
+		if got := formatMutationScore(score); got != want {
+			t.Errorf("formatMutationScore(%s) = %q, want %q", policy, got, want)
+		}
+	}
+}
+
 func TestFormatMutationScore_NarrowedRun(t *testing.T) {
 	score := domain.MutationScore{
 		Summary:   rpt.Summary{Total: 4, Killed: 2, Survived: 2},
