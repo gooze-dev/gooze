@@ -32,9 +32,11 @@ JSON report instead of the summary, for GitLab Code Quality. Paths in all of
 them are relative to the git repository root.
 report.format in gooze.yaml sets the default.
 
-Below a --threshold-* minimum, view exits with code 3. For the reports of a
-gooze run --diff (view -o .gooze-reports/run), the --threshold-diff-* minimums
-apply instead, as they do for the run.`
+Below a --threshold-* minimum, or with more surviving mutants than
+--threshold-max-survivors, view exits with code 3. For the reports of a gooze
+run --diff (view -o .gooze-reports/run), the --threshold-diff-* minimums apply
+instead, as they do for the run, and only the survivors on the changed lines
+count.`
 
 func newViewCmd(deps Deps) *cobra.Command {
 	var (
@@ -55,12 +57,7 @@ func newViewCmd(deps Deps) *cobra.Command {
 				paths = append(paths, m.Path(arg))
 			}
 
-			minimums, err := thresholds.Read(cmd)
-			if err != nil {
-				return err
-			}
-
-			diffMinimums, err := diffThresholds.Read(cmd)
+			minimums, diffMinimums, err := ReadGates(cmd, thresholds, diffThresholds)
 			if err != nil {
 				return err
 			}

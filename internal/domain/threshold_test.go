@@ -36,6 +36,7 @@ func TestThresholds_Set(t *testing.T) {
 	assert.True(t, domain.Thresholds{File: 100}.Set())
 	assert.True(t, domain.Thresholds{Total: 0.5}.Set())
 	assert.True(t, domain.Thresholds{File: 0.5}.Set())
+	assert.True(t, domain.Thresholds{MaxSurvivors: 1}.Set())
 }
 
 func TestThresholds_Check(t *testing.T) {
@@ -70,6 +71,17 @@ func TestThresholds_Check(t *testing.T) {
 		"an unscored file doesn't raise the average": {scoreOf(file("a.go", 1, 2, 0), file("b.go", 0, 0, 3)), domain.Thresholds{Key: "threshold", Average: 60}, []string{"average file score 50.00% is below threshold.average 60%"}},
 		"no mutations":                               {scoreOf(), domain.Thresholds{Key: "threshold", Total: 100, Average: 100, File: 100}, nil},
 		"nothing scored":                             {scoreOf(file("a.go", 0, 0, 2)), domain.Thresholds{Key: "threshold", Total: 100, Average: 100}, nil},
+		// calc.go has 2 survivors.
+		"max survivors met":   {calc, domain.Thresholds{Key: "threshold", MaxSurvivors: 2}, nil},
+		"max survivors above": {calc, domain.Thresholds{Key: "threshold", MaxSurvivors: 1}, []string{"2 surviving mutants are above threshold.max_survivors 1"}},
+		// The run's scope decides what is counted, so a --diff run checks the
+		// same key on its changed lines.
+		"max survivors, diff run":   {calc, domain.Thresholds{Key: "threshold.diff", MaxSurvivors: 1}, []string{"2 surviving mutants are above threshold.max_survivors 1"}},
+		"max survivors of 0 is off": {project, domain.Thresholds{Key: "threshold", Total: 90, MaxSurvivors: 0, File: 75}, []string{"mutation score 85.71% is below threshold.total 90%", "b.go: score 50.00% is below threshold.file 75%"}},
+		"survivors and scores":      {scoreOf(file("a.go", 1, 4, 0)), domain.Thresholds{Key: "threshold", Total: 50, MaxSurvivors: 2}, []string{"mutation score 25.00% is below threshold.total 50%", "3 surviving mutants are above threshold.max_survivors 2"}},
+		// Only survived mutants count: not_covered and timeout lower the score
+		// but aren't survivors.
+		"only survived counts": {domain.MutationScore{Summary: rpt.Summary{Total: 3, Survived: 1, NotCovered: 1, Timeout: 1}}, domain.Thresholds{Key: "threshold", MaxSurvivors: 1}, nil},
 	}
 
 	for name, tc := range cases {

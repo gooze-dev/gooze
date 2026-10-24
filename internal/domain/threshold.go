@@ -11,8 +11,9 @@ import (
 )
 
 // Thresholds are the minimum mutation scores, in percent, that a run, view or
-// merge must reach; 0 turns one off. Key names their config object
-// ("threshold", or "threshold.diff" for --diff runs) in messages.
+// merge must reach, and the most surviving mutants it may have; 0 turns one
+// off. Key names the config object of the scores ("threshold", or
+// "threshold.diff" for --diff runs) in messages.
 type Thresholds struct {
 	Key string
 	// Total is the minimum score of all mutations.
@@ -21,25 +22,36 @@ type Thresholds struct {
 	Average float64
 	// File is the minimum score of every file.
 	File float64
+	// MaxSurvivors is the most surviving mutants allowed. It has no diff
+	// copy: a --diff run counts the survivors on its changed lines.
+	MaxSurvivors int
 }
+
+// maxSurvivorsKey is the config key of Thresholds.MaxSurvivors.
+const maxSurvivorsKey = "threshold.max_survivors"
 
 // Set reports whether any threshold is on.
 func (t Thresholds) Set() bool {
 	// Equivalent: thresholds are validated to 0..100, so > 0 is != 0.
-	return t.Total > 0 || t.Average > 0 || t.File > 0 //gooze:ignore comparison
+	return t.Total > 0 || t.Average > 0 || t.File > 0 || t.MaxSurvivors > 0 //gooze:ignore comparison
 }
 
-// Breach is a score below one of the thresholds.
+// Breach is a score below one of the thresholds, or more survivors than
+// threshold.max_survivors allows.
 type Breach struct {
 	// Key is the threshold's config key, e.g. "threshold.file".
 	Key string
 	// File is the file whose score is low, for threshold.file.
 	File  string
-	Score float64 // percent, as gooze prints it
-	Min   float64 // percent
+	Score float64 // percent, as gooze prints it; the survivor count for threshold.max_survivors
+	Min   float64 // percent; the maximum for threshold.max_survivors
 }
 
 func (b Breach) String() string {
+	if b.Key == maxSurvivorsKey {
+		return fmt.Sprintf("%d surviving mutants are above %s %d", int(b.Score), b.Key, int(b.Min))
+	}
+
 	what := "mutation score"
 
 	switch {
@@ -77,8 +89,9 @@ func (t Thresholds) Err(score MutationScore) error {
 	return WithExitCode(m.ExitBelowThreshold, &ThresholdError{Breaches: breaches})
 }
 
-// Check returns the scores below their thresholds: the total, the average of
-// the file scores, then each low file by path. Scores are compared as gooze
+// Check returns the scores below their thresholds: the total, the survivors
+// above threshold.max_survivors, the average of the file scores, then each low
+// file by path. Scores are compared as gooze
 // prints them, rounded to two decimals. A threshold of 0 is off: no score is
 // below it. Files with no scored mutations (none, or none that compile) have
 // no score: they never fail threshold.file and don't count towards the
@@ -86,6 +99,11 @@ func (t Thresholds) Err(score MutationScore) error {
 // threshold.
 func (t Thresholds) Check(score MutationScore) []Breach {
 	breaches := appendBelow(nil, t.Key+".total", "", percent(score.Score()), t.Total)
+
+	// Equivalent: max survivors are validated to be 0 or more, so > 0 is != 0.
+	if t.MaxSurvivors > 0 && score.Survived > t.MaxSurvivors { //gooze:ignore comparison
+		breaches = append(breaches, Breach{Key: maxSurvivorsKey, Score: float64(score.Survived), Min: float64(t.MaxSurvivors)})
+	}
 
 	files := slices.SortedFunc(slices.Values(score.Files), func(a, b FileSummary) int { return strings.Compare(a.Path, b.Path) })
 	// Equivalent: a file's scored count is never negative, so == 0 is <= 0.
