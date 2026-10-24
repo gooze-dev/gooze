@@ -269,6 +269,10 @@ func testStatus(ctx context.Context, testAdapter TestRunnerAdapter, workDir, tes
 		return rpt.Killed
 	}
 
+	if strings.Contains(output, "[no test files]") {
+		return rpt.NotCovered
+	}
+
 	return rpt.Survived
 }
 
@@ -447,7 +451,7 @@ func validateMutation(mutation m.Mutation) error {
 }
 
 func resultForNoTest(mutation m.Mutation) m.Result {
-	return resultForStatus(mutation, rpt.Survived)
+	return resultForStatus(mutation, rpt.NotCovered)
 }
 
 func resultForStatus(mutation m.Mutation, status rpt.TestStatus) m.Result {

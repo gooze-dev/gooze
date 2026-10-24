@@ -51,7 +51,7 @@ func TestOrchestrator_TestMutation_NoTestFile(t *testing.T) {
 	require.True(t, ok)
 	require.Len(t, entries, 1)
 	require.Equal(t, "test-hash-id", entries[0].MutationID)
-	require.Equal(t, rpt.Survived, entries[0].Status)
+	require.Equal(t, rpt.NotCovered, entries[0].Status, "no test can kill it")
 }
 
 func TestOrchestrator_TestMutation_FindProjectRootError(t *testing.T) {
