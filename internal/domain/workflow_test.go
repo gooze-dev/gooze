@@ -1976,8 +1976,9 @@ func TestWorkflow_Merge_StoreErrorsAreReturned(t *testing.T) {
 		)
 
 		store := new(domainmocks.MockReportStore)
-		store.EXPECT().LoadSpillReports(ctx, m.Path(filepath.Join(base, domain.ShardDirPrefix+"0"))).Return(shard, nil)
+		store.EXPECT().LoadSpillReports(ctx, m.Path(filepath.Join(base, domain.ShardDirPrefix+"0"))).Return(shard, nil).Maybe()
 		configure(store)
+		store.EXPECT().LoadSelection(ctx, mock.Anything).Return(rpt.Selection{}, nil).Maybe()
 
 		reporter := new(domainmocks.MockReporter)
 		reporter.EXPECT().StartTest(ctx).Return(nil).Once()
@@ -1999,6 +2000,24 @@ func TestWorkflow_Merge_StoreErrorsAreReturned(t *testing.T) {
 		err := run(t, func(store *domainmocks.MockReportStore) {
 			store.EXPECT().CleanReports(ctx, mock.Anything, mock.Anything).Return(nil)
 			store.EXPECT().SaveReports(ctx, mock.Anything, mock.Anything).Return(boom)
+		})
+		require.ErrorIs(t, err, boom)
+	})
+
+	t.Run("load shard selection", func(t *testing.T) {
+		err := run(t, func(store *domainmocks.MockReportStore) {
+			store.EXPECT().LoadSelection(ctx, mock.Anything).Return(rpt.Selection{}, boom)
+		})
+		require.ErrorIs(t, err, boom)
+	})
+
+	t.Run("save merged selection", func(t *testing.T) {
+		err := run(t, func(store *domainmocks.MockReportStore) {
+			store.EXPECT().LoadSelection(ctx, mock.Anything).Return(rpt.Selection{Diff: "main", Base: "abc"}, nil)
+			store.EXPECT().CleanReports(ctx, mock.Anything, mock.Anything).Return(nil)
+			store.EXPECT().SaveReports(ctx, mock.Anything, mock.Anything).Return(nil)
+			store.EXPECT().RegenerateIndex(ctx, mock.Anything).Return(nil).Maybe()
+			store.EXPECT().SaveSelection(ctx, mock.Anything, rpt.Selection{Diff: "main", Base: "abc"}).Return(boom)
 		})
 		require.ErrorIs(t, err, boom)
 	})

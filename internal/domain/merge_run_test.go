@@ -73,7 +73,7 @@ func mergeWorkflow(t *testing.T) domain.Workflow {
 	t.Helper()
 
 	reporter := domainmocks.NewMockReporter(t)
-	for _, call := range []string{"StartTest", "Wait", "Close", "DisplayMutationScore"} {
+	for _, call := range []string{"StartTest", "Wait", "Close", "DisplayMutationScore", "DisplayReportSummary"} {
 		reporter.On(call, mock.Anything).Return(nil).Maybe()
 		reporter.On(call, mock.Anything, mock.Anything).Return().Maybe()
 	}
@@ -252,7 +252,7 @@ func TestMerge_KeepsOnlyMainResultsTheRunDidNotReplace(t *testing.T) {
 	})
 
 	reporter := domainmocks.NewMockReporter(t)
-	for _, call := range []string{"StartTest", "Wait", "Close", "DisplayMutationScore"} {
+	for _, call := range []string{"StartTest", "Wait", "Close", "DisplayMutationScore", "DisplayReportSummary"} {
 		reporter.On(call, mock.Anything).Return(nil).Maybe()
 		reporter.On(call, mock.Anything, mock.Anything).Return().Maybe()
 	}
@@ -266,4 +266,51 @@ func TestMerge_KeepsOnlyMainResultsTheRunDidNotReplace(t *testing.T) {
 	for _, ids := range saves {
 		assert.NotContains(t, ids, "in-c=survived", "the replaced main result is not written back")
 	}
+}
+
+func saveSelection(t *testing.T, dir string, selection rpt.Selection) {
+	t.Helper()
+	require.NoError(t, adapter.NewReportStore().SaveSelection(context.Background(), m.Path(dir), selection))
+}
+
+var diffSelection = rpt.Selection{Diff: "origin/main", Base: "abc123"}
+
+func TestMerge_DiffShardsKeepTheirSelection(t *testing.T) {
+	runDir := filepath.Join(t.TempDir(), domain.RunDirName)
+	diffScope := &rpt.Scope{Base: "abc123", Lines: []rpt.LineRange{{Start: 1, End: 1}}}
+
+	for i, id := range []string{"in-a", "next"} {
+		shard := filepath.Join(runDir, domain.ShardDirPrefix+string(rune('0'+i)))
+		saveReports(t, shard, mergeReport(mergeSource("h1"), id, rpt.Survived, diffScope))
+		saveSelection(t, shard, diffSelection)
+	}
+
+	require.NoError(t, mergeWorkflow(t).Merge(context.Background(), domain.MergeArgs{Reports: m.Path(runDir)}))
+
+	selection, err := adapter.NewReportStore().LoadSelection(context.Background(), m.Path(runDir))
+	require.NoError(t, err)
+	assert.Equal(t, diffSelection, selection)
+
+	// report view of the merged run applies the diff thresholds, as for an
+	// unsharded gooze run --diff.
+	err = mergeWorkflow(t).View(context.Background(), domain.ViewArgs{
+		Reports:        m.Path(runDir),
+		Thresholds:     domain.Thresholds{Key: "threshold"},
+		DiffThresholds: domain.Thresholds{Key: "threshold.diff", Total: 100},
+	})
+	require.EqualError(t, err, "mutation score 0.00% is below threshold.diff.total 100%")
+}
+
+func TestMerge_ShardsWithDifferentSelectionsFail(t *testing.T) {
+	runDir := filepath.Join(t.TempDir(), domain.RunDirName)
+
+	for i, selection := range []rpt.Selection{diffSelection, diffSelection, {Diff: "origin/main", Base: "def456"}} {
+		shard := filepath.Join(runDir, domain.ShardDirPrefix+string(rune('0'+i)))
+		saveReports(t, shard, mergeReport(mergeSource("h1"), "id"+string(rune('0'+i)), rpt.Survived, runScope))
+		saveSelection(t, shard, selection)
+	}
+
+	err := mergeWorkflow(t).Merge(context.Background(), domain.MergeArgs{Reports: m.Path(runDir)})
+	require.ErrorContains(t, err, "shards were run with different selections: "+filepath.Join(runDir, domain.ShardDirPrefix+"1")+" and "+filepath.Join(runDir, domain.ShardDirPrefix+"2"))
+	assert.DirExists(t, filepath.Join(runDir, domain.ShardDirPrefix+"0"), "nothing is merged")
 }
