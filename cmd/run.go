@@ -173,13 +173,11 @@ func parseShardFlag(shard string) (int, int, error) {
 
 	_, err := fmt.Sscanf(shard, "%d/%d", &index, &total)
 	if err != nil || fmt.Sprintf("%d/%d", index, total) != strings.TrimSpace(shard) {
-		// Equivalent: callers ignore the numbers when err is set.
-		return 0, 0, usageError(fmt.Errorf("invalid --shard %q: expected INDEX/TOTAL (e.g. 0/3)", shard)) //gooze:ignore numbers
+		return 0, 0, usageError(fmt.Errorf("invalid --shard %q: expected INDEX/TOTAL (e.g. 0/3)", shard))
 	}
 
 	if index < 0 || index >= total {
-		// Equivalent: callers ignore the numbers when err is set.
-		return 0, 0, usageError(fmt.Errorf("invalid --shard %q: index must satisfy 0 <= INDEX < TOTAL", shard)) //gooze:ignore numbers
+		return 0, 0, usageError(fmt.Errorf("invalid --shard %q: index must satisfy 0 <= INDEX < TOTAL", shard))
 	}
 
 	return index, total, nil

@@ -403,8 +403,7 @@ func evalConst(e ast.Expr, index int64) (int64, bool) {
 // notConstant is the result of evaluating an expression that isn't a
 // constant this tracks.
 func notConstant() (int64, bool) {
-	// Equivalent: the value is never read when ok is false.
-	return 0, false //gooze:ignore numbers
+	return 0, false
 }
 
 func evalUnary(op token.Token, x int64, ok bool) (int64, bool) {

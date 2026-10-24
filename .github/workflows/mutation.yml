@@ -45,7 +45,7 @@ jobs:
       with:
         go-version-file: go.mod
     - name: Install gooze
-      run: go install gooze.dev/pkg/gooze@v1.3.0
+      run: go install gooze.dev/pkg/gooze@v1.4.0
 
       # Full runs reuse the main baseline, so unchanged files are skipped. A
       # diff run only mutates changed lines, which the cache can't skip.
@@ -89,7 +89,7 @@ jobs:
       with:
         go-version-file: go.mod
     - name: Install gooze
-      run: go install gooze.dev/pkg/gooze@v1.3.0
+      run: go install gooze.dev/pkg/gooze@v1.4.0
 
       # Pull main's baseline first so the merge keeps unchanged (cached) reports
       # alongside the shards' freshly-tested ones.
@@ -118,20 +118,15 @@ jobs:
     - name: Merge shards
       run: gooze report merge -o "$REPORTS_DIR"
 
-      # Survivors as annotations on the pull request's changed lines. Only
-      # display: the gate below stays on the pinned release. --format github
-      # isn't in a release yet, so this gooze comes from main, never from the
-      # pull request; switch to the pinned one when a release has the flag.
-      # Runs before the gate, and a low score (exit 3) doesn't fail it.
+      # Survivors as annotations on the changed lines; a low score (exit 3)
+      # doesn't fail this step, the gate below does.
     - name: Annotate survivors
       if: github.event_name == 'pull_request'
-      run: |
-        GOBIN="$RUNNER_TEMP/gooze-main" go install gooze.dev/pkg/gooze@main
-        "$RUNNER_TEMP/gooze-main/gooze" report view -o "$REPORTS_DIR" --format github || [ $? -eq 3 ]
+      run: gooze report view -o "$REPORTS_DIR" --format github || [ $? -eq 3 ]
 
       # The merged run/ holds only the changed lines' mutants, so the plain
       # total threshold is the diff gate. It's passed as a flag because
-      # gooze v1.3.0 doesn't apply threshold.diff.* from gooze.yaml to merged
+      # gooze doesn't apply threshold.diff.* from gooze.yaml to merged
       # shards; keep it in sync with threshold.diff.total there.
     - name: Changed lines must be fully killed
       if: github.event_name == 'pull_request'
