@@ -87,8 +87,7 @@ func (f ThresholdFlags) value(cmd *cobra.Command, name string) (float64, error) 
 	if flag := f.prefix + "-" + name; cmd.Flags().Changed(flag) {
 		value, _ := cmd.Flags().GetFloat64(flag)
 		if err := field.CheckFloat(value); err != nil {
-			// Equivalent: Read ignores the number when err is set.
-			return 0, fmt.Errorf("invalid --%s: %w", flag, err) //gooze:ignore numbers
+			return 0, fmt.Errorf("invalid --%s: %w", flag, err)
 		}
 
 		return value, nil
@@ -96,13 +95,11 @@ func (f ThresholdFlags) value(cmd *cobra.Command, name string) (float64, error) 
 
 	value, err := cast.ToFloat64E(viper.Get(key))
 	if err != nil {
-		// Equivalent: Read ignores the number when err is set.
-		return 0, fmt.Errorf("invalid %s: %q is not a number", key, viper.GetString(key)) //gooze:ignore numbers
+		return 0, fmt.Errorf("invalid %s: %q is not a number", key, viper.GetString(key))
 	}
 
 	if err := field.CheckFloat(value); err != nil {
-		// Equivalent: Read ignores the number when err is set.
-		return 0, fmt.Errorf("invalid %s: %w", key, err) //gooze:ignore numbers
+		return 0, fmt.Errorf("invalid %s: %w", key, err)
 	}
 
 	return value, nil
@@ -116,8 +113,7 @@ func (f ThresholdFlags) survivorCap(cmd *cobra.Command) (int, error) {
 	if flag := f.prefix + "-max-survivors"; cmd.Flags().Changed(flag) {
 		value, _ := cmd.Flags().GetInt(flag)
 		if err := field.CheckInt(value); err != nil {
-			// Equivalent: Read ignores the number when err is set.
-			return 0, fmt.Errorf("invalid --%s: %w", flag, err) //gooze:ignore numbers
+			return 0, fmt.Errorf("invalid --%s: %w", flag, err)
 		}
 
 		return value, nil
@@ -132,13 +128,11 @@ func (f ThresholdFlags) survivorCap(cmd *cobra.Command) (int, error) {
 
 	value, err := strconv.Atoi(text)
 	if err != nil {
-		// Equivalent: Read ignores the number when err is set.
-		return 0, fmt.Errorf("invalid %s: %q is not a whole number", key, text) //gooze:ignore numbers
+		return 0, fmt.Errorf("invalid %s: %q is not a whole number", key, text)
 	}
 
 	if err := field.CheckInt(value); err != nil {
-		// Equivalent: Read ignores the number when err is set.
-		return 0, fmt.Errorf("invalid %s: %w", key, err) //gooze:ignore numbers
+		return 0, fmt.Errorf("invalid %s: %w", key, err)
 	}
 
 	return value, nil
