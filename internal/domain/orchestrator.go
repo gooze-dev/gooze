@@ -169,7 +169,7 @@ func (ws *workspace) ensurePrepared(ctx context.Context, sourcePath m.Path) erro
 		return fmt.Errorf("failed to find project root: %w", err)
 	}
 
-	if ws.tmpDir != "" && ws.projectRoot == root {
+	if ws.projectRoot == root {
 		return nil
 	}
 
