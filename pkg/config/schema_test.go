@@ -24,6 +24,7 @@ func TestDefaults(t *testing.T) {
 		KeyThresholdTotal:              0.0,
 		KeyThresholdAverage:            0.0,
 		KeyThresholdFile:               0.0,
+		KeyThresholdMaxSurvivors:       0,
 		KeyThresholdDiffTotal:          0.0,
 		KeyThresholdDiffAverage:        0.0,
 		KeyThresholdDiffFile:           0.0,
@@ -84,24 +85,25 @@ func TestLookup_LogLevelEnum(t *testing.T) {
 
 func TestLookup_Kinds(t *testing.T) {
 	want := map[string]Kind{
-		KeyVersion:            KindInt,
-		KeyOutput:             KindString,
-		KeyNoCache:            KindBool,
-		"paths":               KindObject,
-		KeyPathsExclude:       KindStringList,
-		KeyRunMutationTimeout: KindInt,
-		KeyRunCoverageProfile: KindString,
-		KeyRunDiff:            KindString,
-		KeyRunMutagens:        KindStringList,
-		KeyRunWorkspace:       KindEnum,
-		"threshold":           KindObject,
-		KeyThresholdTotal:     KindFloat,
-		"threshold.diff":      KindObject,
-		KeyThresholdDiffFile:  KindFloat,
-		"report":              KindObject,
-		KeyReportFormat:       KindEnum,
-		"log":                 KindObject,
-		KeyLogCompress:        KindBool,
+		KeyVersion:               KindInt,
+		KeyOutput:                KindString,
+		KeyNoCache:               KindBool,
+		"paths":                  KindObject,
+		KeyPathsExclude:          KindStringList,
+		KeyRunMutationTimeout:    KindInt,
+		KeyRunCoverageProfile:    KindString,
+		KeyRunDiff:               KindString,
+		KeyRunMutagens:           KindStringList,
+		KeyRunWorkspace:          KindEnum,
+		"threshold":              KindObject,
+		KeyThresholdTotal:        KindFloat,
+		KeyThresholdMaxSurvivors: KindInt,
+		"threshold.diff":         KindObject,
+		KeyThresholdDiffFile:     KindFloat,
+		"report":                 KindObject,
+		KeyReportFormat:          KindEnum,
+		"log":                    KindObject,
+		KeyLogCompress:           KindBool,
 	}
 
 	for key, kind := range want {
@@ -138,9 +140,10 @@ func TestSchema_ReturnsCopy(t *testing.T) {
 
 func TestSchema_Bounds(t *testing.T) {
 	want := map[string][2]*int{
-		KeyVersion:            {new(1), new(1)},
-		KeyRunParallel:        {new(1), nil},
-		KeyRunMutationTimeout: {new(1), nil},
+		KeyVersion:               {new(1), new(1)},
+		KeyRunParallel:           {new(1), nil},
+		KeyRunMutationTimeout:    {new(1), nil},
+		KeyThresholdMaxSurvivors: {new(0), nil},
 	}
 
 	for _, key := range thresholdKeys {

@@ -55,7 +55,8 @@ func newRunCmd() *cobra.Command {
 				return err
 			}
 
-			if totalShards > 1 && estimateArgs.Run != "" {
+			// Equivalent: parseShardFlag returns a total of at least 1, so > 1 is != 1.
+			if totalShards > 1 && estimateArgs.Run != "" { //gooze:ignore comparison
 				return usageError(errRunWithShard)
 			}
 
@@ -122,16 +123,10 @@ func configureRunFlags(cmd *cobra.Command) (report.ThresholdFlags, report.Thresh
 		report.AddThresholdFlags(cmd, "threshold.diff", "threshold-diff")
 }
 
-// runThresholds returns the minimum scores of a run: a --diff run is scored
-// on its changed lines, so it has its own. Both sets are checked, so a bad
-// value fails whichever applies.
+// runThresholds returns the quality gates of a run: a --diff run is scored on
+// its changed lines, so it has its own minimum scores.
 func runThresholds(cmd *cobra.Command, diff bool, plain, diffOnly report.ThresholdFlags) (domain.Thresholds, error) {
-	minimums, err := plain.Read(cmd)
-	if err != nil {
-		return domain.Thresholds{}, err
-	}
-
-	diffMinimums, err := diffOnly.Read(cmd)
+	minimums, diffMinimums, err := report.ReadGates(cmd, plain, diffOnly)
 	if err != nil {
 		return domain.Thresholds{}, err
 	}
@@ -172,13 +167,15 @@ func parseShardFlag(shard string) (int, int, error) {
 
 	var index, total int
 
-	n, err := fmt.Sscanf(shard, "%d/%d", &index, &total)
-	if err != nil || n != 2 || fmt.Sprintf("%d/%d", index, total) != strings.TrimSpace(shard) {
+	// Sscanf fails unless it reads both numbers.
+	_, err := fmt.Sscanf(shard, "%d/%d", &index, &total)
+	if err != nil || fmt.Sprintf("%d/%d", index, total) != strings.TrimSpace(shard) {
 		// Equivalent: callers ignore the numbers when err is set.
 		return 0, 0, usageError(fmt.Errorf("invalid --shard %q: expected INDEX/TOTAL (e.g. 0/3)", shard)) //gooze:ignore numbers
 	}
 
-	if total <= 0 || index < 0 || index >= total {
+	// 0 <= index < total also rules out a total below 1.
+	if index < 0 || index >= total {
 		// Equivalent: callers ignore the numbers when err is set.
 		return 0, 0, usageError(fmt.Errorf("invalid --shard %q: index must satisfy 0 <= INDEX < TOTAL", shard)) //gooze:ignore numbers
 	}

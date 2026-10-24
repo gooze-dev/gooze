@@ -80,6 +80,109 @@ func TestThresholdFlags_OutOfRange(t *testing.T) {
 	require.EqualError(t, err, `invalid threshold.diff.file: "lots" is not a number`)
 }
 
+// readMaxSurvivors parses args for a command with the plain threshold flags
+// and returns the max survivors they read.
+func readMaxSurvivors(t *testing.T, args ...string) (int, error) {
+	t.Helper()
+
+	got, err := readThresholds(t, "threshold", "threshold", args...)
+
+	return got.MaxSurvivors, err
+}
+
+func TestMaxSurvivorsFlag(t *testing.T) {
+	defer viper.Reset()
+
+	got, err := readMaxSurvivors(t)
+	require.NoError(t, err)
+	assert.Zero(t, got, "off by default")
+
+	viper.Set(config.KeyThresholdMaxSurvivors, 5)
+
+	got, err = readMaxSurvivors(t)
+	require.NoError(t, err)
+	assert.Equal(t, 5, got)
+
+	got, err = readMaxSurvivors(t, "--threshold-max-survivors", "2")
+	require.NoError(t, err)
+	assert.Equal(t, 2, got, "the flag wins over the config")
+
+	got, err = readMaxSurvivors(t, "--threshold-max-survivors", "0")
+	require.NoError(t, err)
+	assert.Zero(t, got, "a flag of 0 turns the config value off")
+
+	// Env vars and quoted YAML are strings, read in base 10.
+	viper.Set(config.KeyThresholdMaxSurvivors, "010")
+
+	got, err = readMaxSurvivors(t)
+	require.NoError(t, err)
+	assert.Equal(t, 10, got)
+}
+
+func TestMaxSurvivorsFlag_HelpShowsOff(t *testing.T) {
+	cmd := &cobra.Command{Use: "x"}
+	AddThresholdFlags(cmd, "threshold", "threshold")
+
+	flag := cmd.Flags().Lookup("threshold-max-survivors")
+	require.NotNil(t, flag)
+	assert.Equal(t, "0", flag.DefValue)
+	assert.Equal(t, "exit with code 3 when more mutants than this survive (config threshold.max_survivors; 0 is off)", flag.Usage)
+}
+
+func TestMaxSurvivorsFlag_HasNoDiffCopy(t *testing.T) {
+	cmd := &cobra.Command{Use: "x"}
+	AddThresholdFlags(cmd, "threshold.diff", "threshold-diff")
+
+	assert.Nil(t, cmd.Flags().Lookup("threshold-diff-max-survivors"), "a --diff run counts its own survivors against threshold.max_survivors")
+}
+
+func TestMaxSurvivorsFlag_Invalid(t *testing.T) {
+	defer viper.Reset()
+
+	_, err := readMaxSurvivors(t, "--threshold-max-survivors", "-1")
+	require.EqualError(t, err, "invalid --threshold-max-survivors: -1 is out of range: must be at least 0")
+	assert.Equal(t, m.ExitUsage, codeOf(err))
+
+	viper.Set(config.KeyThresholdMaxSurvivors, -3)
+	_, err = readMaxSurvivors(t)
+	require.EqualError(t, err, "invalid threshold.max_survivors: -3 is out of range: must be at least 0")
+	assert.Equal(t, m.ExitUsage, codeOf(err))
+
+	viper.Set(config.KeyThresholdMaxSurvivors, "lots")
+	_, err = readMaxSurvivors(t)
+	require.EqualError(t, err, `invalid threshold.max_survivors: "lots" is not a whole number`)
+	assert.Equal(t, m.ExitUsage, codeOf(err))
+
+	viper.Set(config.KeyThresholdMaxSurvivors, 2.5)
+	_, err = readMaxSurvivors(t)
+	require.EqualError(t, err, `invalid threshold.max_survivors: "2.5" is not a whole number`)
+}
+
+func TestReportViewAndMergePassMaxSurvivors(t *testing.T) {
+	viper.Set(testOutputKey, "/tmp/reports")
+	viper.Set(config.KeyThresholdMaxSurvivors, 4)
+	defer viper.Reset()
+
+	wf := domainmocks.NewMockWorkflow(t)
+	// A --diff run's reports count the survivors on their changed lines, so
+	// view checks the same maximum against them.
+	wf.On("View", mock.Anything, domain.ViewArgs{
+		Reports: "/tmp/reports", Paths: []m.Path{},
+		Thresholds:     domain.Thresholds{Key: "threshold", MaxSurvivors: 3},
+		DiffThresholds: domain.Thresholds{Key: "threshold.diff", MaxSurvivors: 3},
+	}).Return(nil)
+	wf.On("Merge", mock.Anything, domain.MergeArgs{Reports: "/tmp/reports", Thresholds: domain.Thresholds{Key: "threshold", MaxSurvivors: 4}}).Return(nil)
+
+	deps := Deps{Workflow: wf, Publisher: domainmocks.NewMockReportPublisher(t), OutputKey: testOutputKey}
+
+	require.NoError(t, execReport(t, deps, "view", "--threshold-max-survivors", "3"))
+	require.NoError(t, execReport(t, deps, "merge"))
+
+	err := execReport(t, deps, "merge", "--threshold-max-survivors", "-1")
+	assert.Equal(t, m.ExitUsage, codeOf(err))
+	wf.AssertNumberOfCalls(t, "Merge", 1)
+}
+
 func TestReportViewAndMergePassThresholds(t *testing.T) {
 	viper.Set(testOutputKey, "/tmp/reports")
 	viper.Set(config.KeyThresholdAverage, 50)

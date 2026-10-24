@@ -90,13 +90,18 @@ func runField() Field {
 	}}
 }
 
-// thresholdField holds the minimum mutation scores, in percent. A command
-// whose score is below one exits with code 3; 0 turns a threshold off.
+// thresholdField holds the quality gates: minimum mutation scores, in percent,
+// and the most surviving mutants allowed. A command that fails one exits with
+// code 3; 0 turns a threshold off.
 func thresholdField() Field {
-	return Field{Name: "threshold", Kind: KindObject, Doc: "Minimum mutation scores in percent; below one, gooze exits with code 3. 0 turns a threshold off.", Children: append(
+	return Field{Name: "threshold", Kind: KindObject, Doc: "Quality gates: minimum mutation scores in percent and the most surviving mutants allowed; failing one, gooze exits with code 3. 0 turns a threshold off.", Children: append(
 		thresholdFields("the score of all mutations", "the average of the per-file scores", "the score every file must reach"),
 		Field{
-			Name: "diff", Kind: KindObject, Doc: "Thresholds for --diff runs, scored on the changed lines; they replace the ones above there.",
+			Name: "max_survivors", Kind: KindInt, Default: 0, Min: new(0),
+			Doc: "Most surviving mutants allowed; a --diff run counts the ones on its changed lines.",
+		},
+		Field{
+			Name: "diff", Kind: KindObject, Doc: "Thresholds for --diff runs, scored on the changed lines; they replace the scores above there.",
 			Children: thresholdFields("the changed lines' score", "the average of the changed files' scores", "the score every changed file must reach"),
 		},
 	)}

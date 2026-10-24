@@ -509,6 +509,22 @@ func TestRunCmd_DiffThresholdsReplaceThePlainOnes(t *testing.T) {
 		thresholdsOfRun(t, "--diff", "main", "--threshold-total", "80", "--threshold-diff-average", "90", "./..."))
 }
 
+func TestRunCmd_MaxSurvivors(t *testing.T) {
+	assert.Equal(t, domain.Thresholds{Key: "threshold", Total: 80, MaxSurvivors: 5},
+		thresholdsOfRun(t, "--threshold-total", "80", "--threshold-max-survivors", "5", "./..."))
+	// A --diff run counts the survivors on its changed lines against the same
+	// maximum.
+	assert.Equal(t, domain.Thresholds{Key: "threshold.diff", MaxSurvivors: 5},
+		thresholdsOfRun(t, "--diff", "main", "--threshold-max-survivors", "5", "./..."))
+}
+
+func TestRunCmd_MaxSurvivorsFromEnv(t *testing.T) {
+	t.Setenv("GOOZE_THRESHOLD_MAX_SURVIVORS", "3")
+
+	assert.Equal(t, domain.Thresholds{Key: "threshold", MaxSurvivors: 3}, thresholdsOfRun(t, "./..."))
+	assert.Equal(t, domain.Thresholds{Key: "threshold.diff", MaxSurvivors: 3}, thresholdsOfRun(t, "--diff", "main", "./..."))
+}
+
 func TestRunCmd_ThresholdsFromEnv(t *testing.T) {
 	t.Setenv("GOOZE_THRESHOLD_TOTAL", "70")
 	t.Setenv("GOOZE_THRESHOLD_DIFF_FILE", "85.5")
@@ -522,6 +538,9 @@ func TestRunCmd_BadThresholdIsAUsageError(t *testing.T) {
 
 	err := diffRunCmd(t, mockWorkflow, "run", "--threshold-diff-total", "120", "./...")
 	require.EqualError(t, err, "invalid --threshold-diff-total: 120 is out of range: must be between 0 and 100")
+
+	err = diffRunCmd(t, mockWorkflow, "run", "--threshold-max-survivors", "-2", "./...")
+	require.EqualError(t, err, "invalid --threshold-max-survivors: -2 is out of range: must be at least 0")
 	assert.Equal(t, m.ExitUsage, exitCode(context.Background(), err, false))
 	mockWorkflow.AssertNotCalled(t, "Test", mock.Anything, mock.Anything)
 }
@@ -637,4 +656,13 @@ func TestRunCmd_ParallelPrecedence(t *testing.T) {
 			mockWorkflow.AssertExpectations(t)
 		})
 	}
+}
+
+func TestParseShardFlag_Bounds(t *testing.T) {
+	index, total, err := parseShardFlag("0/1")
+	require.NoError(t, err)
+	assert.Equal(t, [2]int{0, 1}, [2]int{index, total}, "one shard is valid")
+
+	_, _, err = parseShardFlag("01/3")
+	require.EqualError(t, err, `invalid --shard "01/3": expected INDEX/TOTAL (e.g. 0/3)`, "numbers are written as gooze prints them")
 }

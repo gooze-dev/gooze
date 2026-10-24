@@ -17,6 +17,7 @@ const (
 	KeyThresholdTotal              = "threshold.total"
 	KeyThresholdAverage            = "threshold.average"
 	KeyThresholdFile               = "threshold.file"
+	KeyThresholdMaxSurvivors       = "threshold.max_survivors"
 	KeyThresholdDiffTotal          = "threshold.diff.total"
 	KeyThresholdDiffAverage        = "threshold.diff.average"
 	KeyThresholdDiffFile           = "threshold.diff.file"

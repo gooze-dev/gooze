@@ -21,11 +21,12 @@ mutagen:                      # Per-mutagen settings.
   comparison:                 # Settings of the comparison mutagen.
     enum_bounds: false        # Treat the lowest and highest constant of a defined integer type as its bounds, so v == Lowest isn't mutated to v <= Lowest. Only safe when no value of the type is converted from an arbitrary integer.
 
-threshold:                    # Minimum mutation scores in percent; below one, gooze exits with code 3. 0 turns a threshold off.
+threshold:                    # Quality gates: minimum mutation scores in percent and the most surviving mutants allowed; failing one, gooze exits with code 3. 0 turns a threshold off.
   total: 0                    # Minimum for the score of all mutations.
   average: 0                  # Minimum for the average of the per-file scores.
   file: 0                     # Minimum for the score every file must reach.
-  diff:                       # Thresholds for --diff runs, scored on the changed lines; they replace the ones above there.
+  max_survivors: 0            # Most surviving mutants allowed; a --diff run counts the ones on its changed lines.
+  diff:                       # Thresholds for --diff runs, scored on the changed lines; they replace the scores above there.
     total: 100                 # Minimum for the changed lines' score.
     average: 0                # Minimum for the average of the changed files' scores.
     file: 0                   # Minimum for the score every changed file must reach.
