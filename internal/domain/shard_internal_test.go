@@ -34,3 +34,15 @@ func TestInShard(t *testing.T) {
 		require.Equal(t, 1, matches, "id %q must belong to exactly one shard", id)
 	}
 }
+
+// Shards of one run may come from different gooze builds, so the assignment
+// must not change.
+func TestInShard_AssignmentIsStable(t *testing.T) {
+	want := map[string]int{"hash-0": 1, "hash-1": 2, "hash-2": 5, "hash-3": 2, "hash-4": 1, "hash-5": 1, "b1d9e3": 1, "ffff": 3}
+
+	for id, shard := range want {
+		for index := range 6 {
+			require.Equal(t, index == shard, inShard(id, index, 6), "%s in shard %d", id, index)
+		}
+	}
+}
