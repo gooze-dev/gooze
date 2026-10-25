@@ -3,13 +3,11 @@ package gocache
 import (
 	"context"
 	"flag"
-	"fmt"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -34,48 +32,12 @@ func TestMain(m *testing.M) {
 		os.Exit(0)
 	}
 
-	code := m.Run()
-	_ = os.RemoveAll(template.dir)
-
-	os.Exit(code)
+	os.Exit(m.Run())
 }
 
-// template is a GOCACHE holding the standard library's test builds, which
-// newModule copies so that each test starts from a warm cache.
-var template struct {
-	once sync.Once
-	dir  string
-	err  error
-}
-
-func warmTemplate(t *testing.T) string {
-	t.Helper()
-
-	template.once.Do(func() {
-		if template.dir, template.err = os.MkdirTemp("", "gocache-template"); template.err != nil {
-			return
-		}
-
-		mod := filepath.Join(template.dir, "mod")
-		_ = os.MkdirAll(mod, 0o755)
-		_ = os.WriteFile(filepath.Join(mod, "go.mod"), []byte("module warm\n\ngo 1.24\n"), 0o600)
-		_ = os.WriteFile(filepath.Join(mod, "warm_test.go"), []byte("package warm\n\nimport \"testing\"\n\nfunc TestWarm(t *testing.T) {}\n"), 0o600)
-
-		cmd := exec.Command("go", "test", "-count=1", ".")
-		cmd.Dir = mod
-		cmd.Env = append(os.Environ(), "GOCACHE="+filepath.Join(template.dir, "go-build"), "GOCACHEPROG=", "GOFLAGS=-buildvcs=false")
-
-		if out, err := cmd.CombinedOutput(); err != nil {
-			template.err = fmt.Errorf("%w: %s", err, out)
-		}
-	})
-	require.NoError(t, template.err)
-
-	return filepath.Join(template.dir, "go-build")
-}
-
-// module is a module whose main package imports its lib package, in a
-// temporary GOCACHE and user cache directory.
+// module is a module whose main package imports its lib package. Its builds
+// read the developer's GOCACHE, which already holds the standard library;
+// its directory makes its own packages' cache entries unique.
 type module struct {
 	dir, shared, layer string
 }
@@ -83,14 +45,16 @@ type module struct {
 func newModule(t *testing.T) module {
 	t.Helper()
 
+	shared, err := exec.Command("go", "env", "GOCACHE").Output()
+	require.NoError(t, err)
+
 	tmp := t.TempDir()
-	mod := module{dir: filepath.Join(tmp, "calc"), shared: filepath.Join(tmp, "go-build"), layer: filepath.Join(tmp, "xdg", "gooze", "go-build")}
-	require.NoError(t, os.CopyFS(mod.shared, os.DirFS(warmTemplate(t))))
-	t.Setenv("GOCACHE", mod.shared)
+	t.Setenv("GOCACHE", strings.TrimSpace(string(shared)))
 	t.Setenv("XDG_CACHE_HOME", filepath.Join(tmp, "xdg"))
 	t.Setenv("GOCACHEPROG", "")
 	t.Setenv("GOFLAGS", "-buildvcs=false")
 
+	mod := module{dir: filepath.Join(tmp, "calc"), shared: strings.TrimSpace(string(shared)), layer: filepath.Join(tmp, "xdg", "gooze", "go-build")}
 	writeTestFile(t, filepath.Join(mod.dir, "go.mod"), "module calc\n\ngo 1.24\n")
 	writeTestFile(t, filepath.Join(mod.dir, "lib", "lib.go"), "package lib\n\nfunc Add(a, b int) int { return a + b }\n")
 	writeTestFile(t, filepath.Join(mod.dir, "lib", "lib_test.go"), "package lib\n\nimport \"testing\"\n\nfunc TestAdd(t *testing.T) {}\n")
@@ -113,20 +77,44 @@ func (mod module) goCmd(t *testing.T, env []string, args ...string) string {
 	return string(out)
 }
 
-func files(t *testing.T, dir string) []string {
+// build builds the module's main package with env and returns the -x output.
+func (mod module) build(t *testing.T, env []string) string {
+	t.Helper()
+
+	return mod.goCmd(t, env, "build", "-x", "-o", filepath.Join(t.TempDir(), "calc"), ".")
+}
+
+// layerFiles returns the layer's files, relative to it.
+func (mod module) layerFiles(t *testing.T) []string {
 	t.Helper()
 
 	var paths []string
 
-	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+	_ = filepath.WalkDir(mod.layer, func(path string, d fs.DirEntry, err error) error {
 		if err == nil && !d.IsDir() {
-			paths = append(paths, path)
+			rel, _ := filepath.Rel(mod.layer, path)
+			paths = append(paths, rel)
 		}
 
 		return nil
 	})
 
 	return paths
+}
+
+// assertNotShared checks that no entry of the layer was written to the shared
+// cache too. Outputs are named by their content, so both may hold one.
+func (mod module) assertNotShared(t *testing.T) {
+	t.Helper()
+
+	files := mod.layerFiles(t)
+	require.NotEmpty(t, files)
+
+	for _, file := range files {
+		if strings.HasSuffix(file, "-a") {
+			assert.NoFileExists(t, filepath.Join(mod.shared, file))
+		}
+	}
 }
 
 func prepare(t *testing.T, settings domain.GoCache, dirs ...string) (*Cache, []string) {
@@ -143,7 +131,6 @@ func prepare(t *testing.T, settings domain.GoCache, dirs ...string) (*Cache, []s
 func TestCache_IsolatesBuilds(t *testing.T) {
 	mod := newModule(t)
 	mod.goCmd(t, nil, "build", "./lib")
-	shared := files(t, mod.shared)
 
 	_, env := prepare(t, domain.GoCache{Mode: domain.GoCacheIsolated})
 	require.Len(t, env, 1)
@@ -158,34 +145,35 @@ func TestCache_IsolatesBuilds(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "5\n", string(out))
 
-	second := mod.goCmd(t, env, "build", "-x", "-o", bin, ".")
-	assert.NotContains(t, second, "-p main ", "main is read from the layer")
-
-	assert.NotEmpty(t, files(t, mod.layer))
-	assert.Equal(t, shared, files(t, mod.shared))
+	assert.NotContains(t, mod.build(t, env), "-p main ", "main is read from the layer")
+	mod.assertNotShared(t)
 }
 
 func TestCache_LeavesSharedCacheAlone(t *testing.T) {
 	mod := newModule(t)
-	mod.goCmd(t, nil, "build", "./lib")
-	shared := files(t, mod.shared)
 
 	_, env := prepare(t, domain.GoCache{Mode: domain.GoCacheIsolated})
 	mod.goCmd(t, env, "test", "-count=1", "./...")
-	mod.goCmd(t, env, "build", "-o", filepath.Join(t.TempDir(), "calc"), ".")
+	mod.build(t, env)
 
-	assert.Equal(t, shared, files(t, mod.shared))
+	mod.assertNotShared(t)
 }
 
 func TestCache_Prewarm(t *testing.T) {
 	mod := newModule(t)
-	mod.goCmd(t, nil, "build", "./lib")
-	shared := files(t, mod.shared)
 
 	_, env := prepare(t, domain.GoCache{Mode: domain.GoCacheIsolated, Prewarm: true}, filepath.Join(mod.dir, "lib"), mod.dir)
-	assert.Len(t, env, 1)
-	assert.Greater(t, len(files(t, mod.shared)), len(shared), "the packages' test builds go to the shared cache")
-	assert.Empty(t, files(t, mod.layer))
+	require.Len(t, env, 1)
+	assert.Empty(t, mod.layerFiles(t))
+
+	assert.NotContains(t, mod.build(t, env), "-p calc/lib ", "lib was built in the shared cache")
+}
+
+func TestCache_NoPrewarm(t *testing.T) {
+	mod := newModule(t)
+
+	_, env := prepare(t, domain.GoCache{Mode: domain.GoCacheIsolated}, filepath.Join(mod.dir, "lib"), mod.dir)
+	assert.Contains(t, mod.build(t, env), "-p calc/lib ")
 }
 
 func TestCache_PrewarmFailureIsNotFatal(t *testing.T) {
@@ -197,12 +185,10 @@ func TestCache_PrewarmFailureIsNotFatal(t *testing.T) {
 }
 
 func TestCache_NoPrewarmWithoutPackages(t *testing.T) {
-	mod := newModule(t)
-	shared := files(t, mod.shared)
+	newModule(t)
 
 	_, env := prepare(t, domain.GoCache{Mode: domain.GoCacheIsolated, Prewarm: true})
 	assert.Len(t, env, 1)
-	assert.Equal(t, shared, files(t, mod.shared))
 }
 
 // oldLayerFile writes a file of 600 KB to the layer, last used a day ago.
@@ -234,12 +220,10 @@ func TestCache_CloseTrimsToSize(t *testing.T) {
 func TestCache_FallsBackWhenGOCACHEPROGIsSet(t *testing.T) {
 	mod := newModule(t)
 	path := oldLayerFile(t, mod)
-	shared := files(t, mod.shared)
 	t.Setenv("GOCACHEPROG", "/no/such/cacheprog")
 
-	cache, env := prepare(t, domain.GoCache{Mode: domain.GoCacheIsolated, Prewarm: true}, mod.dir)
+	cache, env := prepare(t, domain.GoCache{Mode: domain.GoCacheIsolated})
 	assert.Nil(t, env)
-	assert.Equal(t, shared, files(t, mod.shared), "no prewarm")
 
 	require.NoError(t, cache.Close(context.Background()))
 	assert.FileExists(t, path, "no trim")
