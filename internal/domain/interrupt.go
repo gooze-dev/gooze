@@ -20,6 +20,7 @@ type testedRun struct {
 	mutations   pkg.FileSpill[m.Mutation] // the mutants the run was to test
 	planned     int                       // how many there are
 	interrupted bool                      // the run was stopped before testing them all
+	spillErr    error                     // the failed report write that stopped the run, or nil
 	failFast    FailFast                  // the fail-fast policy that left mutants untested, or ""
 	stop        error                     // the verdict of a fail-fast stop, or nil
 	stored      pkg.FileSpill[m.Report]   // the stored reports before the run, or nil
