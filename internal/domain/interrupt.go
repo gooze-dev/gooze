@@ -23,6 +23,7 @@ type testedRun struct {
 	failFast    FailFast                  // the fail-fast policy that left mutants untested, or ""
 	stop        error                     // the verdict of a fail-fast stop, or nil
 	stored      pkg.FileSpill[m.Report]   // the stored reports before the run, or nil
+	cached      pkg.FileSpill[m.Report]   // a narrowed run's cached results, or nil
 	resumed     resumedFiles
 }
 
@@ -254,6 +255,9 @@ func completeReports(run testedRun) (pkg.FileSpill[m.Report], error) {
 	err = run.reports.Range(func(_ uint64, report m.Report) error {
 		return add(report, report.Scope)
 	})
+	if err == nil {
+		err = appendReports(reports, run.cached)
+	}
 
 	for _, resumed := range run.resumed.reports {
 		for _, report := range resumed {
@@ -271,6 +275,15 @@ func completeReports(run testedRun) (pkg.FileSpill[m.Report], error) {
 	}
 
 	return reports, nil
+}
+
+// appendReports appends the reports of from (nil: none) to into.
+func appendReports(into, from pkg.FileSpill[m.Report]) error {
+	if from == nil {
+		return nil
+	}
+
+	return from.Range(func(_ uint64, report m.Report) error { return into.Append(report) })
 }
 
 func withInterrupted(scope *rpt.Scope) *rpt.Scope {

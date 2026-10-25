@@ -212,11 +212,13 @@ func (f *failFastWatch) actedOn() FailFast {
 }
 
 // failFastWatch returns the run's watch, planned with the mutants to test and
-// the cached and resumed results it scores.
+// the cached and resumed results it scores: of stored for a full run, selected
+// for a narrowed one.
 func (w *workflow) failFastWatch(
 	args TestArgs,
 	mutations pkg.FileSpill[m.Mutation],
 	stored pkg.FileSpill[m.Report],
+	selected pkg.FileSpill[m.Report],
 	resumed resumedFiles,
 	sources sourceSet,
 	stop context.CancelCauseFunc,
@@ -228,7 +230,7 @@ func (w *workflow) failFastWatch(
 	}
 
 	if stored == nil {
-		return watch, watch.plan(mutations, nil)
+		return watch, watch.plan(mutations, selected)
 	}
 
 	scored, err := pkg.NewFileSpill[m.Report]()
