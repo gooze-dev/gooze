@@ -104,6 +104,8 @@ type MergeArgs struct {
 	Reports m.Path
 	// Thresholds are the minimum scores of the merged reports.
 	Thresholds Thresholds
+	// DiffThresholds replace Thresholds when the shards are a --diff run's.
+	DiffThresholds Thresholds
 }
 
 // Workflow defines the interface for the mutation testing workflow.
@@ -559,7 +561,12 @@ func (w *workflow) Merge(ctx context.Context, args MergeArgs) error {
 			return err
 		}
 
-		return w.regenerateIndexAndScore(ctx, base, args.Thresholds)
+		thresholds := args.Thresholds
+		if selection.Diff != "" {
+			thresholds = args.DiffThresholds
+		}
+
+		return w.regenerateIndexAndScore(ctx, base, thresholds)
 	})
 }
 

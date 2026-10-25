@@ -66,7 +66,7 @@ func TestReportMerge(t *testing.T) {
 	defer viper.Reset()
 
 	wf := domainmocks.NewMockWorkflow(t)
-	wf.On("Merge", mock.Anything, domain.MergeArgs{Reports: m.Path("/tmp/reports"), Thresholds: domain.Thresholds{Key: "threshold"}}).Return(nil)
+	wf.On("Merge", mock.Anything, domain.MergeArgs{Reports: m.Path("/tmp/reports"), Thresholds: domain.Thresholds{Key: "threshold"}, DiffThresholds: domain.Thresholds{Key: "threshold.diff"}}).Return(nil)
 
 	deps := Deps{Workflow: wf, Publisher: domainmocks.NewMockReportPublisher(t), OutputKey: testOutputKey}
 
