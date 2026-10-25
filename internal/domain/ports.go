@@ -87,6 +87,15 @@ type TestRunnerAdapter interface {
 	RunGoTest(ctx context.Context, workDir, testFile, overlay string) (output string, err error)
 }
 
+// BuildCache keeps the builds of mutants out of the user's Go build cache.
+type BuildCache interface {
+	// Prepare sets the cache up for testing the mutants of the packages in
+	// pkgDirs.
+	Prepare(ctx context.Context, settings GoCache, pkgDirs []string) error
+	// Close trims the cache.
+	Close(ctx context.Context) error
+}
+
 // ReportStore persists and loads mutation reports.
 type ReportStore interface {
 	SaveReports(ctx context.Context, path m.Path, reports pkg.FileSpill[m.Report]) error

@@ -72,6 +72,8 @@ type TestArgs struct {
 	Thresholds Thresholds
 	// FailFast is when the run stops early; empty is FailFastOff.
 	FailFast FailFast
+	// GoCache is where the go command caches the builds of mutants.
+	GoCache GoCache
 }
 
 // ViewArgs contains the arguments for viewing mutation test reports.
@@ -121,6 +123,7 @@ type workflow struct {
 	orchestrator Orchestrator
 	mutagen      Mutagen
 	changes      ChangeDetector // nil disables diff mode
+	buildCache   BuildCache     // nil leaves mutant builds in the shared cache
 }
 
 // NewWorkflow creates a new Workflow instance with the provided dependencies.
@@ -191,6 +194,13 @@ func (w *workflow) Test(ctx context.Context, args TestArgs) error {
 		if err != nil {
 			return err
 		}
+
+		closeCache, err := w.prepareBuildCache(ctx, args.GoCache, sources.changed)
+		if err != nil {
+			return err
+		}
+
+		defer closeCache()
 
 		return w.testAndFinalize(ctx, args, sel, reportsDir, sources)
 	})
