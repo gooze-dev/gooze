@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	pkg "gooze.dev/pkg/gooze/pkg"
 	rpt "gooze.dev/pkg/gooze/pkg/report"
@@ -94,8 +95,11 @@ func (s *DiffScope) ReportScope(source rpt.Source) *rpt.Scope {
 	return &rpt.Scope{Base: s.changes.Base, Lines: lines}
 }
 
+// testChanged reports whether source's own x_test.go changed. A source without
+// one runs with another test file of its package, which says nothing about
+// what that file tests, so no test change puts it in scope.
 func (s *DiffScope) testChanged(source rpt.Source) bool {
-	if source.Test == nil {
+	if source.Test == nil || source.Test.FullPath != strings.TrimSuffix(source.Origin.FullPath, ".go")+"_test.go" {
 		return false
 	}
 
