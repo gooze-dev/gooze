@@ -79,7 +79,7 @@ func TestLocalSourceFSAdapter_BuildConstraintsHonourGOFLAGSTags(t *testing.T) {
 
 func TestGoflagsTags(t *testing.T) {
 	assert.Nil(t, goflagsTags(""))
-	assert.Nil(t, goflagsTags("-mod=mod -count=1"))
+	assert.Nil(t, goflagsTags("-mod=mod -count=1 -trimpath"))
 	assert.Equal(t, []string{"a", "b"}, goflagsTags("-tags=a,b"))
 	assert.Equal(t, []string{"c"}, goflagsTags("--tags=a -tags=c"), "the last -tags wins, as in go")
 }
