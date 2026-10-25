@@ -40,16 +40,13 @@ func TestOfTypes(t *testing.T) {
 
 func TestRunError(t *testing.T) {
 	failed := errors.New("dispatch failed")
-	fatal := errors.New("spill full")
 	mutant := errors.New("workspace broken")
 
 	canceled, cancel := context.WithCancel(context.Background())
 	cancel()
 
 	assert.ErrorIs(t, runError(context.Background(), failed, collectorResult{}), failed)
-	assert.ErrorIs(t, runError(context.Background(), nil, collectorResult{fatalErr: fatal}), fatal)
 	assert.NoError(t, runError(context.Background(), nil, collectorResult{}))
 	assert.NoError(t, runError(canceled, context.Canceled, collectorResult{}), "an interruption keeps the finished results")
-	assert.ErrorIs(t, runError(canceled, nil, collectorResult{fatalErr: fatal}), fatal)
 	assert.ErrorIs(t, runError(canceled, nil, collectorResult{errs: []error{mutant}}), mutant)
 }

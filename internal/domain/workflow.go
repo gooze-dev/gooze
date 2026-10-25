@@ -260,14 +260,15 @@ func (w *workflow) testMutations(ctx context.Context, args TestArgs, sel Selecti
 	}
 
 	reports, untested, err := w.testReports(runCtx, run.mutations, gate, sel, args.Threads, args.MutationTimeout, args.Workspace, watch)
-	if err != nil {
+	if reports == nil {
 		slog.Error("Failed to run mutation tests", "error", err)
 		return nil, fmt.Errorf("run mutation tests: %w", err)
 	}
 
 	run.reports = reports
+	run.spillErr = err
 	// The run was interrupted when it returns results on a canceled context.
-	run.interrupted = ctx.Err() != nil
+	run.interrupted = ctx.Err() != nil || err != nil
 
 	if !run.interrupted {
 		run.failFast = watch.actedOn()
@@ -304,7 +305,7 @@ func (w *workflow) finishRun(ctx context.Context, args TestArgs, sel Selection, 
 		return err
 	}
 
-	return fmt.Errorf("run mutation tests: %w", ctx.Err())
+	return fmt.Errorf("run mutation tests: %w", cmp.Or(run.spillErr, ctx.Err()))
 }
 
 // prepareReportsDir returns the directory the run writes to. A full run first
@@ -1161,7 +1162,8 @@ type mutationOutcome struct {
 // reusable workspace, tests the mutation, and sends the outcome on the shared
 // results channel. A single collector drains results and spills reports to disk.
 // Peak memory is bounded by one file's mutations plus the small channel buffers,
-// not the whole project's mutations.
+// not the whole project's mutations. When a report can't be spilled, the run
+// stops and returns the reports spilled so far with the error.
 // loadCoverage reads and parses the supplied coverage profile.
 func (w *workflow) loadCoverage(ctx context.Context, profile m.Path) (*CoverageIndex, error) {
 	if profile == "" {
@@ -1186,7 +1188,7 @@ func (w *workflow) testReports(
 	workspace WorkspaceMode,
 	watch *failFastWatch,
 ) (pkg.FileSpill[m.Report], *untestedPackages, error) {
-	reports, err := pkg.NewFileSpill[m.Report]()
+	reports, err := newReportSpill()
 	if err != nil {
 		slog.Error("failed to create reports filespill", "error", err)
 		return nil, nil, fmt.Errorf("create reports filespill: %w", err)
@@ -1199,16 +1201,17 @@ func (w *workflow) testReports(
 	queues := makeQueues(effectiveThreads)
 	results := make(chan mutationOutcome, effectiveThreads)
 
+	// A failed report write stops the dispatch of mutants.
+	dispatchCtx, stop := context.WithCancelCause(ctx)
+	defer stop(nil)
+
 	// Collector drains results into the spill while the dispatcher and workers run.
 	collected := make(chan collectorResult)
-
-	go func() {
-		collected <- w.collectResults(ctx, results, reports, sel.ReportScope)
-	}()
+	go func() { collected <- w.collectResults(ctx, results, reports, sel.ReportScope, stop) }()
 
 	var group errgroup.Group
 
-	group.Go(w.dispatchMutations(ctx, mutations, gate, watch, queues, results))
+	group.Go(w.dispatchMutations(dispatchCtx, mutations, gate, watch, queues, results))
 
 	checks := newTestChecks()
 	for threadID := range effectiveThreads {
@@ -1220,6 +1223,10 @@ func (w *workflow) testReports(
 	close(results)
 
 	outcome := <-collected
+	if outcome.spillErr != nil {
+		return reports, &outcome.untested, outcome.spillErr
+	}
+
 	if err := runError(ctx, runErr, outcome); err != nil {
 		closeSpill("reports", reports)
 		return nil, nil, err
@@ -1231,7 +1238,7 @@ func (w *workflow) testReports(
 // runError returns the run's error. An interrupted run has none, so that the
 // results of the finished mutants are kept, unless a mutant failed before.
 func runError(ctx context.Context, runErr error, outcome collectorResult) error {
-	if ctx.Err() != nil && outcome.fatalErr == nil && len(outcome.errs) == 0 {
+	if ctx.Err() != nil && len(outcome.errs) == 0 {
 		return nil
 	}
 
@@ -1253,8 +1260,6 @@ func testRunError(runErr error, outcome collectorResult) error {
 	switch {
 	case runErr != nil:
 		return runErr
-	case outcome.fatalErr != nil:
-		return outcome.fatalErr
 	case len(outcome.errs) > 0:
 		return fmt.Errorf("errors occurred during mutation testing: %w", errors.Join(outcome.errs...))
 	default:
@@ -1263,26 +1268,28 @@ func testRunError(runErr error, outcome collectorResult) error {
 }
 
 // collectorResult aggregates everything the collector observed: non-fatal
-// per-mutation errors and a fatal error (e.g. a spill write failure).
+// per-mutation errors and the failed write that stopped the spill.
 type collectorResult struct {
 	errs     []error
-	fatalErr error
+	spillErr error
 	untested untestedPackages
 }
 
 // collectResults drains the results channel until it is closed, spilling a
-// report for each successful outcome and accumulating errors. Because a single
+// report for each successful outcome and accumulating errors. The first failed
+// write stops the run with stop and ends the spilling. Because a single
 // goroutine owns the report spill and the error slices, no locking is needed.
 func (w *workflow) collectResults(
 	ctx context.Context,
 	results <-chan mutationOutcome,
 	reports pkg.FileSpill[m.Report],
 	scopeOf func(rpt.Source) *rpt.Scope,
+	stop context.CancelCauseFunc,
 ) collectorResult {
 	var collected collectorResult
 
 	for outcome := range results {
-		if outcome.dropped {
+		if outcome.dropped || collected.spillErr != nil {
 			continue
 		}
 
@@ -1298,9 +1305,10 @@ func (w *workflow) collectResults(
 		}
 
 		if err := reports.Append(buildReport(outcome.mutation, outcome.result, scopeOf(outcome.mutation.Source))); err != nil {
-			slog.Error("failed to append report to filespill", "error", err)
+			slog.Error("failed to append report to filespill", "path", reports.Path(), "error", err)
 
-			collected.fatalErr = cmp.Or(collected.fatalErr, fmt.Errorf("append report to filespill: %w", err))
+			collected.spillErr = fmt.Errorf("append report to %s: %w", reports.Path(), err)
+			stop(collected.spillErr)
 
 			continue
 		}
@@ -1400,6 +1408,9 @@ func dispatch(ctx context.Context, queues []chan m.Mutation, mutation m.Mutation
 }
 
 var errNoWorkers = errors.New("no workers to test mutations")
+
+// newReportSpill creates the spill a run collects its reports in.
+var newReportSpill = pkg.NewFileSpill[m.Report]
 
 func closeQueues(queues []chan m.Mutation) {
 	for _, queue := range queues {
