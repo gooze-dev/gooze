@@ -214,9 +214,15 @@ func (rs *LocalReportStore) LoadSpillReports(ctx context.Context, path m.Path) (
 type storedSourceState struct {
 	source  rpt.Source
 	mutator map[string]int
-	// partial is set when any stored report covers only some lines of the
-	// source (a diff-mode run), so its other lines were never tested.
+	// partial is set when any stored report covers only some lines or
+	// functions of the source, so the rest were never tested.
 	partial bool
+}
+
+// partialScope reports whether scope leaves out lines or functions of its
+// source. A scope of mutagens alone holds every result of those mutagens.
+func partialScope(scope *rpt.Scope) bool {
+	return scope != nil && (scope.Base != "" || scope.Lines != nil || scope.Run != "" || scope.Interrupted)
 }
 
 // CleanReports deletes stored report files that belong to the provided sources.
@@ -473,7 +479,7 @@ func (rs *LocalReportStore) addStoredReport(state map[string]storedSourceState, 
 
 	// Keep the most recently seen Source metadata (hashes), but they should be consistent.
 	st.source = report.Source
-	st.partial = st.partial || report.Scope != nil
+	st.partial = st.partial || partialScope(report.Scope)
 
 	for mt := range report.Result {
 		if existing, ok := st.mutator[mt.Name]; ok && existing != mt.Version {

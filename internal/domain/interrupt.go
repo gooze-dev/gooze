@@ -95,15 +95,16 @@ func reportsInScope(stored, reports pkg.FileSpill[m.Report], sources sourceSet) 
 	return all, nil
 }
 
-// resumedFiles holds the results an interrupted run saved for files that are
-// unchanged since: the run tests only their other mutants and keeps these.
+// resumedFiles holds the results an interrupted or --mutagens run saved for
+// files that are unchanged since: the run tests only their other mutants and
+// keeps these.
 type resumedFiles struct {
 	reports map[string][]m.Report // by source key
 	tested  map[string]bool       // mutationKey of each result
 }
 
 // resumeFrom picks from stored (nil: none) the results of files a previous
-// run left interrupted. A file's results are resumed only when its source and
+// run left interrupted or tested with only some mutagens. A file's results are resumed only when its source and
 // test are unchanged and every result is of a mutagen version this run uses;
 // otherwise the file is tested in full.
 func resumeFrom(stored pkg.FileSpill[m.Report], sel Selection, sources sourceSet) (resumedFiles, error) {
@@ -150,7 +151,7 @@ func interruptedReports(stored pkg.FileSpill[m.Report], changed map[string]rpt.S
 			return nil
 		}
 
-		if !interruptedOnly(report.Scope) || !sameHashes(report.Source, source) || !ofTypes(report, types) {
+		if !resumable(report.Scope) || !sameHashes(report.Source, source) || !ofTypes(report, types) {
 			stale[key] = true
 		}
 
@@ -181,6 +182,16 @@ func interruptedOnly(scope *rpt.Scope) bool {
 	}
 
 	return scope.Interrupted && scope.Base == "" && scope.Lines == nil && scope.Run == "" && scope.Mutagens == nil
+}
+
+// resumable reports whether scope leaves out no line or function: the run
+// was interrupted or used only some mutagens.
+func resumable(scope *rpt.Scope) bool {
+	return interruptedOnly(scope) || mutagensOnly(scope)
+}
+
+func mutagensOnly(scope *rpt.Scope) bool {
+	return scope != nil && scope.Mutagens != nil && scope.Base == "" && scope.Lines == nil && scope.Run == ""
 }
 
 func ofTypes(report m.Report, types []mgen.Type) bool {
