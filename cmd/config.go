@@ -38,6 +38,10 @@ const (
 	workspaceFlagName = "workspace"
 	failFastFlagName  = "fail-fast"
 
+	goCacheFlagName        = "go-cache"
+	goCacheSizeFlagName    = "go-cache-size"
+	goCachePrewarmFlagName = "go-cache-prewarm"
+
 	envPrefix = "GOOZE"
 )
 

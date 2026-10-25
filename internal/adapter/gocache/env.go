@@ -120,7 +120,7 @@ func supportsCacheProg(version string) bool {
 // prewarm builds the tests of the packages in dirs in the shared cache. A
 // failure only costs the speedup, so it is logged.
 func prewarm(ctx context.Context, dirs []string) {
-	cmd := exec.CommandContext(ctx, "go", append([]string{"test", "-count=1", "-vet=off", "-run", "^$"}, dirs...)...)
+	cmd := exec.CommandContext(ctx, "go", append([]string{"test", "-count=1", "-vet=off", "-run", "^$"}, dirs...)...) //nolint:gosec // dirs are the run's package directories.
 	cmd.Dir = dirs[0]
 
 	if out, err := cmd.CombinedOutput(); err != nil {

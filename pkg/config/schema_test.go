@@ -21,6 +21,9 @@ func TestDefaults(t *testing.T) {
 		KeyRunMutagens:                 []string{},
 		KeyRunWorkspace:                "overlay",
 		KeyRunFailFast:                 "off",
+		KeyRunGoCache:                  "isolated",
+		KeyRunGoCacheSize:              2048,
+		KeyRunGoCachePrewarm:           false,
 		KeyMutagenComparisonEnumBounds: false,
 		KeyThresholdTotal:              0.0,
 		KeyThresholdAverage:            0.0,
@@ -66,7 +69,7 @@ func TestLookup_Object(t *testing.T) {
 		names = append(names, child.Name)
 	}
 
-	assert.Equal(t, []string{"parallel", "mutation_timeout", "coverage_profile", "diff", "mutagens", "workspace", "fail_fast"}, names)
+	assert.Equal(t, []string{"parallel", "mutation_timeout", "coverage_profile", "diff", "mutagens", "workspace", "fail_fast", "go_cache", "go_cache_size", "go_cache_prewarm"}, names)
 }
 
 func TestLookup_Missing(t *testing.T) {
@@ -97,6 +100,9 @@ func TestLookup_Kinds(t *testing.T) {
 		KeyRunMutagens:           KindStringList,
 		KeyRunWorkspace:          KindEnum,
 		KeyRunFailFast:           KindEnum,
+		KeyRunGoCache:            KindEnum,
+		KeyRunGoCacheSize:        KindInt,
+		KeyRunGoCachePrewarm:     KindBool,
 		"threshold":              KindObject,
 		KeyThresholdTotal:        KindFloat,
 		KeyThresholdMaxSurvivors: KindInt,
@@ -146,6 +152,7 @@ func TestSchema_Bounds(t *testing.T) {
 		KeyRunParallel:           {new(1), nil},
 		KeyRunMutationTimeout:    {new(1), nil},
 		KeyThresholdMaxSurvivors: {new(0), nil},
+		KeyRunGoCacheSize:        {new(0), nil},
 	}
 
 	for _, key := range thresholdKeys {

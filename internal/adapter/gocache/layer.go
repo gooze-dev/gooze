@@ -53,7 +53,7 @@ func (l layer) put(actionID, outputID, body []byte, now time.Time) (string, erro
 // writeFile writes data to a temporary file and renames it to path, so a
 // concurrent reader never sees a partial file.
 func writeFile(path string, data []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return err
 	}
 

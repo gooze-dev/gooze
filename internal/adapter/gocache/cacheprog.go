@@ -9,6 +9,13 @@ import (
 	"time"
 )
 
+// The commands gooze's server knows.
+const (
+	cmdGet   = "get"
+	cmdPut   = "put"
+	cmdClose = "close"
+)
+
 // request and response are the messages of the GOCACHEPROG protocol, as
 // cmd/go/internal/cacheprog defines them.
 type request struct {
@@ -45,7 +52,7 @@ func Serve(in io.Reader, out io.Writer, shared, layerDir string) error {
 		return buf.Flush()
 	}
 
-	if err := send(response{KnownCommands: []string{"get", "put", "close"}}); err != nil {
+	if err := send(response{KnownCommands: []string{cmdGet, cmdPut, cmdClose}}); err != nil {
 		return err
 	}
 
@@ -64,7 +71,7 @@ func Serve(in io.Reader, out io.Writer, shared, layerDir string) error {
 			return err
 		}
 
-		if err := send(res); err != nil || req.Command == "close" {
+		if err := send(res); err != nil || req.Command == cmdClose {
 			return err
 		}
 	}
@@ -75,7 +82,7 @@ func answer(dec *json.Decoder, req request, shared string, l layer) (response, e
 	res := response{ID: req.ID}
 
 	switch req.Command {
-	case "get":
+	case cmdGet:
 		e, ok := l.get(req.ActionID)
 		if !ok {
 			e, ok = readEntry(shared, req.ActionID)
@@ -87,7 +94,7 @@ func answer(dec *json.Decoder, req request, shared string, l layer) (response, e
 		}
 
 		res.OutputID, res.Size, res.Time, res.DiskPath = e.outputID, e.size, &e.time, e.path
-	case "put":
+	case cmdPut:
 		var body []byte
 		if req.BodySize > 0 {
 			if err := dec.Decode(&body); err != nil {
@@ -101,7 +108,7 @@ func answer(dec *json.Decoder, req request, shared string, l layer) (response, e
 		}
 
 		res.DiskPath = path
-	case "close":
+	case cmdClose:
 	default:
 		res.Err = fmt.Sprintf("unknown command %q", req.Command)
 	}

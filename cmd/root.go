@@ -17,6 +17,7 @@ import (
 	configcmd "gooze.dev/pkg/gooze/cmd/config"
 	"gooze.dev/pkg/gooze/cmd/report"
 	"gooze.dev/pkg/gooze/internal/adapter"
+	"gooze.dev/pkg/gooze/internal/adapter/gocache"
 	"gooze.dev/pkg/gooze/internal/controller"
 	"gooze.dev/pkg/gooze/internal/domain"
 	m "gooze.dev/pkg/gooze/internal/model"
@@ -58,7 +59,8 @@ func init() {
 	goFileAdapter = adapter.NewLocalGoFileAdapter()
 	sourceFSAdapter = adapter.NewLocalSourceFSAdapter()
 	reportStore = adapter.NewReportStore()
-	testAdapter = adapter.NewLocalTestRunnerAdapter()
+	localTestAdapter := adapter.NewLocalTestRunnerAdapter()
+	testAdapter = localTestAdapter
 	ociRegistry = adapter.NewORASRegistry()
 	orchestrator = domain.NewOrchestrator(sourceFSAdapter, testAdapter)
 	mutagen = domain.NewMutagen(goFileAdapter, sourceFSAdapter, adapter.NewUnifiedDiffer())
@@ -69,6 +71,7 @@ func init() {
 		orchestrator,
 		mutagen,
 		domain.WithChangeDetector(adapter.NewGitChangeDetector()),
+		domain.WithBuildCache(gocache.New(localTestAdapter.SetEnv)),
 	)
 	publisher = domain.NewReportPublisher(ociRegistry)
 	releaseChecker = adapter.NewModuleProxyReleaseChecker()
@@ -78,6 +81,8 @@ func init() {
 		Publisher: publisher,
 		OutputKey: config.KeyOutput,
 	}))
+
+	rootCmd.AddCommand(newCacheProgCmd())
 
 	rootCmd.AddCommand(configcmd.New(configcmd.Deps{
 		Dir:      configFolderPath,

@@ -18,6 +18,9 @@ run:                          # Mutation run settings.
   mutagens: []                # Mutagens to run (arithmetic, boolean, numbers, comparison, logical, unary, bitwise, increment, assignment, branch, statement, loop); empty runs the default ones, all but branch, statement and loop.
   workspace: overlay          # How mutants are built: overlay tests them in the project through go test -overlay, without copying it; deep-copy tests them in a per-worker copy of the project, for tests that build the project's code in a subprocess, read its source files or write next to themselves.
   fail_fast: first            # When a run stops before testing every mutant: off tests them all; gate stops once a threshold can no longer be met; file skips the rest of a file once it can no longer meet threshold.file; first stops at the first surviving mutant. Untested mutants are tested by the next run.
+  go_cache: isolated          # Where the go command caches the builds of mutants: isolated keeps them in gooze's own cache (gooze/go-build in the user cache directory), which reads GOCACHE but never writes to it; shared writes them to GOCACHE. Without Go 1.24, or with GOCACHEPROG set, gooze uses shared.
+  go_cache_size: 2048         # Size in MB that a run trims gooze's own Go build cache to when it ends, least recently used first; entries used in the last hour are kept.
+  go_cache_prewarm: false     # Build each package's tests once in GOCACHE before its mutants, so their dependencies are cached there. Only with go_cache: isolated.
 
 mutagen:                      # Per-mutagen settings.
   comparison:                 # Settings of the comparison mutagen.

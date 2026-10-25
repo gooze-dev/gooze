@@ -36,7 +36,24 @@ func readEntry(dir string, actionID []byte) (entry, bool) {
 		return entry{}, false
 	}
 
-	fields := strings.Fields(string(data))
+	e, ok := parseIndex(string(data), actionID)
+	if !ok {
+		return entry{}, false
+	}
+
+	e.path = cacheFile(dir, e.outputID, "d")
+
+	info, err := os.Stat(e.path)
+	if err != nil || !info.Mode().IsRegular() || info.Size() != e.size {
+		return entry{}, false
+	}
+
+	return e, true
+}
+
+// parseIndex parses the action file of actionID, all but the output's path.
+func parseIndex(index string, actionID []byte) (entry, bool) {
+	fields := strings.Fields(index)
 	if len(fields) != 5 || fields[0] != "v1" || fields[1] != hex.EncodeToString(actionID) {
 		return entry{}, false
 	}
@@ -48,12 +65,6 @@ func readEntry(dir string, actionID []byte) (entry, bool) {
 
 	size, sizeErr := strconv.ParseInt(fields[3], 10, 64)
 	nanos, timeErr := strconv.ParseInt(fields[4], 10, 64)
-	path := cacheFile(dir, outputID, "d")
 
-	info, err := os.Stat(path)
-	if sizeErr != nil || timeErr != nil || err != nil || !info.Mode().IsRegular() || info.Size() != size {
-		return entry{}, false
-	}
-
-	return entry{outputID: outputID, size: size, time: time.Unix(0, nanos), path: path}, true
+	return entry{outputID: outputID, size: size, time: time.Unix(0, nanos)}, sizeErr == nil && timeErr == nil
 }

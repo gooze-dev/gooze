@@ -94,6 +94,18 @@ func runField() Field {
 			Name: "fail_fast", Kind: KindEnum, Default: failFastPolicies[0], Enum: slices.Clone(failFastPolicies),
 			Doc: "When a run stops before testing every mutant: off tests them all; gate stops once a threshold can no longer be met; file skips the rest of a file once it can no longer meet threshold.file; first stops at the first surviving mutant. Untested mutants are tested by the next run.",
 		},
+		{
+			Name: "go_cache", Kind: KindEnum, Default: "isolated", Enum: []string{"isolated", "shared"},
+			Doc: "Where the go command caches the builds of mutants: isolated keeps them in gooze's own cache (gooze/go-build in the user cache directory), which reads GOCACHE but never writes to it; shared writes them to GOCACHE. Without Go 1.24, or with GOCACHEPROG set, gooze uses shared.",
+		},
+		{
+			Name: "go_cache_size", Kind: KindInt, Default: 2048, Min: new(0),
+			Doc: "Size in MB that a run trims gooze's own Go build cache to when it ends, least recently used first; entries used in the last hour are kept.",
+		},
+		{
+			Name: "go_cache_prewarm", Kind: KindBool, Default: false,
+			Doc: "Build each package's tests once in GOCACHE before its mutants, so their dependencies are cached there. Only with go_cache: isolated.",
+		},
 	}}
 }
 

@@ -3,6 +3,7 @@ package adapter
 import (
 	"bytes"
 	"context"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"time"
@@ -10,11 +11,17 @@ import (
 
 // LocalTestRunnerAdapter provides a concrete implementation using os/exec.
 type LocalTestRunnerAdapter struct {
+	env []string
 }
 
 // NewLocalTestRunnerAdapter constructs a LocalTestRunnerAdapter.
 func NewLocalTestRunnerAdapter() *LocalTestRunnerAdapter {
 	return &LocalTestRunnerAdapter{}
+}
+
+// SetEnv adds env to the environment of the go commands it runs.
+func (a *LocalTestRunnerAdapter) SetEnv(env []string) {
+	a.env = env
 }
 
 // RunGoTest runs 'go test -vet=off' for the package that contains testFile,
@@ -36,6 +43,8 @@ func (a *LocalTestRunnerAdapter) RunGoTest(ctx context.Context, workDir, testFil
 
 	cmd := exec.CommandContext(ctx, "go", args...)
 	cmd.Dir = workDir
+
+	cmd.Env = append(os.Environ(), a.env...)
 	cmd.WaitDelay = 5 * time.Second
 	setProcessGroup(cmd)
 
