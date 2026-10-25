@@ -209,6 +209,13 @@ func (w *workflow) testAndFinalize(ctx context.Context, args TestArgs, sel Selec
 
 	defer closeSpill("stored reports", stored)
 
+	cached, err := w.cachedSelection(ctx, args, sel, sources)
+	if err != nil {
+		return err
+	}
+
+	defer closeSpill("cached reports", cached)
+
 	resumed, err := resumeFrom(stored, sel, sources)
 	if err != nil {
 		return err
@@ -228,7 +235,7 @@ func (w *workflow) testAndFinalize(ctx context.Context, args TestArgs, sel Selec
 
 	w.progress.DisplayUpcomingTestsInfo(ctx, total)
 
-	run := testedRun{mutations: mutations, planned: total, stored: stored, resumed: resumed}
+	run := testedRun{mutations: mutations, planned: total, stored: stored, cached: cached, resumed: resumed}
 
 	untested, err := w.testMutations(ctx, args, sel, sources, &run)
 	if err != nil {
@@ -252,7 +259,7 @@ func (w *workflow) testMutations(ctx context.Context, args TestArgs, sel Selecti
 	runCtx, stop := context.WithCancelCause(ctx)
 	defer stop(nil)
 
-	watch, err := w.failFastWatch(args, run.mutations, run.stored, run.resumed, sources, stop)
+	watch, err := w.failFastWatch(args, run.mutations, run.stored, run.cached, run.resumed, sources, stop)
 	if err != nil {
 		return nil, fmt.Errorf("plan fail-fast: %w", err)
 	}
@@ -492,6 +499,7 @@ func runScore(sel Selection, reportsDir m.Path, sources sourceSet, reports pkg.F
 	if sel.Narrowed() {
 		score.Selection = sel.Describe()
 		score.ReportsDir = reportsDir
+		score.Cached = score.Total - score.Tested
 
 		return score, nil
 	}
