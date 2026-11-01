@@ -49,3 +49,8 @@ func TestVersionLine(t *testing.T) {
 		})
 	}
 }
+
+func TestVersionFrom(t *testing.T) {
+	assert.Equal(t, "gooze (unknown version)", versionFrom(nil, false))
+	assert.Equal(t, "gooze v1 (go1)", versionFrom(&debug.BuildInfo{GoVersion: "go1", Main: debug.Module{Version: "v1"}}, true))
+}

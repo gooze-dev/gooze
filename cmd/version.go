@@ -13,15 +13,23 @@ func newVersionCmd() *cobra.Command {
 		Short: "Show the version information",
 		Long:  "Displays the build version and Go version used to build this tool.",
 		Run: func(cmd *cobra.Command, _ []string) {
-			info, ok := debug.ReadBuildInfo()
-			if !ok {
-				_, _ = fmt.Fprintln(cmd.OutOrStdout(), "gooze (unknown version)")
-				return
-			}
-
-			_, _ = fmt.Fprintln(cmd.OutOrStdout(), versionLine(info))
+			_, _ = fmt.Fprintln(cmd.OutOrStdout(), currentVersion())
 		},
 	}
+}
+
+// currentVersion returns this binary's version line.
+func currentVersion() string {
+	return versionFrom(debug.ReadBuildInfo())
+}
+
+// versionFrom formats the result of debug.ReadBuildInfo.
+func versionFrom(info *debug.BuildInfo, ok bool) string {
+	if !ok {
+		return "gooze (unknown version)"
+	}
+
+	return versionLine(info)
 }
 
 // versionLine formats build info as "gooze v1.2.3 (go1.27.3)".
