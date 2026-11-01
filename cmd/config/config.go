@@ -24,7 +24,7 @@ func New(deps Deps) *cobra.Command {
 		},
 	}
 
-	cmd.AddCommand(newInitCmd(deps))
+	cmd.AddCommand(newInitCmd(deps), newSchemaCmd())
 
 	return cmd
 }
