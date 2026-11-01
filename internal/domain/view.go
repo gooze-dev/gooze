@@ -25,7 +25,10 @@ type ReportSummary struct {
 	Score     MutationScore
 	Files     []FileSummary // sorted by path
 	Survivors []Survivor    // sorted by path, then line
-	Hint      string        // what to do when the reports hold nothing, or ""
+	// BuildErrors are the mutations that did not build; they don't count
+	// against the score. Sorted like Survivors.
+	BuildErrors []Survivor
+	Hint        string // what to do when the reports hold nothing, or ""
 }
 
 // FileSummary counts the mutation results of one source file.
@@ -219,7 +222,10 @@ func summarizeView(reports pkg.FileSpill[m.Report], paths []m.Path) (ReportSumma
 		counts := summarizeReport(report)
 		file.Merge(counts)
 		summary.Score.Merge(counts)
-		summary.Survivors = append(summary.Survivors, reportSurvivors(report)...)
+
+		survivors, buildErrors := reportFailures(report)
+		summary.Survivors = append(summary.Survivors, survivors...)
+		summary.BuildErrors = append(summary.BuildErrors, buildErrors...)
 
 		return nil
 	})
@@ -233,16 +239,21 @@ func summarizeView(reports pkg.FileSpill[m.Report], paths []m.Path) (ReportSumma
 
 	summary.Score.Files = summary.Files
 
-	slices.SortStableFunc(summary.Survivors, func(a, b Survivor) int {
-		return cmp.Or(cmp.Compare(a.Path, b.Path), cmp.Compare(a.Line, b.Line), cmp.Compare(a.Mutagen, b.Mutagen))
-	})
+	sortByLocation(summary.Survivors)
+	sortByLocation(summary.BuildErrors)
 
 	return summary, nil
 }
 
-// reportSurvivors returns the scored, not killed mutations of a report, located
-// by the first change in its diff.
-func reportSurvivors(report m.Report) []Survivor {
+func sortByLocation(survivors []Survivor) {
+	slices.SortStableFunc(survivors, func(a, b Survivor) int {
+		return cmp.Or(cmp.Compare(a.Path, b.Path), cmp.Compare(a.Line, b.Line), cmp.Compare(a.Mutagen, b.Mutagen))
+	})
+}
+
+// reportFailures returns the not killed mutations of a report, located by the
+// first change in its diff: the scored ones, and those that did not build.
+func reportFailures(report m.Report) (survivors, buildErrors []Survivor) {
 	var change rpt.Change
 
 	if report.Diff != nil {
@@ -251,16 +262,14 @@ func reportSurvivors(report m.Report) []Survivor {
 		}
 	}
 
-	var survivors []Survivor
-
 	for _, mutationType := range sortedResultTypes(report.Result) {
 		for _, entry := range report.Result[mutationType] {
-			// Equivalent mutants: Killed is the lowest status.
-			if entry.Status == rpt.Killed || entry.Status == rpt.Error { //gooze:ignore comparison
+			// Equivalent mutant: Killed is the lowest status.
+			if entry.Status == rpt.Killed { //gooze:ignore comparison
 				continue
 			}
 
-			survivors = append(survivors, Survivor{
+			failure := Survivor{
 				Path:       report.Source.Key(),
 				Line:       change.Line,
 				Mutagen:    mutationType.Name,
@@ -268,11 +277,17 @@ func reportSurvivors(report m.Report) []Survivor {
 				Original:   strings.TrimSpace(change.Original),
 				Mutated:    strings.TrimSpace(change.Mutated),
 				MutationID: entry.MutationID,
-			})
+			}
+
+			if entry.Status == rpt.Error {
+				buildErrors = append(buildErrors, failure)
+			} else {
+				survivors = append(survivors, failure)
+			}
 		}
 	}
 
-	return survivors
+	return survivors, buildErrors
 }
 
 // matchesPaths reports whether source matches any of the patterns, which read

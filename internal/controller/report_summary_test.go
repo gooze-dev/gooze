@@ -3,6 +3,7 @@ package controller
 import (
 	"bytes"
 	"context"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -43,6 +44,54 @@ func TestRenderReportSummary(t *testing.T) {
 		if !strings.Contains(output, want) {
 			t.Fatalf("output missing %q\noutput:\n%s", want, output)
 		}
+	}
+}
+
+func TestRenderFileSummaryTable_RowsAddUpToMutations(t *testing.T) {
+	output := renderFileSummaryTable(domain.ReportSummary{
+		Score: domain.MutationScore{Summary: rpt.Summary{Total: 10, Killed: 4, Survived: 3, NotCovered: 1, Timeout: 1, Error: 1}},
+		Files: []domain.FileSummary{{Path: "a.go", Summary: rpt.Summary{Total: 10, Killed: 4, Survived: 3, NotCovered: 1, Timeout: 1, Error: 1}}},
+	})
+
+	var cells [][]string
+
+	for _, line := range strings.Split(output, "\n") {
+		if strings.Contains(line, "│") {
+			row := strings.Split(line, "│")
+			for i := range row {
+				row[i] = strings.TrimSpace(row[i])
+			}
+
+			cells = append(cells, row)
+		}
+	}
+
+	want := [][]string{
+		{"PATH", "MUTATIONS", "KILLED", "SURVIVED", "NOT COVERED", "TIMEOUT", "ERROR", "SCORE"},
+		{"a.go", "10", "4", "3", "1", "1", "1", "44.44%"},
+		{"TOTAL FILES 1", "10", "4", "3", "1", "1", "1", "44.44%"},
+	}
+
+	if !reflect.DeepEqual(cells, want) {
+		t.Fatalf("cells = %q, want %q\noutput:\n%s", cells, want, output)
+	}
+}
+
+func TestRenderReportSummary_BuildErrors(t *testing.T) {
+	summary := sampleReportSummary()
+	summary.BuildErrors = []domain.Survivor{
+		{Path: "calc.go", Line: 12, Mutagen: "arithmetic", Status: rpt.Error, Original: "a + b", Mutated: "a * b"},
+	}
+
+	output := renderReportSummary(summary)
+
+	want := "\nBuild errors (1):\ncalc.go:12: error (arithmetic): a + b -> a * b\n\nMutation score: "
+	if !strings.Contains(output, want) {
+		t.Fatalf("output missing %q\noutput:\n%s", want, output)
+	}
+
+	if output := renderReportSummary(sampleReportSummary()); strings.Contains(output, "Build errors") {
+		t.Fatalf("no build errors, no section\noutput:\n%s", output)
 	}
 }
 

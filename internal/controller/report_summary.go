@@ -12,8 +12,8 @@ import (
 )
 
 // renderReportSummary renders stored reports as plain text: a per-file table,
-// one "path:line: status (mutagen): original -> mutated" line per survivor, and
-// the mutation score.
+// one "path:line: status (mutagen): original -> mutated" line per survivor and
+// per mutation that did not build, and the mutation score.
 func renderReportSummary(summary domain.ReportSummary) string {
 	var out strings.Builder
 
@@ -27,6 +27,15 @@ func renderReportSummary(summary domain.ReportSummary) string {
 
 		for _, survivor := range summary.Survivors {
 			out.WriteString(formatSurvivor(survivor))
+			out.WriteString("\n")
+		}
+	}
+
+	if len(summary.BuildErrors) > 0 {
+		fmt.Fprintf(&out, "\nBuild errors (%d):\n", len(summary.BuildErrors))
+
+		for _, buildError := range summary.BuildErrors {
+			out.WriteString(formatSurvivor(buildError))
 			out.WriteString("\n")
 		}
 	}
@@ -47,11 +56,11 @@ func renderFileSummaryTable(summary domain.ReportSummary) string {
 		tablewriter.WithRendition(tw.Rendition{
 			Borders: tw.Border{Left: tw.Off, Right: tw.Off, Top: tw.Off, Bottom: tw.Off},
 		}),
-		tablewriter.WithAlignment(tw.Alignment{tw.AlignLeft, tw.AlignRight, tw.AlignRight, tw.AlignRight, tw.AlignRight, tw.AlignRight}),
+		tablewriter.WithAlignment(tw.Alignment{tw.AlignLeft, tw.AlignRight, tw.AlignRight, tw.AlignRight, tw.AlignRight, tw.AlignRight, tw.AlignRight, tw.AlignRight}),
 		// Auto-formatting would space out the score's decimal point.
 		tablewriter.WithFooterAutoFormat(tw.Off),
 	)
-	table.Header("Path", "Mutations", "Killed", "Survived", "Not covered", "Score")
+	table.Header("Path", "Mutations", "Killed", "Survived", "Not covered", "Timeout", "Error", "Score")
 
 	for _, file := range summary.Files {
 		if err := table.Append(summaryRow(file.Path, file.Summary)); err != nil {
@@ -75,6 +84,8 @@ func summaryRow(label string, counts rpt.Summary) []string {
 		fmt.Sprintf("%d", counts.Killed),
 		fmt.Sprintf("%d", counts.Survived),
 		fmt.Sprintf("%d", counts.NotCovered),
+		fmt.Sprintf("%d", counts.Timeout),
+		fmt.Sprintf("%d", counts.Error),
 		fmt.Sprintf("%.2f%%", counts.Score()*100),
 	}
 }

@@ -27,14 +27,15 @@ gooze report view            # per-file scores and surviving mutations
 ```
 
 `gooze report view [paths...]` summarizes the stored reports: one row per file,
-then one line per mutation that counts against the score, then the score:
+then one line per mutation that counts against the score, one per mutation that
+did not build, if any, then the score:
 
 ```text
- PATH          │ MUTATIONS │ KILLED │ SURVIVED │ NOT COVERED │  SCORE
-───────────────┼───────────┼────────┼──────────┼─────────────┼────────
- calc.go       │        16 │     14 │        2 │           0 │ 87.50%
-───────────────┼───────────┼────────┼──────────┼─────────────┼────────
- TOTAL FILES 1 │        16 │     14 │        2 │           0 │ 87.50%
+ PATH          │ MUTATIONS │ KILLED │ SURVIVED │ NOT COVERED │ TIMEOUT │ ERROR │  SCORE
+───────────────┼───────────┼────────┼──────────┼─────────────┼─────────┼───────┼────────
+ calc.go       │        16 │     14 │        2 │           0 │       0 │     0 │ 87.50%
+───────────────┼───────────┼────────┼──────────┼─────────────┼─────────┼───────┼────────
+ TOTAL FILES 1 │        16 │     14 │        2 │           0 │       0 │     0 │ 87.50%
 
 Survivors (2):
 calc.go:10: survived (comparison): if n < lo { -> if n <= lo {

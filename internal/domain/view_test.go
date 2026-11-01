@@ -71,7 +71,28 @@ func TestWorkflow_View_SummarizesPerFileWithSurvivors(t *testing.T) {
 			{Path: "cmd/b.go", Mutagen: "boolean", Status: rpt.NotCovered, MutationID: "b-1"},
 			{Path: "pkg/a.go", Line: 10, Mutagen: "comparison", Status: rpt.Survived, Original: "if n < lo {", Mutated: "if n <= lo {", MutationID: "a-2"},
 		},
+		BuildErrors: []domain.Survivor{
+			{Path: "pkg/a.go", Line: 10, Mutagen: "arithmetic", Status: rpt.Error, Original: "if n < lo {", Mutated: "if n <= lo {", MutationID: "a-3"},
+		},
 	}, summary)
+}
+
+func TestWorkflow_View_SortsBuildErrorsByLocation(t *testing.T) {
+	dir := t.TempDir()
+	second := []byte("--- original\n+++ mutated\n@@ -2,1 +2,1 @@\n-a\n+b\n")
+	first := []byte("--- original\n+++ mutated\n@@ -1,1 +1,1 @@\n-a\n+b\n")
+	source := rpt.Source{Origin: &rpt.File{ShortPath: "a.go", FullPath: "/p/a.go", Hash: "a"}}
+
+	writeReports(t, dir,
+		m.Report{Source: source, Result: m.Result{mgen.Arithmetic: {{MutationID: "second", Status: rpt.Error}}}, Diff: &second},
+		m.Report{Source: source, Result: m.Result{mgen.Arithmetic: {{MutationID: "first", Status: rpt.Error}}}, Diff: &first},
+	)
+
+	summary := viewSummary(t, domain.ViewArgs{Reports: m.Path(dir)})
+
+	require.Len(t, summary.BuildErrors, 2)
+	assert.Equal(t, "first", summary.BuildErrors[0].MutationID)
+	assert.Equal(t, "second", summary.BuildErrors[1].MutationID)
 }
 
 func TestWorkflow_View_FiltersByPath(t *testing.T) {
