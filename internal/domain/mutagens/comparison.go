@@ -5,6 +5,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -58,10 +59,16 @@ func getComparisonAlternatives(original token.Token) []token.Token {
 // left.
 func equivalentMutantOp(expr *ast.BinaryExpr, fset *token.FileSet, content []byte) token.Token {
 	switch {
-	case isMinimumOf(expr.Y, expr.X, fset, content):
+	case isMinimumOf(expr.Y, expr.X, fset, content), isTypeBound(expr.Y, expr.X, minimumBound, content):
 		return equivalentOpWithMinimumRight(expr.Op)
-	case isMinimumOf(expr.X, expr.Y, fset, content):
+	case isMinimumOf(expr.X, expr.Y, fset, content), isTypeBound(expr.X, expr.Y, minimumBound, content):
 		return equivalentOpWithMinimumLeft(expr.Op)
+	// Nothing is above a maximum, as nothing is below a minimum, so a maximum
+	// on one side reads like a minimum on the other.
+	case isTypeBound(expr.Y, expr.X, maximumBound, content):
+		return equivalentOpWithMinimumLeft(expr.Op)
+	case isTypeBound(expr.X, expr.Y, maximumBound, content):
+		return equivalentOpWithMinimumRight(expr.Op)
 	default:
 		return token.ILLEGAL
 	}
@@ -115,6 +122,60 @@ func isMinimumOf(minimum, v ast.Expr, fset *token.FileSet, content []byte) bool 
 	default:
 		return false
 	}
+}
+
+// The prefixes of the math constants for an integer type's bounds.
+const (
+	minimumBound = "Min"
+	maximumBound = "Max"
+)
+
+// integerType matches the predeclared integer types whose bounds math names
+// after them, as MinInt64 and MaxUint8.
+var integerType = regexp.MustCompile(`^u?int(8|16|32|64)?$`)
+
+// isTypeBound reports whether bound is the math constant that is the lowest
+// or highest value (by prefix) of the integer type v is declared with. A constant
+// of another type may be inside v's range, so v's type has to be known: it is
+// read from the declaration of a parameter or var.
+func isTypeBound(bound, v ast.Expr, prefix string, content []byte) bool {
+	sel, ok := bound.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+
+	pkg, ok := sel.X.(*ast.Ident)
+	if !ok || pkg.Obj != nil || fileImports(content)[pkg.Name] != "math" {
+		return false
+	}
+
+	ident, ok := v.(*ast.Ident)
+	if !ok || ident.Obj == nil {
+		return false
+	}
+
+	declared := declaredPredeclaredType(ident)
+
+	return integerType.MatchString(declared) && sel.Sel.Name == prefix+strings.ToUpper(declared[:1])+declared[1:]
+}
+
+// declaredPredeclaredType returns the predeclared type ident's parameter or
+// var declaration names, or "".
+func declaredPredeclaredType(ident *ast.Ident) string {
+	var declared ast.Expr
+
+	switch decl := ident.Obj.Decl.(type) {
+	case *ast.Field:
+		declared = decl.Type
+	case *ast.ValueSpec:
+		declared = decl.Type
+	}
+
+	if t, ok := declared.(*ast.Ident); ok && t.Obj == nil {
+		return t.Name
+	}
+
+	return ""
 }
 
 func isLenOrCapCall(e ast.Expr) bool {
