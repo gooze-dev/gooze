@@ -223,8 +223,7 @@ func (w *workflow) failFastWatch(
 	sources sourceSet,
 	stop context.CancelCauseFunc,
 ) (*failFastWatch, error) {
-	// Equivalent: the CLI passes a total of at least 1, so > 1 is != 1.
-	watch := newFailFastWatch(args.FailFast, args.Thresholds, args.TotalShardCount > 1, stop) //gooze:ignore comparison
+	watch := newFailFastWatch(args.FailFast, args.Thresholds, args.Sharded(), stop)
 	if watch == nil {
 		return nil, nil //nolint:nilnil // nil: the policy can't act.
 	}

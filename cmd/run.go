@@ -59,8 +59,7 @@ func newRunCmd() *cobra.Command {
 				return err
 			}
 
-			// Equivalent: parseShardFlag returns a total of at least 1, so > 1 is != 1.
-			if totalShards > 1 && estimateArgs.Run != "" { //gooze:ignore comparison
+			if (domain.TestArgs{TotalShardCount: totalShards}).Sharded() && estimateArgs.Run != "" {
 				return usageError(errRunWithShard)
 			}
 

@@ -187,6 +187,11 @@ func (w *workflow) selection(ctx context.Context, args EstimateArgs) (Selection,
 	return sel, nil
 }
 
+// Sharded reports whether the run tests only one of several shards.
+func (args TestArgs) Sharded() bool {
+	return args.TotalShardCount > 1
+}
+
 // runReportsDir returns where a test run writes its reports: base (or its
 // shard dir) for a full run; base/run (or run/shard_N) for a narrowed run,
 // emptied first so it holds only this run's results.
