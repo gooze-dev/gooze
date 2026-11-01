@@ -175,6 +175,9 @@ func configureRootFlags(cmd *cobra.Command) {
 	// Add verbose and log output flags (handled directly; not bound to Viper).
 	cmd.PersistentFlags().BoolVarP(&verboseFlag, "verbose", "v", false, "enable verbose logging")
 	cmd.PersistentFlags().StringVar(&logOutputFlag, "log-output", "", "path to the log output file")
+
+	cmd.PersistentFlags().String(logLevelFlagName, schemaDefault[string](config.KeyLogLevel), "log severity: debug, info, warn or error; --verbose overrides it")
+	bindFlagToConfig(cmd.PersistentFlags().Lookup(logLevelFlagName), config.KeyLogLevel)
 }
 
 // bindFlagToConfig wires a Cobra flag to a Viper key so config/env values feed the flag.
