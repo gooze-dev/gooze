@@ -69,12 +69,33 @@ func init() {
 func readConfigFile() {
 	err := viper.ReadInConfig()
 
+	applyDeprecatedKeys()
+
 	var notFound viper.ConfigFileNotFoundError
 	if err == nil || errors.As(err, &notFound) || errors.Is(err, os.ErrNotExist) {
 		return
 	}
 
 	slog.Warn("failed to read config file", "error", err)
+}
+
+// applyDeprecatedKeys makes the value of a deprecated name in gooze.yaml the
+// default of the key that replaced it, so the new name, the environment and
+// flags still win over it.
+func applyDeprecatedKeys() {
+	for old, key := range config.DeprecatedKeys() {
+		field, ok := config.Lookup(key)
+		if !ok {
+			continue
+		}
+
+		value := field.Default
+		if viper.InConfig(old) {
+			value = viper.Get(old)
+		}
+
+		viper.SetDefault(key, value)
+	}
 }
 
 // validateConfig checks the effective value of every key (from flags,
@@ -254,8 +275,15 @@ func describe(value any) string {
 func unknownConfigKeys(keys []string) []string {
 	var warnings []string
 
+	deprecated := config.DeprecatedKeys()
+
 	for _, key := range keys {
 		if _, ok := config.Lookup(key); ok {
+			continue
+		}
+
+		if current, ok := deprecated[key]; ok {
+			warnings = append(warnings, deprecatedKeyWarning(key, current))
 			continue
 		}
 
@@ -270,6 +298,15 @@ func unknownConfigKeys(keys []string) []string {
 	slices.Sort(warnings)
 
 	return warnings
+}
+
+func deprecatedKeyWarning(key, current string) string {
+	msg := fmt.Sprintf("gooze config key %q in %s is deprecated", key, config.FileName)
+	if current == "" {
+		return msg + " and ignored"
+	}
+
+	return fmt.Sprintf("%s; use %q", msg, current)
 }
 
 // maxTypoDistance is the largest edit distance between an unknown key and a

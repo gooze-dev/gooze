@@ -56,7 +56,7 @@ func TestDefaultFile_Layout(t *testing.T) {
 	lines := strings.Split(strings.TrimSuffix(string(DefaultFile()), "\n"), "\n")
 
 	require.Equal(t, "# gooze.yaml: every key is optional; these are the defaults.", lines[0])
-	assert.Contains(t, lines, "version: 1                    # Config schema version.")
+	assert.Contains(t, lines, "no_cache: false               # Disable incremental caching and force a full re-run.")
 	assert.Contains(t, lines, "")
 	assert.Contains(t, lines, "run:                          # Mutation run settings.")
 	assert.Contains(t, lines, "  parallel: 1                 # Number of concurrent mutation workers.")

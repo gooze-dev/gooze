@@ -68,12 +68,13 @@ func TestConfigShow_SaysWhereEachValueComesFrom(t *testing.T) {
 	t.Setenv("GOOZE_RUN_PARALLEL", "7")
 	t.Setenv("GOOZE_RUN_DIFF", "")
 
-	lines := showLines(t, "run:\n  parallel: 3\n  mutation_timeout: 9\nno-cache: true\n", "--output", "out")
+	lines := showLines(t, "run:\n  parallel: 3\n  mutation_timeout: 9\nno_cache: true\nno-update-check: true\n", "--output", "out")
 
 	assert.Equal(t, "output out flag GOOZE_OUTPUT", lines[config.KeyOutput])
 	assert.Equal(t, "run.parallel 7 env GOOZE_RUN_PARALLEL", lines[config.KeyRunParallel], "env wins over the file")
 	assert.Equal(t, "run.mutation_timeout 9 gooze.yaml GOOZE_RUN_MUTATION_TIMEOUT", lines[config.KeyRunMutationTimeout])
-	assert.Equal(t, "no-cache true gooze.yaml GOOZE_NO_CACHE", lines[config.KeyNoCache], "a kebab-case key")
+	assert.Equal(t, "no_cache true gooze.yaml GOOZE_NO_CACHE", lines[config.KeyNoCache])
+	assert.Contains(t, lines[config.KeyNoUpdateCheck], " gooze.yaml ", "under its deprecated name")
 	assert.Equal(t, "run.workspace overlay default GOOZE_RUN_WORKSPACE", lines[config.KeyRunWorkspace])
 	assert.Contains(t, lines[config.KeyRunDiff], " default ", "an empty variable doesn't count")
 }
@@ -87,4 +88,11 @@ func TestConfigShow_AFlagWinsOverTheEnvironment(t *testing.T) {
 
 func TestConfigShow_ShowsAnEmptyValue(t *testing.T) {
 	assert.Equal(t, `run.diff "" default GOOZE_RUN_DIFF`, showLines(t, "")[config.KeyRunDiff])
+}
+
+func TestConfigShow_DeprecatedNameCountsOnlyForItsOwnKey(t *testing.T) {
+	lines := showLines(t, "no-update-check: true\n")
+
+	assert.Contains(t, lines[config.KeyNoUpdateCheck], " gooze.yaml ")
+	assert.Contains(t, lines[config.KeyNoCache], " default ")
 }

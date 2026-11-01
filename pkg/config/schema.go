@@ -42,7 +42,6 @@ type Field struct {
 // gooze documents them. Each call returns a new copy.
 func Schema() []Field {
 	return []Field{
-		{Name: KeyVersion, Kind: KindInt, Default: 1, Min: new(1), Max: new(1), Doc: "Config schema version."},
 		{Name: KeyOutput, Kind: KindString, Default: DefaultReportsDir, Doc: "Directory where mutation reports are written."},
 		{Name: KeyNoCache, Kind: KindBool, Default: false, Doc: "Disable incremental caching and force a full re-run."},
 		{Name: KeyNoUpdateCheck, Kind: KindBool, Default: false, Doc: "Disable the check for a newer gooze release."},

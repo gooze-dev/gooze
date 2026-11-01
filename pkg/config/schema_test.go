@@ -9,7 +9,6 @@ import (
 
 func TestDefaults(t *testing.T) {
 	want := map[string]any{
-		KeyVersion:                     1,
 		KeyOutput:                      DefaultReportsDir,
 		KeyNoCache:                     false,
 		KeyNoUpdateCheck:               false,
@@ -89,7 +88,6 @@ func TestLookup_LogLevelEnum(t *testing.T) {
 
 func TestLookup_Kinds(t *testing.T) {
 	want := map[string]Kind{
-		KeyVersion:               KindInt,
 		KeyOutput:                KindString,
 		KeyNoCache:               KindBool,
 		"paths":                  KindObject,
@@ -139,16 +137,15 @@ func TestSchema_EveryFieldDocumented(t *testing.T) {
 func TestSchema_ReturnsCopy(t *testing.T) {
 	first := Schema()
 	first[0].Name = "changed"
-	first[4].Children[0].Name = "changed"
+	first[3].Children[0].Name = "changed"
 
 	second := Schema()
-	assert.Equal(t, "version", second[0].Name)
-	assert.Equal(t, "exclude", second[4].Children[0].Name)
+	assert.Equal(t, "output", second[0].Name)
+	assert.Equal(t, "exclude", second[3].Children[0].Name)
 }
 
 func TestSchema_Bounds(t *testing.T) {
 	want := map[string][2]*int{
-		KeyVersion:               {new(1), new(1)},
 		KeyRunParallel:           {new(1), nil},
 		KeyRunMutationTimeout:    {new(1), nil},
 		KeyThresholdMaxSurvivors: {new(0), nil},

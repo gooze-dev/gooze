@@ -8,7 +8,6 @@ import (
 
 func TestKeys(t *testing.T) {
 	assert.Equal(t, []string{
-		KeyVersion,
 		KeyOutput,
 		KeyNoCache,
 		KeyNoUpdateCheck,
@@ -44,7 +43,7 @@ func TestKeys(t *testing.T) {
 
 func TestKeyValues(t *testing.T) {
 	assert.Equal(t, []string{
-		"version", "output", "no-cache", "no-update-check", "paths.exclude",
+		"output", "no_cache", "no_update_check", "paths.exclude",
 		"run.parallel", "run.mutation_timeout", "run.coverage_profile", "run.diff", "run.mutagens",
 		"run.workspace", "run.fail_fast", "run.go_cache", "run.go_cache_size", "run.go_cache_prewarm",
 		"mutagen.comparison.enum_bounds",
@@ -54,4 +53,20 @@ func TestKeyValues(t *testing.T) {
 		"log.filename", "log.level", "log.verbose", "log.max_size",
 		"log.max_backups", "log.max_age", "log.compress",
 	}, Keys())
+}
+
+func TestDeprecatedKeys(t *testing.T) {
+	deprecated := DeprecatedKeys()
+
+	assert.Equal(t, map[string]string{"no-cache": "no_cache", "no-update-check": "no_update_check", "version": ""}, deprecated)
+
+	for old, current := range deprecated {
+		_, ok := Lookup(old)
+		assert.False(t, ok, old)
+
+		if current != "" {
+			_, ok := Lookup(current)
+			assert.True(t, ok, current)
+		}
+	}
 }

@@ -2,10 +2,9 @@ package config
 
 // Dotted keys of every configuration value gooze reads.
 const (
-	KeyVersion                     = "version"
 	KeyOutput                      = "output"
-	KeyNoCache                     = "no-cache"
-	KeyNoUpdateCheck               = "no-update-check"
+	KeyNoCache                     = "no_cache"
+	KeyNoUpdateCheck               = "no_update_check"
 	KeyPathsExclude                = "paths.exclude"
 	KeyRunParallel                 = "run.parallel"
 	KeyRunMutationTimeout          = "run.mutation_timeout"
@@ -34,6 +33,21 @@ const (
 	KeyLogMaxAge                   = "log.max_age"
 	KeyLogCompress                 = "log.compress"
 )
+
+// KeyVersion named a config schema version that nothing read.
+//
+// Deprecated: gooze ignores the key; see [DeprecatedKeys].
+const KeyVersion = "version"
+
+// DeprecatedKeys returns the names gooze still accepts in the configuration
+// file, each with the key that replaced it, or "" when it is ignored.
+func DeprecatedKeys() map[string]string {
+	return map[string]string{
+		"no-cache":        KeyNoCache,
+		"no-update-check": KeyNoUpdateCheck,
+		KeyVersion:        "",
+	}
+}
 
 // Keys returns the dotted key of every non-object field in schema order.
 func Keys() []string {

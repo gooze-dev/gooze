@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 
@@ -32,10 +34,9 @@ func TestConfigFile(t *testing.T) {
 
 func TestConfigDefaults(t *testing.T) {
 	want := map[string]any{
-		"version":                        1,
 		"output":                         ".gooze-reports",
-		"no-cache":                       false,
-		"no-update-check":                false,
+		"no_cache":                       false,
+		"no_update_check":                false,
 		"paths.exclude":                  []string{},
 		"run.parallel":                   1,
 		"run.mutation_timeout":           120,
@@ -91,7 +92,6 @@ func TestValidateConfig(t *testing.T) {
 		{key: config.KeyRunParallel, value: 4},
 		{key: config.KeyRunParallel, value: 0, wantErr: "invalid run.parallel: 0 is out of range: must be at least 1"},
 		{key: config.KeyRunMutationTimeout, value: 0, wantErr: "invalid run.mutation_timeout: 0 is out of range: must be at least 1"},
-		{key: config.KeyVersion, value: 2, wantErr: "invalid version: 2 is out of range: must be 1"},
 		{key: config.KeyThresholdTotal, value: 87.5},
 		{key: config.KeyThresholdTotal, value: 100},
 		{key: config.KeyThresholdFile, value: 100.5, wantErr: "invalid threshold.file: 100.5 is out of range: must be between 0 and 100"},
@@ -112,7 +112,7 @@ func TestValidateConfig(t *testing.T) {
 		{key: config.KeyRunWorkspace, value: 7, wantErr: "invalid run.workspace: 7 is not one of overlay, deep-copy"},
 		{key: config.KeyNoCache, value: "true"},
 		{key: config.KeyMutagenComparisonEnumBounds, value: "yes", wantErr: `invalid mutagen.comparison.enum_bounds: "yes" is not true or false`},
-		{key: config.KeyNoCache, value: "maybe", wantErr: `invalid no-cache: "maybe" is not true or false`},
+		{key: config.KeyNoCache, value: "maybe", wantErr: `invalid no_cache: "maybe" is not true or false`},
 		{key: config.KeyOutput, value: 5},
 		{key: config.KeyOutput, value: []any{"a"}, wantErr: "invalid output: a list is not a single value"},
 		{key: config.KeyOutput, value: map[string]any{"a": 1}, wantErr: "invalid output: a mapping is not a single value"},
@@ -253,6 +253,40 @@ func TestWholeNumber_StringsAreDecimal(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestUnknownConfigKeys_Deprecated(t *testing.T) {
+	assert.Equal(t, []string{
+		`gooze config key "no-cache" in gooze.yaml is deprecated; use "no_cache"`,
+		`gooze config key "version" in gooze.yaml is deprecated and ignored`,
+	}, unknownConfigKeys([]string{"version", "no-cache", "no_cache"}))
+}
+
+func TestReadConfigFile_DeprecatedKeys(t *testing.T) {
+	for name, tt := range map[string]struct {
+		file string
+		want bool
+	}{
+		"old name":      {"no-cache: true\n", true},
+		"new name":      {"no_cache: true\n", true},
+		"new name wins": {"no-cache: true\nno_cache: false\n", false},
+		"neither":       {"output: out\n", false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "gooze.yaml")
+			require.NoError(t, os.WriteFile(path, []byte(tt.file), 0o600))
+			withConfigFile(t, path)
+			t.Cleanup(func() {
+				empty := filepath.Join(t.TempDir(), "empty.yaml")
+				require.NoError(t, os.WriteFile(empty, nil, 0o600))
+				viper.SetConfigFile(empty)
+				readConfigFile()
+			})
+
+			readConfigFile()
+			assert.Equal(t, tt.want, viper.GetBool(config.KeyNoCache))
 		})
 	}
 }

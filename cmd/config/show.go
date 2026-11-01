@@ -30,12 +30,27 @@ flags of gooze run apply to gooze run.`,
 
 			for _, key := range config.Keys() {
 				env := envName(deps.EnvPrefix, key)
-				_, _ = fmt.Fprintf(table, "%s\t%s\t%s\t%s\n", key, showValue(viper.Get(key)), source(flagged[key], os.Getenv(env) != "", viper.InConfig(key)), env)
+				_, _ = fmt.Fprintf(table, "%s\t%s\t%s\t%s\n", key, showValue(viper.Get(key)), source(flagged[key], os.Getenv(env) != "", inConfig(key)), env)
 			}
 
 			return table.Flush()
 		},
 	}
+}
+
+// inConfig reports whether gooze.yaml sets key, under its name or a deprecated one.
+func inConfig(key string) bool {
+	if viper.InConfig(key) {
+		return true
+	}
+
+	for old, current := range config.DeprecatedKeys() {
+		if current == key && viper.InConfig(old) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // flaggedKeys returns the config keys of the flags set on the command line.
