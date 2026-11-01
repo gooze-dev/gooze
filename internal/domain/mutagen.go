@@ -282,6 +282,7 @@ func walkMutations(
 	// is equivalent.
 	constraints := map[ast.Node]bool{}
 	markEquivalentSubtrees(file, constraints)
+	zeroEquivalent := markStrconvBitSizes(file, constraints)
 
 	ast.Inspect(file, func(n ast.Node) bool {
 		if n == nil || walkErr != nil {
@@ -297,7 +298,7 @@ func walkMutations(
 			return descend
 		}
 
-		mutations := ignore.keepChanged(generateMutationsForNode(mutationType, n, fset, content, source), fset, file, content, mutationType)
+		mutations := ignore.keepChanged(dropEquivalentZero(generateMutationsForNode(mutationType, n, fset, content, source), n, fset, zeroEquivalent), fset, file, content, mutationType)
 		for _, mutation := range mutations {
 			mutation.Line = lineForOffset(content, firstDifference(content, mutation.MutatedCode))
 			mutation.Funcs = funcs.at(mutation.Line)
