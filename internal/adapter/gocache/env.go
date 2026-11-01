@@ -1,22 +1,13 @@
-// Package gocache keeps the builds of mutants out of the user's Go build cache
-// by running them through the cacheprog server.
 package gocache
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
-
-	"gooze.dev/pkg/gooze/internal/adapter/gocache/cacheprog"
-	"gooze.dev/pkg/gooze/internal/domain"
 )
 
 // minGoMinor is the first Go 1.x release with GOCACHEPROG.
@@ -24,66 +15,8 @@ const minGoMinor = 24
 
 var goMinor = regexp.MustCompile(`^(?:devel )?go1\.(\d+)`)
 
-// Cache is the domain.BuildCache that isolates the builds of mutants in
-// gooze's own cache, through GOCACHEPROG.
-type Cache struct {
-	setEnv func(env []string)
-	layer  *cacheprog.Layer
-	limit  int64
-}
-
-// New returns a Cache that hands the go command's environment to setEnv.
-func New(setEnv func(env []string)) *Cache {
-	return &Cache{setEnv: setEnv}
-}
-
 type goEnv struct {
 	GOVERSION, GOCACHE, GOCACHEPROG string
-}
-
-// Prepare prewarms the shared cache with the packages in pkgDirs when the
-// settings ask for it, then sets GOCACHEPROG to gooze's server. Without
-// GOCACHEPROG support, or with GOCACHEPROG already set, the mutants use the
-// shared cache.
-func (c *Cache) Prepare(ctx context.Context, settings domain.GoCache, pkgDirs []string) error {
-	env, err := readGoEnv(ctx)
-	if err != nil {
-		return err
-	}
-
-	if reason := fallbackReason(env); reason != "" {
-		slog.Info("Building mutants in the shared Go build cache", "reason", reason)
-		return nil
-	}
-
-	exe, err := os.Executable()
-	if err != nil {
-		return err
-	}
-
-	userCache, err := os.UserCacheDir()
-	if err != nil {
-		return err
-	}
-
-	if settings.Prewarm && len(pkgDirs) > 0 {
-		prewarm(ctx, pkgDirs)
-	}
-
-	c.layer = &cacheprog.Layer{Dir: filepath.Join(userCache, "gooze", "go-build")}
-	c.limit = int64(settings.SizeMB) << 20
-	c.setEnv([]string{"GOCACHEPROG=" + progCommand(exe, env.GOCACHE, c.layer.Dir)})
-
-	return nil
-}
-
-// Close trims gooze's cache to its size.
-func (c *Cache) Close(context.Context) error {
-	if c.layer == nil {
-		return nil
-	}
-
-	return c.layer.Trim(c.limit, time.Now())
 }
 
 func readGoEnv(ctx context.Context) (goEnv, error) {
@@ -118,17 +51,6 @@ func supportsCacheProg(version string) bool {
 	minor, err := strconv.Atoi(match[1])
 
 	return err == nil && minor >= minGoMinor
-}
-
-// prewarm builds the tests of the packages in dirs in the shared cache. A
-// failure only costs the speedup, so it is logged.
-func prewarm(ctx context.Context, dirs []string) {
-	cmd := exec.CommandContext(ctx, "go", append([]string{"test", "-count=1", "-vet=off", "-run", "^$"}, dirs...)...) //nolint:gosec // dirs are the run's package directories.
-	cmd.Dir = dirs[0]
-
-	if out, err := cmd.CombinedOutput(); err != nil {
-		slog.Warn("Failed to prewarm the Go build cache", "error", err, "output", string(out))
-	}
 }
 
 // progCommand returns the GOCACHEPROG value that runs gooze's server, its

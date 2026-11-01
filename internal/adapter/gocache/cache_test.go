@@ -1,11 +1,9 @@
 package gocache
 
 import (
-	"bytes"
 	"context"
 	"flag"
 	"io/fs"
-	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -123,10 +121,14 @@ func (mod module) assertNotShared(t *testing.T) {
 func prepare(t *testing.T, settings domain.GoCache, dirs ...string) (*Cache, []string) {
 	t.Helper()
 
-	var env []string
+	cache := New()
 
-	cache := New(func(e []string) { env = e })
-	require.NoError(t, cache.Prepare(context.Background(), settings, dirs))
+	env, err := cache.Prepare(context.Background(), settings.SizeMB)
+	require.NoError(t, err)
+
+	if settings.Prewarm {
+		require.NoError(t, cache.Prewarm(context.Background(), dirs))
+	}
 
 	return cache, env
 }
@@ -179,21 +181,6 @@ func TestCache_NoPrewarm(t *testing.T) {
 	assert.Contains(t, mod.build(t, env), "-p calc/lib ")
 }
 
-func TestCache_PrewarmFailureIsNotFatal(t *testing.T) {
-	mod := newModule(t)
-	writeTestFile(t, filepath.Join(mod.dir, "lib", "broken.go"), "package lib\n\nfunc Broken() int { return \"\" }\n")
-
-	_, env := prepare(t, domain.GoCache{Mode: domain.GoCacheIsolated, Prewarm: true}, filepath.Join(mod.dir, "lib"))
-	assert.Len(t, env, 1)
-}
-
-func TestCache_NoPrewarmWithoutPackages(t *testing.T) {
-	newModule(t)
-
-	_, env := prepare(t, domain.GoCache{Mode: domain.GoCacheIsolated, Prewarm: true})
-	assert.Len(t, env, 1)
-}
-
 // oldLayerFile writes a file of 600 KB to the layer, last used a day ago.
 func oldLayerFile(t *testing.T, mod module) string {
 	t.Helper()
@@ -235,8 +222,9 @@ func TestCache_FallsBackWhenGOCACHEPROGIsSet(t *testing.T) {
 func TestCache_GoEnvFails(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 
-	err := New(func([]string) { t.Error("env set") }).Prepare(context.Background(), domain.GoCache{}, nil)
+	env, err := New().Prepare(context.Background(), 0)
 	require.Error(t, err)
+	assert.Empty(t, env)
 }
 
 func TestCache_PrewarmOnePackage(t *testing.T) {
@@ -253,20 +241,13 @@ func writeTestFile(t *testing.T, path, content string) {
 	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
 }
 
-func TestCache_PrewarmWarnsOnlyOnFailure(t *testing.T) {
-	var logs bytes.Buffer
-
-	original := slog.Default()
-	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
-	t.Cleanup(func() { slog.SetDefault(original) })
-
+func TestCache_PrewarmReportsAFailure(t *testing.T) {
 	mod := newModule(t)
-	settings := domain.GoCache{Mode: domain.GoCacheIsolated, Prewarm: true}
+	cache, _ := prepare(t, domain.GoCache{Mode: domain.GoCacheIsolated})
 
-	prepare(t, settings, filepath.Join(mod.dir, "lib"))
-	assert.NotContains(t, logs.String(), "Failed to prewarm")
+	lib := filepath.Join(mod.dir, "lib")
+	require.NoError(t, cache.Prewarm(context.Background(), []string{lib}))
 
-	writeTestFile(t, filepath.Join(mod.dir, "lib", "broken.go"), "package lib\n\nfunc Broken() int { return \"\" }\n")
-	prepare(t, settings, filepath.Join(mod.dir, "lib"))
-	assert.Contains(t, logs.String(), "Failed to prewarm")
+	writeTestFile(t, filepath.Join(lib, "broken.go"), "package lib\n\nfunc Broken() int { return \"\" }\n")
+	require.ErrorContains(t, cache.Prewarm(context.Background(), []string{lib}), "broken.go")
 }

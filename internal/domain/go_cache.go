@@ -33,9 +33,12 @@ type GoCache struct {
 }
 
 // WithBuildCache isolates the builds of mutants with cache when a run's
-// GoCache.Mode is GoCacheIsolated.
-func WithBuildCache(cache BuildCache) WorkflowOption {
-	return func(w *workflow) { w.buildCache = cache }
+// GoCache.Mode is GoCacheIsolated, by setting env to what the cache returns.
+func WithBuildCache(cache BuildCache, env BuildEnvironment) WorkflowOption {
+	return func(w *workflow) {
+		w.buildCache = cache
+		w.buildEnv = env
+	}
 }
 
 // prepareBuildCache prepares the build cache for testing the mutants of
@@ -45,20 +48,43 @@ func (w *workflow) prepareBuildCache(ctx context.Context, settings GoCache, sour
 		return func() {}, nil
 	}
 
-	dirs, err := packageDirs(sources)
+	env, err := w.buildCache.Prepare(ctx, settings.SizeMB)
 	if err != nil {
-		return nil, err
-	}
-
-	if err := w.buildCache.Prepare(ctx, settings, dirs); err != nil {
 		return nil, fmt.Errorf("prepare the go build cache: %w", err)
 	}
+
+	if settings.Prewarm && len(env) > 0 {
+		if err := w.prewarmBuildCache(ctx, sources); err != nil {
+			return nil, err
+		}
+	}
+
+	w.buildEnv.SetBuildEnv(env)
 
 	return func() {
 		if err := w.buildCache.Close(context.WithoutCancel(ctx)); err != nil {
 			slog.Warn("Failed to trim the go build cache", "error", err)
 		}
 	}, nil
+}
+
+// prewarmBuildCache prewarms the packages of sources that have tests. A failed
+// prewarm only slows the run down.
+func (w *workflow) prewarmBuildCache(ctx context.Context, sources pkg.FileSpill[rpt.Source]) error {
+	dirs, err := packageDirs(sources)
+	if err != nil {
+		return err
+	}
+
+	if len(dirs) == 0 {
+		return nil
+	}
+
+	if err := w.buildCache.Prewarm(ctx, dirs); err != nil {
+		slog.Warn("Failed to prewarm the Go build cache", "error", err)
+	}
+
+	return nil
 }
 
 // packageDirs returns the sorted directories of the sources with tests.

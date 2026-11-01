@@ -5,8 +5,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"testing"
 
@@ -14,8 +16,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spf13/viper"
+	"github.com/stretchr/testify/mock"
 	"gooze.dev/pkg/gooze/internal/domain"
+	domainmocks "gooze.dev/pkg/gooze/internal/domain/mocks"
 	m "gooze.dev/pkg/gooze/internal/model"
+	"gooze.dev/pkg/gooze/pkg/config"
 )
 
 // newRootCmd creates a root command with flags configured for testing.
@@ -346,4 +352,104 @@ func TestRootCmd_FlagDefaultsMatchSchema(t *testing.T) {
 		assert.Equal(t, "false", cmd.PersistentFlags().Lookup(noUpdateCheckFlag).DefValue)
 		assert.Equal(t, "[]", cmd.PersistentFlags().Lookup(excludeFlagName).DefValue)
 	}
+}
+
+// executeRun runs gooze run against a mock workflow and returns the error and
+// the log level the run saw.
+func executeRun(t *testing.T, mockCalled bool, args ...string) (string, error) {
+	t.Helper()
+
+	mockWorkflow := domainmocks.NewMockWorkflow(t)
+	if mockCalled {
+		mockWorkflow.On("Test", mock.Anything, mock.Anything).Return(nil)
+	}
+
+	originalWorkflow := workflow
+	workflow = mockWorkflow
+
+	t.Cleanup(func() {
+		workflow = originalWorkflow
+
+		newRootCmd() // Rebind the keys to fresh, unset flags for later tests.
+		newRunCmd()
+	})
+
+	cmd := newRootCmd()
+	cmd.AddCommand(newRunCmd())
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs(append([]string{"run"}, args...))
+
+	err := cmd.Execute()
+
+	return viper.GetString(config.KeyLogLevel), err
+}
+
+func TestLogLevelFlag_SetsTheLevel(t *testing.T) {
+	level, err := executeRun(t, true, "--log-level", "warn", "./...")
+	require.NoError(t, err)
+	assert.Equal(t, "warn", level)
+}
+
+func TestLogLevelFlag_WinsOverTheEnvironment(t *testing.T) {
+	t.Setenv("GOOZE_LOG_LEVEL", "error")
+
+	level, err := executeRun(t, true, "--log-level", "debug", "./...")
+	require.NoError(t, err)
+	assert.Equal(t, "debug", level)
+}
+
+func TestLogLevelFlag_UnsetLeavesTheEnvironment(t *testing.T) {
+	t.Setenv("GOOZE_LOG_LEVEL", "error")
+
+	level, err := executeRun(t, true, "./...")
+	require.NoError(t, err)
+	assert.Equal(t, "error", level)
+}
+
+func TestLogLevelFlag_RejectsAnUnknownLevel(t *testing.T) {
+	_, err := executeRun(t, false, "--log-level", "loud", "./...")
+	require.ErrorContains(t, err, "invalid log.level")
+}
+
+func TestRootCmd_VerboseSetsDebugLogging(t *testing.T) {
+	for name, tt := range map[string]struct {
+		args []string
+		env  string
+		want bool
+	}{
+		"off":  {},
+		"flag": {args: []string{"--verbose"}, want: true},
+		"env":  {env: "true", want: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if tt.env != "" {
+				t.Setenv("GOOZE_LOG_VERBOSE", tt.env)
+			}
+
+			original := slog.Default()
+			t.Cleanup(func() { slog.SetDefault(original) })
+
+			args := append([]string{"--log-output", filepath.Join(t.TempDir(), "gooze.log"), "./..."}, tt.args...)
+			_, err := executeRun(t, true, args...)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, slog.Default().Enabled(context.Background(), slog.LevelDebug))
+		})
+	}
+}
+
+func TestRootCmd_LogOutputWinsOverTheConfig(t *testing.T) {
+	dir := t.TempDir()
+	given, configured := filepath.Join(dir, "given.log"), filepath.Join(dir, "configured.log")
+	t.Setenv("GOOZE_LOG_FILENAME", configured)
+
+	original := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(original) })
+
+	_, err := executeRun(t, true, "--log-output", given, "./...")
+	require.NoError(t, err)
+
+	slog.Info("logged here")
+	assert.FileExists(t, given)
+	assert.NoFileExists(t, configured)
 }

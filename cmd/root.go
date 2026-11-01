@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 
 	"log/slog"
@@ -71,7 +70,7 @@ func init() {
 		orchestrator,
 		mutagen,
 		domain.WithChangeDetector(adapter.NewGitChangeDetector()),
-		domain.WithBuildCache(gocache.New(localTestAdapter.SetEnv)),
+		domain.WithBuildCache(gocache.New(), localTestAdapter),
 	)
 	publisher = domain.NewReportPublisher(ociRegistry)
 	releaseChecker = adapter.NewModuleProxyReleaseChecker()
@@ -122,21 +121,7 @@ func baseRootCmd() *cobra.Command {
 			// failure, so print only the error, not the usage.
 			cmd.Root().SilenceUsage = true
 
-			logPath := strings.TrimSpace(logOutputFlag)
-			if logPath == "" {
-				logPath = viper.GetString(config.KeyLogFilename)
-			}
-
-			if strings.TrimSpace(logPath) == "" {
-				logPath = defaultLogFilename()
-			}
-
-			verbose := verboseFlag
-			if !verbose {
-				verbose = viper.GetBool(config.KeyLogVerbose)
-			}
-
-			configureLogger(logPath, verbose)
+			configureLogger(logOutputFlag, verboseFlag || viper.GetBool(config.KeyLogVerbose))
 			startUpdateCheck(cmd)
 
 			for _, warning := range unknownConfigKeys(viper.AllKeys()) {

@@ -89,11 +89,19 @@ type TestRunnerAdapter interface {
 
 // BuildCache keeps the builds of mutants out of the user's Go build cache.
 type BuildCache interface {
-	// Prepare sets the cache up for testing the mutants of the packages in
-	// pkgDirs.
-	Prepare(ctx context.Context, settings GoCache, pkgDirs []string) error
+	// Prepare sets up a cache of at most sizeMB and returns the environment
+	// that makes the go command use it. An empty environment means the go
+	// command can't, and the mutants use the shared cache.
+	Prepare(ctx context.Context, sizeMB int) (env []string, err error)
+	// Prewarm builds the tests of the packages in pkgDirs in the shared cache.
+	Prewarm(ctx context.Context, pkgDirs []string) error
 	// Close trims the cache.
 	Close(ctx context.Context) error
+}
+
+// BuildEnvironment holds the environment of the go commands that build mutants.
+type BuildEnvironment interface {
+	SetBuildEnv(env []string)
 }
 
 // ReportStore persists and loads mutation reports.
