@@ -3,6 +3,7 @@ package adapter
 import (
 	"bytes"
 	"context"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"time"
@@ -36,6 +37,13 @@ func (a *LocalTestRunnerAdapter) RunGoTest(ctx context.Context, workDir, testFil
 
 	cmd := exec.CommandContext(ctx, "go", args...)
 	cmd.Dir = workDir
+
+	// A killed go test can't remove its work directory, so it goes in one
+	// removed here, timed out or not. Removing "" does nothing.
+	buildTmp := buildTempDir()
+	defer os.RemoveAll(buildTmp) //nolint:errcheck // best effort cleanup.
+
+	cmd.Env = append(os.Environ(), "GOTMPDIR="+buildTmp)
 	cmd.WaitDelay = 5 * time.Second
 	setProcessGroup(cmd)
 
@@ -49,4 +57,16 @@ func (a *LocalTestRunnerAdapter) RunGoTest(ctx context.Context, workDir, testFil
 	output := stdout.String() + stderr.String()
 
 	return output, err
+}
+
+// buildTempDir creates the directory for one go test's work directory, where
+// go itself would put it. When it can't be created it returns "", which leaves
+// the choice to go.
+func buildTempDir() string {
+	dir, err := os.MkdirTemp(os.Getenv("GOTMPDIR"), "gooze-gotest-")
+	if err != nil {
+		return ""
+	}
+
+	return dir
 }
