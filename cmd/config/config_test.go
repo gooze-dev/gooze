@@ -59,7 +59,7 @@ func TestConfigInit_IgnoresEnvAndFlags(t *testing.T) {
 	viper.Reset()
 	viper.SetEnvPrefix("GOOZE")
 	viper.AutomaticEnv()
-	viper.Set("no-cache", true)
+	viper.Set("no_cache", true)
 	t.Cleanup(viper.Reset)
 
 	cmd := New(Deps{Dir: dir, FileName: "gooze.yaml"})

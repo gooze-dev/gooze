@@ -3,10 +3,9 @@
 # differ from the defaults are paths.exclude, run.fail_fast and
 # threshold.diff.total.
 # Reference: https://gooze.dev/docs/config/
-version: 1                    # Config schema version.
 output: .gooze-reports        # Directory where mutation reports are written.
-no-cache: false               # Disable incremental caching and force a full re-run.
-no-update-check: false        # Disable the check for a newer gooze release.
+no_cache: false               # Disable incremental caching and force a full re-run.
+no_update_check: false        # Disable the check for a newer gooze release.
 
 paths:                        # Path selection settings.
   exclude: [^vendor/, ^mock_]     # Regular-expression patterns of files to skip (e.g. '^vendor/').
