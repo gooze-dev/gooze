@@ -324,3 +324,110 @@ func TestMutagen_PerOperatorIgnore(t *testing.T) {
 		})
 	}
 }
+
+func TestMutagen_StrconvBitSize64(t *testing.T) {
+	const prelude = "package p\n\nimport \"strconv\"\n\nfunc f(s string, x float64) {\n\t"
+
+	tests := []struct {
+		name string
+		src  string
+		want []string // the mutated calls
+	}{
+		{
+			name: "ParseInt keeps only 1",
+			src:  prelude + "_, _ = strconv.ParseInt(s, 10, 64)\n}\n",
+			want: []string{"strconv.ParseInt(s, 0, 64)", "strconv.ParseInt(s, 1, 64)", "strconv.ParseInt(s, 10, 1)"},
+		},
+		{
+			name: "ParseUint keeps only 1",
+			src:  prelude + "_, _ = strconv.ParseUint(s, 10, 64)\n}\n",
+			want: []string{"strconv.ParseUint(s, 0, 64)", "strconv.ParseUint(s, 1, 64)", "strconv.ParseUint(s, 10, 1)"},
+		},
+		{
+			name: "ParseFloat treats every size but 32 as 64",
+			src:  prelude + "_, _ = strconv.ParseFloat(s, 64)\n}\n",
+		},
+		{
+			name: "ParseInt with a smaller size keeps both",
+			src:  prelude + "_, _ = strconv.ParseInt(s, 0, 32)\n}\n",
+			want: []string{"strconv.ParseInt(s, 1, 32)", "strconv.ParseInt(s, 0, 0)", "strconv.ParseInt(s, 0, 1)"},
+		},
+		{
+			name: "ParseFloat with size 32 keeps both",
+			src:  prelude + "_, _ = strconv.ParseFloat(s, 32)\n}\n",
+			want: []string{"strconv.ParseFloat(s, 0)", "strconv.ParseFloat(s, 1)"},
+		},
+		{
+			name: "FormatFloat panics on other sizes, so it keeps both",
+			src:  prelude + "_ = strconv.FormatFloat(x, 'f', 0, 64)\n}\n",
+			want: []string{"strconv.FormatFloat(x, 'f', 1, 64)", "strconv.FormatFloat(x, 'f', 0, 0)", "strconv.FormatFloat(x, 'f', 0, 1)"},
+		},
+		{
+			name: "a renamed import",
+			src:  "package p\n\nimport sc \"strconv\"\n\nfunc f(s string) {\n\t_, _ = sc.ParseFloat(s, 64)\n\t_, _ = sc.ParseInt(s, 0, 64)\n}\n",
+			want: []string{"sc.ParseInt(s, 1, 64)", "sc.ParseInt(s, 0, 1)"},
+		},
+		{
+			name: "another package with the same function names",
+			src:  "package p\n\nimport \"example.com/strconv\"\n\nfunc f(s string) {\n\t_, _ = strconv.ParseFloat(s, 64)\n}\n",
+			want: []string{"strconv.ParseFloat(s, 0)", "strconv.ParseFloat(s, 1)"},
+		},
+		{
+			name: "a local variable named like the package",
+			src:  prelude + "strconv := parser{}\n\t_, _ = strconv.ParseFloat(s, 64)\n}\n",
+			want: []string{"strconv.ParseFloat(s, 0)", "strconv.ParseFloat(s, 1)"},
+		},
+		{
+			name: "a method of another value",
+			src:  prelude + "_, _ = p().ParseFloat(s, 64)\n}\n",
+			want: []string{"p().ParseFloat(s, 0)", "p().ParseFloat(s, 1)"},
+		},
+		{
+			name: "another strconv function",
+			src:  prelude + "_ = strconv.Itoa(64)\n}\n",
+			want: []string{"strconv.Itoa(0)", "strconv.Itoa(1)"},
+		},
+		{
+			name: "a call with the wrong number of arguments",
+			src:  prelude + "_, _ = strconv.ParseFloat(s, 64, 64)\n}\n",
+			want: []string{"strconv.ParseFloat(s, 0, 64)", "strconv.ParseFloat(s, 1, 64)", "strconv.ParseFloat(s, 64, 0)", "strconv.ParseFloat(s, 64, 1)"},
+		},
+		{
+			name: "a call with too few arguments",
+			src:  prelude + "_, _ = strconv.ParseFloat(s)\n\t_ = strconv.ParseInt(1)\n}\n",
+			want: []string{"strconv.ParseInt(0)"},
+		},
+		{
+			name: "a size that sorts after 64",
+			src:  prelude + "_, _ = strconv.ParseFloat(s, 8)\n}\n",
+			want: []string{"strconv.ParseFloat(s, 0)", "strconv.ParseFloat(s, 1)"},
+		},
+		{
+			name: "a call inside another call",
+			src:  prelude + "_ = g(strconv.ParseFloat(s, 64))\n}\n",
+		},
+		{
+			name: "an import before strconv that sorts after it",
+			src:  "package p\n\nimport (\n\t\"unicode\"\n\tsc \"strconv\"\n)\n\nfunc f(s string) {\n\t_, _ = sc.ParseFloat(s, 64)\n}\n",
+		},
+		{
+			name: "a size that isn't a literal",
+			src:  prelude + "_, _ = strconv.ParseInt(s, 0, 8*8)\n}\n",
+			want: []string{"strconv.ParseInt(s, 1, 8*8)", "strconv.ParseInt(s, 0, 0*8)", "strconv.ParseInt(s, 0, 1*8)", "strconv.ParseInt(s, 0, 8*0)", "strconv.ParseInt(s, 0, 8*1)"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got []string
+
+			for _, mutation := range streamTypesFromSource(t, tt.src, mgen.Numbers) {
+				line := strings.Split(string(mutation.MutatedCode), "\n")[mutation.Line-1]
+				_, call, _ := strings.Cut(line, "= ")
+				got = append(got, call)
+			}
+
+			require.ElementsMatch(t, tt.want, got)
+		})
+	}
+}

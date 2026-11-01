@@ -3,6 +3,9 @@ package domain
 import (
 	"go/ast"
 	"go/token"
+	"slices"
+
+	m "gooze.dev/pkg/gooze/internal/model"
 )
 
 // markEquivalentSubtrees adds to skip the expressions of file whose every
@@ -223,4 +226,94 @@ func isConstantComposite(e *ast.CompositeLit) bool {
 	}
 
 	return true
+}
+
+// strconvBitSizeArg is the position of the bitSize argument of the strconv
+// functions that accept an equivalent size. FormatFloat isn't one: it panics
+// on any size but 32 and 64.
+var strconvBitSizeArg = map[string]int{"ParseInt": 2, "ParseUint": 2, "ParseFloat": 1}
+
+// markStrconvBitSizes finds the literal bitSize 64 of strconv calls. ParseFloat
+// treats every size but 32 as 64, so the literal goes in skip. ParseInt and
+// ParseUint read 0 as the size of int, which is 64 on the 64-bit hosts gooze
+// mostly runs on, so only the mutant to 0 is equivalent: the literal is in the
+// returned set, for dropEquivalentZero.
+func markStrconvBitSizes(file *ast.File, skip map[ast.Node]bool) map[ast.Node]bool {
+	zeroEquivalent := map[ast.Node]bool{}
+	pkg := strconvImportName(file)
+
+	ast.Inspect(file, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+
+		function, lit := strconvBitSize64(call, pkg)
+
+		switch {
+		case lit == nil:
+		// Equivalent: ParseFloat sorts first of the functions strconvBitSize64 returns.
+		case function == "ParseFloat": //gooze:ignore comparison
+			skip[lit] = true
+		default:
+			zeroEquivalent[lit] = true
+		}
+
+		return true
+	})
+
+	return zeroEquivalent
+}
+
+// strconvBitSize64 returns the function called and its bitSize argument, when
+// call is a strconv call in strconvBitSizeArg whose bitSize is the literal 64.
+func strconvBitSize64(call *ast.CallExpr, pkg string) (string, *ast.BasicLit) {
+	selector, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok || !isPredeclared(selector.X, pkg) {
+		return "", nil
+	}
+
+	arg, ok := strconvBitSizeArg[selector.Sel.Name]
+	if !ok || len(call.Args) != arg+1 {
+		return "", nil
+	}
+
+	lit, ok := call.Args[arg].(*ast.BasicLit)
+	if !ok || lit.Value != "64" {
+		return "", nil
+	}
+
+	return selector.Sel.Name, lit
+}
+
+// strconvImportName returns the name file imports strconv under, or "".
+func strconvImportName(file *ast.File) string {
+	for _, spec := range file.Imports {
+		if spec.Path.Value != `"strconv"` {
+			continue
+		}
+
+		if spec.Name != nil {
+			return spec.Name.Name
+		}
+
+		return "strconv"
+	}
+
+	return ""
+}
+
+// dropEquivalentZero removes the mutant that turns n into 0 when n is in
+// zeroEquivalent (see markStrconvBitSizes).
+func dropEquivalentZero(mutations []m.Mutation, n ast.Node, fset *token.FileSet, zeroEquivalent map[ast.Node]bool) []m.Mutation {
+	if !zeroEquivalent[n] {
+		return mutations
+	}
+
+	offset := fset.Position(n.Pos()).Offset
+
+	return slices.DeleteFunc(mutations, func(mutation m.Mutation) bool {
+		// Equivalent: a number's mutants start with 0 or 1, so <= '0' is == '0'.
+		return mutation.MutatedCode[offset] == '0' //gooze:ignore comparison
+	})
 }
