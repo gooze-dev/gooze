@@ -4,6 +4,7 @@ import (
 	"go/ast"
 	"go/token"
 	"slices"
+	"strings"
 
 	m "gooze.dev/pkg/gooze/internal/model"
 )
@@ -233,14 +234,24 @@ func isConstantComposite(e *ast.CompositeLit) bool {
 // on any size but 32 and 64.
 var strconvBitSizeArg = map[string]int{"ParseInt": 2, "ParseUint": 2, "ParseFloat": 1}
 
-// markStrconvBitSizes finds the literal bitSize 64 of strconv calls. ParseFloat
-// treats every size but 32 as 64, so the literal goes in skip. ParseInt and
-// ParseUint read 0 as the size of int, which is 64 on the 64-bit hosts gooze
-// mostly runs on, so only the mutant to 0 is equivalent: the literal is in the
-// returned set, for dropEquivalentZero.
-func markStrconvBitSizes(file *ast.File, skip map[ast.Node]bool) map[ast.Node]bool {
-	zeroEquivalent := map[ast.Node]bool{}
-	pkg := strconvImportName(file)
+// halfRotations holds half the size of each math/bits rotation with a fixed
+// size. RotateLeft isn't one: its size depends on the host.
+var halfRotations = map[string]string{"RotateLeft8": "4", "RotateLeft16": "8", "RotateLeft32": "16", "RotateLeft64": "32"}
+
+// markPartlyEquivalent finds the nodes with an equivalent mutant next to ones
+// that can be killed, so skip can't hold them whole.
+//
+// In the literal bitSize 64 of a strconv call, ParseFloat treats every size but
+// 32 as 64, so its literal goes in skip. ParseInt and ParseUint read 0 as the
+// size of int, which is 64 on the 64-bit hosts gooze mostly runs on, so only
+// the mutant to 0 is equivalent: the literal is in the returned set.
+//
+// Rotating by half a value's size gives the same result in either direction,
+// so the sign of such an amount is in the returned set; the literal inside
+// keeps its mutants. See dropEquivalent.
+func markPartlyEquivalent(file *ast.File, skip map[ast.Node]bool) map[ast.Node]bool {
+	partly := map[ast.Node]bool{}
+	strconvName, bitsName := importName(file, "strconv"), importName(file, "math/bits")
 
 	ast.Inspect(file, func(n ast.Node) bool {
 		call, ok := n.(*ast.CallExpr)
@@ -248,7 +259,11 @@ func markStrconvBitSizes(file *ast.File, skip map[ast.Node]bool) map[ast.Node]bo
 			return true
 		}
 
-		function, lit := strconvBitSize64(call, pkg)
+		if sign := halfRotationSign(call, bitsName); sign != nil {
+			partly[sign] = true
+		}
+
+		function, lit := strconvBitSize64(call, strconvName)
 
 		switch {
 		case lit == nil:
@@ -256,13 +271,35 @@ func markStrconvBitSizes(file *ast.File, skip map[ast.Node]bool) map[ast.Node]bo
 		case function == "ParseFloat": //gooze:ignore comparison
 			skip[lit] = true
 		default:
-			zeroEquivalent[lit] = true
+			partly[lit] = true
 		}
 
 		return true
 	})
 
-	return zeroEquivalent
+	return partly
+}
+
+// halfRotationSign returns the signed amount of call when it rotates by half
+// the size of the value, with a sign on the literal: bits.RotateLeft64(x, -32).
+func halfRotationSign(call *ast.CallExpr, pkg string) *ast.UnaryExpr {
+	selector, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok || !isPredeclared(selector.X, pkg) || len(call.Args) != 2 {
+		return nil
+	}
+
+	sign, ok := call.Args[1].(*ast.UnaryExpr)
+	// Equivalent: + and - are the lowest unary operators, so > is != for them.
+	if !ok || (sign.Op != token.SUB && sign.Op != token.ADD) { //gooze:ignore comparison
+		return nil
+	}
+
+	lit, ok := sign.X.(*ast.BasicLit)
+	if !ok || lit.Value != halfRotations[selector.Sel.Name] {
+		return nil
+	}
+
+	return sign
 }
 
 // strconvBitSize64 returns the function called and its bitSize argument, when
@@ -286,10 +323,10 @@ func strconvBitSize64(call *ast.CallExpr, pkg string) (string, *ast.BasicLit) {
 	return selector.Sel.Name, lit
 }
 
-// strconvImportName returns the name file imports strconv under, or "".
-func strconvImportName(file *ast.File) string {
+// importName returns the name file imports path under, or "".
+func importName(file *ast.File, path string) string {
 	for _, spec := range file.Imports {
-		if spec.Path.Value != `"strconv"` {
+		if spec.Path.Value != `"`+path+`"` {
 			continue
 		}
 
@@ -297,17 +334,22 @@ func strconvImportName(file *ast.File) string {
 			return spec.Name.Name
 		}
 
-		return "strconv"
+		return path[strings.LastIndex(path, "/")+1:]
 	}
 
 	return ""
 }
 
-// dropEquivalentZero removes the mutant that turns n into 0 when n is in
-// zeroEquivalent (see markStrconvBitSizes).
-func dropEquivalentZero(mutations []m.Mutation, n ast.Node, fset *token.FileSet, zeroEquivalent map[ast.Node]bool) []m.Mutation {
-	if !zeroEquivalent[n] {
+// dropEquivalent removes the equivalent mutants of n when n is in partly (see
+// markPartlyEquivalent): every mutant of a sign, and the one that turns a
+// number into 0.
+func dropEquivalent(mutations []m.Mutation, n ast.Node, fset *token.FileSet, partly map[ast.Node]bool) []m.Mutation {
+	if !partly[n] {
 		return mutations
+	}
+
+	if _, isSign := n.(*ast.UnaryExpr); isSign {
+		return nil
 	}
 
 	offset := fset.Position(n.Pos()).Offset
