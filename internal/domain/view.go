@@ -25,6 +25,7 @@ type ReportSummary struct {
 	Score     MutationScore
 	Files     []FileSummary // sorted by path
 	Survivors []Survivor    // sorted by path, then line
+	Hint      string        // what to do when the reports hold nothing, or ""
 }
 
 // FileSummary counts the mutation results of one source file.
@@ -69,6 +70,10 @@ func (w *workflow) View(ctx context.Context, args ViewArgs) error {
 		return WithExitCode(m.ExitNoReports, fmt.Errorf("no reports in %s match %s", args.Reports, joinPaths(args.Paths)))
 	}
 
+	if len(summary.Files) == 0 {
+		summary.Hint = unmergedReportsHint(args.Reports)
+	}
+
 	if err := w.displayView(ctx, args, summary); err != nil {
 		return err
 	}
@@ -79,6 +84,28 @@ func (w *workflow) View(ctx context.Context, args ViewArgs) error {
 	}
 
 	return thresholds.Err(summary.Score)
+}
+
+// unmergedReportsHint points at the reports in dir that report view doesn't
+// read: those of shards and of a narrowed run, until gooze report merge. It
+// returns "" when there are none.
+func unmergedReportsHint(dir m.Path) string {
+	shards, _ := findShardDirs(string(dir))
+	if len(shards) > 0 {
+		names := make([]string, len(shards))
+		for i, shard := range shards {
+			names[i] = filepath.Base(shard)
+		}
+
+		return fmt.Sprintf("found %s but no merged reports; run: gooze report merge -o %s", strings.Join(names, ", "), dir)
+	}
+
+	runDir := filepath.Join(string(dir), RunDirName)
+	if _, err := os.Stat(runDir); err != nil {
+		return ""
+	}
+
+	return "the last --diff or --run reports are not merged; see them with: gooze report view -o " + runDir
 }
 
 // viewThresholds returns the thresholds to check the viewed reports against:

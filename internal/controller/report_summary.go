@@ -33,6 +33,10 @@ func renderReportSummary(summary domain.ReportSummary) string {
 
 	fmt.Fprintf(&out, "\nMutation score: %s\n", formatMutationScore(summary.Score))
 
+	if summary.Hint != "" {
+		fmt.Fprintf(&out, "\n%s\n", summary.Hint)
+	}
+
 	return out.String()
 }
 
