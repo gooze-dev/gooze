@@ -431,3 +431,42 @@ func TestMutagen_StrconvBitSize64(t *testing.T) {
 		})
 	}
 }
+
+func TestMutagen_HalfRotations(t *testing.T) {
+	const prelude = "package p\n\nimport \"math/bits\"\n\nfunc f(x uint64) {\n\t"
+
+	tests := []struct {
+		name string
+		src  string
+		want int // the unary mutants
+	}{
+		{"RotateLeft64 by -32", prelude + "_ = bits.RotateLeft64(x, -32)\n}\n", 0},
+		{"RotateLeft64 by +32", prelude + "_ = bits.RotateLeft64(x, +32)\n}\n", 0},
+		{"RotateLeft32 by -16", prelude + "_ = bits.RotateLeft32(uint32(x), -16)\n}\n", 0},
+		{"RotateLeft16 by -8", prelude + "_ = bits.RotateLeft16(uint16(x), -8)\n}\n", 0},
+		{"RotateLeft8 by -4", prelude + "_ = bits.RotateLeft8(uint8(x), -4)\n}\n", 0},
+		{"another amount", prelude + "_ = bits.RotateLeft64(x, -31)\n}\n", 2},
+		{"half of another size", prelude + "_ = bits.RotateLeft32(uint32(x), -32)\n}\n", 2},
+		{"RotateLeft, whose size depends on the host", prelude + "_ = bits.RotateLeft(uint(x), -32)\n}\n", 2},
+		{"another function", prelude + "_ = bits.Len64(-32)\n}\n", 2},
+		{"a complement", prelude + "_ = bits.RotateLeft64(x, ^32)\n}\n", 1},
+		{"a variable amount", prelude + "k := 32\n\t_ = bits.RotateLeft64(x, -k)\n}\n", 2},
+		{"another package", "package p\n\nimport \"example.com/bits\"\n\nfunc f(x uint64) {\n\t_ = bits.RotateLeft64(x, -32)\n}\n", 2},
+		{"a renamed import", "package p\n\nimport b \"math/bits\"\n\nfunc f(x uint64) {\n\t_ = b.RotateLeft64(x, -32)\n}\n", 0},
+		{"too many arguments", prelude + "_ = bits.RotateLeft64(x, -32, 1)\n}\n", 2},
+		{"too few arguments", prelude + "_ = bits.RotateLeft64(-32)\n}\n", 2},
+		{"the rotated value", prelude + "_ = bits.RotateLeft64(-32, 8)\n}\n", 2},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Len(t, streamTypesFromSource(t, tt.src, mgen.Unary), tt.want)
+		})
+	}
+}
+
+func TestMutagen_HalfRotationsKeepTheAmountsNumbers(t *testing.T) {
+	src := "package p\n\nimport \"math/bits\"\n\nfunc f(x uint64) uint64 {\n\treturn bits.RotateLeft64(x, -32)\n}\n"
+
+	require.Len(t, streamTypesFromSource(t, src, mgen.Numbers), 2)
+}
