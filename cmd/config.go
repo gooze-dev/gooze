@@ -38,6 +38,8 @@ const (
 	workspaceFlagName = "workspace"
 	failFastFlagName  = "fail-fast"
 
+	logLevelFlagName = "log-level"
+
 	goCacheFlagName        = "go-cache"
 	goCacheSizeFlagName    = "go-cache-size"
 	goCachePrewarmFlagName = "go-cache-prewarm"
