@@ -9,8 +9,11 @@ import (
 // Deps are the dependencies the config commands need, supplied by the root
 // command so this package stays decoupled from config-key wiring.
 type Deps struct {
-	Dir      string // directory the config file lives in (e.g. ".")
-	FileName string // config file name (e.g. "gooze.yaml")
+	Dir       string // directory the config file lives in (e.g. ".")
+	FileName  string // config file name (e.g. "gooze.yaml")
+	EnvPrefix string // prefix of the config's environment variables (e.g. "GOOZE")
+	// FlagKeys maps the flags available to every command to their config keys.
+	FlagKeys map[string]string
 }
 
 // New builds the `config` parent command and its subcommands.
@@ -24,7 +27,7 @@ func New(deps Deps) *cobra.Command {
 		},
 	}
 
-	cmd.AddCommand(newInitCmd(deps), newSchemaCmd())
+	cmd.AddCommand(newInitCmd(deps), newSchemaCmd(), newShowCmd(deps))
 
 	return cmd
 }
