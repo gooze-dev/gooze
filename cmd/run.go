@@ -29,6 +29,9 @@ var runPatternFlag string
 var runMutagensFlag []string
 var runWorkspaceFlag string
 var runFailFastFlag string
+var runGoCacheFlag string
+var runGoCacheSizeFlag int
+var runGoCachePrewarmFlag bool
 
 // errRunWithShard rejects --run with --shard: a run of a few functions is too
 // small to split across jobs.
@@ -89,6 +92,11 @@ func runTestArgs(estimateArgs domain.EstimateArgs, shardIndex, totalShards int, 
 		Workspace:       domain.WorkspaceMode(viper.GetString(config.KeyRunWorkspace)),
 		Thresholds:      minimums,
 		FailFast:        domain.FailFast(viper.GetString(config.KeyRunFailFast)),
+		GoCache: domain.GoCache{
+			Mode:    domain.GoCacheMode(viper.GetString(config.KeyRunGoCache)),
+			SizeMB:  configInt(config.KeyRunGoCacheSize),
+			Prewarm: viper.GetBool(config.KeyRunGoCachePrewarm),
+		},
 	}
 }
 
@@ -123,6 +131,13 @@ func configureRunFlags(cmd *cobra.Command) (report.ThresholdFlags, report.Thresh
 
 	cmd.Flags().StringVar(&runFailFastFlag, failFastFlagName, schemaDefault[string](config.KeyRunFailFast), "when to stop before testing every mutant: off, gate (once a --threshold-* gate can't be met), file (skip a file once it can't meet --threshold-file) or first (at the first survivor)")
 	bindFlagToConfig(cmd.Flags().Lookup(failFastFlagName), config.KeyRunFailFast)
+
+	cmd.Flags().StringVar(&runGoCacheFlag, goCacheFlagName, schemaDefault[string](config.KeyRunGoCache), "where mutant builds are cached: isolated (gooze's own cache, reading GOCACHE without writing to it) or shared (GOCACHE)")
+	bindFlagToConfig(cmd.Flags().Lookup(goCacheFlagName), config.KeyRunGoCache)
+	cmd.Flags().IntVar(&runGoCacheSizeFlag, goCacheSizeFlagName, schemaDefault[int](config.KeyRunGoCacheSize), "size in MB that gooze's own Go build cache is trimmed to after a run")
+	bindFlagToConfig(cmd.Flags().Lookup(goCacheSizeFlagName), config.KeyRunGoCacheSize)
+	cmd.Flags().BoolVar(&runGoCachePrewarmFlag, goCachePrewarmFlagName, schemaDefault[bool](config.KeyRunGoCachePrewarm), "build each package once in GOCACHE before its mutants, so their dependencies are cached there")
+	bindFlagToConfig(cmd.Flags().Lookup(goCachePrewarmFlagName), config.KeyRunGoCachePrewarm)
 
 	return report.AddThresholdFlags(cmd, "threshold", "threshold"),
 		report.AddThresholdFlags(cmd, "threshold.diff", "threshold-diff")
