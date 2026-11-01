@@ -16,8 +16,7 @@ import (
 // run's own, so the run scores and saves them as cached. It returns nil for
 // any other run.
 func (w *workflow) cachedSelection(ctx context.Context, args TestArgs, sel Selection, sources sourceSet) (pkg.FileSpill[m.Report], error) {
-	// Equivalent: the CLI passes a total of at least 1, so > 1 is != 1.
-	if !sel.Narrowed() || args.TotalShardCount > 1 { //gooze:ignore comparison
+	if !sel.Narrowed() || args.Sharded() {
 		return nil, nil //nolint:nilnil // nil: the run reuses no stored results.
 	}
 

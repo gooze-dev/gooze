@@ -421,7 +421,7 @@ func (w *workflow) finalizeReports(ctx context.Context, args TestArgs, sel Selec
 		return fmt.Errorf("calculate mutation score: %w", err)
 	}
 
-	score.ThresholdsSkipped = args.Thresholds.Set() && args.TotalShardCount > 1
+	score.ThresholdsSkipped = args.Thresholds.Set() && args.Sharded()
 	score.Interrupted = run.interrupted
 	score.FailFast = run.failFast
 

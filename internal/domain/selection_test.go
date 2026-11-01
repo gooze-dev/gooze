@@ -14,6 +14,15 @@ import (
 	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
+func TestTestArgs_Sharded(t *testing.T) {
+	t.Parallel()
+
+	// 0 is the zero value of TestArgs: a run that never set a shard count.
+	for total, want := range map[int]bool{0: false, 1: false, 2: true, 6: true} {
+		assert.Equal(t, want, domain.TestArgs{TotalShardCount: total}.Sharded(), "total %d", total)
+	}
+}
+
 func TestSelection_Run(t *testing.T) {
 	t.Parallel()
 

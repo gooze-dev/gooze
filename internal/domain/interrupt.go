@@ -37,7 +37,7 @@ func (r testedRun) partial() bool {
 // cache on scores its cached files with and resumes interrupted files from.
 // It returns nil for any other run.
 func (w *workflow) storedReports(ctx context.Context, args TestArgs, sel Selection, sources sourceSet) (pkg.FileSpill[m.Report], error) {
-	if !sources.cached || sel.Narrowed() || args.TotalShardCount > 1 {
+	if !sources.cached || sel.Narrowed() || args.Sharded() {
 		return nil, nil //nolint:nilnil // nil: the run keeps no stored reports.
 	}
 
