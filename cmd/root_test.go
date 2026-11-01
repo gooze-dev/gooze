@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime/debug"
 	"slices"
 	"testing"
 
@@ -452,4 +453,21 @@ func TestRootCmd_LogOutputWinsOverTheConfig(t *testing.T) {
 	slog.Info("logged here")
 	assert.FileExists(t, given)
 	assert.NoFileExists(t, configured)
+}
+
+func TestRootCmd_VersionFlag(t *testing.T) {
+	cmd := newRootCmd()
+
+	out := &bytes.Buffer{}
+	cmd.SetOut(out)
+	cmd.SetArgs([]string{"--version"})
+	require.NoError(t, cmd.Execute())
+
+	info, ok := debug.ReadBuildInfo()
+	require.True(t, ok, "test binaries carry build info")
+	assert.Equal(t, versionLine(info)+"\n", out.String())
+}
+
+func TestRootCmd_ShortVFlagStaysVerbose(t *testing.T) {
+	assert.Equal(t, "verbose", newRootCmd().PersistentFlags().ShorthandLookup("v").Name)
 }

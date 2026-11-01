@@ -121,9 +121,10 @@ var rootCmd = baseRootCmd()
 
 func baseRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "gooze",
-		Short: "Go mutation testing tool",
-		Long:  rootLongDescription,
+		Use:     "gooze",
+		Short:   "Go mutation testing tool",
+		Long:    rootLongDescription,
+		Version: currentVersion(),
 		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
 			// Flags and arguments are valid by now: a later error is a runtime
 			// failure, so print only the error, not the usage.
@@ -143,6 +144,8 @@ func baseRootCmd() *cobra.Command {
 			return cmd.Help()
 		},
 	}
+
+	cmd.SetVersionTemplate("{{.Version}}\n")
 
 	return cmd
 }
