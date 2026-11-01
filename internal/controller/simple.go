@@ -25,11 +25,7 @@ func NewSimpleUI(cmd *cobra.Command) *SimpleUI {
 
 // Start initializes the UI.
 func (s *SimpleUI) Start(ctx context.Context, _ ...StartOption) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-
-	return nil
+	return ctx.Err()
 }
 
 // StartEstimate initializes the UI in estimation mode.
@@ -43,19 +39,10 @@ func (s *SimpleUI) StartTest(ctx context.Context) error {
 }
 
 // Close finalizes the UI.
-func (s *SimpleUI) Close(ctx context.Context) {
-	if err := ctx.Err(); err != nil {
-		return
-	}
-}
+func (s *SimpleUI) Close(context.Context) {}
 
 // Wait blocks until the UI is closed (no-op for SimpleUI).
-func (s *SimpleUI) Wait(ctx context.Context) {
-	if err := ctx.Err(); err != nil {
-		return
-	}
-	// SimpleUI doesn't block - it just prints and continues
-}
+func (s *SimpleUI) Wait(context.Context) {}
 
 // DisplayEstimation prints the estimation results or error.
 func (s *SimpleUI) DisplayEstimation(ctx context.Context, estimation domain.Estimation, err error) error {
@@ -183,6 +170,13 @@ func (s *SimpleUI) DisplayCompletedTestInfo(ctx context.Context, currentMutation
 	}
 
 	s.printf("Completed mutation %s (%s) -> %s\n", currentMutation.ID[:4], currentMutation.Type.Name, status)
+
+	// A mutant that did not build is noise in a log, where diffs read as
+	// survivors; gooze report view lists it by file and line.
+	// Equivalent: no status label sorts before "error".
+	if status == formatTestStatus(rpt.Error) { //gooze:ignore comparison
+		return
+	}
 
 	if diff := reportedDiff(status, currentMutation.DiffCode); diff != nil {
 		path := ""
