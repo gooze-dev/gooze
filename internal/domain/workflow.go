@@ -124,8 +124,9 @@ type workflow struct {
 	progress     Reporter
 	orchestrator Orchestrator
 	mutagen      Mutagen
-	changes      ChangeDetector // nil disables diff mode
-	buildCache   BuildCache     // nil leaves mutant builds in the shared cache
+	changes      ChangeDetector   // nil disables diff mode
+	buildCache   BuildCache       // nil leaves mutant builds in the shared cache
+	buildEnv     BuildEnvironment // receives the environment buildCache returns
 }
 
 // NewWorkflow creates a new Workflow instance with the provided dependencies.
