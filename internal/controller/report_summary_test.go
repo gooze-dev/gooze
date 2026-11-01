@@ -104,3 +104,13 @@ func TestDisplayReportSummary_PrintsPlainText(t *testing.T) {
 		t.Fatalf("simple UI and TUI should print the rendered summary\nsimple:\n%s\ntui:\n%s", simpleOut.String(), tuiOut.String())
 	}
 }
+
+func TestRenderReportSummary_Hint(t *testing.T) {
+	if output := renderReportSummary(domain.ReportSummary{Hint: "run the merge"}); !strings.HasSuffix(output, "\nrun the merge\n") {
+		t.Fatalf("output = %q", output)
+	}
+
+	if output := renderReportSummary(domain.ReportSummary{}); strings.HasSuffix(output, "\n\n") {
+		t.Fatalf("no hint leaves no blank line: %q", output)
+	}
+}

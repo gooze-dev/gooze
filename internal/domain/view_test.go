@@ -2,6 +2,8 @@ package domain_test
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -150,4 +152,46 @@ func TestWorkflow_View_SurvivorWithoutChangedLineHasNoLocation(t *testing.T) {
 
 	summary := viewSummary(t, domain.ViewArgs{Reports: m.Path(dir)})
 	assert.Equal(t, []domain.Survivor{{Path: "a.go", Mutagen: "boolean", Status: rpt.Survived, MutationID: "a-1"}}, summary.Survivors)
+}
+
+func TestWorkflow_View_EmptyMainReportsPointAtUnmergedOnes(t *testing.T) {
+	for name, tt := range map[string]struct {
+		dirs []string
+		want string
+	}{
+		"nothing": {},
+		"shards": {
+			dirs: []string{"shard_0", "shard_1"},
+			want: "found shard_0, shard_1 but no merged reports; run: gooze report merge -o %s",
+		},
+		"run": {
+			dirs: []string{"run"},
+			want: "the last --diff or --run reports are not merged; see them with: gooze report view -o %s/run",
+		},
+		"shards first": {
+			dirs: []string{"run", "shard_0"},
+			want: "found shard_0 but no merged reports; run: gooze report merge -o %s",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			for _, sub := range tt.dirs {
+				require.NoError(t, os.Mkdir(filepath.Join(dir, sub), 0o750))
+			}
+
+			want := tt.want
+			if want != "" {
+				want = fmt.Sprintf(want, dir)
+			}
+
+			assert.Equal(t, want, viewSummary(t, domain.ViewArgs{Reports: m.Path(dir)}).Hint)
+		})
+	}
+}
+
+func TestWorkflow_View_ReportsLeaveNoHint(t *testing.T) {
+	dir := viewFixture(t)
+	require.NoError(t, os.Mkdir(filepath.Join(dir, "run"), 0o750))
+
+	assert.Empty(t, viewSummary(t, domain.ViewArgs{Reports: m.Path(dir)}).Hint)
 }
