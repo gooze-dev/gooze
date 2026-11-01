@@ -84,6 +84,14 @@ func init() {
 	rootCmd.AddCommand(newCacheProgCmd())
 
 	rootCmd.AddCommand(configcmd.New(configcmd.Deps{
+		EnvPrefix: envPrefix,
+		FlagKeys: map[string]string{
+			outputFlagName:    config.KeyOutput,
+			noCacheFlagName:   config.KeyNoCache,
+			noUpdateCheckFlag: config.KeyNoUpdateCheck,
+			excludeFlagName:   config.KeyPathsExclude,
+			logLevelFlagName:  config.KeyLogLevel,
+		},
 		Dir:      configFolderPath,
 		FileName: config.FileName,
 	}))
