@@ -210,6 +210,106 @@ func TestSimpleUI_OtherDisplays(t *testing.T) {
 	}
 }
 
+func TestSimpleUI_DisplayCompletedTestInfo_PrintsNoDiffForBuildErrors(t *testing.T) {
+	diff := "--- original\n+++ mutated\n@@\n"
+
+	cases := []struct {
+		status   rpt.TestStatus
+		wantDiff bool
+	}{
+		{rpt.Error, false},
+		{rpt.Survived, true},
+		{rpt.Timeout, true},
+		{rpt.NotCovered, true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.status.String(), func(t *testing.T) {
+			var buf bytes.Buffer
+
+			cmd := &cobra.Command{}
+			cmd.SetOut(&buf)
+
+			mutation := m.Mutation{
+				ID:       "abcd1234567890",
+				Type:     mgen.Arithmetic,
+				Source:   rpt.Source{Origin: &rpt.File{FullPath: "path/a.go"}},
+				DiffCode: []byte(diff),
+			}
+			result := m.Result{mgen.Arithmetic: {{MutationID: mutation.ID, Status: tc.status}}}
+
+			NewSimpleUI(cmd).DisplayCompletedTestInfo(context.Background(), mutation, result)
+
+			output := buf.String()
+			if !strings.Contains(output, "Completed mutation abcd (arithmetic) -> "+tc.status.String()+"\n") {
+				t.Fatalf("output has no status line:\n%s", output)
+			}
+
+			if got := strings.Contains(output, diff) && strings.Contains(output, "File: path/a.go"); got != tc.wantDiff {
+				t.Fatalf("diff printed = %v, want %v\noutput:\n%s", got, tc.wantDiff, output)
+			}
+		})
+	}
+}
+
+func TestSimpleUI_Start_CanceledContextFails(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	if err := NewSimpleUI(&cobra.Command{}).Start(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Start() = %v, want context.Canceled", err)
+	}
+}
+
+func TestSimpleUI_DisplayMutationScore_NoHintPrintsOnlyTheScore(t *testing.T) {
+	var buf bytes.Buffer
+
+	cmd := &cobra.Command{}
+	cmd.SetOut(&buf)
+
+	NewSimpleUI(cmd).DisplayMutationScore(context.Background(), domain.MutationScore{})
+
+	if want := "Mutation score: 100.00% (no mutations)\n"; buf.String() != want {
+		t.Fatalf("output = %q, want %q", buf.String(), want)
+	}
+}
+
+func TestSimpleUI_DisplayCompletedTestInfo_NoResultIsUnknown(t *testing.T) {
+	for name, result := range map[string]m.Result{
+		"no entry":     {},
+		"empty result": {mgen.Arithmetic: {}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var buf bytes.Buffer
+
+			cmd := &cobra.Command{}
+			cmd.SetOut(&buf)
+
+			NewSimpleUI(cmd).DisplayCompletedTestInfo(context.Background(), m.Mutation{ID: "abcd1234567890", Type: mgen.Arithmetic}, result)
+
+			if want := "Completed mutation abcd (arithmetic) -> unknown\n"; buf.String() != want {
+				t.Fatalf("output = %q, want %q", buf.String(), want)
+			}
+		})
+	}
+}
+
+func TestSimpleUI_DisplayCompletedTestInfo_DiffWithoutPathHasNoFileLine(t *testing.T) {
+	var buf bytes.Buffer
+
+	cmd := &cobra.Command{}
+	cmd.SetOut(&buf)
+
+	mutation := m.Mutation{ID: "abcd1234567890", Type: mgen.Arithmetic, DiffCode: []byte("--- original\n")}
+	result := m.Result{mgen.Arithmetic: {{MutationID: mutation.ID, Status: rpt.Survived}}}
+
+	NewSimpleUI(cmd).DisplayCompletedTestInfo(context.Background(), mutation, result)
+
+	if strings.Contains(buf.String(), "File:") {
+		t.Fatalf("no path, no file line:\n%s", buf.String())
+	}
+}
+
 func TestFormatTestStatus(t *testing.T) {
 	cases := map[rpt.TestStatus]string{
 		rpt.Killed:         "killed",
