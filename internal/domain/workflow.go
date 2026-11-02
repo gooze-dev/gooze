@@ -339,10 +339,12 @@ func (w *workflow) prepareReportsDir(ctx context.Context, args TestArgs, sel Sel
 		return reportsDir, err
 	}
 
-	return reportsDir, w.cleanDeleted(ctx, args.Reports, reportsDir, sources.deleted)
+	return reportsDir, w.cleanDeleted(ctx, args.Reports, args.Sharded(), sources.deleted)
 }
 
-func (w *workflow) cleanDeleted(ctx context.Context, base, reportsDir m.Path, deleted pkg.FileSpill[rpt.Source]) error {
+// cleanDeleted drops the stored reports of deleted sources from base. A shard
+// writes to its own dir inside base, so base's index is rebuilt for it here.
+func (w *workflow) cleanDeleted(ctx context.Context, base m.Path, sharded bool, deleted pkg.FileSpill[rpt.Source]) error {
 	// Equivalent: Len is never negative, so == 0 is <= 0.
 	if deleted == nil || deleted.Len() == 0 { //gooze:ignore comparison
 		return nil
@@ -353,8 +355,7 @@ func (w *workflow) cleanDeleted(ctx context.Context, base, reportsDir m.Path, de
 		return fmt.Errorf("clean reports: %w", err)
 	}
 
-	// Equivalent: reportsDir is base or a shard dir inside it, which sorts after base.
-	if base == reportsDir { //gooze:ignore comparison
+	if !sharded {
 		return nil
 	}
 
