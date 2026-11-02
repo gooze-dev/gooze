@@ -84,6 +84,8 @@ type ViewArgs struct {
 	Paths []m.Path
 	// All lists every mutation with its status instead of a per-file summary.
 	All bool
+	// ByLine has the text summary list the survivors per line of a file.
+	ByLine bool
 	// Thresholds are the minimum scores of the viewed reports.
 	Thresholds Thresholds
 	// DiffThresholds replace Thresholds when the reports are a --diff run's,

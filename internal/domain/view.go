@@ -25,6 +25,8 @@ type ReportSummary struct {
 	Score     MutationScore
 	Files     []FileSummary // sorted by path
 	Survivors []Survivor    // sorted by path, then line
+	// SurvivorLines holds Survivors per line when the view asks for it, else nil.
+	SurvivorLines []SurvivorLine
 	// BuildErrors are the mutations that did not build; they don't count
 	// against the score. Sorted like Survivors.
 	BuildErrors []Survivor
@@ -75,6 +77,10 @@ func (w *workflow) View(ctx context.Context, args ViewArgs) error {
 
 	if len(summary.Files) == 0 {
 		summary.Hint = unmergedReportsHint(args.Reports)
+	}
+
+	if args.ByLine {
+		summary.SurvivorLines = groupByLine(summary.Survivors)
 	}
 
 	if err := w.displayView(ctx, args, summary); err != nil {

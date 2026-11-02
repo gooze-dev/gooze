@@ -52,7 +52,7 @@ func writeCodeClimate(w io.Writer, survivors []Survivor, prefix string) error {
 	return nil
 }
 
-func codeClimateLineIssue(line survivorLine, prefix string) codeClimateIssue {
+func codeClimateLineIssue(line SurvivorLine, prefix string) codeClimateIssue {
 	severity := "minor"
 	if lineSurvived(line) {
 		severity = "major"

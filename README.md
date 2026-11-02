@@ -46,7 +46,7 @@ Mutation score: 87.50% (14 killed, 2 survived)
 
 Paths filter the files like `gooze run` arguments, relative to the module root
 (`./internal/...`, `./cmd`, `./cmd/run.go`). `--all` lists every mutation with its
-status and diff instead.
+status and diff instead; `--by-line` lists the survivors once per line of a file.
 
 ## Documentation
 

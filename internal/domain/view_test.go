@@ -77,6 +77,28 @@ func TestWorkflow_View_SummarizesPerFileWithSurvivors(t *testing.T) {
 	}, summary)
 }
 
+func TestWorkflow_View_ByLineGroupsSurvivorsOfALine(t *testing.T) {
+	dir := t.TempDir()
+	diff := []byte(survivorDiff)
+	other := []byte("--- original\n+++ mutated\n@@ -2,1 +2,1 @@\n-a\n+b\n")
+	source := rpt.Source{Origin: &rpt.File{ShortPath: "a.go", FullPath: "/p/a.go", Hash: "a"}}
+
+	writeReports(t, dir,
+		m.Report{Source: source, Result: m.Result{mgen.Comparison: {{MutationID: "same-1", Status: rpt.Survived}}}, Diff: &diff},
+		m.Report{Source: source, Result: m.Result{mgen.Numbers: {{MutationID: "same-2", Status: rpt.Survived}}}, Diff: &diff},
+		m.Report{Source: source, Result: m.Result{mgen.Comparison: {{MutationID: "other", Status: rpt.Survived}}}, Diff: &other},
+	)
+
+	summary := viewSummary(t, domain.ViewArgs{Reports: m.Path(dir), ByLine: true})
+
+	require.Len(t, summary.Survivors, 3, "the flat list stays, for the score and the machine formats")
+	require.Len(t, summary.SurvivorLines, 2)
+	assert.Equal(t, "a.go", summary.SurvivorLines[0].Path)
+	assert.Equal(t, 2, summary.SurvivorLines[0].Line)
+	assert.Equal(t, 10, summary.SurvivorLines[1].Line)
+	assert.Len(t, summary.SurvivorLines[1].Survivors, 2)
+}
+
 func TestWorkflow_View_SortsBuildErrorsByLocation(t *testing.T) {
 	dir := t.TempDir()
 	second := []byte("--- original\n+++ mutated\n@@ -2,1 +2,1 @@\n-a\n+b\n")
