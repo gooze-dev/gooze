@@ -1,6 +1,9 @@
 ---
 # Mockery configuration for generating mocks
 with-expecter: true
+# Every mock starts with //gooze:ignore, so gooze never mutates generated
+# mocks, wherever they live (e.g. pkg/config/mock_Registry.go).
+boilerplate-file: .mockery-boilerplate.txt
 disable-version-string: true
 packages:
   gooze.dev/pkg/gooze/internal/domain:
