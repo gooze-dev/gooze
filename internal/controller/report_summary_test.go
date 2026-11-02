@@ -163,3 +163,139 @@ func TestRenderReportSummary_Hint(t *testing.T) {
 		t.Fatalf("no hint leaves no blank line: %q", output)
 	}
 }
+
+func survivorLines(survivors ...domain.Survivor) domain.ReportSummary {
+	summary := domain.ReportSummary{Survivors: survivors}
+
+	for _, survivor := range survivors {
+		lines := summary.SurvivorLines
+		if n := len(lines); n > 0 && lines[n-1].Path == survivor.Path && lines[n-1].Line == survivor.Line {
+			lines[n-1].Survivors = append(lines[n-1].Survivors, survivor)
+			continue
+		}
+
+		line := domain.SurvivorLine{Survivors: []domain.Survivor{survivor}}
+		line.Path, line.Line = survivor.Path, survivor.Line
+		summary.SurvivorLines = append(lines, line)
+	}
+
+	return summary
+}
+
+func TestRenderReportSummary_ByLine(t *testing.T) {
+	const original = "if len(apiKeys) > 0 {"
+
+	mutant := func(mutagen, mutated string) domain.Survivor {
+		return domain.Survivor{Path: "runner/config.go", Line: 56, Mutagen: mutagen, Status: rpt.Survived, Original: original, Mutated: mutated}
+	}
+
+	output := renderReportSummary(survivorLines(
+		mutant("comparison", "if len(apiKeys) >= 0 {"),
+		mutant("comparison", "if len(apiKeys) == 0 {"),
+		mutant("comparison", "if len(apiKeys) <= 0 {"),
+		mutant("comparison", "if len(apiKeys) < 0 {"),
+		mutant("numbers", "if len(apiKeys) > 1 {"),
+		domain.Survivor{Path: "z.go", Line: 3, Mutagen: "boolean", Status: rpt.Survived, Original: "a := true", Mutated: "a := false"},
+	))
+
+	want := "Survivors (6 on 2 lines):\n" +
+		"runner/config.go:56: 5 survived (comparison ×4, numbers): if len(apiKeys) > 0 { -> >= 0, == 0, <= 0, < 0, > 1\n" +
+		"z.go:3: survived (boolean): a := true -> a := false\n\n"
+	if !strings.Contains(output, want) {
+		t.Fatalf("output missing %q\noutput:\n%s", want, output)
+	}
+}
+
+func TestRenderReportSummary_ByLineOneLineIsSingular(t *testing.T) {
+	output := renderReportSummary(survivorLines(domain.Survivor{Path: "a.go", Line: 1, Mutagen: "boolean", Status: rpt.Survived}))
+
+	if !strings.Contains(output, "Survivors (1 on 1 line):\n") {
+		t.Fatalf("output:\n%s", output)
+	}
+}
+
+func TestRenderReportSummary_BuildErrorsStayFlatByLine(t *testing.T) {
+	summary := survivorLines(domain.Survivor{Path: "a.go", Line: 1, Mutagen: "boolean", Status: rpt.Survived})
+	failure := domain.Survivor{Path: "b.go", Line: 2, Mutagen: "numbers", Status: rpt.Error, Original: "x", Mutated: "y"}
+	summary.BuildErrors = []domain.Survivor{failure, failure}
+
+	want := "Build errors (2):\nb.go:2: error (numbers): x -> y\nb.go:2: error (numbers): x -> y\n"
+	if output := renderReportSummary(summary); !strings.Contains(output, want) {
+		t.Fatalf("output missing %q\noutput:\n%s", want, output)
+	}
+}
+
+func TestFormatSurvivorLine(t *testing.T) {
+	survivor := func(status rpt.TestStatus, mutagen, mutated string) domain.Survivor {
+		return domain.Survivor{Path: "a.go", Line: 7, Mutagen: mutagen, Status: status, Original: "x := a + b", Mutated: mutated}
+	}
+
+	for name, tt := range map[string]struct {
+		survivors []domain.Survivor
+		want      string
+	}{
+		"one mutant reads as in the flat list": {
+			survivors: []domain.Survivor{survivor(rpt.Survived, "arithmetic", "x := a - b")},
+			want:      "a.go:7: survived (arithmetic): x := a + b -> x := a - b",
+		},
+		"mixed statuses in order": {
+			survivors: []domain.Survivor{
+				survivor(rpt.Survived, "arithmetic", "x := a - b"),
+				survivor(rpt.NotCovered, "arithmetic", "x := a * b"),
+				survivor(rpt.Survived, "arithmetic", "x := a / b"),
+			},
+			want: "a.go:7: 2 survived, 1 not_covered (arithmetic ×3): x := a + b -> -, *, /",
+		},
+		"a removed line among the variants": {
+			survivors: []domain.Survivor{
+				survivor(rpt.Survived, "arithmetic", "x := a - b"),
+				survivor(rpt.Survived, "arithmetic", "x := a * b"),
+				survivor(rpt.Survived, "statement", ""),
+			},
+			want: "a.go:7: 3 survived (arithmetic ×2, statement): x := a + b -> -, *, (line removed)",
+		},
+		"no location and no change": {
+			survivors: []domain.Survivor{
+				{Path: "a.go", Mutagen: "boolean", Status: rpt.Survived},
+				{Path: "a.go", Mutagen: "boolean", Status: rpt.Survived},
+			},
+			want: "a.go: 2 survived (boolean ×2)",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got := formatSurvivorLine(survivorLines(tt.survivors...).SurvivorLines[0]); got != tt.want {
+				t.Errorf("got %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFoldChanges(t *testing.T) {
+	for name, tt := range map[string]struct {
+		original string
+		mutated  []string
+		want     []string
+	}{
+		"common ends go":          {"a b c", []string{"a x c", "a y c"}, []string{"x", "y"}},
+		"only tokens in common":   {"a b c", []string{"a x y", "a x c"}, []string{"x y", "x c"}},
+		"the first token differs": {"a b", []string{"x b", "y b"}, []string{"x", "y"}},
+		"the last token differs":  {"a b", []string{"a x", "a y"}, []string{"x", "y"}},
+		"a lone token stays":      {"a", []string{"x", "y"}, []string{"x", "y"}},
+		"a shorter variant keeps a token": {
+			"a  b", []string{"a b", "a x b"}, []string{"b", "x b"},
+		},
+		"prefix and suffix don't overlap": {
+			"a a", []string{"a a a", "a a a a"}, []string{"a a", "a a a"},
+		},
+		"a suffix among lines of different lengths": {"x c", []string{"y z c", "q c"}, []string{"y z", "q"}},
+		"a token sorting before the original's":     {"z c", []string{"a c", "b c"}, []string{"a", "b"}},
+		"every line removed":                        {"a b", []string{"", ""}, []string{lineRemoved, lineRemoved}},
+		"inner spaces stay":                         {"a  b c", []string{"x  b d", "y  b d"}, []string{"x  b d", "y  b d"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got := foldChanges(tt.original, tt.mutated); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("got %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

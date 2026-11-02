@@ -1,6 +1,7 @@
 package report
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -24,6 +25,10 @@ arguments, relative to the module root:
 
 Use --all to list every mutation with its status and diff instead.
 
+--by-line lists the survivors once per line of a file, because one test usually
+kills them all, as "path:line: 5 survived (comparison ×4, numbers): original ->
+>= 0, == 0, <= 0, < 0, > 1", with what the mutated lines share left out.
+
 --format github writes a GitHub workflow annotation for each line with
 surviving mutants before the summary, so they show on the pull request's
 changed files; --format sarif writes a SARIF 2.1.0 log instead of the summary,
@@ -40,7 +45,7 @@ count.`
 
 func newViewCmd(deps Deps) *cobra.Command {
 	var (
-		all                        bool
+		all, byLine                bool
 		thresholds, diffThresholds ThresholdFlags
 	)
 
@@ -50,7 +55,8 @@ func newViewCmd(deps Deps) *cobra.Command {
 		Long:  viewLongDescription,
 		Example: `  gooze report view                      # per-file scores and survivors
   gooze report view ./internal/domain/... # only files under internal/domain
-  gooze report view --all ./cmd/run.go    # every mutation of one file`,
+  gooze report view --all ./cmd/run.go    # every mutation of one file
+  gooze report view --by-line             # one entry per line with survivors`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			paths := make([]m.Path, 0, len(args))
 			for _, arg := range args {
@@ -62,7 +68,7 @@ func newViewCmd(deps Deps) *cobra.Command {
 				return err
 			}
 
-			view, err := viewFormatArgs(cmd, all)
+			view, err := viewFormatArgs(cmd, all, byLine)
 			if err != nil {
 				return err
 			}
@@ -70,6 +76,7 @@ func newViewCmd(deps Deps) *cobra.Command {
 			view.Reports = m.Path(viper.GetString(deps.OutputKey))
 			view.Paths = paths
 			view.All = all
+			view.ByLine = byLine
 			view.Thresholds = minimums
 			view.DiffThresholds = diffMinimums
 
@@ -78,6 +85,7 @@ func newViewCmd(deps Deps) *cobra.Command {
 	}
 
 	cmd.Flags().BoolVar(&all, "all", false, "list every mutation with its status and diff instead of a per-file summary")
+	cmd.Flags().BoolVar(&byLine, "by-line", false, "list the summary's survivors once per line of a file, with the changes folded")
 	addFormatFlag(cmd)
 	thresholds = AddThresholdFlags(cmd, "threshold", "threshold")
 	diffThresholds = AddThresholdFlags(cmd, "threshold.diff", "threshold-diff")
@@ -85,12 +93,31 @@ func newViewCmd(deps Deps) *cobra.Command {
 	return cmd
 }
 
+// checkByLine rejects --by-line where no text summary lists survivors: --all,
+// and the formats that write something else instead of the summary.
+func checkByLine(byLine, all bool, format domain.ViewFormat) error {
+	switch {
+	case !byLine:
+		return nil
+	case all:
+		return domain.WithExitCode(m.ExitUsage, errors.New("--by-line groups the summary's survivors; --all lists every mutation"))
+	case !writesOutput[format] || format == domain.FormatGitHub:
+		return nil
+	default:
+		return domain.WithExitCode(m.ExitUsage, fmt.Errorf("--by-line groups the text summary; --format %s writes none", format))
+	}
+}
+
 // viewFormatArgs returns the view's format settings. Text leaves them empty,
 // so the view prints as it always has. --all lists mutations as text, so it
 // ignores report.format and rejects --format.
-func viewFormatArgs(cmd *cobra.Command, all bool) (domain.ViewArgs, error) {
+func viewFormatArgs(cmd *cobra.Command, all, byLine bool) (domain.ViewArgs, error) {
 	format, err := readFormat(cmd)
 	if err != nil {
+		return domain.ViewArgs{}, err
+	}
+
+	if err := checkByLine(byLine, all, format); err != nil {
 		return domain.ViewArgs{}, err
 	}
 

@@ -130,7 +130,7 @@ func sarifRules() []sarifRule {
 }
 
 // lineRule returns the rule of the line's most severe mutant.
-func lineRule(line survivorLine) string {
+func lineRule(line SurvivorLine) string {
 	for _, s := range sarifStatuses {
 		if slices.ContainsFunc(line.Survivors, func(survivor Survivor) bool { return survivor.Status == s.status }) {
 			return s.rule
@@ -140,7 +140,7 @@ func lineRule(line survivorLine) string {
 	return ""
 }
 
-func sarifLineResult(line survivorLine, prefix string) sarifResult {
+func sarifLineResult(line SurvivorLine, prefix string) sarifResult {
 	level := "note"
 	if lineSurvived(line) {
 		level = "warning"

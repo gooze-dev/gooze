@@ -55,16 +55,17 @@ type lineKey struct {
 	Line int
 }
 
-// survivorLine is the survivors on one line of a file, in summary order.
-type survivorLine struct {
+// SurvivorLine is the survivors on one line of a file, in summary order; Path
+// and Line come from the embedded lineKey.
+type SurvivorLine struct {
 	lineKey
 
 	Survivors []Survivor
 }
 
 // groupByLine groups survivors sorted by path and line into one entry per line.
-func groupByLine(survivors []Survivor) []survivorLine {
-	var lines []survivorLine
+func groupByLine(survivors []Survivor) []SurvivorLine {
+	var lines []SurvivorLine
 
 	for _, survivor := range survivors {
 		key := lineKey{Path: survivor.Path, Line: survivor.Line}
@@ -73,7 +74,7 @@ func groupByLine(survivors []Survivor) []survivorLine {
 			continue
 		}
 
-		lines = append(lines, survivorLine{lineKey: key, Survivors: []Survivor{survivor}})
+		lines = append(lines, SurvivorLine{lineKey: key, Survivors: []Survivor{survivor}})
 	}
 
 	return lines
@@ -106,7 +107,7 @@ func survivorMessage(survivor Survivor) string {
 // lineTitle titles the mutants of one line: "Surviving mutant (comparison)",
 // "2 surviving mutants (comparison)", or "3 mutants (arithmetic, comparison)"
 // when their statuses differ.
-func lineTitle(line survivorLine) string {
+func lineTitle(line SurvivorLine) string {
 	var mutagens []string
 
 	for _, survivor := range line.Survivors {
@@ -132,7 +133,7 @@ func lineTitle(line survivorLine) string {
 }
 
 // lineMessage lists the mutants of one line, one per line of text.
-func lineMessage(line survivorLine) string {
+func lineMessage(line SurvivorLine) string {
 	messages := make([]string, 0, len(line.Survivors))
 	for _, survivor := range line.Survivors {
 		messages = append(messages, survivorMessage(survivor))
@@ -143,7 +144,7 @@ func lineMessage(line survivorLine) string {
 
 // lineSurvived reports whether a mutant on the line survived its tests, the
 // most severe outcome.
-func lineSurvived(line survivorLine) bool {
+func lineSurvived(line SurvivorLine) bool {
 	// Equivalent: killed mutants aren't survivors, so <= Survived is == Survived.
 	return slices.ContainsFunc(line.Survivors, func(s Survivor) bool { return s.Status == rpt.Survived }) //gooze:ignore comparison
 }
@@ -162,7 +163,7 @@ func gitHubAnnotations(survivors []Survivor, prefix string) []string {
 	return annotations
 }
 
-func gitHubAnnotation(line survivorLine, prefix string) string {
+func gitHubAnnotation(line SurvivorLine, prefix string) string {
 	command := "notice"
 	if lineSurvived(line) {
 		command = "warning"

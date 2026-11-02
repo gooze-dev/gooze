@@ -11,7 +11,7 @@ import (
 )
 
 func TestSARIFLineResult_MostSevereMutantSetsTheRule(t *testing.T) {
-	line := survivorLine{lineKey: lineKey{Path: "a.go", Line: 7}, Survivors: []Survivor{
+	line := SurvivorLine{lineKey: lineKey{Path: "a.go", Line: 7}, Survivors: []Survivor{
 		{MutationID: "z-1", Mutagen: "boolean", Status: rpt.Timeout},
 		{MutationID: "a-9", Mutagen: "arithmetic", Status: rpt.Survived},
 		{MutationID: "m-5", Mutagen: "boolean", Status: rpt.NotCovered},
@@ -39,7 +39,7 @@ func TestSARIFLineResult_RuleWithoutASurvivor(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.want, func(t *testing.T) {
-			line := survivorLine{lineKey: lineKey{Path: "a.go", Line: 1}, Survivors: []Survivor{
+			line := SurvivorLine{lineKey: lineKey{Path: "a.go", Line: 1}, Survivors: []Survivor{
 				{MutationID: "s-1", Mutagen: "boolean", Status: rpt.Skipped},
 				{MutationID: "s-2", Mutagen: "boolean", Status: tt.status},
 			}}
@@ -63,7 +63,7 @@ func TestSARIFLineResult_Region(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(fmt.Sprint(tt.line), func(t *testing.T) {
-			line := survivorLine{lineKey: lineKey{Path: "a.go", Line: tt.line}, Survivors: []Survivor{{MutationID: "s-1", Status: rpt.Skipped}}}
+			line := SurvivorLine{lineKey: lineKey{Path: "a.go", Line: tt.line}, Survivors: []Survivor{{MutationID: "s-1", Status: rpt.Skipped}}}
 
 			assert.Equal(t, tt.want, sarifLineResult(line, "").Locations[0].PhysicalLocation.Region)
 		})
