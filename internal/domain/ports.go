@@ -126,6 +126,9 @@ type ReportStore interface {
 type RegistryOptions struct {
 	PlainHTTP bool // use http instead of https
 	Insecure  bool // skip TLS certificate verification
+	// OCICompat packages pushed reports with only widely accepted media types,
+	// for registries (GitLab's) that reject gooze's own.
+	OCICompat bool
 }
 
 // OCIRegistry stores and retrieves a reports directory as an OCI artifact.

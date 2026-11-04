@@ -32,6 +32,8 @@ func TestDefaults(t *testing.T) {
 		KeyThresholdDiffAverage:        0.0,
 		KeyThresholdDiffFile:           0.0,
 		KeyReportFormat:                "text",
+		KeyReportOCICompat:             false,
+		KeyReportOCICompatHosts:        []string{},
 		KeyLogFilename:                 ".gooze.log",
 		KeyLogLevel:                    "info",
 		KeyLogVerbose:                  false,
@@ -108,6 +110,9 @@ func TestLookup_Kinds(t *testing.T) {
 		KeyThresholdDiffFile:     KindFloat,
 		"report":                 KindObject,
 		KeyReportFormat:          KindEnum,
+		"report.oci":             KindObject,
+		KeyReportOCICompat:       KindBool,
+		KeyReportOCICompatHosts:  KindStringList,
 		"log":                    KindObject,
 		KeyLogCompress:           KindBool,
 	}

@@ -3,18 +3,24 @@ package adapter
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"oras.land/oras-go/v2"
+	"oras.land/oras-go/v2/content"
 	"oras.land/oras-go/v2/content/file"
 	"oras.land/oras-go/v2/registry"
 	"oras.land/oras-go/v2/registry/remote"
 	"oras.land/oras-go/v2/registry/remote/auth"
 	"oras.land/oras-go/v2/registry/remote/credentials"
+	"oras.land/oras-go/v2/registry/remote/errcode"
 	"oras.land/oras-go/v2/registry/remote/retry"
 
 	"gooze.dev/pkg/gooze/internal/domain"
@@ -30,6 +36,15 @@ const (
 	reportsBlobMediaType = "application/gzip"
 	// reportsBlobName is the file name of the packaged reports blob.
 	reportsBlobName = "gooze-reports.tgz"
+	// compatBlobMediaType is the reports blob's media type in compat mode,
+	// where the manifest has no artifactType and an unknown config: GitLab's
+	// registry accepts only allowlisted media types, and these are on it.
+	compatBlobMediaType = "application/tar+gzip"
+	// reportsVersionAnnotation marks the reports layer of a compat artifact.
+	reportsVersionAnnotation = "dev.gooze.reports.version"
+	reportsVersion           = "1"
+	// supportedMediaTypesDoc lists the media types GitLab's registry accepts.
+	supportedMediaTypesDoc = "https://gitlab.com/gitlab-org/container-registry/-/blob/master/docs/supported-media-types.md"
 )
 
 // ORASRegistry implements OCIRegistry using oras-go against any OCI registry.
@@ -51,38 +66,13 @@ func (r *ORASRegistry) Push(ctx context.Context, ref string, dir m.Path, opts do
 		return err
 	}
 
-	staging, err := os.MkdirTemp("", "gooze-oci-push-*")
-	if err != nil {
-		return fmt.Errorf("create staging dir: %w", err)
-	}
-
-	defer func() { _ = os.RemoveAll(staging) }()
-
-	archivePath := filepath.Join(staging, reportsBlobName)
-	if err := tarGz(string(dir), archivePath); err != nil {
-		return fmt.Errorf("package reports: %w", err)
-	}
-
-	store, err := file.New(staging)
-	if err != nil {
-		return fmt.Errorf("create file store: %w", err)
-	}
-
-	defer func() { _ = store.Close() }()
-
-	tag := parsed.Reference
-
-	if err := r.pack(ctx, store, archivePath, tag); err != nil {
-		return err
-	}
-
 	repo, err := r.repository(parsed, opts)
 	if err != nil {
 		return err
 	}
 
-	if _, err := oras.Copy(ctx, store, tag, repo, tag, oras.DefaultCopyOptions); err != nil {
-		return fmt.Errorf("push to %q: %w", ref, err)
+	if err := pushTo(ctx, string(dir), repo, parsed.Reference, opts.OCICompat); err != nil {
+		return compatHint(fmt.Errorf("push to %q: %w", ref, err))
 	}
 
 	return nil
@@ -95,12 +85,31 @@ func (r *ORASRegistry) Pull(ctx context.Context, ref string, dir m.Path, opts do
 		return err
 	}
 
-	staging, err := os.MkdirTemp("", "gooze-oci-pull-*")
+	repo, err := r.repository(parsed, opts)
+	if err != nil {
+		return err
+	}
+
+	if err := pullFrom(ctx, repo, parsed.Reference, string(dir)); err != nil {
+		return fmt.Errorf("pull from %q: %w", ref, err)
+	}
+
+	return nil
+}
+
+// pushTo packages dir and copies it to dst under tag.
+func pushTo(ctx context.Context, dir string, dst oras.Target, tag string, compat bool) error {
+	staging, err := os.MkdirTemp("", "gooze-oci-push-*")
 	if err != nil {
 		return fmt.Errorf("create staging dir: %w", err)
 	}
 
 	defer func() { _ = os.RemoveAll(staging) }()
+
+	archivePath := filepath.Join(staging, reportsBlobName)
+	if err := tarGz(dir, archivePath); err != nil {
+		return fmt.Errorf("package reports: %w", err)
+	}
 
 	store, err := file.New(staging)
 	if err != nil {
@@ -109,25 +118,115 @@ func (r *ORASRegistry) Pull(ctx context.Context, ref string, dir m.Path, opts do
 
 	defer func() { _ = store.Close() }()
 
-	repo, err := r.repository(parsed, opts)
+	if _, err := (&ORASRegistry{}).pack(ctx, store, archivePath, tag, compat); err != nil {
+		return err
+	}
+
+	if _, err := oras.Copy(ctx, store, tag, dst, tag, oras.DefaultCopyOptions); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// pullFrom copies the artifact at reference from src and extracts its reports
+// layer into dir. Both packagings are read: gooze's media types and compat.
+func pullFrom(ctx context.Context, src oras.ReadOnlyTarget, reference, dir string) error {
+	staging, err := os.MkdirTemp("", "gooze-oci-pull-*")
+	if err != nil {
+		return fmt.Errorf("create staging dir: %w", err)
+	}
+
+	defer func() { _ = os.RemoveAll(staging) }()
+
+	store, err := file.New(filepath.Join(staging, "store"))
+	if err != nil {
+		return fmt.Errorf("create file store: %w", err)
+	}
+
+	defer func() { _ = store.Close() }()
+
+	root, err := oras.Copy(ctx, src, reference, store, reference, oras.DefaultCopyOptions)
 	if err != nil {
 		return err
 	}
 
-	if _, err := oras.Copy(ctx, repo, parsed.Reference, store, parsed.Reference, oras.DefaultCopyOptions); err != nil {
-		return fmt.Errorf("pull from %q: %w", ref, err)
+	raw, err := content.FetchAll(ctx, store, root)
+	if err != nil {
+		return fmt.Errorf("read manifest: %w", err)
+	}
+
+	var manifest ocispec.Manifest
+	if err := json.Unmarshal(raw, &manifest); err != nil {
+		return fmt.Errorf("read manifest: %w", err)
+	}
+
+	layer, ok := reportsLayer(manifest.Layers)
+	if !ok {
+		return fmt.Errorf("not a gooze reports artifact (no %s, %s or %s layer)", reportsBlobMediaType, compatBlobMediaType, reportsVersionAnnotation)
 	}
 
 	archivePath := filepath.Join(staging, reportsBlobName)
-	if _, err := os.Stat(archivePath); err != nil {
-		return fmt.Errorf("artifact at %q is not a gooze reports artifact (missing %s layer)", ref, reportsBlobName)
+	if err := saveBlob(ctx, store, layer, archivePath); err != nil {
+		return err
 	}
 
-	if err := unTarGz(archivePath, string(dir)); err != nil {
+	if err := unTarGz(archivePath, dir); err != nil {
 		return fmt.Errorf("unpack reports: %w", err)
 	}
 
 	return nil
+}
+
+// reportsLayer returns the layer holding the reports: the one annotated
+// dev.gooze.reports.version, else the first with gooze's or compat's media type.
+func reportsLayer(layers []ocispec.Descriptor) (ocispec.Descriptor, bool) {
+	for _, layer := range layers {
+		if _, ok := layer.Annotations[reportsVersionAnnotation]; ok {
+			return layer, true
+		}
+	}
+
+	for _, layer := range layers {
+		if layer.MediaType == reportsBlobMediaType || layer.MediaType == compatBlobMediaType {
+			return layer, true
+		}
+	}
+
+	return ocispec.Descriptor{}, false
+}
+
+// saveBlob writes the verified content of desc from store to path.
+func saveBlob(ctx context.Context, store content.Fetcher, desc ocispec.Descriptor, path string) error {
+	rc, err := store.Fetch(ctx, desc)
+	if err != nil {
+		return fmt.Errorf("read reports layer: %w", err)
+	}
+
+	defer func() { _ = rc.Close() }()
+
+	out, err := os.Create(path) //nolint:gosec // path is an internal staging path.
+	if err != nil {
+		return fmt.Errorf("create archive: %w", err)
+	}
+
+	if _, err := io.Copy(out, content.NewVerifyReader(rc, desc)); err != nil {
+		return errors.Join(fmt.Errorf("read reports layer: %w", err), out.Close())
+	}
+
+	return out.Close()
+}
+
+// compatHint adds how to fix it to a push a registry rejected for an unknown
+// media type (GitLab's answers 400 "manifest invalid: unknown media type").
+func compatHint(err error) error {
+	var resp *errcode.ErrorResponse
+	if !errors.As(err, &resp) || resp.StatusCode != http.StatusBadRequest || !strings.Contains(err.Error(), "unknown media type") {
+		return err
+	}
+
+	return fmt.Errorf("%w\nthe registry accepts only allowlisted media types: set report.oci.compat=true "+
+		"(GOOZE_REPORT_OCI_COMPAT=true or --oci-compat) to push with compat media types; see %s", err, supportedMediaTypesDoc)
 }
 
 // parseReference parses ref and requires a tag or digest.
@@ -181,25 +280,38 @@ func validateReportsDir(dir string) error {
 	return nil
 }
 
-// pack adds the archive as a layer and tags a wrapping artifact manifest.
-func (r *ORASRegistry) pack(ctx context.Context, store *file.Store, archivePath, tag string) error {
-	layer, err := store.Add(ctx, reportsBlobName, reportsBlobMediaType, archivePath)
-	if err != nil {
-		return fmt.Errorf("add reports blob: %w", err)
+// pack adds the archive as a layer and tags a manifest wrapping it. compat
+// packs with only media types GitLab's registry accepts: an image manifest
+// with an unknown config and no artifactType, and an application/tar+gzip
+// layer annotated dev.gooze.reports.version. Otherwise the manifest has the
+// gooze artifactType and an application/gzip layer.
+func (r *ORASRegistry) pack(ctx context.Context, store *file.Store, archivePath, tag string, compat bool) (ocispec.Descriptor, error) {
+	mediaType, version, artifactType := reportsBlobMediaType, oras.PackManifestVersion1_1, reportsArtifactType
+	if compat {
+		mediaType, version, artifactType = compatBlobMediaType, oras.PackManifestVersion1_0, ""
 	}
 
-	manifest, err := oras.PackManifest(ctx, store, oras.PackManifestVersion1_1, reportsArtifactType, oras.PackManifestOptions{
+	layer, err := store.Add(ctx, reportsBlobName, mediaType, archivePath)
+	if err != nil {
+		return ocispec.Descriptor{}, fmt.Errorf("add reports blob: %w", err)
+	}
+
+	if compat {
+		layer.Annotations[reportsVersionAnnotation] = reportsVersion
+	}
+
+	manifest, err := oras.PackManifest(ctx, store, version, artifactType, oras.PackManifestOptions{
 		Layers: []ocispec.Descriptor{layer},
 	})
 	if err != nil {
-		return fmt.Errorf("pack manifest: %w", err)
+		return ocispec.Descriptor{}, fmt.Errorf("pack manifest: %w", err)
 	}
 
 	if err := store.Tag(ctx, manifest, tag); err != nil {
-		return fmt.Errorf("tag manifest: %w", err)
+		return ocispec.Descriptor{}, fmt.Errorf("tag manifest: %w", err)
 	}
 
-	return nil
+	return manifest, nil
 }
 
 // repository builds an authenticated remote repository client for ref.
