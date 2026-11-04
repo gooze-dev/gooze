@@ -127,7 +127,7 @@ func TestValidateConfig(t *testing.T) {
 		{key: config.KeyReportFormat, value: "sarif"},
 		{key: config.KeyReportFormat, value: "gitlab"},
 		{key: config.KeyReportFormat, value: "codeclimate"},
-		{key: config.KeyReportFormat, value: "xml", wantErr: `invalid report.format: "xml" is not one of text, github, gitlab, sarif, codeclimate`},
+		{key: config.KeyReportFormat, value: "xml", wantErr: `invalid report.format: "xml" is not one of text, github, gitlab, sarif, codeclimate, metrics`},
 		{key: config.KeyLogLevel, value: "-4"},
 	}
 

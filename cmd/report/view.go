@@ -34,7 +34,9 @@ surviving mutants before the summary, so they show on the pull request's
 changed files; --format sarif writes a SARIF 2.1.0 log instead of the summary,
 for code scanning; --format codeclimate (or gitlab) writes a Code Climate
 JSON report instead of the summary, for GitLab Code Quality. Paths in all of
-them are relative to the git repository root.
+them are relative to the git repository root. --format metrics writes the score
+and counts as a GitLab metrics report (gooze_mutation_score_percent, ...;
+gooze_diff_* for the reports of a --diff run).
 report.format in gooze.yaml sets the default.
 
 Below a --threshold-* minimum, or with more surviving mutants than

@@ -22,7 +22,7 @@ const formatFlagName = "format"
 
 // writesOutput holds the formats that write more than the text summary.
 var writesOutput = map[domain.ViewFormat]bool{
-	domain.FormatGitHub: true, domain.FormatGitLab: true, domain.FormatSARIF: true, domain.FormatCodeClimate: true,
+	domain.FormatGitHub: true, domain.FormatGitLab: true, domain.FormatSARIF: true, domain.FormatCodeClimate: true, domain.FormatMetrics: true,
 }
 
 // addFormatFlag adds --format, whose default comes from report.format in the
