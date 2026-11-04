@@ -17,9 +17,10 @@ type PushArgs struct {
 	Ref       string
 	PlainHTTP bool
 	Insecure  bool
-	// OCICompat forces compat media types; without it they are used only for
-	// registry.gitlab.com and the OCICompatHosts (and their subdomains).
-	OCICompat      bool
+	// OCICompat turns compat media types on or off. When it is nil they are
+	// used only for registry.gitlab.com and the OCICompatHosts (and their
+	// subdomains).
+	OCICompat      *bool
 	OCICompatHosts []string
 }
 
@@ -54,8 +55,12 @@ func (p *reportPublisher) Push(ctx context.Context, args PushArgs) error {
 	opts := RegistryOptions{
 		PlainHTTP: args.PlainHTTP,
 		Insecure:  args.Insecure,
-		OCICompat: args.OCICompat || compatHost(registryHost(args.Ref), args.OCICompatHosts),
+		OCICompat: compatHost(registryHost(args.Ref), args.OCICompatHosts),
 	}
+	if args.OCICompat != nil {
+		opts.OCICompat = *args.OCICompat
+	}
+
 	if opts.OCICompat {
 		slog.Info("Pushing reports with OCI compat media types", "ref", args.Ref)
 	}

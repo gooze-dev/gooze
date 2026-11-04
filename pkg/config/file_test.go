@@ -37,6 +37,10 @@ func TestDefaultFile_HoldsEveryKeyWithItsDefault(t *testing.T) {
 		field, ok := Lookup(key)
 		require.True(t, ok)
 
+		if field.Unset {
+			continue // see TestDefaultFile_LeavesUnsetKeysCommentedOut
+		}
+
 		got := lookupPath(t, doc, key)
 
 		switch field.Kind {
@@ -128,4 +132,19 @@ func TestYAMLValue(t *testing.T) {
 
 func TestYAMLValue_PanicsOnUnknownType(t *testing.T) {
 	assert.PanicsWithValue(t, "config: no YAML form for default 1.5", func() { yamlValue(float32(1.5)) })
+}
+
+func TestDefaultFile_LeavesUnsetKeysCommentedOut(t *testing.T) {
+	var doc map[string]any
+	require.NoError(t, yaml.Unmarshal(DefaultFile(), &doc))
+
+	oci, ok := lookupPath(t, doc, "report.oci.compat_hosts").([]any)
+	require.True(t, ok)
+	assert.Empty(t, oci)
+
+	report, _ := doc["report"].(map[string]any)
+	_, set := report["oci"].(map[string]any)["compat"]
+	assert.False(t, set, "report.oci.compat unset means automatic, which no value says")
+
+	assert.Contains(t, string(DefaultFile()), "\n    # compat: false ", "written commented out, to show the key")
 }

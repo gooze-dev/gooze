@@ -15,6 +15,7 @@ const commentColumn = 30
 
 // DefaultFile returns a gooze.yaml holding every key of the schema with its
 // default value and its documentation as a trailing comment, in schema order.
+// A key whose Unset is set is written commented out.
 // It depends on nothing but the schema: no environment variable, flag or
 // existing file changes it.
 func DefaultFile() []byte {
@@ -46,7 +47,12 @@ func writeFields(out *bytes.Buffer, fields []Field, depth int) {
 			continue
 		}
 
-		writeLine(out, indent+field.Name+": "+yamlValue(field.Default), field.Doc)
+		line := field.Name + ": " + yamlValue(field.Default)
+		if field.Unset {
+			line = "# " + line
+		}
+
+		writeLine(out, indent+line, field.Doc)
 	}
 }
 
