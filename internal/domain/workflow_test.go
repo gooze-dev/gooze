@@ -1871,6 +1871,7 @@ func TestWorkflow_Test_ShardedRunRebuildsBaseIndexAfterCleaningDeleted(t *testin
 	mockReportStore.EXPECT().CheckUpdates(ctx, m.Path("reports"), mock.Anything, mock.Anything).Return(spillOf[rpt.Source](t), spillOf(t, gone), nil)
 	mockReportStore.EXPECT().CleanReports(ctx, m.Path("reports"), mock.Anything).Return(nil).Once()
 	mockReportStore.EXPECT().RegenerateIndex(ctx, m.Path("reports")).Return(nil).Once()
+	mockReportStore.EXPECT().LoadSpillReports(ctx, m.Path("reports")).Return(spillOf[m.Report](t), nil).Once()
 	mockReportStore.EXPECT().CleanReports(ctx, shardDir, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().SaveReports(ctx, shardDir, mock.Anything).Return(nil).Once()
 	mockReportStore.EXPECT().RegenerateIndex(ctx, shardDir).Return(nil).Once()
@@ -2065,6 +2066,7 @@ func TestWorkflow_Test_ShardedRunWithoutDeletedSourcesLeavesBaseUntouched(t *tes
 
 	mockFSAdapter.EXPECT().Stream(ctx, mock.Anything).Return(streamSources(nil))
 	mockReportStore.EXPECT().CheckUpdates(ctx, m.Path("reports"), mock.Anything, mock.Anything).Return(spillOf[rpt.Source](t), spillOf[rpt.Source](t), nil)
+	mockReportStore.EXPECT().LoadSpillReports(ctx, m.Path("reports")).Return(spillOf[m.Report](t), nil).Once()
 	mockReportStore.EXPECT().CleanReports(ctx, shardDir, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().SaveReports(ctx, shardDir, mock.Anything).Return(nil).Once()
 	mockReportStore.EXPECT().RegenerateIndex(ctx, shardDir).Return(nil).Once()

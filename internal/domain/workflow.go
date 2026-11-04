@@ -493,10 +493,10 @@ func (w *workflow) saveReports(ctx context.Context, sel Selection, reportsDir m.
 }
 
 // runScore scores a run over every source in its scope: the results tested now
-// plus, for an unsharded cached run, the stored results of unchanged sources.
-// reports are the run's results as saved, and include those it resumed.
-// A shard scores only its own results, and a narrowed run only its selection;
-// `report merge` scores the whole set.
+// plus the stored results of unchanged sources. reports are the run's results
+// as saved; they include those it resumed and, for a narrowed run or a shard,
+// the cached ones (see cachedSelection). A shard scores only its own slice,
+// and a narrowed run only its selection; `report merge` scores the whole set.
 func runScore(sel Selection, reportsDir m.Path, sources sourceSet, reports pkg.FileSpill[m.Report], run testedRun) (MutationScore, error) {
 	score, err := scoreReports(reports, nil)
 	if err != nil {
@@ -509,11 +509,11 @@ func runScore(sel Selection, reportsDir m.Path, sources sourceSet, reports pkg.F
 	}
 
 	score.Tested = tested.Total
+	score.Cached = score.Total - score.Tested
 
 	if sel.Narrowed() {
 		score.Selection = sel.Describe()
 		score.ReportsDir = reportsDir
-		score.Cached = score.Total - score.Tested
 
 		return score, nil
 	}

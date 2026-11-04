@@ -56,6 +56,22 @@ func (w *workflow) storedReports(ctx context.Context, args TestArgs, sel Selecti
 // reportsInScope returns the reports a full run scores once it has saved
 // reports: the stored ones of the unchanged sources in scope, and reports.
 func reportsInScope(stored, reports pkg.FileSpill[m.Report], sources sourceSet) (pkg.FileSpill[m.Report], error) {
+	all, err := unchangedInScope(stored, sources, nil)
+	if err == nil {
+		err = reports.Range(func(_ uint64, report m.Report) error { return all.Append(report) })
+	}
+
+	if err != nil {
+		closeSpill("reports in scope", all)
+		return nil, err
+	}
+
+	return all, nil
+}
+
+// unchangedInScope returns the stored reports of the unchanged sources in
+// scope that keep accepts (nil: all of them).
+func unchangedInScope(stored pkg.FileSpill[m.Report], sources sourceSet, keep func(rpt.Source) bool) (pkg.FileSpill[m.Report], error) {
 	inScope, err := sourceKeys(sources.scanned)
 	if err != nil {
 		return nil, err
@@ -77,18 +93,14 @@ func reportsInScope(stored, reports pkg.FileSpill[m.Report], sources sourceSet) 
 			return nil
 		}
 
-		if _, ok := changed[key]; ok {
+		if _, ok := changed[key]; ok || (keep != nil && !keep(report.Source)) {
 			return nil
 		}
 
 		return all.Append(report)
 	})
-	if err == nil {
-		err = reports.Range(func(_ uint64, report m.Report) error { return all.Append(report) })
-	}
-
 	if err != nil {
-		closeSpill("reports in scope", all)
+		closeSpill("unchanged reports", all)
 		return nil, err
 	}
 

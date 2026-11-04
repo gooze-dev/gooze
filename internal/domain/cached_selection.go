@@ -11,16 +11,23 @@ import (
 	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
-// cachedSelection returns the stored results a narrowed, unsharded run with
-// the cache on selects in the files it does not re-test, scoped like the
-// run's own, so the run scores and saves them as cached. It returns nil for
-// any other run.
+// cachedSelection returns the stored results a run reuses and saves with its
+// own, so it scores them as cached: a narrowed run's are those it selects in
+// the files it does not re-test, scoped like its own results. A shard keeps
+// only the sources it owns (see ownsSource), and a full shard all their
+// stored results, so `report merge` of the shards gives the unsharded score.
+// It returns nil for a full, unsharded run, which scores the stored reports
+// in place.
 func (w *workflow) cachedSelection(ctx context.Context, args TestArgs, sel Selection, sources sourceSet) (pkg.FileSpill[m.Report], error) {
-	if !sel.Narrowed() || args.Sharded() {
-		return nil, nil //nolint:nilnil // nil: the run reuses no stored results.
+	if !sel.Narrowed() {
+		if !args.Sharded() || !sources.cached {
+			return nil, nil //nolint:nilnil // nil: the run reuses no stored results.
+		}
+
+		return w.shardStored(ctx, args, sources)
 	}
 
-	selected, err := w.selectedCached(ctx, sel, sources)
+	selected, err := w.selectedCached(ctx, sel, sources, func(source rpt.Source) bool { return ownsSource(args, source) })
 	if err != nil {
 		return nil, fmt.Errorf("select cached mutations: %w", err)
 	}
@@ -44,9 +51,34 @@ func (w *workflow) cachedSelection(ctx context.Context, args TestArgs, sel Selec
 	return selectReports(stored, selected, sel)
 }
 
+// shardStored returns, unchanged, the stored reports of the unchanged sources
+// in scope that the shard of args owns.
+func (w *workflow) shardStored(ctx context.Context, args TestArgs, sources sourceSet) (pkg.FileSpill[m.Report], error) {
+	stored, err := w.reports.LoadSpillReports(ctx, args.Reports)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil //nolint:nilnil // nil: there is no baseline.
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("load reports: %w", err)
+	}
+
+	defer closeSpill("stored reports", stored)
+
+	return unchangedInScope(stored, sources, func(source rpt.Source) bool { return ownsSource(args, source) })
+}
+
+// ownsSource reports whether the shard of args keeps the stored results of
+// source. Each source belongs to exactly one shard, picked like a mutant's
+// (see inShard) but by source key, so a cached source's reports are copied
+// whole into one shard dir. An unsharded run owns every source.
+func ownsSource(args TestArgs, source rpt.Source) bool {
+	return inShard(source.Key(), args.ShardIndex, args.TotalShardCount)
+}
+
 // selectedCached returns the source key and mutationKey of every mutation sel selects in the
-// sources in scope that the run does not re-test.
-func (w *workflow) selectedCached(ctx context.Context, sel Selection, sources sourceSet) (map[string]bool, error) {
+// sources in scope that the run does not re-test and owns.
+func (w *workflow) selectedCached(ctx context.Context, sel Selection, sources sourceSet, owns func(rpt.Source) bool) (map[string]bool, error) {
 	changed, err := sourceKeys(sources.changed)
 	if err != nil {
 		return nil, err
@@ -55,7 +87,7 @@ func (w *workflow) selectedCached(ctx context.Context, sel Selection, sources so
 	selected := map[string]bool{}
 
 	err = sources.scanned.Range(func(_ uint64, source rpt.Source) error {
-		if _, ok := changed[source.Key()]; ok || !sel.InScope(source) {
+		if _, ok := changed[source.Key()]; ok || !sel.InScope(source) || !owns(source) {
 			return nil
 		}
 
