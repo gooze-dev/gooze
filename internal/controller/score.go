@@ -28,6 +28,12 @@ func formatMutationScore(score domain.MutationScore) string {
 		breakdown += fmt.Sprintf("; stopped early by fail-fast %s after %d of %d", score.FailFast, score.Tested, score.Planned)
 	}
 
+	// A shard holds part of the run: without mutations it has no score, and
+	// 100% would read like a pass. Equivalent mutants: counts are never negative.
+	if score.Total == 0 && score.Shard != "" { //gooze:ignore comparison
+		return fmt.Sprintf("n/a (%s)", breakdown)
+	}
+
 	return fmt.Sprintf("%.2f%% (%s)", score.Score()*100, breakdown)
 }
 
@@ -50,6 +56,10 @@ func runReportsHint(score domain.MutationScore) string {
 func scoreBreakdown(score domain.MutationScore) string {
 	// Equivalent mutants: counts and lengths are never negative.
 	if score.Total == 0 { //gooze:ignore comparison
+		if score.Shard != "" {
+			return "no mutations in shard " + score.Shard
+		}
+
 		return "no mutations"
 	}
 

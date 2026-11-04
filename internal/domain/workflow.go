@@ -425,6 +425,10 @@ func (w *workflow) finalizeReports(ctx context.Context, args TestArgs, sel Selec
 	}
 
 	score.ThresholdsSkipped = args.Thresholds.Set() && args.Sharded()
+	if args.Sharded() {
+		score.Shard = fmt.Sprintf("%d/%d", args.ShardIndex, args.TotalShardCount)
+	}
+
 	score.Interrupted = run.interrupted
 	score.FailFast = run.failFast
 

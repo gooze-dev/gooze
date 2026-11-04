@@ -22,6 +22,21 @@ func TestFormatMutationScore(t *testing.T) {
 			want:  "100.00% (no mutations)",
 		},
 		{
+			name:  "a shard with no mutations",
+			score: domain.MutationScore{Shard: "2/3"},
+			want:  "n/a (no mutations in shard 2/3)",
+		},
+		{
+			name:  "a narrowed shard with no mutations",
+			score: domain.MutationScore{Shard: "2/3", Selection: "changed lines since main"},
+			want:  "n/a (no mutations in shard 2/3; changed lines since main)",
+		},
+		{
+			name:  "a shard with mutations",
+			score: domain.MutationScore{Summary: rpt.Summary{Total: 4, Killed: 3, Survived: 1}, Cached: 4, Shard: "0/3"},
+			want:  "75.00% (3 killed, 1 survived; 4 cached, 0 tested)",
+		},
+		{
 			name:  "reports directory",
 			score: domain.MutationScore{Summary: rpt.Summary{Total: 4, Killed: 3, Survived: 1}},
 			want:  "75.00% (3 killed, 1 survived)",
