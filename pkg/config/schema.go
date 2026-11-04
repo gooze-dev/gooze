@@ -138,6 +138,16 @@ func reportField() Field {
 			Name: "format", Kind: KindEnum, Default: "text", Enum: []string{"text", "github", "gitlab", "sarif", "codeclimate"},
 			Doc: "How gooze report view writes surviving mutants: text, github (workflow annotations on the lines, then the text summary), sarif (a SARIF 2.1.0 log for code scanning) or codeclimate (a Code Climate JSON report for GitLab Code Quality; gitlab is the same).",
 		},
+		{Name: "oci", Kind: KindObject, Doc: "How gooze report push packages reports for an OCI registry.", Children: []Field{
+			{
+				Name: "compat", Kind: KindBool, Default: false,
+				Doc: "Push reports with only widely accepted media types (an unknown config and an application/tar+gzip layer), for registries such as GitLab's that reject custom ones. On by itself for registry.gitlab.com and the compat_hosts.",
+			},
+			{
+				Name: "compat_hosts", Kind: KindStringList, Default: []string{},
+				Doc: "Registry hosts, and their subdomains, that get compat mode without report.oci.compat (registry.gitlab.com always does).",
+			},
+		}},
 	}}
 }
 

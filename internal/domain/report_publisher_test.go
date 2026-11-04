@@ -58,3 +58,39 @@ func TestReportPublisher_PropagatesError(t *testing.T) {
 	reg.On("Pull", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(boom)
 	assert.Equal(t, m.ExitRegistry, exitCodeOf(pub.Pull(context.Background(), domain.PullArgs{Reports: "/r", Ref: "x"})))
 }
+
+func TestReportPublisher_PushOCICompat(t *testing.T) {
+	tests := []struct {
+		name  string
+		ref   string
+		force bool
+		hosts []string
+		want  bool
+	}{
+		{name: "ghcr keeps the gooze media types", ref: "ghcr.io/org/repo:main"},
+		{name: "docker hub keeps the gooze media types", ref: "docker.io/org/repo:main"},
+		{name: "gitlab.com registry", ref: "registry.gitlab.com/group/project/gooze-reports:master", want: true},
+		{name: "gitlab.com registry, any case and port", ref: "Registry.GitLab.com:443/group/project:master", want: true},
+		{name: "forced", ref: "ghcr.io/org/repo:main", force: true, want: true},
+		{name: "listed host", ref: "gitlab.example.com/group/project:main", hosts: []string{"gitlab.example.com"}, want: true},
+		{name: "subdomain of a listed host", ref: "registry.gitlab.example.com/group/project:main", hosts: []string{"gitlab.example.com"}, want: true},
+		{name: "comma-separated hosts from the environment", ref: "b.example.com/p:main", hosts: []string{"a.example.com, b.example.com"}, want: true},
+		{name: "only a name suffix, not a subdomain", ref: "evilgitlab.example.com/p:main", hosts: []string{"gitlab.example.com"}},
+		{name: "path that names gitlab", ref: "ghcr.io/registry.gitlab.com/p:main"},
+		{name: "host that sorts after a listed one", ref: "zot.internal/p:main", hosts: []string{"gitlab.example.com"}},
+		{name: "empty entries match nothing", ref: "ghcr.io./org/repo:main", hosts: []string{"", " , "}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reg := domainmocks.NewMockOCIRegistry(t)
+			reg.On("Push", mock.Anything, tt.ref, m.Path("/r"), domain.RegistryOptions{OCICompat: tt.want}).Return(nil)
+
+			pub := domain.NewReportPublisher(reg)
+
+			require.NoError(t, pub.Push(context.Background(), domain.PushArgs{
+				Reports: "/r", Ref: tt.ref, OCICompat: tt.force, OCICompatHosts: tt.hosts,
+			}))
+		})
+	}
+}

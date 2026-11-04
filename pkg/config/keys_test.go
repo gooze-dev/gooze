@@ -31,6 +31,8 @@ func TestKeys(t *testing.T) {
 		KeyThresholdDiffAverage,
 		KeyThresholdDiffFile,
 		KeyReportFormat,
+		KeyReportOCICompat,
+		KeyReportOCICompatHosts,
 		KeyLogFilename,
 		KeyLogLevel,
 		KeyLogVerbose,
@@ -50,6 +52,8 @@ func TestKeyValues(t *testing.T) {
 		"threshold.total", "threshold.average", "threshold.file", "threshold.max_survivors",
 		"threshold.diff.total", "threshold.diff.average", "threshold.diff.file",
 		"report.format",
+		"report.oci.compat",
+		"report.oci.compat_hosts",
 		"log.filename", "log.level", "log.verbose", "log.max_size",
 		"log.max_backups", "log.max_age", "log.compress",
 	}, Keys())

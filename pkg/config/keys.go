@@ -25,6 +25,8 @@ const (
 	KeyThresholdDiffAverage        = "threshold.diff.average"
 	KeyThresholdDiffFile           = "threshold.diff.file"
 	KeyReportFormat                = "report.format"
+	KeyReportOCICompat             = "report.oci.compat"
+	KeyReportOCICompatHosts        = "report.oci.compat_hosts"
 	KeyLogFilename                 = "log.filename"
 	KeyLogLevel                    = "log.level"
 	KeyLogVerbose                  = "log.verbose"

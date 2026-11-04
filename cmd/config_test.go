@@ -57,6 +57,8 @@ func TestConfigDefaults(t *testing.T) {
 		"threshold.diff.average":         0.0,
 		"threshold.diff.file":            0.0,
 		"report.format":                  "text",
+		"report.oci.compat":              false,
+		"report.oci.compat_hosts":        []string{},
 		"log.filename":                   ".gooze.log",
 		"log.level":                      "info",
 		"log.verbose":                    false,
