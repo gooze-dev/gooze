@@ -28,6 +28,7 @@ type ExprTypes struct {
 	fset     *token.FileSet
 	importer types.Importer
 	exports  map[string]string                          // import path -> export data file
+	env      []string                                   // of go list, which builds the export data
 	strings  map[string]map[string]map[domain.Span]bool // dir -> file -> string spans
 }
 
@@ -53,12 +54,24 @@ func (e *ExprTypes) lookup(path string) (io.ReadCloser, error) {
 	return os.Open(file) //nolint:gosec // a file go list named.
 }
 
+// SetBuildEnv adds env to the environment of the go list that builds export
+// data, so it builds in the same cache as the mutants (an isolated one leaves
+// the shared GOCACHE alone).
+func (e *ExprTypes) SetBuildEnv(env []string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	e.env = env
+}
+
 // loadExports records the export data files of the dependencies of the
 // package in dir. Packages that don't build have none, so their types stay
 // unknown.
 func (e *ExprTypes) loadExports(ctx context.Context, dir string) {
 	cmd := exec.CommandContext(ctx, "go", "list", "-e", "-export", "-deps", "-f", "{{if .Export}}{{.ImportPath}}={{.Export}}{{end}}", ".")
 	cmd.Dir = dir
+
+	cmd.Env = append(os.Environ(), e.env...)
 
 	out, err := cmd.Output()
 	if err != nil {
