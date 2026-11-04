@@ -206,9 +206,41 @@ func TestPackageArg(t *testing.T) {
 }
 
 func TestNewGoTestCommand(t *testing.T) {
-	cmd := newGoTestCommand(context.Background(), "/w", "/w/p/x_test.go", "")
+	cmd := newGoTestCommand(context.Background(), "/w", "/w/p/x_test.go", "", nil)
 
 	assert.Equal(t, "/w", cmd.Dir)
 	assert.Equal(t, 5*time.Second, cmd.WaitDelay)
 	assert.Equal(t, []string{"test", "-count=1", "-vet=off", "-v", "." + string(filepath.Separator) + "p"}, cmd.Args[1:])
+}
+
+func TestNewGoTestCommand_TestFlags(t *testing.T) {
+	cmd := newGoTestCommand(context.Background(), "/w", "/w/p/x_test.go", "o.json", []string{"-short", "-tags=integration"})
+
+	assert.Equal(t, []string{"test", "-count=1", "-vet=off", "-v", "-overlay", "o.json", "-short", "-tags=integration", "." + string(filepath.Separator) + "p"}, cmd.Args[1:],
+		"after gooze's own flags, before the package")
+}
+
+func TestLocalTestRunnerAdapter_RunGoTest_UsesTheTestFlags(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/p\n\ngo 1.24\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "p_test.go"), []byte(`package p
+
+import "testing"
+
+func TestLong(t *testing.T) {
+	if !testing.Short() {
+		t.Fatal("runs only with -short")
+	}
+}
+`), 0o600))
+
+	runner := NewLocalTestRunnerAdapter()
+
+	_, err := runner.RunGoTest(context.Background(), dir, filepath.Join(dir, "p_test.go"), "")
+	require.Error(t, err, "without -short")
+
+	runner.SetTestFlags([]string{"-short"})
+
+	out, err := runner.RunGoTest(context.Background(), dir, filepath.Join(dir, "p_test.go"), "")
+	require.NoError(t, err, out)
 }

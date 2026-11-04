@@ -64,10 +64,10 @@ func (w *workflow) prepareBuildCache(ctx context.Context, settings GoCache) ([]s
 	}, nil
 }
 
-// prewarmBuildCache prewarms the packages of sources that have tests when
-// settings ask for it and the cache is isolated (env is set). A failed prewarm
-// only slows the run down.
-func (w *workflow) prewarmBuildCache(ctx context.Context, settings GoCache, env []string, sources pkg.FileSpill[rpt.Source]) error {
+// prewarmBuildCache prewarms the packages of sources that have tests, with
+// the go test flags testFlags, when settings ask for it and the cache is
+// isolated (env is set). A failed prewarm only slows the run down.
+func (w *workflow) prewarmBuildCache(ctx context.Context, settings GoCache, env, testFlags []string, sources pkg.FileSpill[rpt.Source]) error {
 	if !settings.Prewarm || len(env) == 0 {
 		return nil
 	}
@@ -81,7 +81,7 @@ func (w *workflow) prewarmBuildCache(ctx context.Context, settings GoCache, env 
 		return nil
 	}
 
-	if err := w.buildCache.Prewarm(ctx, dirs); err != nil {
+	if err := w.buildCache.Prewarm(ctx, dirs, testFlags); err != nil {
 		slog.Warn("Failed to prewarm the Go build cache", "error", err)
 	}
 

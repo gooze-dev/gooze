@@ -23,6 +23,7 @@ func TestDefaults(t *testing.T) {
 		KeyRunGoCache:                  "isolated",
 		KeyRunGoCacheSize:              2048,
 		KeyRunGoCachePrewarm:           false,
+		KeyRunTestFlags:                []string{},
 		KeyMutagenComparisonEnumBounds: false,
 		KeyThresholdTotal:              0.0,
 		KeyThresholdAverage:            0.0,
@@ -70,7 +71,7 @@ func TestLookup_Object(t *testing.T) {
 		names = append(names, child.Name)
 	}
 
-	assert.Equal(t, []string{"parallel", "mutation_timeout", "coverage_profile", "diff", "mutagens", "workspace", "fail_fast", "go_cache", "go_cache_size", "go_cache_prewarm"}, names)
+	assert.Equal(t, []string{"parallel", "mutation_timeout", "coverage_profile", "diff", "mutagens", "workspace", "fail_fast", "go_cache", "go_cache_size", "go_cache_prewarm", "test_flags"}, names)
 }
 
 func TestLookup_Missing(t *testing.T) {
