@@ -48,6 +48,7 @@ func TestConfigDefaults(t *testing.T) {
 		"run.go_cache":                   "isolated",
 		"run.go_cache_size":              2048,
 		"run.go_cache_prewarm":           false,
+		"run.test_flags":                 []string{},
 		"mutagen.comparison.enum_bounds": false,
 		"threshold.total":                0.0,
 		"threshold.average":              0.0,

@@ -109,6 +109,10 @@ func runField() Field {
 			Name: "go_cache_prewarm", Kind: KindBool, Default: false,
 			Doc: "Build each package's tests once in GOCACHE before its mutants, so their dependencies are cached there. Only with go_cache: isolated.",
 		},
+		{
+			Name: "test_flags", Kind: KindStringList, Default: []string{},
+			Doc: "Extra go test flags for the tests of every mutant, e.g. -short, -race, -tags=integration or -skip=TestSlow; values after =. Not -json, -count, -vet, -overlay, -c or -o, which gooze sets itself.",
+		},
 	}}
 }
 

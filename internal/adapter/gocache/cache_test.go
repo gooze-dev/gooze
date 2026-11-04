@@ -127,7 +127,7 @@ func prepare(t *testing.T, settings domain.GoCache, dirs ...string) (*Cache, []s
 	require.NoError(t, err)
 
 	if settings.Prewarm {
-		require.NoError(t, cache.Prewarm(context.Background(), dirs))
+		require.NoError(t, cache.Prewarm(context.Background(), dirs, nil))
 	}
 
 	return cache, env
@@ -246,8 +246,21 @@ func TestCache_PrewarmReportsAFailure(t *testing.T) {
 	cache, _ := prepare(t, domain.GoCache{Mode: domain.GoCacheIsolated})
 
 	lib := filepath.Join(mod.dir, "lib")
-	require.NoError(t, cache.Prewarm(context.Background(), []string{lib}))
+	require.NoError(t, cache.Prewarm(context.Background(), []string{lib}, nil))
 
 	writeTestFile(t, filepath.Join(lib, "broken.go"), "package lib\n\nfunc Broken() int { return \"\" }\n")
-	require.ErrorContains(t, cache.Prewarm(context.Background(), []string{lib}), "broken.go")
+	require.ErrorContains(t, cache.Prewarm(context.Background(), []string{lib}, nil), "broken.go")
+}
+
+func TestCache_PrewarmBuildsWithTheTestFlags(t *testing.T) {
+	mod := newModule(t)
+	cache, _ := prepare(t, domain.GoCache{Mode: domain.GoCacheIsolated})
+
+	lib := filepath.Join(mod.dir, "lib")
+	writeTestFile(t, filepath.Join(lib, "tagged.go"), "//go:build integration\n\npackage lib\n\nfunc Tagged() int { return \"\" }\n")
+
+	require.NoError(t, cache.Prewarm(context.Background(), []string{lib}, nil), "the tagged file is left out")
+	require.ErrorContains(t, cache.Prewarm(context.Background(), []string{lib}, []string{"-tags=integration"}), "tagged.go")
+	require.NoError(t, cache.Prewarm(context.Background(), []string{lib}, []string{"-run=TestNothing", "-short"}),
+		"-run ^$ comes last, so the prewarm runs no test")
 }

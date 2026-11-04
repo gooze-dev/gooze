@@ -93,8 +93,9 @@ type BuildCache interface {
 	// that makes the go command use it. An empty environment means the go
 	// command can't, and the mutants use the shared cache.
 	Prepare(ctx context.Context, sizeMB int) (env []string, err error)
-	// Prewarm builds the tests of the packages in pkgDirs in the shared cache.
-	Prewarm(ctx context.Context, pkgDirs []string) error
+	// Prewarm builds the tests of the packages in pkgDirs in the shared cache,
+	// with the go test flags testFlags, so they build what the mutants do.
+	Prewarm(ctx context.Context, pkgDirs, testFlags []string) error
 	// Close trims the cache.
 	Close(ctx context.Context) error
 }

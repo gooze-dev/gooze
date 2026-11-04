@@ -71,6 +71,7 @@ func init() {
 		mutagen,
 		domain.WithChangeDetector(adapter.NewGitChangeDetector()),
 		domain.WithBuildCache(gocache.New(), localTestAdapter),
+		domain.WithTestFlags(localTestAdapter),
 	)
 	publisher = domain.NewReportPublisher(ociRegistry)
 	releaseChecker = adapter.NewModuleProxyReleaseChecker()

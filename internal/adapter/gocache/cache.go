@@ -59,9 +59,11 @@ func (c *Cache) Prepare(ctx context.Context, sizeMB int) ([]string, error) {
 	return []string{"GOCACHEPROG=" + progCommand(exe, env.GOCACHE, c.layer.Dir)}, nil
 }
 
-// Prewarm builds the tests of the packages in pkgDirs in the shared cache.
-func (c *Cache) Prewarm(ctx context.Context, pkgDirs []string) error {
-	cmd := exec.CommandContext(ctx, "go", append([]string{"test", "-count=1", "-vet=off", "-run", "^$"}, pkgDirs...)...) //nolint:gosec // pkgDirs are the run's package directories.
+// Prewarm builds the tests of the packages in pkgDirs in the shared cache,
+// with testFlags. Its own -run ^$ comes after them, so no test runs.
+func (c *Cache) Prewarm(ctx context.Context, pkgDirs, testFlags []string) error {
+	args := append(append([]string{"test", "-count=1", "-vet=off"}, testFlags...), "-run", "^$")
+	cmd := exec.CommandContext(ctx, "go", append(args, pkgDirs...)...) //nolint:gosec // pkgDirs are the run's package directories, testFlags the user's checked flags.
 	cmd.Dir = pkgDirs[0]
 
 	if out, err := cmd.CombinedOutput(); err != nil {

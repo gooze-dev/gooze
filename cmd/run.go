@@ -32,6 +32,7 @@ var runFailFastFlag string
 var runGoCacheFlag string
 var runGoCacheSizeFlag int
 var runGoCachePrewarmFlag bool
+var runTestFlagsFlag []string
 
 // errRunWithShard rejects --run with --shard: a run of a few functions is too
 // small to split across jobs.
@@ -68,7 +69,15 @@ func newRunCmd() *cobra.Command {
 				return err
 			}
 
-			return workflow.Test(cmd.Context(), runTestArgs(estimateArgs, shardIndex, totalShards, minimums))
+			testFlags, err := domain.ParseTestFlags(viper.GetStringSlice(config.KeyRunTestFlags))
+			if err != nil {
+				return usageError(err)
+			}
+
+			testArgs := runTestArgs(estimateArgs, shardIndex, totalShards, minimums)
+			testArgs.TestFlags = testFlags
+
+			return workflow.Test(cmd.Context(), testArgs)
 		},
 	}
 
@@ -137,6 +146,9 @@ func configureRunFlags(cmd *cobra.Command) (report.ThresholdFlags, report.Thresh
 	bindFlagToConfig(cmd.Flags().Lookup(goCacheSizeFlagName), config.KeyRunGoCacheSize)
 	cmd.Flags().BoolVar(&runGoCachePrewarmFlag, goCachePrewarmFlagName, schemaDefault[bool](config.KeyRunGoCachePrewarm), "build each package once in GOCACHE before its mutants, so their dependencies are cached there")
 	bindFlagToConfig(cmd.Flags().Lookup(goCachePrewarmFlagName), config.KeyRunGoCachePrewarm)
+
+	cmd.Flags().StringArrayVar(&runTestFlagsFlag, testFlagsFlagName, schemaDefault[[]string](config.KeyRunTestFlags), "extra go test flags for every mutant's tests, repeatable or space-separated, values after = (e.g. --test-flags \"-short -tags=integration\")")
+	bindFlagToConfig(cmd.Flags().Lookup(testFlagsFlagName), config.KeyRunTestFlags)
 
 	return report.AddThresholdFlags(cmd, "threshold", "threshold"),
 		report.AddThresholdFlags(cmd, "threshold.diff", "threshold-diff")

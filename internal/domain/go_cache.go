@@ -42,8 +42,9 @@ func WithBuildCache(cache BuildCache, env BuildEnvironment) WorkflowOption {
 }
 
 // prepareBuildCache prepares the build cache for testing the mutants of
-// sources and returns the function that closes it.
-func (w *workflow) prepareBuildCache(ctx context.Context, settings GoCache, sources pkg.FileSpill[rpt.Source]) (func(), error) {
+// sources with the go test flags testFlags, and returns the function that
+// closes it.
+func (w *workflow) prepareBuildCache(ctx context.Context, settings GoCache, testFlags []string, sources pkg.FileSpill[rpt.Source]) (func(), error) {
 	if w.buildCache == nil || settings.Mode != GoCacheIsolated {
 		return func() {}, nil
 	}
@@ -54,7 +55,7 @@ func (w *workflow) prepareBuildCache(ctx context.Context, settings GoCache, sour
 	}
 
 	if settings.Prewarm && len(env) > 0 {
-		if err := w.prewarmBuildCache(ctx, sources); err != nil {
+		if err := w.prewarmBuildCache(ctx, sources, testFlags); err != nil {
 			return nil, err
 		}
 	}
@@ -70,7 +71,7 @@ func (w *workflow) prepareBuildCache(ctx context.Context, settings GoCache, sour
 
 // prewarmBuildCache prewarms the packages of sources that have tests. A failed
 // prewarm only slows the run down.
-func (w *workflow) prewarmBuildCache(ctx context.Context, sources pkg.FileSpill[rpt.Source]) error {
+func (w *workflow) prewarmBuildCache(ctx context.Context, sources pkg.FileSpill[rpt.Source], testFlags []string) error {
 	dirs, err := packageDirs(sources)
 	if err != nil {
 		return err
@@ -80,7 +81,7 @@ func (w *workflow) prewarmBuildCache(ctx context.Context, sources pkg.FileSpill[
 		return nil
 	}
 
-	if err := w.buildCache.Prewarm(ctx, dirs); err != nil {
+	if err := w.buildCache.Prewarm(ctx, dirs, testFlags); err != nil {
 		slog.Warn("Failed to prewarm the Go build cache", "error", err)
 	}
 
