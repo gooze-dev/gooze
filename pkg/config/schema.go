@@ -36,6 +36,10 @@ type Field struct {
 	Max *int
 	// Children are the keys of a KindObject field.
 	Children []Field
+	// Unset reports that leaving the key out means something no value says,
+	// such as "automatic" for report.oci.compat. DefaultFile writes it
+	// commented out, so gooze config init doesn't set it.
+	Unset bool
 }
 
 // Schema returns the top-level fields of the configuration file in the order
@@ -140,8 +144,8 @@ func reportField() Field {
 		},
 		{Name: "oci", Kind: KindObject, Doc: "How gooze report push packages reports for an OCI registry.", Children: []Field{
 			{
-				Name: "compat", Kind: KindBool, Default: false,
-				Doc: "Push reports with only widely accepted media types (an unknown config and an application/tar+gzip layer), for registries such as GitLab's that reject custom ones. On by itself for registry.gitlab.com and the compat_hosts.",
+				Name: "compat", Kind: KindBool, Default: false, Unset: true,
+				Doc: "Push reports with only widely accepted media types (an unknown config and an application/tar+gzip layer), for registries such as GitLab's that reject custom ones. Unset, it is on for registry.gitlab.com and the compat_hosts; true or false sets it for every registry.",
 			},
 			{
 				Name: "compat_hosts", Kind: KindStringList, Default: []string{},

@@ -60,10 +60,12 @@ func TestReportPublisher_PropagatesError(t *testing.T) {
 }
 
 func TestReportPublisher_PushOCICompat(t *testing.T) {
+	on, off := true, false
+
 	tests := []struct {
 		name  string
 		ref   string
-		force bool
+		force *bool
 		hosts []string
 		want  bool
 	}{
@@ -71,7 +73,9 @@ func TestReportPublisher_PushOCICompat(t *testing.T) {
 		{name: "docker hub keeps the gooze media types", ref: "docker.io/org/repo:main"},
 		{name: "gitlab.com registry", ref: "registry.gitlab.com/group/project/gooze-reports:master", want: true},
 		{name: "gitlab.com registry, any case and port", ref: "Registry.GitLab.com:443/group/project:master", want: true},
-		{name: "forced", ref: "ghcr.io/org/repo:main", force: true, want: true},
+		{name: "forced", ref: "ghcr.io/org/repo:main", force: &on, want: true},
+		{name: "turned off for gitlab.com", ref: "registry.gitlab.com/group/project:master", force: &off},
+		{name: "turned off for a listed host", ref: "gitlab.example.com/g/p:main", force: &off, hosts: []string{"gitlab.example.com"}},
 		{name: "listed host", ref: "gitlab.example.com/group/project:main", hosts: []string{"gitlab.example.com"}, want: true},
 		{name: "subdomain of a listed host", ref: "registry.gitlab.example.com/group/project:main", hosts: []string{"gitlab.example.com"}, want: true},
 		{name: "comma-separated hosts from the environment", ref: "b.example.com/p:main", hosts: []string{"a.example.com, b.example.com"}, want: true},

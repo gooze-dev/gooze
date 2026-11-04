@@ -2,6 +2,7 @@ package report
 
 import (
 	"context"
+	"os"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -11,7 +12,11 @@ import (
 	"gooze.dev/pkg/gooze/pkg/config"
 )
 
-const ociCompatFlagName = "oci-compat"
+const (
+	ociCompatFlagName = "oci-compat"
+	// ociCompatEnv sets report.oci.compat (viper reads it as GOOZE_ + the key).
+	ociCompatEnv = "GOOZE_REPORT_OCI_COMPAT"
+)
 
 func newPushCmd(deps Deps) *cobra.Command {
 	var cmd *cobra.Command
@@ -21,8 +26,9 @@ func newPushCmd(deps Deps) *cobra.Command {
 		"Push reports to an OCI registry",
 		"Package the reports directory and push it to an OCI registry as an artifact.\n\n"+
 			"Registries that accept only allowlisted media types, such as GitLab's, need compat media types:\n"+
-			"--oci-compat (config report.oci.compat) turns them on, and they are on by themselves for\n"+
-			"registry.gitlab.com and the hosts in report.oci.compat_hosts.",
+			"--oci-compat (config report.oci.compat) turns them on. Unless it is set, they are on by\n"+
+			"themselves for registry.gitlab.com and the hosts in report.oci.compat_hosts;\n"+
+			"--oci-compat=false turns them off there too.",
 		func(ctx context.Context, ref string, opts registryFlags) error {
 			return deps.Publisher.Push(ctx, domain.PushArgs{
 				Reports:        m.Path(viper.GetString(deps.OutputKey)),
@@ -41,13 +47,20 @@ func newPushCmd(deps Deps) *cobra.Command {
 }
 
 // readOCICompat returns --oci-compat when it is given, else report.oci.compat
-// from GOOZE_REPORT_OCI_COMPAT or gooze.yaml.
-func readOCICompat(cmd *cobra.Command) bool {
+// when GOOZE_REPORT_OCI_COMPAT or gooze.yaml sets it, else nil: compat media
+// types are then used for the hosts that need them.
+func readOCICompat(cmd *cobra.Command) *bool {
 	if cmd.Flags().Changed(ociCompatFlagName) {
 		value, _ := cmd.Flags().GetBool(ociCompatFlagName)
 
-		return value
+		return &value
 	}
 
-	return viper.GetBool(config.KeyReportOCICompat)
+	if os.Getenv(ociCompatEnv) == "" && !viper.InConfig(config.KeyReportOCICompat) {
+		return nil
+	}
+
+	value := viper.GetBool(config.KeyReportOCICompat)
+
+	return &value
 }
