@@ -9,6 +9,7 @@ import (
 	"gooze.dev/pkg/gooze/internal/adapter"
 	domain "gooze.dev/pkg/gooze/internal/domain"
 	m "gooze.dev/pkg/gooze/internal/model"
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
 	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
@@ -76,4 +77,15 @@ func TestWorkflow_View_MetricsFormatWritesBeforeTheGate(t *testing.T) {
 	require.Error(t, err)
 	assert.Equal(t, m.ExitBelowThreshold, exitCodeOf(err))
 	assert.Equal(t, fixtureMetrics, out)
+}
+
+func TestWorkflow_View_MetricsFormatScoresOneMutant(t *testing.T) {
+	dir := t.TempDir()
+	source := rpt.Source{Origin: &rpt.File{ShortPath: "a.go", FullPath: "/p/a.go", Hash: "a"}}
+	writeReports(t, dir, m.Report{Source: source, Result: m.Result{mgen.Comparison: {{MutationID: "a-1", Status: rpt.Killed}}}})
+
+	out, err := viewFormatted(t, domain.ViewArgs{Reports: m.Path(dir), Format: domain.FormatMetrics}, false)
+	require.NoError(t, err)
+
+	assert.Contains(t, out, "gooze_mutation_score_percent 100\ngooze_mutants_total 1\n")
 }
