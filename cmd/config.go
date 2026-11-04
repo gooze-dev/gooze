@@ -43,6 +43,7 @@ const (
 	goCacheFlagName        = "go-cache"
 	goCacheSizeFlagName    = "go-cache-size"
 	goCachePrewarmFlagName = "go-cache-prewarm"
+	testFlagsFlagName      = "test-flags"
 
 	envPrefix = "GOOZE"
 )

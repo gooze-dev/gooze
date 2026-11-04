@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -795,4 +796,63 @@ func TestRunCmd_RejectsBadGoCache(t *testing.T) {
 
 		workflow = originalWorkflow
 	}
+}
+
+func TestRunCmd_TestFlags(t *testing.T) {
+	for name, tt := range map[string]struct {
+		args []string
+		env  string
+		want []string
+	}{
+		"none":          {args: []string{"run", "./..."}},
+		"flag":          {args: []string{"run", "--test-flags=-short", "--test-flags=-race", "./..."}, want: []string{"-short", "-race"}},
+		"one flag, two": {args: []string{"run", "--test-flags", "-short -timeout=30s", "./..."}, want: []string{"-short", "-timeout=30s"}},
+		"env":           {args: []string{"run", "./..."}, env: "-short -tags=integration", want: []string{"-short", "-tags=integration"}},
+		"flag over env": {args: []string{"run", "--test-flags=-race", "./..."}, env: "-short", want: []string{"-race"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if tt.env != "" {
+				t.Setenv("GOOZE_RUN_TEST_FLAGS", tt.env)
+			}
+
+			mockWorkflow := domainmocks.NewMockWorkflow(t)
+
+			cmd := newRootCmd()
+			cmd.AddCommand(newRunCmd())
+			cmd.SetOut(&bytes.Buffer{})
+			cmd.SetErr(&bytes.Buffer{})
+
+			originalWorkflow := workflow
+			workflow = mockWorkflow
+			defer func() { workflow = originalWorkflow }()
+			defer newRunCmd()
+			defer func() { runTestFlagsFlag = nil }()
+
+			mockWorkflow.On("Test", mock.Anything, mock.MatchedBy(func(args domain.TestArgs) bool {
+				return slices.Equal(args.TestFlags, tt.want)
+			})).Return(nil)
+
+			cmd.SetArgs(tt.args)
+			require.NoError(t, cmd.Execute())
+			mockWorkflow.AssertExpectations(t)
+		})
+	}
+}
+
+func TestRunCmd_RejectsGoozesOwnTestFlags(t *testing.T) {
+	cmd := newRootCmd()
+	cmd.AddCommand(newRunCmd())
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+
+	originalWorkflow := workflow
+	workflow = domainmocks.NewMockWorkflow(t)
+	defer func() { workflow = originalWorkflow }()
+	defer newRunCmd()
+	defer func() { runTestFlagsFlag = nil }()
+
+	cmd.SetArgs([]string{"run", "--test-flags=-json", "./..."})
+	err := cmd.Execute()
+	require.EqualError(t, err, "run.test_flags: gooze sets -json itself or can't run with it")
+	assert.Equal(t, m.ExitUsage, exitCode(context.Background(), err, false))
 }

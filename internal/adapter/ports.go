@@ -10,6 +10,7 @@ var (
 	_ domain.ExprTypes         = (*ExprTypes)(nil)
 	_ domain.BuildEnvironment  = (*ExprTypes)(nil)
 	_ domain.BuildEnvironment  = BuildEnvs(nil)
+	_ domain.TestCommand       = (*LocalTestRunnerAdapter)(nil)
 	_ domain.ReportStore       = (*LocalReportStore)(nil)
 	_ domain.OCIRegistry       = (*ORASRegistry)(nil)
 	_ domain.Differ            = (*UnifiedDiffer)(nil)

@@ -75,6 +75,9 @@ type TestArgs struct {
 	Thresholds Thresholds
 	// FailFast is when the run stops early; empty is FailFastOff.
 	FailFast FailFast
+	// TestFlags are extra go test flags (see ParseTestFlags), for the tests
+	// of every mutant and the build cache prewarm.
+	TestFlags []string
 }
 
 // ViewArgs contains the arguments for viewing mutation test reports.
@@ -130,6 +133,7 @@ type workflow struct {
 	changes      ChangeDetector   // nil disables diff mode
 	buildCache   BuildCache       // nil leaves mutant builds in the shared cache
 	buildEnv     BuildEnvironment // receives the environment buildCache returns
+	testCommand  TestCommand      // receives a run's go test flags, or nil
 }
 
 // NewWorkflow creates a new Workflow instance with the provided dependencies.
@@ -196,7 +200,12 @@ func (w *workflow) Estimate(ctx context.Context, args EstimateArgs) error {
 
 func (w *workflow) Test(ctx context.Context, args TestArgs) error {
 	return w.withTestUI(ctx, func() error {
-		slog.Info("Starting mutation testing", "threads", args.Threads, "shardIndex", args.ShardIndex, "totalShardCount", args.TotalShardCount)
+		slog.Info("Starting mutation testing", "threads", args.Threads, "shardIndex", args.ShardIndex, "totalShardCount", args.TotalShardCount, "testFlags", args.TestFlags)
+
+		if w.testCommand != nil {
+			w.testCommand.SetTestFlags(args.TestFlags)
+		}
+
 		w.progress.DisplayConcurrencyInfo(ctx, args.Threads, args.ShardIndex, args.TotalShardCount)
 
 		// Before the sources are scanned: generating mutants builds too.
@@ -219,7 +228,7 @@ func (w *workflow) Test(ctx context.Context, args TestArgs) error {
 			return err
 		}
 
-		if err := w.prewarmBuildCache(ctx, args.GoCache, env, sources.changed); err != nil {
+		if err := w.prewarmBuildCache(ctx, args.GoCache, env, args.TestFlags, sources.changed); err != nil {
 			return err
 		}
 

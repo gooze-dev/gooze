@@ -25,6 +25,8 @@ type recordingBuildCache struct {
 	calls      []string
 	sizeMB     int
 	dirs       []string
+	flags      []string // the go test flags of the prewarm
+	testFlags  []string // the go test flags that reached the runner
 	builds     []string // the environment that reached the runner
 	generated  []string // the environment when the first mutant was generated
 	generating bool
@@ -52,9 +54,10 @@ func (c *recordingBuildCache) Prepare(_ context.Context, sizeMB int) ([]string, 
 	return c.env, c.prepareErr
 }
 
-func (c *recordingBuildCache) Prewarm(_ context.Context, dirs []string) error {
+func (c *recordingBuildCache) Prewarm(_ context.Context, dirs, flags []string) error {
 	c.record("prewarm")
 	c.dirs = dirs
+	c.flags = flags
 
 	return c.prewarmErr
 }
@@ -62,6 +65,11 @@ func (c *recordingBuildCache) Prewarm(_ context.Context, dirs []string) error {
 func (c *recordingBuildCache) SetBuildEnv(env []string) {
 	c.record("env")
 	c.builds = env
+}
+
+func (c *recordingBuildCache) SetTestFlags(flags []string) {
+	c.record("flags")
+	c.testFlags = flags
 }
 
 func (c *recordingBuildCache) Close(ctx context.Context) error {
@@ -96,7 +104,7 @@ func (recordingWorkspace) Close(context.Context) {}
 func runWithBuildCache(t *testing.T, cache *recordingBuildCache, mode domain.GoCacheMode, interrupt bool) error {
 	t.Helper()
 
-	return runSourcesWithBuildCache(t, cache, mode, interrupt, []rpt.Source{
+	return runSourcesWithBuildCache(t, cache, mode, interrupt, nil, []rpt.Source{
 		{Origin: &rpt.File{ShortPath: "p/a.go", FullPath: "/p/a.go", Hash: "a"}, Test: &rpt.File{ShortPath: "p/a_test.go", FullPath: "/p/a_test.go", Hash: "at"}},
 		{Origin: &rpt.File{ShortPath: "p/b.go", FullPath: "/p/b.go", Hash: "b"}, Test: &rpt.File{ShortPath: "p/b_test.go", FullPath: "/p/b_test.go", Hash: "bt"}},
 		{Origin: &rpt.File{ShortPath: "q/c.go", FullPath: "/q/c.go", Hash: "c"}, Test: &rpt.File{ShortPath: "q/c_test.go", FullPath: "/q/c_test.go", Hash: "ct"}},
@@ -104,7 +112,7 @@ func runWithBuildCache(t *testing.T, cache *recordingBuildCache, mode domain.GoC
 	})
 }
 
-func runSourcesWithBuildCache(t *testing.T, cache *recordingBuildCache, mode domain.GoCacheMode, interrupt bool, sources []rpt.Source) error {
+func runSourcesWithBuildCache(t *testing.T, cache *recordingBuildCache, mode domain.GoCacheMode, interrupt bool, testFlags []string, sources []rpt.Source) error {
 	t.Helper()
 
 	fs := domainmocks.NewMockSourceFSAdapter(t)
@@ -154,10 +162,11 @@ func runSourcesWithBuildCache(t *testing.T, cache *recordingBuildCache, mode dom
 		},
 		Threads:         1,
 		TotalShardCount: 1,
+		TestFlags:       testFlags,
 	}
 	args.Reports = args.EstimateArgs.Reports
 
-	wf := domain.NewWorkflow(fs, adapter.NewReportStore(), reporter, orchestrator, mutagen, domain.WithBuildCache(cache, cache))
+	wf := domain.NewWorkflow(fs, adapter.NewReportStore(), reporter, orchestrator, mutagen, domain.WithBuildCache(cache, cache), domain.WithTestFlags(cache))
 
 	return wf.Test(ctx, args)
 }
@@ -166,7 +175,7 @@ func TestWorkflow_Test_IsolatedGoCache(t *testing.T) {
 	cache := newRecordingBuildCache()
 
 	require.NoError(t, runWithBuildCache(t, cache, domain.GoCacheIsolated, false))
-	assert.Equal(t, []string{"prepare", "env", "prewarm", "mutant", "mutant", "mutant", "close"}, cache.calls)
+	assert.Equal(t, []string{"flags", "prepare", "env", "prewarm", "mutant", "mutant", "mutant", "close"}, cache.calls)
 	assert.Equal(t, []string{"GOCACHEPROG=x"}, cache.generated, "generating mutants (type checks) builds in the isolated cache too")
 	assert.Equal(t, 7, cache.sizeMB)
 	assert.Equal(t, []string{"GOCACHEPROG=x"}, cache.builds)
@@ -178,7 +187,7 @@ func TestWorkflow_Test_GoCacheOtherModesLeaveItAlone(t *testing.T) {
 		cache := newRecordingBuildCache()
 
 		require.NoError(t, runWithBuildCache(t, cache, mode, false))
-		assert.Equal(t, []string{"mutant", "mutant", "mutant"}, cache.calls, string(mode))
+		assert.Equal(t, []string{"flags", "mutant", "mutant", "mutant"}, cache.calls, string(mode))
 	}
 }
 
@@ -186,14 +195,14 @@ func TestWorkflow_Test_GoCacheUnsupportedSkipsPrewarm(t *testing.T) {
 	cache := &recordingBuildCache{}
 
 	require.NoError(t, runWithBuildCache(t, cache, domain.GoCacheIsolated, false))
-	assert.Equal(t, []string{"prepare", "env", "mutant", "mutant", "mutant", "close"}, cache.calls)
+	assert.Equal(t, []string{"flags", "prepare", "env", "mutant", "mutant", "mutant", "close"}, cache.calls)
 }
 
 func TestWorkflow_Test_GoCacheNoPrewarmWithoutPackages(t *testing.T) {
 	cache := newRecordingBuildCache()
 	sources := []rpt.Source{{Origin: &rpt.File{ShortPath: "r/d.go", FullPath: "/r/d.go", Hash: "d"}}}
 
-	require.NoError(t, runSourcesWithBuildCache(t, cache, domain.GoCacheIsolated, false, sources))
+	require.NoError(t, runSourcesWithBuildCache(t, cache, domain.GoCacheIsolated, false, nil, sources))
 	assert.NotContains(t, cache.calls, "prewarm")
 	assert.Contains(t, cache.calls, "close")
 }
@@ -203,7 +212,7 @@ func TestWorkflow_Test_GoCachePrepareFails(t *testing.T) {
 
 	err := runWithBuildCache(t, cache, domain.GoCacheIsolated, false)
 	require.ErrorIs(t, err, cache.prepareErr)
-	assert.Equal(t, []string{"prepare"}, cache.calls)
+	assert.Equal(t, []string{"flags", "prepare"}, cache.calls)
 }
 
 func TestWorkflow_Test_GoCachePrewarmFailureOnlyWarns(t *testing.T) {
@@ -273,4 +282,16 @@ func TestWorkflow_Estimate_IsolatedGoCache(t *testing.T) {
 	}))
 
 	assert.Equal(t, []string{"prepare", "env", "generate", "close"}, cache.calls, "an estimate generates mutants in the isolated cache, without a prewarm")
+}
+
+func TestWorkflow_Test_TestFlagsReachTheTestsAndThePrewarm(t *testing.T) {
+	cache := newRecordingBuildCache()
+	flags := []string{"-short", "-tags=integration"}
+
+	require.NoError(t, runSourcesWithBuildCache(t, cache, domain.GoCacheIsolated, false, flags, []rpt.Source{
+		{Origin: &rpt.File{ShortPath: "p/a.go", FullPath: "/p/a.go", Hash: "a"}, Test: &rpt.File{ShortPath: "p/a_test.go", FullPath: "/p/a_test.go", Hash: "at"}},
+	}))
+
+	assert.Equal(t, flags, cache.testFlags, "set before the first mutant")
+	assert.Equal(t, flags, cache.flags, "the prewarm builds what the tests build")
 }

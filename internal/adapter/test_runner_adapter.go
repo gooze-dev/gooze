@@ -11,7 +11,8 @@ import (
 
 // LocalTestRunnerAdapter provides a concrete implementation using os/exec.
 type LocalTestRunnerAdapter struct {
-	env []string
+	env   []string
+	flags []string
 }
 
 // NewLocalTestRunnerAdapter constructs a LocalTestRunnerAdapter.
@@ -24,10 +25,15 @@ func (a *LocalTestRunnerAdapter) SetBuildEnv(env []string) {
 	a.env = env
 }
 
+// SetTestFlags adds flags to the go test commands it runs.
+func (a *LocalTestRunnerAdapter) SetTestFlags(flags []string) {
+	a.flags = flags
+}
+
 // RunGoTest runs 'go test -vet=off' for the package that contains testFile,
 // with -overlay when overlay is set.
 func (a *LocalTestRunnerAdapter) RunGoTest(ctx context.Context, workDir, testFile, overlay string) (string, error) {
-	cmd := newGoTestCommand(ctx, workDir, testFile, overlay)
+	cmd := newGoTestCommand(ctx, workDir, testFile, overlay, a.flags)
 
 	// A killed go test can't remove its work directory, so it goes in one
 	// removed here, timed out or not. Removing "" does nothing.
@@ -49,8 +55,9 @@ func (a *LocalTestRunnerAdapter) RunGoTest(ctx context.Context, workDir, testFil
 }
 
 // newGoTestCommand returns the go test command for the package of testFile,
-// which a canceled ctx kills along with its children.
-func newGoTestCommand(ctx context.Context, workDir, testFile, overlay string) *exec.Cmd {
+// with the user's flags after gooze's, which a canceled ctx kills along with
+// its children.
+func newGoTestCommand(ctx context.Context, workDir, testFile, overlay string, flags []string) *exec.Cmd {
 	// Vet would reject common mutants (x == a && x == b) before the tests run.
 	args := []string{"test", "-count=1", "-vet=off", "-v"}
 	// Equivalent: go test treats -overlay "" as no overlay.
@@ -58,7 +65,7 @@ func newGoTestCommand(ctx context.Context, workDir, testFile, overlay string) *e
 		args = append(args, "-overlay", overlay)
 	}
 
-	args = append(args, packageArg(workDir, testFile))
+	args = append(append(args, flags...), packageArg(workDir, testFile))
 
 	cmd := exec.CommandContext(ctx, "go", args...)
 	cmd.Dir = workDir

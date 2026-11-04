@@ -16,6 +16,7 @@ const (
 	KeyRunGoCache                  = "run.go_cache"
 	KeyRunGoCacheSize              = "run.go_cache_size"
 	KeyRunGoCachePrewarm           = "run.go_cache_prewarm"
+	KeyRunTestFlags                = "run.test_flags"
 	KeyMutagenComparisonEnumBounds = "mutagen.comparison.enum_bounds"
 	KeyThresholdTotal              = "threshold.total"
 	KeyThresholdAverage            = "threshold.average"
