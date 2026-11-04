@@ -21,10 +21,31 @@ import (
 // operand is the minimum of the other (see equivalentMutantOp) or because the
 // comparison stops a counting loop (see countingLoopMutantOp).
 func GenerateComparisonMutations(n ast.Node, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
+	return GenerateComparisonMutationsWith(n, fset, content, source, Facts{})
+}
+
+// Facts holds what type information tells about the expressions of a file.
+// The zero value knows nothing, which turns off the rules that need it.
+type Facts struct {
+	// Indexed holds the [start, end) offsets of the expressions a range
+	// gives keys in [0, len) over: slices, arrays, pointers to arrays,
+	// strings and integers. A map's keys can be negative.
+	Indexed map[[2]int]bool
+}
+
+// isIndexed reports whether facts know e as indexed.
+func (f Facts) isIndexed(fset *token.FileSet, e ast.Expr) bool {
+	return f.Indexed[[2]int{fset.Position(e.Pos()).Offset, fset.Position(e.End()).Offset}]
+}
+
+// GenerateComparisonMutationsWith is GenerateComparisonMutations with what
+// facts tell about the types: the key of a range over an indexed expression
+// is in [0, len), so 0 is its minimum and len(x)-1 its maximum.
+func GenerateComparisonMutationsWith(n ast.Node, fset *token.FileSet, content []byte, source rpt.Source, facts Facts) []m.Mutation {
 	alternatives := getComparisonAlternatives
 
 	if expr, ok := n.(*ast.BinaryExpr); ok && isComparisonOp(expr.Op) {
-		skip := []token.Token{equivalentMutantOp(expr, fset, content), countingLoopMutantOp(expr, fset, content)}
+		skip := []token.Token{equivalentMutantOp(expr, fset, content, facts), countingLoopMutantOp(expr, fset, content)}
 		alternatives = func(op token.Token) []token.Token {
 			return slices.DeleteFunc(getComparisonAlternatives(op), func(alt token.Token) bool { return slices.Contains(skip, alt) })
 		}
@@ -57,17 +78,17 @@ func getComparisonAlternatives(original token.Token) []token.Token {
 // token.ILLEGAL. Nothing is below m, so "v == m" behaves as "v <= m",
 // "v != m" as "v > m", and the other way around; mirrored when m is on the
 // left.
-func equivalentMutantOp(expr *ast.BinaryExpr, fset *token.FileSet, content []byte) token.Token {
+func equivalentMutantOp(expr *ast.BinaryExpr, fset *token.FileSet, content []byte, facts Facts) token.Token {
 	switch {
-	case isMinimumOf(expr.Y, expr.X, fset, content), isTypeBound(expr.Y, expr.X, minimumBound, content):
+	case isMinimumOf(expr.Y, expr.X, fset, content, facts), isTypeBound(expr.Y, expr.X, minimumBound, content):
 		return equivalentOpWithMinimumRight(expr.Op)
-	case isMinimumOf(expr.X, expr.Y, fset, content), isTypeBound(expr.X, expr.Y, minimumBound, content):
+	case isMinimumOf(expr.X, expr.Y, fset, content, facts), isTypeBound(expr.X, expr.Y, minimumBound, content):
 		return equivalentOpWithMinimumLeft(expr.Op)
 	// Nothing is above a maximum, as nothing is below a minimum, so a maximum
 	// on one side reads like a minimum on the other.
-	case isTypeBound(expr.Y, expr.X, maximumBound, content):
+	case isTypeBound(expr.Y, expr.X, maximumBound, content), isRangeKeyMaximum(expr.Y, expr.X, fset, content, facts):
 		return equivalentOpWithMinimumLeft(expr.Op)
-	case isTypeBound(expr.X, expr.Y, maximumBound, content):
+	case isTypeBound(expr.X, expr.Y, maximumBound, content), isRangeKeyMaximum(expr.X, expr.Y, fset, content, facts):
 		return equivalentOpWithMinimumRight(expr.Op)
 	default:
 		return token.ILLEGAL
@@ -107,7 +128,7 @@ func equivalentOpWithMinimumLeft(op token.Token) token.Token {
 // isMinimumOf reports whether minimum is a literal no value of v can be below:
 // the empty string, or 0 compared with a value that is never negative (see
 // isNonNegative). v was parsed from content with fset.
-func isMinimumOf(minimum, v ast.Expr, fset *token.FileSet, content []byte) bool {
+func isMinimumOf(minimum, v ast.Expr, fset *token.FileSet, content []byte, facts Facts) bool {
 	lit, ok := minimum.(*ast.BasicLit)
 	if !ok {
 		return false
@@ -118,7 +139,7 @@ func isMinimumOf(minimum, v ast.Expr, fset *token.FileSet, content []byte) bool 
 		return lit.Value == `""` || lit.Value == "``"
 	case token.INT:
 		// Equivalent mutants: no integer literal sorts before "0".
-		return lit.Value == "0" && isNonNegative(v, fset, content) //gooze:ignore comparison
+		return lit.Value == "0" && isNonNegative(v, fset, content, facts) //gooze:ignore comparison
 	default:
 		return false
 	}
@@ -190,15 +211,17 @@ func isLenOrCapCall(e ast.Expr) bool {
 }
 
 // isNonNegative reports whether e is never negative, judged from the syntax
-// alone: a len or cap call, a call the standard library documents as never
-// negative (see nonNegativeFuncs and nonNegativeMethods), or a variable that
-// can't be negative (see isNonNegativeVar).
-func isNonNegative(e ast.Expr, fset *token.FileSet, content []byte) bool {
+// and facts: a len or cap call, a call the standard library documents as
+// never negative (see nonNegativeFuncs and nonNegativeMethods), a variable
+// that can't be negative (see isNonNegativeVar) or a range key (see rangeKey).
+func isNonNegative(e ast.Expr, fset *token.FileSet, content []byte, facts Facts) bool {
 	switch v := e.(type) {
 	case *ast.CallExpr:
 		return isLenOrCapCall(v) || isNonNegativeCall(v, content)
 	case *ast.Ident:
-		return isNonNegativeVar(v, fset, content)
+		_, key := rangeKey(v, fset, content, facts)
+
+		return key || isNonNegativeVar(v, fset, content)
 	default:
 		return false
 	}
@@ -354,6 +377,119 @@ func fileImports(content []byte) map[string]string {
 	}
 
 	return imports
+}
+
+// rangeKey returns the expression ident ranges over when ident is the key a
+// range clause defines over an indexed expression (see Facts) and nothing else
+// writes it: the key is then in [0, len).
+func rangeKey(ident *ast.Ident, fset *token.FileSet, content []byte, facts Facts) (ast.Expr, bool) {
+	decl, over, ok := rangeClause(ident)
+	if !ok || !facts.isIndexed(fset, over) {
+		return nil, false
+	}
+
+	for _, write := range writesAfterDefinition(fset, content, decl, ident.Name) {
+		if r, ok := write.(*ast.RangeStmt); !ok || !definesKey(r) {
+			return nil, false
+		}
+	}
+
+	return over, true
+}
+
+// definesKey reports whether r is the range clause that declares its key, not
+// one that assigns a key declared before (for i = range x).
+func definesKey(r *ast.RangeStmt) bool {
+	key, ok := r.Key.(*ast.Ident)
+	if !ok || key.Obj == nil {
+		return false
+	}
+
+	decl, ok := key.Obj.Decl.(*ast.AssignStmt)
+
+	return ok && decl.Lhs[0] == r.Key
+}
+
+// rangeClause returns the declaration of ident and the expression it ranges
+// over when ident is the key of a range clause. The parser declares range
+// keys with an assignment from "range x".
+func rangeClause(ident *ast.Ident) (*ast.AssignStmt, ast.Expr, bool) {
+	if ident.Obj == nil {
+		return nil, nil, false
+	}
+
+	decl, ok := ident.Obj.Decl.(*ast.AssignStmt)
+	if !ok {
+		return nil, nil, false
+	}
+
+	over, ok := decl.Rhs[0].(*ast.UnaryExpr)
+	if !ok {
+		return nil, nil, false
+	}
+
+	// A switch, not over.Op != token.RANGE, which would add equivalent < and >
+	// mutants: RANGE sorts after every unary operator.
+	switch over.Op {
+	case token.RANGE:
+	default:
+		return nil, nil, false
+	}
+
+	key, ok := decl.Lhs[0].(*ast.Ident)
+
+	return decl, over.X, ok && key.Name == ident.Name
+}
+
+// isRangeKeyMaximum reports whether bound is len(x)-1 for a range key v over
+// x (see rangeKey), the largest key, and nothing writes x after it is
+// declared, so its length stays the one the range started with.
+func isRangeKeyMaximum(bound, v ast.Expr, fset *token.FileSet, content []byte, facts Facts) bool {
+	key, ok := v.(*ast.Ident)
+	if !ok {
+		return false
+	}
+
+	over, ok := rangeKey(key, fset, content, facts)
+	if !ok {
+		return false
+	}
+
+	x, ok := over.(*ast.Ident)
+	if !ok || x.Obj == nil || !isLenOf(bound, x) {
+		return false
+	}
+
+	decl, ok := x.Obj.Decl.(ast.Node)
+
+	return ok && len(writesAfterDefinition(fset, content, decl, x.Name)) == 0
+}
+
+// isLenOf reports whether bound is len(x)-1. A cap can be more than the
+// length, so cap(x)-1 is not the largest key.
+func isLenOf(bound ast.Expr, x *ast.Ident) bool {
+	minus, ok := bound.(*ast.BinaryExpr)
+	if !ok || minus.Op != token.SUB || !isLiteral(minus.Y, "1") {
+		return false
+	}
+
+	// The predeclared len takes one argument.
+	call, ok := minus.X.(*ast.CallExpr)
+	if !ok || !isPredeclaredIdent(call.Fun, "len") {
+		return false
+	}
+
+	arg, ok := call.Args[0].(*ast.Ident)
+
+	return ok && arg.Obj == x.Obj
+}
+
+// isPredeclaredIdent reports whether e is the predeclared identifier name,
+// not a declaration of the file that shadows it.
+func isPredeclaredIdent(e ast.Expr, name string) bool {
+	ident, ok := e.(*ast.Ident)
+
+	return ok && ident.Name == name && ident.Obj == nil
 }
 
 // isNonNegativeVar reports whether ident is never negative: a variable or

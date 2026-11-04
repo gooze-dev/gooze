@@ -81,6 +81,10 @@ type ExprTypes interface {
 	// a string, from a type check of its package without its tests. An
 	// expression whose type isn't known is left out.
 	StringExprs(ctx context.Context, file string) map[Span]bool
+	// IndexedExprs returns the spans of the expressions in file a range
+	// gives keys in [0, len) over: slices, arrays, pointers to arrays,
+	// strings and integers. An expression whose type isn't known is left out.
+	IndexedExprs(ctx context.Context, file string) map[Span]bool
 }
 
 // GoFileAdapter encapsulates Go-specific parsing and scope-detection logic so

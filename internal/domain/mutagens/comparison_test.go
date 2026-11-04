@@ -4,8 +4,12 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	m "gooze.dev/pkg/gooze/internal/model"
 	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
@@ -256,6 +260,170 @@ func TestGenerateComparisonMutations_SkipsEquivalentMutantsAgainstTypeBounds(t *
 				if tt.skipped != "" && strings.Contains(string(mutation.MutatedCode), "return "+tt.skipped+"\n") {
 					t.Fatalf("%s: equivalent mutant %q was generated", expr, tt.skipped)
 				}
+			}
+		})
+	}
+}
+
+// rangeKeyMutants returns the conditions the comparison mutants of body turn
+// its if statements into, sorted. The ranges over the expressions named in
+// indexed get Facts that say so, as type information would.
+func rangeKeyMutants(t *testing.T, body string, indexed ...string) []string {
+	t.Helper()
+
+	code := "package main\n\nfunc f(xs []int, m map[int]int, ys []int) {\n" + body + "\n}\n"
+	fset := token.NewFileSet()
+
+	file, err := parser.ParseFile(fset, "test.go", code, parser.AllErrors)
+	require.NoError(t, err)
+
+	facts := Facts{Indexed: map[[2]int]bool{}}
+
+	ast.Inspect(file, func(n ast.Node) bool {
+		if r, ok := n.(*ast.RangeStmt); ok {
+			start, end := fset.Position(r.X.Pos()).Offset, fset.Position(r.X.End()).Offset
+			if slices.Contains(indexed, code[start:end]) {
+				facts.Indexed[[2]int{start, end}] = true
+			}
+		}
+
+		return true
+	})
+
+	var conditions []string
+
+	ast.Inspect(file, func(n ast.Node) bool {
+		for _, mutation := range GenerateComparisonMutationsWith(n, fset, []byte(code), rpt.Source{}, facts) {
+			for line := range strings.Lines(string(mutation.MutatedCode)) {
+				if cond, ok := strings.CutPrefix(strings.TrimSpace(line), "if "); ok && !strings.Contains(code, line) {
+					conditions = append(conditions, strings.TrimSuffix(cond, " {}"))
+				}
+			}
+		}
+
+		return true
+	})
+
+	slices.Sort(conditions)
+
+	return conditions
+}
+
+func TestGenerateComparisonMutations_RangeKeys(t *testing.T) {
+	cases := map[string]struct {
+		body    string
+		indexed []string
+		has     []string // mutants that must be generated
+		hasNot  []string // equivalent mutants that must not be
+	}{
+		"key of a slice is never negative": {
+			body: "for i := range xs {\nif i == 0 {}\n}", indexed: []string{"xs"},
+			has: []string{"i != 0", "i < 0", "i > 0", "i >= 0"}, hasNot: []string{"i <= 0"},
+		},
+		"key with a value": {
+			body: "for i, x := range xs {\nif i > 0 {}\n_ = x\n}", indexed: []string{"xs"},
+			has: []string{"i < 0", "i <= 0", "i == 0", "i >= 0"}, hasNot: []string{"i != 0"},
+		},
+		"key of an integer": {
+			body: "for i := range 10 {\nif i == 0 {}\n}", indexed: []string{"10"},
+			hasNot: []string{"i <= 0"},
+		},
+		"without type information": {
+			body: "for i := range xs {\nif i == 0 {}\n}",
+			has:  []string{"i <= 0"},
+		},
+		"key of a map can be negative": {
+			body: "for k := range m {\nif k == 0 {}\n}", indexed: []string{"xs"},
+			has: []string{"k <= 0"},
+		},
+		"the value is not the key": {
+			body: "for _, v := range xs {\nif v == 0 {}\n}", indexed: []string{"xs"},
+			has: []string{"v <= 0"},
+		},
+		"a key the loop writes": {
+			body: "for i := range xs {\ni--\nif i == 0 {}\n}", indexed: []string{"xs"},
+			has: []string{"i <= 0"},
+		},
+		"key below len minus one": {
+			body: "for i := range xs {\nif i < len(xs)-1 {}\n}", indexed: []string{"xs"},
+			has: []string{"i <= len(xs)-1", "i == len(xs)-1", "i > len(xs)-1", "i >= len(xs)-1"}, hasNot: []string{"i != len(xs)-1"},
+		},
+		"key at len minus one": {
+			body: "for i := range xs {\nif i == len(xs)-1 {}\n}", indexed: []string{"xs"},
+			hasNot: []string{"i >= len(xs)-1"},
+		},
+		"len minus one on the left": {
+			body: "for i := range xs {\nif len(xs)-1 > i {}\n}", indexed: []string{"xs"},
+			hasNot: []string{"len(xs)-1 != i"},
+		},
+		"cap minus one can be past the last key": {
+			body: "for i := range xs {\nif i < cap(xs)-1 {}\n}", indexed: []string{"xs"},
+			has: []string{"i != cap(xs)-1"},
+		},
+		"len of another slice": {
+			body: "for i := range xs {\nif i < len(ys)-1 {}\n}", indexed: []string{"xs", "ys"},
+			has: []string{"i != len(ys)-1"},
+		},
+		"a slice the loop grows": {
+			body: "for i := range xs {\nxs = append(xs, 1)\nif i < len(xs)-1 {}\n}", indexed: []string{"xs"},
+			has: []string{"i != len(xs)-1"},
+		},
+		"a value named before the key": {
+			body: "for i, a := range xs {\nif a == 0 {}\n_ = i\n}", indexed: []string{"xs"},
+			has: []string{"a <= 0"},
+		},
+		"a key a later range assigns": {
+			body: "for i := range xs {\nfor i = range ys {}\nif i == 0 {}\n}", indexed: []string{"xs", "ys"},
+			has: []string{"i <= 0"},
+		},
+		"a key a later range assigns as its value": {
+			body: "for i := range xs {\nfor _, i = range ys {}\nif i == 0 {}\n}", indexed: []string{"xs", "ys"},
+			has: []string{"i <= 0"},
+		},
+		"len bound of a range over a literal": {
+			body: "for i := range 10 {\nif i < len(xs)-1 {}\n}", indexed: []string{"10"},
+			has: []string{"i != len(xs)-1"},
+		},
+		"len bound of a package-level slice": {
+			body: "for i := range other {\nif i < len(other)-1 {}\n}", indexed: []string{"other"},
+			has: []string{"i != len(other)-1"},
+		},
+		"len plus one": {
+			body: "for i := range xs {\nif i < len(xs)+1 {}\n}", indexed: []string{"xs"},
+			has: []string{"i != len(xs)+1"},
+		},
+		"len divided": {
+			body: "for i := range xs {\nif i < len(xs)/1 {}\n}", indexed: []string{"xs"},
+			has: []string{"i != len(xs)/1"},
+		},
+		"len minus two": {
+			body: "for i := range xs {\nif i < len(xs)-2 {}\n}", indexed: []string{"xs"},
+			has: []string{"i != len(xs)-2"},
+		},
+		"len itself": {
+			body: "for i := range xs {\nif i < len(xs) {}\n}", indexed: []string{"xs"},
+			has: []string{"i != len(xs)"},
+		},
+		"another builtin": {
+			body: "for i := range xs {\nif i < min(xs)-1 {}\n}", indexed: []string{"xs"},
+			has: []string{"i != min(xs)-1"},
+		},
+		"nested keys": {
+			body: "for i := range xs {\nfor j := range ys {\nif i == 0 && j == 0 {}\n}\n}", indexed: []string{"xs", "ys"},
+			hasNot: []string{"i <= 0 && j == 0", "i == 0 && j <= 0"},
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			got := rangeKeyMutants(t, tc.body, tc.indexed...)
+
+			for _, want := range tc.has {
+				assert.Contains(t, got, want)
+			}
+
+			for _, unwanted := range tc.hasNot {
+				assert.NotContains(t, got, unwanted)
 			}
 		})
 	}
