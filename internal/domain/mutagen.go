@@ -125,10 +125,10 @@ func (mg *mutagen) StreamMutationsWith(ctx context.Context, source rpt.Source, o
 	}
 
 	funcs := buildFuncIndex(file, fset)
-	strs := mg.stringExprs(ctx, source, mutationTypes)
+	typed := typeInfo{strings: mg.stringExprs(ctx, source, mutationTypes), comparison: mg.comparisonFacts(ctx, source, mutationTypes)}
 
 	for _, mutationType := range mutationTypes {
-		if err := walkMutations(mutationType, file, fset, content, source, ignore, funcs, strs, mg.differ, fn); err != nil {
+		if err := walkMutations(mutationType, file, fset, content, source, ignore, funcs, typed, mg.differ, fn); err != nil {
 			return err
 		}
 	}
@@ -288,7 +288,7 @@ func walkMutations(
 	source rpt.Source,
 	ignore ignoreIndex,
 	funcs funcIndex,
-	strs map[Span]bool,
+	typed typeInfo,
 	differ Differ,
 	fn func(m.Mutation) error,
 ) error {
@@ -318,8 +318,8 @@ func walkMutations(
 			return descend
 		}
 
-		mutations := dropStringOps(mutationType, dropEquivalent(generateMutationsForNode(mutationType, n, fset, content, source), n, fset, partlyEquivalent), n, fset, content, strs)
-		for _, mutation := range ignore.keepChanged(mutations, fset, file, content, mutationType) {
+		mutations := generateMutationsForNode(mutationType, n, fset, content, source, typed.comparison)
+		for _, mutation := range ignore.keepChanged(dropStringOps(mutationType, dropEquivalent(mutations, n, fset, partlyEquivalent), n, fset, content, typed.strings), fset, file, content, mutationType) {
 			mutation.Line = lineForOffset(content, firstDifference(content, mutation.MutatedCode))
 			mutation.Funcs = funcs.at(mutation.Line)
 			mutation.DiffCode = differ.Diff(content, mutation.MutatedCode)
@@ -408,7 +408,12 @@ func generateMutationsForNode(
 	fset *token.FileSet,
 	content []byte,
 	source rpt.Source,
+	facts mutagens.Facts,
 ) []m.Mutation {
+	if mutationType == mgen.Comparison {
+		return mutagens.GenerateComparisonMutationsWith(n, fset, content, source, facts)
+	}
+
 	gen, ok := mutationGenerators[mutationType]
 	if !ok {
 		return nil

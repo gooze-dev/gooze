@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 
@@ -27,17 +28,22 @@ type ExprTypes struct {
 	mu       sync.Mutex
 	fset     *token.FileSet
 	importer types.Importer
-	exports  map[string]string                          // import path -> export data file
-	env      []string                                   // of go list, which builds the export data
-	strings  map[string]map[string]map[domain.Span]bool // dir -> file -> string spans
+	exports  map[string]string               // import path -> export data file
+	env      []string                        // of go list, which builds the export data
+	packages map[string]map[string]fileExprs // dir -> file -> its expressions' kinds
+}
+
+// fileExprs are the spans of a file's expressions by kind.
+type fileExprs struct {
+	strings, indexed map[domain.Span]bool
 }
 
 // NewExprTypes returns an ExprTypes with nothing checked yet.
 func NewExprTypes() *ExprTypes {
 	e := &ExprTypes{
-		fset:    token.NewFileSet(),
-		exports: map[string]string{},
-		strings: map[string]map[string]map[domain.Span]bool{},
+		fset:     token.NewFileSet(),
+		exports:  map[string]string{},
+		packages: map[string]map[string]fileExprs{},
 	}
 	e.importer = importer.ForCompiler(e.fset, "gc", e.lookup)
 
@@ -87,25 +93,36 @@ func (e *ExprTypes) loadExports(ctx context.Context, dir string) {
 
 // StringExprs implements domain.ExprTypes.
 func (e *ExprTypes) StringExprs(ctx context.Context, file string) map[domain.Span]bool {
+	return e.file(ctx, file).strings
+}
+
+// IndexedExprs implements domain.ExprTypes.
+func (e *ExprTypes) IndexedExprs(ctx context.Context, file string) map[domain.Span]bool {
+	return e.file(ctx, file).indexed
+}
+
+// file returns the expressions of file, type-checking its package the first
+// time one of its files is asked for.
+func (e *ExprTypes) file(ctx context.Context, file string) fileExprs {
 	file = filepath.Clean(file)
 	dir := filepath.Dir(file)
 
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	pkg, ok := e.strings[dir]
+	pkg, ok := e.packages[dir]
 	if !ok {
 		pkg = e.check(ctx, dir)
-		e.strings[dir] = pkg
+		e.packages[dir] = pkg
 	}
 
 	return pkg[file]
 }
 
 // check type-checks the package in dir without its tests and returns the
-// string spans of each of its files. Type errors leave the expressions they
-// touch untyped; the rest is still checked.
-func (e *ExprTypes) check(ctx context.Context, dir string) map[string]map[domain.Span]bool {
+// kinds of the expressions of each of its files. Type errors leave the
+// expressions they touch untyped; the rest is still checked.
+func (e *ExprTypes) check(ctx context.Context, dir string) map[string]fileExprs {
 	files := e.parse(dir)
 	// Equivalent: a check of no files finds no expression either; returning
 	// early only saves the go list.
@@ -120,22 +137,28 @@ func (e *ExprTypes) check(ctx context.Context, dir string) map[string]map[domain
 	// Errors leave the expressions they touch untyped.
 	_, _ = conf.Check(dir, e.fset, files, info)
 
-	spans := map[string]map[domain.Span]bool{}
+	exprs := map[string]fileExprs{}
 
 	for expr, tv := range info.Types {
-		if !isString(tv.Type) {
-			continue
-		}
-
 		start, end := e.fset.Position(expr.Pos()), e.fset.Position(expr.End())
-		if spans[start.Filename] == nil {
-			spans[start.Filename] = map[domain.Span]bool{}
+		span := domain.Span{Start: start.Offset, End: end.Offset}
+
+		f, ok := exprs[start.Filename]
+		if !ok {
+			f = fileExprs{strings: map[domain.Span]bool{}, indexed: map[domain.Span]bool{}}
+			exprs[start.Filename] = f
 		}
 
-		spans[start.Filename][domain.Span{Start: start.Offset, End: end.Offset}] = true
+		if isString(tv.Type) {
+			f.strings[span] = true
+		}
+
+		if isIndexed(tv.Type) {
+			f.indexed[span] = true
+		}
 	}
 
-	return spans
+	return exprs
 }
 
 // parse parses the non-test files of dir that the build context selects.
@@ -183,4 +206,29 @@ func isString(t types.Type) bool {
 	basic, ok := t.Underlying().(*types.Basic)
 
 	return ok && (basic.Kind() == types.String || basic.Kind() == types.UntypedString)
+}
+
+// isIndexed reports whether a range over a value of type t gives keys in
+// [0, len): a slice, an array or a pointer to one, a string or an integer.
+func isIndexed(t types.Type) bool {
+	switch u := t.Underlying().(type) {
+	case *types.Slice, *types.Array:
+		return true
+	case *types.Pointer:
+		_, ok := u.Elem().Underlying().(*types.Array)
+
+		return ok
+	case *types.Basic:
+		return slices.Contains(indexedKinds, u.Kind())
+	default:
+		return false
+	}
+}
+
+// indexedKinds are the basic types a range gives keys in [0, len) over: the
+// strings and the integers.
+var indexedKinds = []types.BasicKind{
+	types.Int, types.Int8, types.Int16, types.Int32, types.Int64,
+	types.Uint, types.Uint8, types.Uint16, types.Uint32, types.Uint64, types.Uintptr,
+	types.String, types.UntypedInt, types.UntypedRune, types.UntypedString,
 }

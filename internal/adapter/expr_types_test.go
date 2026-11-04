@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -158,4 +159,58 @@ func TestExprTypes_BuildsInTheBuildEnv(t *testing.T) {
 	sharedEntries, err := os.ReadDir(shared)
 	require.NoError(t, err)
 	assert.Empty(t, sharedEntries, "and left the shared GOCACHE alone")
+}
+
+func TestExprTypes_IndexedExprs(t *testing.T) {
+	const src = `package p
+
+type names []string
+
+func F(s []int, a [2]int, pa *[2]int, str string, n int, ns names, m map[int]int, c chan int, f func(func(int) bool), ps *[]int, b bool, x float64) {
+	_ = s
+	_ = a
+	_ = pa
+	_ = str
+	_ = n
+	_ = ns
+	_ = m
+	_ = c
+	_ = f
+	_ = ps
+	_ = b
+	_ = x
+}
+`
+
+	indexed := newTestExprTypes(t).IndexedExprs(context.Background(), filepath.Join(writeModule(t, map[string]string{"p.go": src}), "p.go"))
+
+	for _, name := range []string{"s", "a", "pa", "str", "n", "ns"} {
+		assert.True(t, indexed[spanIn(t, src, "_ = "+name+"\n", name)], "%s is indexed", name)
+	}
+
+	for _, name := range []string{"m", "c", "f", "ps", "b", "x"} {
+		assert.False(t, indexed[spanIn(t, src, "_ = "+name+"\n", name)], "%s is not", name)
+	}
+}
+
+func TestExprTypes_IndexedBasicKinds(t *testing.T) {
+	names := []string{"i8", "i16", "i32", "i64", "u", "u8", "u16", "u32", "u64", "up", "r"}
+	others := []string{"1", "'r'", `"s"`, "1.5", "true"}
+
+	src := "package p\n\nfunc F(i8 int8, i16 int16, i32 int32, i64 int64, u uint, u8 uint8, u16 uint16, u32 uint32, u64 uint64, up uintptr, r rune) {\n"
+	for _, expr := range append(slices.Clone(names), others...) {
+		src += "\t_ = " + expr + "\n"
+	}
+
+	src += "}\n"
+
+	indexed := newTestExprTypes(t).IndexedExprs(context.Background(), filepath.Join(writeModule(t, map[string]string{"p.go": src}), "p.go"))
+
+	for _, expr := range append(names, others[:3]...) {
+		assert.True(t, indexed[spanIn(t, src, "_ = "+expr+"\n", expr)], "%s is indexed", expr)
+	}
+
+	for _, expr := range others[3:] {
+		assert.False(t, indexed[spanIn(t, src, "_ = "+expr+"\n", expr)], "%s is not", expr)
+	}
 }
