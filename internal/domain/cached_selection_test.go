@@ -2,8 +2,12 @@ package domain_test
 
 import (
 	"context"
+	"fmt"
+	"maps"
+	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 
@@ -261,16 +265,329 @@ func TestWorkflow_Test_NarrowedRunScoresOnlyTheFilesItSelects(t *testing.T) {
 		"b.go has no mutant in Less")
 }
 
-func TestWorkflow_Test_NarrowedShardScoresOnlyItsOwnResults(t *testing.T) {
+func TestWorkflow_Test_NarrowedShardsSplitTheCachedResultsBySource(t *testing.T) {
 	reports := filepath.Join(t.TempDir(), "reports")
 	runAddLess(t, cachedTestArgs(reports))
 
-	args := cachedTestArgs(reports)
-	args.Mutagens = []string{"arithmetic"}
-	args.ShardIndex, args.TotalShardCount = 0, 2
+	var scores []int
 
-	ran, score := runAddLess(t, args)
+	for shard := range 2 {
+		args := cachedTestArgs(reports)
+		args.Mutagens = []string{"arithmetic"}
+		args.ShardIndex, args.TotalShardCount = shard, 2
 
-	assert.Empty(t, ran)
-	assert.Zero(t, score.Total, "report merge scores the cached results")
+		ran, score := runAddLess(t, args)
+
+		assert.Empty(t, ran)
+		assert.Equal(t, score.Total, score.Cached)
+		scores = append(scores, score.Cached)
+	}
+
+	assert.ElementsMatch(t, []int{0, 2}, scores, "one shard owns a.go and keeps both of its cached results")
+}
+
+// shardFixture is six sources, p0.go to p5.go, each with a mutant on line 3
+// and one on line 5; the line-3 mutants of the even files survive.
+type shardFixture struct {
+	sources   []rpt.Source
+	mutations fakeMutagen
+	survivors []string
+}
+
+func newShardFixture() shardFixture {
+	f := shardFixture{mutations: fakeMutagen{}}
+
+	for i := range 6 {
+		path := fmt.Sprintf("p%d.go", i)
+		source := rpt.Source{Origin: &rpt.File{ShortPath: path, FullPath: "/p/" + path, Hash: "h" + path}}
+		f.sources = append(f.sources, source)
+		f.mutations[path] = []m.Mutation{
+			{ID: path + "-3", Source: source, Type: mgen.Arithmetic, Line: 3, Funcs: []string{"F"}},
+			{ID: path + "-5", Source: source, Type: mgen.Arithmetic, Line: 5, Funcs: []string{"G"}},
+		}
+
+		if i%2 == 0 {
+			f.survivors = append(f.survivors, path+"-3")
+		}
+	}
+
+	return f
+}
+
+// edited returns the fixture with the source at i changed since a baseline.
+func (f shardFixture) edited(i int) shardFixture {
+	sources := slices.Clone(f.sources)
+	origin := *sources[i].Origin
+	origin.Hash += "-edited"
+	sources[i].Origin = &origin
+
+	mutations := fakeMutagen{}
+	for key, list := range f.mutations {
+		mutations[key] = slices.Clone(list)
+	}
+
+	for j := range mutations[origin.ShortPath] {
+		mutations[origin.ShortPath][j].Source = sources[i]
+	}
+
+	return shardFixture{sources: sources, mutations: mutations, survivors: f.survivors}
+}
+
+// diffOfEveryFile changes line 3 of every fixture file since main.
+func (f shardFixture) diffOfEveryFile() domain.ChangeSet {
+	files := map[string]domain.FileChange{}
+	for _, source := range f.sources {
+		files[source.Origin.FullPath] = domain.FileChange{Lines: []domain.LineRange{{Start: 3, End: 3}}}
+	}
+
+	return domain.ChangeSet{Ref: "main", Base: "b1", Files: files}
+}
+
+// scoringReporter returns a reporter that records the score a workflow displays.
+func scoringReporter(t *testing.T, score *domain.MutationScore) *domainmocks.MockReporter {
+	t.Helper()
+
+	reporter := domainmocks.NewMockReporter(t)
+	reporter.EXPECT().StartTest(mock.Anything).Return(nil)
+	reporter.EXPECT().Wait(mock.Anything).Return().Maybe()
+	reporter.EXPECT().Close(mock.Anything).Return()
+	reporter.EXPECT().DisplayConcurrencyInfo(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return().Maybe()
+	reporter.EXPECT().DisplayUpcomingTestsInfo(mock.Anything, mock.Anything).Return().Maybe()
+	reporter.EXPECT().DisplayStartingTestInfo(mock.Anything, mock.Anything, mock.Anything).Return().Maybe()
+	reporter.EXPECT().DisplayCompletedTestInfo(mock.Anything, mock.Anything, mock.Anything).Return().Maybe()
+	reporter.EXPECT().DisplayMutationScore(mock.Anything, mock.Anything).
+		Run(func(_ context.Context, s domain.MutationScore) { *score = s })
+
+	return reporter
+}
+
+// run tests the fixture with args and returns the mutants it ran and its score.
+func (f shardFixture) run(t *testing.T, args domain.TestArgs) ([]string, domain.MutationScore) {
+	t.Helper()
+
+	fs := domainmocks.NewMockSourceFSAdapter(t)
+	fs.EXPECT().Stream(mock.Anything, mock.Anything).Return(streamSources(f.sources))
+
+	ws := &survivingWorkspace{survivors: f.survivors}
+	orchestrator := domainmocks.NewMockOrchestrator(t)
+	orchestrator.EXPECT().NewWorkspace(mock.Anything).Return(ws).Maybe()
+
+	changes := domainmocks.NewMockChangeDetector(t)
+	changes.EXPECT().Changes(mock.Anything, mock.Anything, "main").Return(f.diffOfEveryFile(), nil).Maybe()
+
+	var score domain.MutationScore
+
+	wf := domain.NewWorkflow(fs, adapter.NewReportStore(), scoringReporter(t, &score), orchestrator, f.mutations, domain.WithChangeDetector(changes))
+	require.NoError(t, wf.Test(context.Background(), args))
+
+	return ws.ran, score
+}
+
+// merge runs gooze report merge -o dir and returns the merged score.
+func (f shardFixture) merge(t *testing.T, dir string) domain.MutationScore {
+	t.Helper()
+
+	var score domain.MutationScore
+
+	wf := domain.NewWorkflow(domainmocks.NewMockSourceFSAdapter(t), adapter.NewReportStore(), scoringReporter(t, &score),
+		domainmocks.NewMockOrchestrator(t), f.mutations)
+	require.NoError(t, wf.Merge(context.Background(), domain.MergeArgs{Reports: m.Path(dir)}))
+
+	return score
+}
+
+// copyDir copies src to dst; a missing src copies nothing.
+func copyDir(t *testing.T, src, dst string) {
+	t.Helper()
+
+	require.NoError(t, os.MkdirAll(dst, 0o750))
+
+	if _, err := os.Stat(src); os.IsNotExist(err) {
+		return
+	}
+
+	require.NoError(t, os.CopyFS(dst, os.DirFS(src)))
+}
+
+// sourcesIn returns the source keys of the reports in dir.
+func sourcesIn(t *testing.T, dir string) []string {
+	t.Helper()
+
+	reports, err := adapter.NewReportStore().LoadSpillReports(context.Background(), m.Path(dir))
+	if os.IsNotExist(err) {
+		return nil
+	}
+
+	require.NoError(t, err)
+
+	defer reports.Close()
+
+	var keys []string
+
+	require.NoError(t, reports.Range(func(_ uint64, report m.Report) error {
+		keys = append(keys, report.Source.Key())
+		return nil
+	}))
+
+	return keys
+}
+
+func TestWorkflow_Test_ShardsKeepTheCachedResultsOfTheirSources(t *testing.T) {
+	const shards = 3
+
+	diff := func(a *domain.TestArgs) { a.Diff = "main" }
+
+	cases := map[string]struct {
+		baseline bool                   // a full run stores results before
+		edit     bool                   // p1.go changes after the baseline
+		narrow   func(*domain.TestArgs) // nil: a full run
+		tested   []string               // the mutants the run tests
+	}{
+		"fully cached diff": {baseline: true, narrow: diff},
+		"partly cached diff": {
+			baseline: true, edit: true, narrow: diff,
+			tested: []string{"p1.go-3"},
+		},
+		"diff without a baseline": {
+			narrow: diff,
+			tested: []string{"p0.go-3", "p1.go-3", "p2.go-3", "p3.go-3", "p4.go-3", "p5.go-3"},
+		},
+		"fully cached run": {
+			baseline: true, narrow: func(a *domain.TestArgs) { a.Run = "^F$" },
+		},
+		"full run with a baseline": {baseline: true},
+		"full run with a partly cached baseline": {
+			baseline: true, edit: true,
+			tested: []string{"p1.go-3", "p1.go-5"},
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			fixture := newShardFixture()
+			root := t.TempDir()
+			baseline := filepath.Join(root, "baseline")
+
+			if tc.baseline {
+				fixture.run(t, cachedTestArgs(baseline))
+			}
+
+			if tc.edit {
+				fixture = fixture.edited(1)
+			}
+
+			argsFor := func(reports string, shard int) domain.TestArgs {
+				args := cachedTestArgs(reports)
+				args.ShardIndex, args.TotalShardCount = shard, shards
+
+				if tc.narrow != nil {
+					tc.narrow(&args)
+				}
+
+				return args
+			}
+
+			// resultsDir is where a run of reports keeps the results merge scores.
+			resultsDir := func(reports string) string {
+				if tc.narrow == nil {
+					return reports
+				}
+
+				return filepath.Join(reports, domain.RunDirName)
+			}
+
+			unsharded := filepath.Join(root, "unsharded")
+			copyDir(t, baseline, unsharded)
+
+			args := argsFor(unsharded, 0)
+			args.TotalShardCount = 1
+
+			ran, want := fixture.run(t, args)
+			assert.ElementsMatch(t, tc.tested, ran)
+
+			sharded := filepath.Join(root, "sharded")
+			copyDir(t, baseline, sharded)
+
+			var (
+				shardRan       []string
+				cached, tested int
+				owner          = map[string]int{} // cached source -> shard dir it is in
+			)
+
+			for shard := range shards {
+				ran, score := fixture.run(t, argsFor(sharded, shard))
+				shardRan = append(shardRan, ran...)
+				cached += score.Cached
+				tested += score.Tested
+
+				assert.Equal(t, score.Total, score.Cached+score.Tested, "shard %d scores its cached results", shard)
+
+				shardDir := filepath.Join(resultsDir(sharded), fmt.Sprintf("%s%d", domain.ShardDirPrefix, shard))
+				for _, key := range sourcesIn(t, shardDir) {
+					if slices.ContainsFunc(tc.tested, func(id string) bool { return strings.HasPrefix(id, key+"-") }) {
+						continue // a tested source is split by mutant, as before
+					}
+
+					previous, seen := owner[key]
+					assert.False(t, seen && previous != shard, "%s is in shard %d and shard %d", key, previous, shard)
+					owner[key] = shard
+				}
+			}
+
+			assert.ElementsMatch(t, tc.tested, shardRan, "each mutant is tested in exactly one shard")
+			assert.Equal(t, want.Cached, cached, "the shards together keep every cached result")
+			assert.Equal(t, want.Tested, tested)
+
+			// CI: each shard hands only its own dir to the merge job, which
+			// starts from the baseline (full run) or from nothing (narrowed run).
+			ci := filepath.Join(root, "ci")
+			if tc.narrow == nil {
+				copyDir(t, baseline, ci)
+			}
+
+			for shard := range shards {
+				dir := filepath.Join(fmt.Sprintf("%s%d", domain.ShardDirPrefix, shard))
+				copyDir(t, filepath.Join(resultsDir(sharded), dir), filepath.Join(resultsDir(ci), dir))
+			}
+
+			for _, reports := range []string{sharded, ci} {
+				merged := fixture.merge(t, resultsDir(reports))
+
+				assert.Equal(t, want.Summary, merged.Summary, "%s merges to the unsharded score", reports)
+				assert.Equal(t, keysOf(storedIDs(t, resultsDir(unsharded))), keysOf(storedIDs(t, resultsDir(reports))),
+					"%s merges to the unsharded results", reports)
+			}
+		})
+	}
+}
+
+func keysOf[V any](in map[string]V) []string {
+	keys := slices.Collect(maps.Keys(in))
+	slices.Sort(keys)
+
+	return keys
+}
+
+func TestWorkflow_Test_AFullyCachedDiffShardShowsItsCachedResults(t *testing.T) {
+	fixture := newShardFixture()
+	reports := filepath.Join(t.TempDir(), "reports")
+	fixture.run(t, cachedTestArgs(reports))
+
+	var cached int
+
+	for shard := range 3 {
+		args := cachedTestArgs(reports)
+		args.Diff = "main"
+		args.ShardIndex, args.TotalShardCount = shard, 3
+
+		ran, score := fixture.run(t, args)
+
+		assert.Empty(t, ran)
+		assert.Zero(t, score.Tested)
+		assert.Equal(t, score.Total, score.Cached, "shard %d: N cached, 0 tested, not no mutations", shard)
+
+		cached += score.Cached
+	}
+
+	assert.Equal(t, 6, cached, "the six line-3 mutants")
 }
