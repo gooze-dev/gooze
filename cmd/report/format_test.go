@@ -129,7 +129,7 @@ func TestReportView_RejectsUnknownFormat(t *testing.T) {
 	deps := Deps{Workflow: domainmocks.NewMockWorkflow(t), Publisher: domainmocks.NewMockReportPublisher(t), OutputKey: testOutputKey}
 	err := execReport(t, deps, "view", "--format", "xml")
 
-	require.EqualError(t, err, `invalid --format "xml": must be one of text, github, gitlab, sarif, codeclimate`)
+	require.EqualError(t, err, `invalid --format "xml": must be one of text, github, gitlab, sarif, codeclimate, metrics`)
 	assert.Equal(t, m.ExitUsage, codeOf(err))
 }
 

@@ -26,6 +26,9 @@ const (
 	// FormatGitLab is FormatCodeClimate under the name of the platform that
 	// reads it.
 	FormatGitLab ViewFormat = "gitlab"
+	// FormatMetrics writes the score and counts as a GitLab metrics report
+	// instead of the text summary.
+	FormatMetrics ViewFormat = "metrics"
 )
 
 // displayView writes summary in args.Format.
@@ -41,6 +44,8 @@ func (w *workflow) displayView(ctx context.Context, args ViewArgs, summary Repor
 		return writeSARIF(args.Output, summary.Survivors, args.PathPrefix, args.ToolVersion)
 	case FormatCodeClimate, FormatGitLab:
 		return writeCodeClimate(args.Output, summary.Survivors, args.PathPrefix)
+	case FormatMetrics:
+		return w.viewMetrics(ctx, args, summary)
 	case FormatText:
 	}
 
