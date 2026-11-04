@@ -36,6 +36,7 @@ func TestReportView_ByLineUsageErrors(t *testing.T) {
 		"sarif":               {args: []string{"--format", "sarif"}, want: "--by-line groups the text summary; --format sarif writes none"},
 		"codeclimate":         {args: []string{"--format", "codeclimate"}, want: "--by-line groups the text summary; --format codeclimate writes none"},
 		"gitlab":              {args: []string{"--format", "gitlab"}, want: "--by-line groups the text summary; --format gitlab writes none"},
+		"metrics":             {args: []string{"--format", "metrics"}, want: "--by-line groups the text summary; --format metrics writes none"},
 		"configured format":   {config: "sarif", want: "--by-line groups the text summary; --format sarif writes none"},
 		"all over the format": {args: []string{"--all"}, config: "sarif", want: "--by-line groups the summary's survivors; --all lists every mutation"},
 	} {

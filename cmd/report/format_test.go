@@ -300,3 +300,13 @@ func TestToolVersion(t *testing.T) {
 		})
 	}
 }
+
+func TestReportView_MetricsFormat(t *testing.T) {
+	viper.Set(testOutputKey, "/tmp/reports")
+	viper.Set(config.KeyReportFormat, "metrics")
+	defer viper.Reset()
+
+	stubShowPrefix(t, "", nil)
+
+	assert.Equal(t, domain.FormatMetrics, viewArgsFor(t).Format, "metrics replaces the text summary")
+}
