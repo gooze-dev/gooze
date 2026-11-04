@@ -48,6 +48,7 @@ type mutagen struct {
 	GoFileAdapter
 	SourceFSAdapter
 	differ Differ
+	types  ExprTypes // nil: no type information
 
 	// enumsMu guards enums, the enums of each package by its files (see
 	// cachedEnums).
@@ -55,13 +56,30 @@ type mutagen struct {
 	enums   map[string]enums
 }
 
+// MutagenOption configures a Mutagen.
+type MutagenOption func(*mutagen)
+
+// WithExprTypes gives the mutagen the types of expressions, so it can leave
+// out mutants that can't build: an operator other than + on strings.
+func WithExprTypes(types ExprTypes) MutagenOption {
+	return func(mg *mutagen) {
+		mg.types = types
+	}
+}
+
 // NewMutagen creates a new Mutagen instance.
-func NewMutagen(goFileAdapter GoFileAdapter, sourceFSAdapter SourceFSAdapter, differ Differ) Mutagen {
-	return &mutagen{
+func NewMutagen(goFileAdapter GoFileAdapter, sourceFSAdapter SourceFSAdapter, differ Differ, opts ...MutagenOption) Mutagen {
+	mg := &mutagen{
 		GoFileAdapter:   goFileAdapter,
 		SourceFSAdapter: sourceFSAdapter,
 		differ:          differ,
 	}
+
+	for _, opt := range opts {
+		opt(mg)
+	}
+
+	return mg
 }
 
 func (mg *mutagen) GenerateMutation(ctx context.Context, source rpt.Source, mutationTypes ...mgen.Type) ([]m.Mutation, error) {
@@ -107,9 +125,10 @@ func (mg *mutagen) StreamMutationsWith(ctx context.Context, source rpt.Source, o
 	}
 
 	funcs := buildFuncIndex(file, fset)
+	strs := mg.stringExprs(ctx, source, mutationTypes)
 
 	for _, mutationType := range mutationTypes {
-		if err := walkMutations(mutationType, file, fset, content, source, ignore, funcs, mg.differ, fn); err != nil {
+		if err := walkMutations(mutationType, file, fset, content, source, ignore, funcs, strs, mg.differ, fn); err != nil {
 			return err
 		}
 	}
@@ -269,6 +288,7 @@ func walkMutations(
 	source rpt.Source,
 	ignore ignoreIndex,
 	funcs funcIndex,
+	strs map[Span]bool,
 	differ Differ,
 	fn func(m.Mutation) error,
 ) error {
@@ -298,8 +318,8 @@ func walkMutations(
 			return descend
 		}
 
-		mutations := ignore.keepChanged(dropEquivalent(generateMutationsForNode(mutationType, n, fset, content, source), n, fset, partlyEquivalent), fset, file, content, mutationType)
-		for _, mutation := range mutations {
+		mutations := dropStringOps(mutationType, dropEquivalent(generateMutationsForNode(mutationType, n, fset, content, source), n, fset, partlyEquivalent), n, fset, content, strs)
+		for _, mutation := range ignore.keepChanged(mutations, fset, file, content, mutationType) {
 			mutation.Line = lineForOffset(content, firstDifference(content, mutation.MutatedCode))
 			mutation.Funcs = funcs.at(mutation.Line)
 			mutation.DiffCode = differ.Diff(content, mutation.MutatedCode)

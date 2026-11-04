@@ -18,7 +18,7 @@ var incDecSwaps = map[token.Token]token.Token{token.INC: token.DEC, token.DEC: t
 func GenerateIncrementMutations(n ast.Node, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
 	var mutations []m.Mutation
 
-	for _, stmt := range blockStatements(n) {
+	for _, stmt := range BlockStatements(n) {
 		incDec, ok := stmt.(*ast.IncDecStmt)
 		if !ok {
 			continue
@@ -30,9 +30,9 @@ func GenerateIncrementMutations(n ast.Node, fset *token.FileSet, content []byte,
 	return mutations
 }
 
-// blockStatements returns the statement list of a block, case or select
+// BlockStatements returns the statement list of a block, case or select
 // clause, or nil for any other node.
-func blockStatements(n ast.Node) []ast.Stmt {
+func BlockStatements(n ast.Node) []ast.Stmt {
 	switch block := n.(type) {
 	case *ast.BlockStmt:
 		return block.List

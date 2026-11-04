@@ -62,7 +62,7 @@ func init() {
 	testAdapter = localTestAdapter
 	ociRegistry = adapter.NewORASRegistry()
 	orchestrator = domain.NewOrchestrator(sourceFSAdapter, testAdapter)
-	mutagen = domain.NewMutagen(goFileAdapter, sourceFSAdapter, adapter.NewUnifiedDiffer())
+	mutagen = domain.NewMutagen(goFileAdapter, sourceFSAdapter, adapter.NewUnifiedDiffer(), domain.WithExprTypes(adapter.NewExprTypes()))
 	workflow = domain.NewWorkflow(
 		sourceFSAdapter,
 		reportStore,

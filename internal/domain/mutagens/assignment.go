@@ -32,7 +32,7 @@ var assignmentAlternatives = map[token.Token]token.Token{
 func GenerateAssignmentMutations(n ast.Node, fset *token.FileSet, content []byte, source rpt.Source) []m.Mutation {
 	var mutations []m.Mutation
 
-	for _, stmt := range blockStatements(n) {
+	for _, stmt := range BlockStatements(n) {
 		assign, ok := stmt.(*ast.AssignStmt)
 		if !ok {
 			continue
