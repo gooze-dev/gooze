@@ -70,6 +70,19 @@ type SourceFSAdapter interface {
 // domain layer.
 type FilepathWalkFunc func(path string, info os.FileInfo, err error) error
 
+// Span is the [Start, End) byte range of an expression in its file.
+type Span struct {
+	Start, End int
+}
+
+// ExprTypes knows the types of a package's expressions.
+type ExprTypes interface {
+	// StringExprs returns the spans of the expressions in file whose type is
+	// a string, from a type check of its package without its tests. An
+	// expression whose type isn't known is left out.
+	StringExprs(ctx context.Context, file string) map[Span]bool
+}
+
 // GoFileAdapter encapsulates Go-specific parsing and scope-detection logic so
 // the domain layer can focus on mutation rules while delegating compilation
 // details to an infrastructure component.
