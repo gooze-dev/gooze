@@ -26,6 +26,8 @@ type recordingBuildCache struct {
 	sizeMB     int
 	dirs       []string
 	builds     []string // the environment that reached the runner
+	generated  []string // the environment when the first mutant was generated
+	generating bool
 	env        []string
 	prepareErr error
 	prewarmErr error
@@ -106,11 +108,17 @@ func runSourcesWithBuildCache(t *testing.T, cache *recordingBuildCache, mode dom
 	t.Helper()
 
 	fs := domainmocks.NewMockSourceFSAdapter(t)
-	fs.EXPECT().Stream(mock.Anything, mock.Anything).Return(streamSources(sources))
+	fs.EXPECT().Stream(mock.Anything, mock.Anything).Return(streamSources(sources)).Maybe() // not when the cache fails first
 
 	mutagen := domainmocks.NewMockMutagen(t)
 	mutagen.EXPECT().StreamMutations(mock.Anything, mock.Anything, mock.Anything, typeArgs(domain.DefaultMutations)...).
 		RunAndReturn(func(_ context.Context, source rpt.Source, fn func(m.Mutation) error, _ ...mgen.Type) error {
+			cache.mu.Lock()
+			if !cache.generating {
+				cache.generating, cache.generated = true, cache.builds
+			}
+			cache.mu.Unlock()
+
 			if source.Test == nil {
 				return nil
 			}
@@ -140,10 +148,12 @@ func runSourcesWithBuildCache(t *testing.T, cache *recordingBuildCache, mode dom
 	reporter.EXPECT().DisplayMutationScore(mock.Anything, mock.Anything).Return().Maybe()
 
 	args := domain.TestArgs{
-		EstimateArgs:    domain.EstimateArgs{Paths: []m.Path{"./..."}, Reports: m.Path(t.TempDir())},
+		EstimateArgs: domain.EstimateArgs{
+			Paths: []m.Path{"./..."}, Reports: m.Path(t.TempDir()),
+			GoCache: domain.GoCache{Mode: mode, SizeMB: 7, Prewarm: true},
+		},
 		Threads:         1,
 		TotalShardCount: 1,
-		GoCache:         domain.GoCache{Mode: mode, SizeMB: 7, Prewarm: true},
 	}
 	args.Reports = args.EstimateArgs.Reports
 
@@ -156,7 +166,8 @@ func TestWorkflow_Test_IsolatedGoCache(t *testing.T) {
 	cache := newRecordingBuildCache()
 
 	require.NoError(t, runWithBuildCache(t, cache, domain.GoCacheIsolated, false))
-	assert.Equal(t, []string{"prepare", "prewarm", "env", "mutant", "mutant", "mutant", "close"}, cache.calls)
+	assert.Equal(t, []string{"prepare", "env", "prewarm", "mutant", "mutant", "mutant", "close"}, cache.calls)
+	assert.Equal(t, []string{"GOCACHEPROG=x"}, cache.generated, "generating mutants (type checks) builds in the isolated cache too")
 	assert.Equal(t, 7, cache.sizeMB)
 	assert.Equal(t, []string{"GOCACHEPROG=x"}, cache.builds)
 	assert.Equal(t, []string{"/p", "/q"}, cache.dirs, "the packages with tests, once each")
@@ -231,4 +242,35 @@ func TestWorkflow_Test_GoCacheClosedOnInterrupt(t *testing.T) {
 	require.ErrorIs(t, runWithBuildCache(t, cache, domain.GoCacheIsolated, true), context.Canceled)
 	assert.Equal(t, "close", cache.calls[len(cache.calls)-1], "no cancellation reaches the trim")
 	assert.False(t, slices.Contains(cache.calls, "close on a canceled context"))
+}
+
+func TestWorkflow_Estimate_IsolatedGoCache(t *testing.T) {
+	cache := newRecordingBuildCache()
+
+	fs := domainmocks.NewMockSourceFSAdapter(t)
+	fs.EXPECT().Stream(mock.Anything, mock.Anything).Return(streamSources([]rpt.Source{
+		{Origin: &rpt.File{ShortPath: "p/a.go", FullPath: "/p/a.go", Hash: "a"}, Test: &rpt.File{ShortPath: "p/a_test.go", FullPath: "/p/a_test.go", Hash: "at"}},
+	}))
+
+	mutagen := domainmocks.NewMockMutagen(t)
+	mutagen.EXPECT().StreamMutations(mock.Anything, mock.Anything, mock.Anything, typeArgs(domain.DefaultMutations)...).
+		RunAndReturn(func(context.Context, rpt.Source, func(m.Mutation) error, ...mgen.Type) error {
+			cache.record("generate")
+			return nil
+		})
+
+	reporter := domainmocks.NewMockReporter(t)
+	reporter.EXPECT().StartEstimate(mock.Anything).Return(nil)
+	reporter.EXPECT().DisplayEstimation(mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	reporter.EXPECT().Wait(mock.Anything).Return()
+	reporter.EXPECT().Close(mock.Anything).Return()
+
+	wf := domain.NewWorkflow(fs, adapter.NewReportStore(), reporter, domainmocks.NewMockOrchestrator(t), mutagen, domain.WithBuildCache(cache, cache))
+	require.NoError(t, wf.Estimate(context.Background(), domain.EstimateArgs{
+		Paths:   []m.Path{"./..."},
+		Reports: m.Path(t.TempDir()),
+		GoCache: domain.GoCache{Mode: domain.GoCacheIsolated, SizeMB: 7, Prewarm: true},
+	}))
+
+	assert.Equal(t, []string{"prepare", "env", "generate", "close"}, cache.calls, "an estimate generates mutants in the isolated cache, without a prewarm")
 }

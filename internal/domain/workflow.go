@@ -48,6 +48,9 @@ type EstimateArgs struct {
 	// EnumBounds skips the comparison mutants that are equivalent when an
 	// enum's lowest and highest constants bound its type (mutagen.comparison.enum_bounds).
 	EnumBounds bool
+	// GoCache is where the go command caches its builds: the mutants', and
+	// those generating mutants needs (the type checks of their packages).
+	GoCache GoCache
 }
 
 // mutationOptions returns the options of the mutations args generates.
@@ -72,8 +75,6 @@ type TestArgs struct {
 	Thresholds Thresholds
 	// FailFast is when the run stops early; empty is FailFastOff.
 	FailFast FailFast
-	// GoCache is where the go command caches the builds of mutants.
-	GoCache GoCache
 }
 
 // ViewArgs contains the arguments for viewing mutation test reports.
@@ -161,7 +162,17 @@ func (w *workflow) Estimate(ctx context.Context, args EstimateArgs) error {
 		return err
 	}
 
+	_, closeCache, err := w.prepareBuildCache(ctx, args.GoCache)
+	if err != nil {
+		w.progress.Close(ctx)
+
+		return err
+	}
+
 	estimation, err := w.estimateMutations(ctx, args)
+
+	closeCache()
+
 	if err != nil {
 		w.progress.Close(ctx)
 		slog.Error("Failed to estimate mutations", "error", err)
@@ -188,6 +199,14 @@ func (w *workflow) Test(ctx context.Context, args TestArgs) error {
 		slog.Info("Starting mutation testing", "threads", args.Threads, "shardIndex", args.ShardIndex, "totalShardCount", args.TotalShardCount)
 		w.progress.DisplayConcurrencyInfo(ctx, args.Threads, args.ShardIndex, args.TotalShardCount)
 
+		// Before the sources are scanned: generating mutants builds too.
+		env, closeCache, err := w.prepareBuildCache(ctx, args.GoCache)
+		if err != nil {
+			return err
+		}
+
+		defer closeCache()
+
 		sources, sel, err := w.testSources(ctx, args.EstimateArgs)
 		if err != nil {
 			return err
@@ -200,12 +219,9 @@ func (w *workflow) Test(ctx context.Context, args TestArgs) error {
 			return err
 		}
 
-		closeCache, err := w.prepareBuildCache(ctx, args.GoCache, sources.changed)
-		if err != nil {
+		if err := w.prewarmBuildCache(ctx, args.GoCache, env, sources.changed); err != nil {
 			return err
 		}
-
-		defer closeCache()
 
 		return w.testAndFinalize(ctx, args, sel, reportsDir, sources)
 	})

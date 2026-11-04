@@ -62,7 +62,8 @@ func init() {
 	testAdapter = localTestAdapter
 	ociRegistry = adapter.NewORASRegistry()
 	orchestrator = domain.NewOrchestrator(sourceFSAdapter, testAdapter)
-	mutagen = domain.NewMutagen(goFileAdapter, sourceFSAdapter, adapter.NewUnifiedDiffer(), domain.WithExprTypes(adapter.NewExprTypes()))
+	exprTypes := adapter.NewExprTypes()
+	mutagen = domain.NewMutagen(goFileAdapter, sourceFSAdapter, adapter.NewUnifiedDiffer(), domain.WithExprTypes(exprTypes))
 	workflow = domain.NewWorkflow(
 		sourceFSAdapter,
 		reportStore,
@@ -70,7 +71,7 @@ func init() {
 		orchestrator,
 		mutagen,
 		domain.WithChangeDetector(adapter.NewGitChangeDetector()),
-		domain.WithBuildCache(gocache.New(), localTestAdapter),
+		domain.WithBuildCache(gocache.New(), adapter.BuildEnvs{localTestAdapter, exprTypes}),
 	)
 	publisher = domain.NewReportPublisher(ociRegistry)
 	releaseChecker = adapter.NewModuleProxyReleaseChecker()

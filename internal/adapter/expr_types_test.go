@@ -126,3 +126,24 @@ func TestExprTypes_UntypedNonStrings(t *testing.T) {
 		assert.False(t, strs[spanOf(t, src, expr)], "%s is not a string", expr)
 	}
 }
+
+func TestExprTypes_BuildsInTheBuildEnv(t *testing.T) {
+	shared, own := t.TempDir(), t.TempDir()
+	t.Setenv("GOCACHE", shared)
+
+	const src = "package p\n\nimport \"strconv\"\n\nfunc F(n int) string { return strconv.Itoa(n) }\n"
+
+	types := NewExprTypes()
+	types.SetBuildEnv([]string{"GOCACHE=" + own})
+
+	strs := types.StringExprs(context.Background(), filepath.Join(writeModule(t, map[string]string{"p.go": src}), "p.go"))
+	assert.True(t, strs[spanOf(t, src, "strconv.Itoa(n)")], "strconv's export data was built")
+
+	ownEntries, err := os.ReadDir(own)
+	require.NoError(t, err)
+	assert.NotEmpty(t, ownEntries, "go list built in the cache of the build env")
+
+	sharedEntries, err := os.ReadDir(shared)
+	require.NoError(t, err)
+	assert.Empty(t, sharedEntries, "and left the shared GOCACHE alone")
+}

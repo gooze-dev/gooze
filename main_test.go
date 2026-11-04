@@ -35,6 +35,7 @@ func TestRun_IsolatedGoCacheLeavesSharedCacheAlone(t *testing.T) {
 	before := cacheFiles(t, shared)
 
 	run(t, module, append(env, "GOOZE_RUN_GO_CACHE=isolated"), gooze, "run", "--no-update-check", "-o", filepath.Join(tmp, "reports"), "./...")
+	run(t, module, append(env, "GOOZE_RUN_GO_CACHE=isolated"), gooze, "run", "--estimate", "--no-update-check", "-o", filepath.Join(tmp, "reports"), "./...")
 
 	if after := cacheFiles(t, shared); !slices.Equal(before, after) {
 		t.Errorf("GOCACHE changed: %d files before, %d after", len(before), len(after))

@@ -41,36 +41,37 @@ func WithBuildCache(cache BuildCache, env BuildEnvironment) WorkflowOption {
 	}
 }
 
-// prepareBuildCache prepares the build cache for testing the mutants of
-// sources and returns the function that closes it.
-func (w *workflow) prepareBuildCache(ctx context.Context, settings GoCache, sources pkg.FileSpill[rpt.Source]) (func(), error) {
+// prepareBuildCache prepares the build cache of a run or an estimate and sets
+// the environment of the go commands that build to use it. It returns that
+// environment, empty when they use the shared cache, and the function that
+// closes the cache.
+func (w *workflow) prepareBuildCache(ctx context.Context, settings GoCache) ([]string, func(), error) {
 	if w.buildCache == nil || settings.Mode != GoCacheIsolated {
-		return func() {}, nil
+		return nil, func() {}, nil
 	}
 
 	env, err := w.buildCache.Prepare(ctx, settings.SizeMB)
 	if err != nil {
-		return nil, fmt.Errorf("prepare the go build cache: %w", err)
-	}
-
-	if settings.Prewarm && len(env) > 0 {
-		if err := w.prewarmBuildCache(ctx, sources); err != nil {
-			return nil, err
-		}
+		return nil, nil, fmt.Errorf("prepare the go build cache: %w", err)
 	}
 
 	w.buildEnv.SetBuildEnv(env)
 
-	return func() {
+	return env, func() {
 		if err := w.buildCache.Close(context.WithoutCancel(ctx)); err != nil {
 			slog.Warn("Failed to trim the go build cache", "error", err)
 		}
 	}, nil
 }
 
-// prewarmBuildCache prewarms the packages of sources that have tests. A failed
-// prewarm only slows the run down.
-func (w *workflow) prewarmBuildCache(ctx context.Context, sources pkg.FileSpill[rpt.Source]) error {
+// prewarmBuildCache prewarms the packages of sources that have tests when
+// settings ask for it and the cache is isolated (env is set). A failed prewarm
+// only slows the run down.
+func (w *workflow) prewarmBuildCache(ctx context.Context, settings GoCache, env []string, sources pkg.FileSpill[rpt.Source]) error {
+	if !settings.Prewarm || len(env) == 0 {
+		return nil
+	}
+
 	dirs, err := packageDirs(sources)
 	if err != nil {
 		return err

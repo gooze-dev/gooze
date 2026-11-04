@@ -91,11 +91,6 @@ func runTestArgs(estimateArgs domain.EstimateArgs, shardIndex, totalShards int, 
 		Workspace:       domain.WorkspaceMode(viper.GetString(config.KeyRunWorkspace)),
 		Thresholds:      minimums,
 		FailFast:        domain.FailFast(viper.GetString(config.KeyRunFailFast)),
-		GoCache: domain.GoCache{
-			Mode:    domain.GoCacheMode(viper.GetString(config.KeyRunGoCache)),
-			SizeMB:  configInt(config.KeyRunGoCacheSize),
-			Prewarm: viper.GetBool(config.KeyRunGoCachePrewarm),
-		},
 	}
 }
 
@@ -174,6 +169,11 @@ func runEstimateArgs(args []string) domain.EstimateArgs {
 		Mutagens: viper.GetStringSlice(config.KeyRunMutagens),
 
 		EnumBounds: viper.GetBool(config.KeyMutagenComparisonEnumBounds),
+		GoCache: domain.GoCache{
+			Mode:    domain.GoCacheMode(viper.GetString(config.KeyRunGoCache)),
+			SizeMB:  configInt(config.KeyRunGoCacheSize),
+			Prewarm: viper.GetBool(config.KeyRunGoCachePrewarm),
+		},
 	}
 }
 
