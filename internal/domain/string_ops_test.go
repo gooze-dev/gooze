@@ -54,7 +54,10 @@ func streamWithTypes(t *testing.T, src string, withTypes bool, mutationType mgen
 
 	var opts []domain.MutagenOption
 	if withTypes {
-		opts = append(opts, domain.WithExprTypes(adapter.NewExprTypes()))
+		// Its own cache: gocache's tests check that the shared one is left alone.
+		types := adapter.NewExprTypes()
+		types.SetBuildEnv([]string{"GOCACHE=" + t.TempDir()})
+		opts = append(opts, domain.WithExprTypes(types))
 	}
 
 	mg := domain.NewMutagen(adapter.NewLocalGoFileAdapter(), adapter.NewLocalSourceFSAdapter(), adapter.NewUnifiedDiffer(), opts...)

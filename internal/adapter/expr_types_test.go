@@ -13,6 +13,18 @@ import (
 	"gooze.dev/pkg/gooze/internal/domain"
 )
 
+// newTestExprTypes returns an ExprTypes that builds export data in a cache
+// of the test's own: in the shared GOCACHE, its builds would show up in
+// gocache's tests, which check that gooze leaves it alone.
+func newTestExprTypes(t *testing.T) *ExprTypes {
+	t.Helper()
+
+	types := NewExprTypes()
+	types.SetBuildEnv([]string{"GOCACHE=" + t.TempDir()})
+
+	return types
+}
+
 // writeModule writes files into a new module and returns its directory.
 func writeModule(t *testing.T, files map[string]string) string {
 	t.Helper()
@@ -69,7 +81,7 @@ func Label(l label, n int) label {
 
 	dir := writeModule(t, map[string]string{"a.go": a, "b.go": b, "a_test.go": test})
 
-	types := NewExprTypes()
+	types := newTestExprTypes(t)
 	strs := types.StringExprs(context.Background(), filepath.Join(dir, "a.go"))
 
 	for _, expr := range []string{"s + strconv.Itoa(n)", "strconv.Itoa(n)", "suffix", "l + label(strconv.Itoa(n+1))", "label(strconv.Itoa(n+1))"} {
@@ -89,11 +101,11 @@ func TestExprTypes_UnknownTypes(t *testing.T) {
 	broken := "package p\n\nfunc F(s string) string {\n\treturn s + missing()\n}\n"
 	dir := writeModule(t, map[string]string{"a.go": broken})
 
-	strs := NewExprTypes().StringExprs(context.Background(), filepath.Join(dir, "a.go"))
+	strs := newTestExprTypes(t).StringExprs(context.Background(), filepath.Join(dir, "a.go"))
 	assert.True(t, strs[spanIn(t, broken, "return s", "s")], "what type-checks is known")
 	assert.False(t, strs[spanOf(t, broken, "missing()")], "an expression that doesn't type-check is unknown")
 
-	assert.Empty(t, NewExprTypes().StringExprs(context.Background(), filepath.Join(t.TempDir(), "gone.go")), "no package")
+	assert.Empty(t, newTestExprTypes(t).StringExprs(context.Background(), filepath.Join(t.TempDir(), "gone.go")), "no package")
 }
 
 func TestExprTypes_OnlyThePackagesOwnBuiltFiles(t *testing.T) {
@@ -106,7 +118,7 @@ func TestExprTypes_OnlyThePackagesOwnBuiltFiles(t *testing.T) {
 	)
 
 	dir := writeModule(t, map[string]string{"a.go": a, "b.go": other, "c.go": last, "d.go": broken, "e.go": ignored})
-	types := NewExprTypes()
+	types := newTestExprTypes(t)
 
 	assert.True(t, types.StringExprs(context.Background(), filepath.Join(dir, "a.go"))[spanOf(t, a, `"a"`)])
 
@@ -118,7 +130,7 @@ func TestExprTypes_OnlyThePackagesOwnBuiltFiles(t *testing.T) {
 func TestExprTypes_UntypedNonStrings(t *testing.T) {
 	const src = "package p\n\nvar n = 1\n\nvar e error = nil\n\nvar r = 'r'\n\nvar s = \"s\"\n"
 
-	strs := NewExprTypes().StringExprs(context.Background(), filepath.Join(writeModule(t, map[string]string{"p.go": src}), "p.go"))
+	strs := newTestExprTypes(t).StringExprs(context.Background(), filepath.Join(writeModule(t, map[string]string{"p.go": src}), "p.go"))
 
 	assert.True(t, strs[spanOf(t, src, `"s"`)])
 
