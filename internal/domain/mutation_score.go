@@ -34,6 +34,8 @@ type MutationScore struct {
 	Planned     int
 	// FailFast is the policy that left mutants untested, if any.
 	FailFast FailFast
+	// Shard is a shard's -s value, e.g. "1/3", and "" for an unsharded run.
+	Shard string
 }
 
 // scoreReports counts the results of the reports whose source include

@@ -183,3 +183,21 @@ func TestWorkflow_Merge_ChecksThresholds(t *testing.T) {
 
 	require.NoError(t, wf.Merge(ctx, domain.MergeArgs{Reports: m.Path(dir), Thresholds: domain.Thresholds{Key: "threshold", Total: 33.33}}))
 }
+
+func TestWorkflow_Test_AShardNamesItselfInItsScore(t *testing.T) {
+	shards := func(index, total int) func(*domain.TestArgs) {
+		return func(args *domain.TestArgs) {
+			args.UseCache = false
+			args.ShardIndex, args.TotalShardCount = index, total
+		}
+	}
+
+	score, err := thresholdRun(t, shards(1, 3))
+	require.NoError(t, err)
+	assert.Equal(t, "1/3", score.Shard, "as given to -s")
+
+	for _, total := range []int{0, 1} {
+		score, _ = thresholdRun(t, shards(0, total))
+		assert.Empty(t, score.Shard, "an unsharded run (-s 0/%d)", total)
+	}
+}
