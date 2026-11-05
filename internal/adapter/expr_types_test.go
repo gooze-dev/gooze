@@ -214,3 +214,45 @@ func TestExprTypes_IndexedBasicKinds(t *testing.T) {
 		assert.False(t, indexed[spanIn(t, src, "_ = "+expr+"\n", expr)], "%s is not", expr)
 	}
 }
+
+func TestExprTypes_IntegerAndUnorderedExprs(t *testing.T) {
+	src := `package p
+
+type point struct{ x int }
+
+type id int
+
+func F[T comparable, N ~int | ~float64](a, b point, p *int, n id, f float64, c complex64, ok bool, t T, v N, e error) {
+	_ = n / 2
+	_ = f / 2
+	_ = a == b
+	_ = p != nil
+	_ = c == c
+	_ = ok == true
+	_ = t == t
+	_ = v < v
+	_ = e == nil
+	_ = "x" < "y"
+	_ = 1 == e
+}
+`
+	dir := writeModule(t, map[string]string{"a.go": src})
+	types := newTestExprTypes(t)
+	file := filepath.Join(dir, "a.go")
+
+	integers := types.IntegerExprs(context.Background(), file)
+	assert.True(t, integers[spanIn(t, src, "n / 2", "n")], "a defined integer type")
+	assert.True(t, integers[spanIn(t, src, "n / 2", "2")], "an untyped integer constant")
+	assert.False(t, integers[spanIn(t, src, "f / 2", "f")], "a float")
+
+	unordered := types.UnorderedExprs(context.Background(), file)
+	for _, expr := range []string{"a == b", "p != nil", "c == c", "ok == true", "t == t", "e == nil"} {
+		assert.True(t, unordered[spanIn(t, src, expr, strings.Fields(expr)[0])], "%s: its type has no order", expr)
+	}
+
+	assert.True(t, unordered[spanIn(t, src, "p != nil", "nil")], "untyped nil")
+
+	for _, expr := range []string{"n / 2", "f / 2", "v < v", `"x" < "y"`, "1 == e"} {
+		assert.False(t, unordered[spanIn(t, src, expr, strings.Fields(expr)[0])], "%s: ordered or ordered by its constraint", expr)
+	}
+}

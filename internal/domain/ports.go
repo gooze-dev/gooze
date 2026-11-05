@@ -85,6 +85,14 @@ type ExprTypes interface {
 	// gives keys in [0, len) over: slices, arrays, pointers to arrays,
 	// strings and integers. An expression whose type isn't known is left out.
 	IndexedExprs(ctx context.Context, file string) map[Span]bool
+	// IntegerExprs returns the spans of the expressions in file whose type
+	// is an integer. An expression whose type isn't known is left out.
+	IntegerExprs(ctx context.Context, file string) map[Span]bool
+	// UnorderedExprs returns the spans of the expressions in file whose type
+	// has no order, so they can't be operands of <, <=, > or >=: bools,
+	// complex numbers, nil, structs, pointers, interfaces and the like. An
+	// expression whose type isn't known is left out.
+	UnorderedExprs(ctx context.Context, file string) map[Span]bool
 }
 
 // GoFileAdapter encapsulates Go-specific parsing and scope-detection logic so

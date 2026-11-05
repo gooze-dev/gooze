@@ -125,13 +125,21 @@ func (mg *mutagen) StreamMutationsWith(ctx context.Context, source rpt.Source, o
 	}
 
 	funcs := buildFuncIndex(file, fset)
-	typed := typeInfo{strings: mg.stringExprs(ctx, source, mutationTypes), comparison: mg.comparisonFacts(ctx, source, mutationTypes)}
+	typed := typeInfo{
+		strings:    mg.stringExprs(ctx, source, mutationTypes),
+		integers:   mg.integerExprs(ctx, source, mutationTypes),
+		unordered:  mg.unorderedExprs(ctx, source, mutationTypes),
+		comparison: mg.comparisonFacts(ctx, source, mutationTypes),
+	}
+	checks := newBuildChecks(file, fset, typed)
 
 	for _, mutationType := range mutationTypes {
-		if err := walkMutations(mutationType, file, fset, content, source, ignore, funcs, typed, mg.differ, fn); err != nil {
+		if err := walkMutations(mutationType, file, fset, content, source, ignore, funcs, checks, mg.differ, fn); err != nil {
 			return err
 		}
 	}
+
+	checks.logSkipped(source.Origin.FullPath)
 
 	return nil
 }
@@ -288,7 +296,7 @@ func walkMutations(
 	source rpt.Source,
 	ignore ignoreIndex,
 	funcs funcIndex,
-	typed typeInfo,
+	checks *buildChecks,
 	differ Differ,
 	fn func(m.Mutation) error,
 ) error {
@@ -318,8 +326,8 @@ func walkMutations(
 			return descend
 		}
 
-		mutations := generateMutationsForNode(mutationType, n, fset, content, source, typed.comparison)
-		for _, mutation := range ignore.keepChanged(dropStringOps(mutationType, dropEquivalent(mutations, n, fset, partlyEquivalent), n, fset, content, typed.strings), fset, file, content, mutationType) {
+		mutations := generateMutationsForNode(mutationType, n, fset, content, source, checks.typed.comparison)
+		for _, mutation := range ignore.keepChanged(checks.keepBuilding(mutationType, dropEquivalent(mutations, n, fset, partlyEquivalent), n, fset, content), fset, file, content, mutationType) {
 			mutation.Line = lineForOffset(content, firstDifference(content, mutation.MutatedCode))
 			mutation.Funcs = funcs.at(mutation.Line)
 			mutation.DiffCode = differ.Diff(content, mutation.MutatedCode)

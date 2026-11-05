@@ -10,11 +10,11 @@ import (
 )
 
 // typeInfo is what type information tells the mutagens about a file: the
-// spans of its string expressions (see dropStringOps) and the comparison
-// mutagen's facts.
+// spans of its string expressions (see dropStringOps), of its integer and
+// unordered expressions (see buildChecks) and the comparison mutagen's facts.
 type typeInfo struct {
-	strings    map[Span]bool
-	comparison mutagens.Facts
+	strings, integers, unordered map[Span]bool
+	comparison                   mutagens.Facts
 }
 
 // comparisonFacts returns what type information tells the comparison
