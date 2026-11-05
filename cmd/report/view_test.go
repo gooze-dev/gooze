@@ -57,3 +57,42 @@ func TestReportView_ByLineUsageErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestReportView_SummaryTopAndSections(t *testing.T) {
+	t.Setenv("GITLAB_CI", "")
+
+	args := viewArgsFor(t, "--summary", "--top", "5")
+	assert.True(t, args.Summary)
+	assert.Equal(t, 5, args.Top)
+	assert.False(t, args.Sections)
+
+	plain := viewArgsFor(t)
+	assert.False(t, plain.Summary)
+	assert.Zero(t, plain.Top)
+
+	t.Setenv("GITLAB_CI", "true")
+	assert.True(t, viewArgsFor(t).Sections, "GitLab CI folds the long sections")
+}
+
+func TestReportView_SummaryUsageErrors(t *testing.T) {
+	for name, tt := range map[string]struct {
+		args []string
+		want string
+	}{
+		"all":      {args: []string{"--summary", "--all"}, want: "--summary shortens the per-file summary; --all lists every mutation"},
+		"by-line":  {args: []string{"--summary", "--by-line"}, want: "--summary lists no survivors to group by line"},
+		"sarif":    {args: []string{"--summary", "--format", "sarif"}, want: "--summary shortens the text summary; --format sarif writes none"},
+		"top":      {args: []string{"--top", "-1"}, want: "--top must be 0 (every file) or more, got -1"},
+		"top, all": {args: []string{"--top", "3", "--all"}, want: "--top limits the per-file summary; --all lists every mutation"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			stubShowPrefix(t, "", nil)
+
+			deps := Deps{Workflow: domainmocks.NewMockWorkflow(t), Publisher: domainmocks.NewMockReportPublisher(t), OutputKey: testOutputKey}
+			err := execReport(t, deps, append([]string{"view"}, tt.args...)...)
+
+			require.EqualError(t, err, tt.want)
+			assert.Equal(t, m.ExitUsage, codeOf(err))
+		})
+	}
+}

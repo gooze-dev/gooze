@@ -49,3 +49,26 @@ func TestMatchesPaths(t *testing.T) {
 	assert.True(t, matchesPaths(absoluteOnly, []m.Path{"/elsewhere/..."}))
 	assert.True(t, matchesPaths(rpt.Source{}, nil))
 }
+
+func TestTopFiles(t *testing.T) {
+	files := []FileSummary{
+		{Path: "a.go", Summary: rpt.Summary{Total: 9, Killed: 9}},
+		{Path: "b.go", Summary: rpt.Summary{Total: 9, Killed: 5, Survived: 2, NotCovered: 1, Timeout: 1}},
+		{Path: "c.go", Summary: rpt.Summary{Total: 9, Killed: 6, Survived: 3}},
+		{Path: "d.go", Summary: rpt.Summary{Total: 9, Killed: 6, Survived: 1, Error: 2}},
+		{Path: "e.go", Summary: rpt.Summary{Total: 9, Killed: 6, Survived: 3}},
+	}
+
+	assert.Equal(t, []string{"b.go", "c.go", "e.go"}, paths(topFiles(files, 3)), "most survivors first, then by path")
+	assert.Equal(t, []string{"b.go", "c.go", "e.go", "d.go", "a.go"}, paths(topFiles(files, 5)))
+	assert.Equal(t, []string{"a.go", "b.go", "c.go", "d.go", "e.go"}, paths(files), "the files keep their order")
+}
+
+func paths(files []FileSummary) []string {
+	out := make([]string, 0, len(files))
+	for _, file := range files {
+		out = append(out, file.Path)
+	}
+
+	return out
+}

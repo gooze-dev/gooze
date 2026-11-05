@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/olekukonko/tablewriter"
 	"github.com/olekukonko/tablewriter/tw"
@@ -20,45 +21,111 @@ const lineRemoved = "(line removed)"
 // one "path:line: status (mutagen): original -> mutated" line per survivor and
 // per mutation that did not build, and the mutation score. With SurvivorLines,
 // it lists the survivors once per line of a file instead.
+//
+// A brief summary leaves out the survivors and build errors. With Sections,
+// the table and the lists are collapsible CI log sections.
 func renderReportSummary(summary domain.ReportSummary) string {
 	var out strings.Builder
 
-	out.WriteString(renderFileSummaryTable(summary))
-	out.WriteString("\n")
+	section := logSection{out: &out, on: summary.Sections}
+	table := renderFileSummaryTable(summary)
 
-	writeSurvivors(&out, summary)
+	section.open("gooze_files", "Mutation scores per file", func() { out.WriteString(table) })
 
-	if len(summary.BuildErrors) > 0 {
-		fmt.Fprintf(&out, "\nBuild errors (%d):\n", len(summary.BuildErrors))
-
-		for _, buildError := range summary.BuildErrors {
-			out.WriteString(formatSurvivor(buildError))
-			out.WriteString("\n")
-		}
+	if summary.HiddenFiles > 0 {
+		fmt.Fprintf(&out, "The %d of %d files with the most survivors.\n", len(summary.Files), len(summary.Files)+summary.HiddenFiles)
 	}
 
-	fmt.Fprintf(&out, "\nMutation score: %s\n", formatMutationScore(summary.Score))
+	if summary.Brief {
+		return writeScore(&out, summary)
+	}
+
+	out.WriteString("\n")
+
+	writeSurvivors(&out, summary, section)
+
+	if len(summary.BuildErrors) > 0 {
+		out.WriteString("\n")
+		section.list("gooze_build_errors", fmt.Sprintf("Build errors (%d):", len(summary.BuildErrors)), func() {
+			for _, buildError := range summary.BuildErrors {
+				out.WriteString(formatSurvivor(buildError))
+				out.WriteString("\n")
+			}
+		})
+	}
+
+	return writeScore(&out, summary)
+}
+
+// writeScore ends a report summary with the mutation score and the hint, and
+// returns the whole summary.
+func writeScore(out *strings.Builder, summary domain.ReportSummary) string {
+	fmt.Fprintf(out, "\nMutation score: %s\n", formatMutationScore(summary.Score))
 
 	if summary.Hint != "" {
-		fmt.Fprintf(&out, "\n%s\n", summary.Hint)
+		fmt.Fprintf(out, "\n%s\n", summary.Hint)
 	}
 
 	return out.String()
 }
 
+// sectionClock returns the Unix time GitLab section markers carry.
+var sectionClock = func() int64 { return time.Now().Unix() }
+
+// logSection writes parts of a report as GitLab CI collapsible log sections
+// when on, and as they are otherwise.
+type logSection struct {
+	out *strings.Builder
+	on  bool
+}
+
+// open writes what body writes as an open section named name, whose title
+// shows only in the CI log.
+func (s logSection) open(name, title string, body func()) {
+	if !s.on {
+		body()
+
+		return
+	}
+
+	s.write(name, "", title, body)
+}
+
+// list writes a heading and the list body writes, as a section named name
+// that starts collapsed in the CI log.
+func (s logSection) list(name, heading string, body func()) {
+	if !s.on {
+		s.out.WriteString(heading + "\n")
+		body()
+
+		return
+	}
+
+	s.write(name, "[collapsed=true]", heading, body)
+}
+
+// write writes the section_start marker with options and title, what body
+// writes, and the section_end marker.
+func (s logSection) write(name, options, title string, body func()) {
+	now := sectionClock()
+	fmt.Fprintf(s.out, "\x1b[0Ksection_start:%d:%s%s\r\x1b[0K%s\n", now, name, options, title)
+	body()
+	fmt.Fprintf(s.out, "\x1b[0Ksection_end:%d:%s\r\x1b[0K\n", now, name)
+}
+
 // writeSurvivors lists the summary's survivors, once per line of a file when it
 // has them per line.
-func writeSurvivors(out *strings.Builder, summary domain.ReportSummary) {
+func writeSurvivors(out *strings.Builder, summary domain.ReportSummary, section logSection) {
 	switch lines := len(summary.SurvivorLines); {
 	case len(summary.Survivors) == 0:
 		out.WriteString("No survivors.\n")
 	case lines == 0:
-		fmt.Fprintf(out, "Survivors (%d):\n", len(summary.Survivors))
-
-		for _, survivor := range summary.Survivors {
-			out.WriteString(formatSurvivor(survivor))
-			out.WriteString("\n")
-		}
+		section.list("gooze_survivors", fmt.Sprintf("Survivors (%d):", len(summary.Survivors)), func() {
+			for _, survivor := range summary.Survivors {
+				out.WriteString(formatSurvivor(survivor))
+				out.WriteString("\n")
+			}
+		})
 	default:
 		noun := "lines"
 		// Equivalent: this case has at least one line, so <= 1 is == 1.
@@ -66,12 +133,12 @@ func writeSurvivors(out *strings.Builder, summary domain.ReportSummary) {
 			noun = "line"
 		}
 
-		fmt.Fprintf(out, "Survivors (%d on %d %s):\n", len(summary.Survivors), lines, noun)
-
-		for _, line := range summary.SurvivorLines {
-			out.WriteString(formatSurvivorLine(line))
-			out.WriteString("\n")
-		}
+		section.list("gooze_survivors", fmt.Sprintf("Survivors (%d on %d %s):", len(summary.Survivors), lines, noun), func() {
+			for _, line := range summary.SurvivorLines {
+				out.WriteString(formatSurvivorLine(line))
+				out.WriteString("\n")
+			}
+		})
 	}
 }
 
@@ -94,7 +161,7 @@ func renderFileSummaryTable(summary domain.ReportSummary) string {
 		}
 	}
 
-	table.Footer(summaryRow(fmt.Sprintf("TOTAL FILES %d", len(summary.Files)), summary.Score.Summary))
+	table.Footer(summaryRow(fmt.Sprintf("TOTAL FILES %d", len(summary.Files)+summary.HiddenFiles), summary.Score.Summary))
 
 	if err := table.Render(); err != nil {
 		return fmt.Sprintf("failed to render report summary: %v\n", err)

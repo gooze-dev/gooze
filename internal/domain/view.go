@@ -31,6 +31,15 @@ type ReportSummary struct {
 	// against the score. Sorted like Survivors.
 	BuildErrors []Survivor
 	Hint        string // what to do when the reports hold nothing, or ""
+	// Brief leaves the survivors and build errors out of the text summary:
+	// the per-file table and the score only.
+	Brief bool
+	// HiddenFiles counts the files a top-N view leaves out of Files; the
+	// score still counts them.
+	HiddenFiles int
+	// Sections wraps the long parts of the text summary in collapsible CI
+	// log sections (GitLab's section_start / section_end).
+	Sections bool
 }
 
 // FileSummary counts the mutation results of one source file.
@@ -79,9 +88,7 @@ func (w *workflow) View(ctx context.Context, args ViewArgs) error {
 		summary.Hint = unmergedReportsHint(args.Reports)
 	}
 
-	if args.ByLine {
-		summary.SurvivorLines = groupByLine(summary.Survivors)
-	}
+	shapeSummary(&summary, args)
 
 	if err := w.displayView(ctx, args, summary); err != nil {
 		return err
@@ -249,6 +256,35 @@ func summarizeView(reports pkg.FileSpill[m.Report], paths []m.Path) (ReportSumma
 	sortByLocation(summary.BuildErrors)
 
 	return summary, nil
+}
+
+// shapeSummary applies the view's output settings to summary: survivors per
+// line, a brief summary, the top files and collapsible sections.
+func shapeSummary(summary *ReportSummary, args ViewArgs) {
+	if args.ByLine {
+		summary.SurvivorLines = groupByLine(summary.Survivors)
+	}
+
+	summary.Brief, summary.Sections = args.Summary, args.Sections
+	if args.Top > 0 && args.Top < len(summary.Files) {
+		summary.HiddenFiles = len(summary.Files) - args.Top
+		summary.Files = topFiles(summary.Files, args.Top)
+	}
+}
+
+// topFiles returns the n files of files with the most mutations that count
+// against the score (survived, not covered, timed out or skipped), ties by
+// path. files keeps its order.
+func topFiles(files []FileSummary, n int) []FileSummary {
+	against := func(file FileSummary) int {
+		return file.Survived + file.NotCovered + file.Timeout + file.Skipped
+	}
+
+	ranked := slices.SortedStableFunc(slices.Values(files), func(a, b FileSummary) int {
+		return cmp.Or(cmp.Compare(against(b), against(a)), cmp.Compare(a.Path, b.Path))
+	})
+
+	return ranked[:n]
 }
 
 func sortByLocation(survivors []Survivor) {
