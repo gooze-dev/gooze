@@ -73,3 +73,15 @@ func paths(files []FileSummary) []string {
 
 	return out
 }
+
+func TestShapeSummary_TopOfEveryFileKeepsThePathOrder(t *testing.T) {
+	summary := ReportSummary{Files: []FileSummary{
+		{Path: "a.go", Summary: rpt.Summary{Total: 1, Killed: 1}},
+		{Path: "b.go", Summary: rpt.Summary{Total: 3, Survived: 3}},
+	}}
+
+	shapeSummary(&summary, ViewArgs{Top: 2})
+
+	assert.Equal(t, []string{"a.go", "b.go"}, paths(summary.Files))
+	assert.Zero(t, summary.HiddenFiles)
+}
