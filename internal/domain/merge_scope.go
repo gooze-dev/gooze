@@ -23,10 +23,10 @@ func (w *workflow) mergeScopes(ctx context.Context, args MergeArgs) error {
 		return err
 	}
 
-	// Auto, which gates on both scopes' own thresholds, gates on the changed
-	// lines here.
+	// A gate that checks the changed lines (auto or diff) gates only on them
+	// here: auto doesn't gate on the whole project too.
 	gate := args.View.Gate
-	if gate.checks(true) && gate.checks(false) {
+	if gate.checks(true) {
 		gate = GateDiff
 	}
 
