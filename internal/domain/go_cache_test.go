@@ -3,6 +3,8 @@ package domain_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os/exec"
 	"slices"
 	"sync"
 	"testing"
@@ -213,6 +215,14 @@ func TestWorkflow_Test_GoCachePrepareFails(t *testing.T) {
 	err := runWithBuildCache(t, cache, domain.GoCacheIsolated, false)
 	require.ErrorIs(t, err, cache.prepareErr)
 	assert.Equal(t, []string{"flags", "prepare"}, cache.calls)
+}
+
+func TestWorkflow_Test_GoNotInstalled(t *testing.T) {
+	cache := &recordingBuildCache{prepareErr: fmt.Errorf("%w: %w", domain.ErrGoNotInstalled, exec.ErrNotFound)}
+
+	err := runWithBuildCache(t, cache, domain.GoCacheIsolated, false)
+	require.ErrorIs(t, err, domain.ErrGoNotInstalled)
+	assert.Equal(t, cache.prepareErr.Error(), err.Error(), "no build cache prefix")
 }
 
 func TestWorkflow_Test_GoCachePrewarmFailureOnlyWarns(t *testing.T) {

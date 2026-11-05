@@ -35,6 +35,7 @@ func TestExitCode(t *testing.T) {
 		"no git":                  {ctx: context.Background(), err: fmt.Errorf("diff: %w", domain.ErrGitNotInstalled), want: m.ExitGit},
 		"not a repository":        {ctx: context.Background(), err: fmt.Errorf("diff: %w", domain.ErrNotGitRepository), want: m.ExitGit},
 		"unknown ref":             {ctx: context.Background(), err: fmt.Errorf("diff: %w", domain.ErrUnknownRef), want: m.ExitGit},
+		"no go":                   {ctx: context.Background(), err: fmt.Errorf("run: %w", domain.ErrGoNotInstalled), want: m.ExitUsage},
 	} {
 		t.Run(name, func(t *testing.T) {
 			assert.Equal(t, tc.want, exitCode(tc.ctx, tc.err, tc.beforeRun))

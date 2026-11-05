@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"path/filepath"
@@ -10,6 +11,9 @@ import (
 	pkg "gooze.dev/pkg/gooze/pkg"
 	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
+
+// ErrGoNotInstalled means the go command was not found on PATH.
+var ErrGoNotInstalled = errors.New("gooze needs go, but go was not found on PATH")
 
 // GoCacheMode is where the go command caches the builds of mutants.
 type GoCacheMode string
@@ -51,6 +55,10 @@ func (w *workflow) prepareBuildCache(ctx context.Context, settings GoCache) ([]s
 	}
 
 	env, err := w.buildCache.Prepare(ctx, settings.SizeMB)
+	if errors.Is(err, ErrGoNotInstalled) {
+		return nil, nil, err
+	}
+
 	if err != nil {
 		return nil, nil, fmt.Errorf("prepare the go build cache: %w", err)
 	}

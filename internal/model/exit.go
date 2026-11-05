@@ -10,7 +10,7 @@ const (
 	ExitOK ExitCode = 0
 	// ExitFailure: an unexpected failure, such as an I/O or report error.
 	ExitFailure ExitCode = 1
-	// ExitUsage: a bad flag, argument or config value.
+	// ExitUsage: a bad flag, argument or config value, or no go command.
 	ExitUsage ExitCode = 2
 	// ExitBelowThreshold: the run completed, but its score is below a
 	// threshold.

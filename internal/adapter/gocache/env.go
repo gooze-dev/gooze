@@ -3,11 +3,14 @@ package gocache
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"gooze.dev/pkg/gooze/internal/domain"
 )
 
 // minGoMinor is the first Go 1.x release with GOCACHEPROG.
@@ -21,6 +24,10 @@ type goEnv struct {
 
 func readGoEnv(ctx context.Context) (goEnv, error) {
 	out, err := exec.CommandContext(ctx, "go", "env", "-json", "GOVERSION", "GOCACHE", "GOCACHEPROG").Output()
+	if errors.Is(err, exec.ErrNotFound) {
+		return goEnv{}, fmt.Errorf("%w: %w", domain.ErrGoNotInstalled, err)
+	}
+
 	if err != nil {
 		return goEnv{}, fmt.Errorf("go env: %w", err)
 	}
