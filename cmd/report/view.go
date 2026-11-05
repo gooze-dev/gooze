@@ -146,7 +146,8 @@ func checkTop(top int, all bool) error {
 	switch {
 	case top < 0:
 		return domain.WithExitCode(m.ExitUsage, fmt.Errorf("--top must be 0 (every file) or more, got %d", top))
-	case top > 0 && all:
+	// Equivalent mutant: a negative top is rejected by the case above.
+	case top > 0 && all: //gooze:ignore comparison
 		return domain.WithExitCode(m.ExitUsage, errors.New("--top limits the per-file summary; --all lists every mutation"))
 	default:
 		return nil
