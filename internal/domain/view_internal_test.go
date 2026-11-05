@@ -57,11 +57,12 @@ func TestTopFiles(t *testing.T) {
 		{Path: "c.go", Summary: rpt.Summary{Total: 9, Killed: 6, Survived: 3}},
 		{Path: "d.go", Summary: rpt.Summary{Total: 9, Killed: 6, Survived: 1, Error: 2}},
 		{Path: "e.go", Summary: rpt.Summary{Total: 9, Killed: 6, Survived: 3}},
+		{Path: "f.go", Summary: rpt.Summary{Total: 9, Killed: 4, Skipped: 5}},
 	}
 
-	assert.Equal(t, []string{"b.go", "c.go", "e.go"}, paths(topFiles(files, 3)), "most survivors first, then by path")
-	assert.Equal(t, []string{"b.go", "c.go", "e.go", "d.go", "a.go"}, paths(topFiles(files, 5)))
-	assert.Equal(t, []string{"a.go", "b.go", "c.go", "d.go", "e.go"}, paths(files), "the files keep their order")
+	assert.Equal(t, []string{"f.go", "b.go", "c.go", "e.go"}, paths(topFiles(files, 4)), "most mutants against the score first, then by path")
+	assert.Equal(t, []string{"f.go", "b.go", "c.go", "e.go", "d.go", "a.go"}, paths(topFiles(files, 6)))
+	assert.Equal(t, []string{"a.go", "b.go", "c.go", "d.go", "e.go", "f.go"}, paths(files), "the files keep their order")
 }
 
 func paths(files []FileSummary) []string {
