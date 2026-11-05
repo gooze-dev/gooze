@@ -79,22 +79,23 @@ func (r *ORASRegistry) Push(ctx context.Context, ref string, dir m.Path, opts do
 }
 
 // Pull fetches the artifact at ref and extracts its reports into dir.
-func (r *ORASRegistry) Pull(ctx context.Context, ref string, dir m.Path, opts domain.RegistryOptions) error {
+func (r *ORASRegistry) Pull(ctx context.Context, ref string, dir m.Path, opts domain.RegistryOptions) (string, error) {
 	parsed, err := parseReference(ref)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	repo, err := r.repository(parsed, opts)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	if err := pullFrom(ctx, repo, parsed.Reference, string(dir)); err != nil {
-		return fmt.Errorf("pull from %q: %w", ref, err)
+	digest, err := pullFrom(ctx, repo, parsed.Reference, string(dir))
+	if err != nil {
+		return "", fmt.Errorf("pull from %q: %w", ref, err)
 	}
 
-	return nil
+	return digest, nil
 }
 
 // pushTo packages dir and copies it to dst under tag.
@@ -129,50 +130,80 @@ func pushTo(ctx context.Context, dir string, dst oras.Target, tag string, compat
 	return nil
 }
 
-// pullFrom copies the artifact at reference from src and extracts its reports
-// layer into dir. Both packagings are read: gooze's media types and compat.
-func pullFrom(ctx context.Context, src oras.ReadOnlyTarget, reference, dir string) error {
+// pullFrom copies the artifact at reference from src, replaces the stored
+// reports in dir with its reports layer and returns the manifest digest. Both
+// packagings are read: gooze's media types and compat.
+func pullFrom(ctx context.Context, src oras.ReadOnlyTarget, reference, dir string) (string, error) {
 	staging, err := os.MkdirTemp("", "gooze-oci-pull-*")
 	if err != nil {
-		return fmt.Errorf("create staging dir: %w", err)
+		return "", fmt.Errorf("create staging dir: %w", err)
 	}
 
 	defer func() { _ = os.RemoveAll(staging) }()
 
 	store, err := file.New(filepath.Join(staging, "store"))
 	if err != nil {
-		return fmt.Errorf("create file store: %w", err)
+		return "", fmt.Errorf("create file store: %w", err)
 	}
 
 	defer func() { _ = store.Close() }()
 
 	root, err := oras.Copy(ctx, src, reference, store, reference, oras.DefaultCopyOptions)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	raw, err := content.FetchAll(ctx, store, root)
 	if err != nil {
-		return fmt.Errorf("read manifest: %w", err)
+		return "", fmt.Errorf("read manifest: %w", err)
 	}
 
 	var manifest ocispec.Manifest
 	if err := json.Unmarshal(raw, &manifest); err != nil {
-		return fmt.Errorf("read manifest: %w", err)
+		return "", fmt.Errorf("read manifest: %w", err)
 	}
 
 	layer, ok := reportsLayer(manifest.Layers)
 	if !ok {
-		return fmt.Errorf("not a gooze reports artifact (no %s, %s or %s layer)", reportsBlobMediaType, compatBlobMediaType, reportsVersionAnnotation)
+		return "", fmt.Errorf("not a gooze reports artifact (no %s, %s or %s layer)", reportsBlobMediaType, compatBlobMediaType, reportsVersionAnnotation)
 	}
 
 	archivePath := filepath.Join(staging, reportsBlobName)
 	if err := saveBlob(ctx, store, layer, archivePath); err != nil {
-		return err
+		return "", err
+	}
+
+	if err := removeStoredReports(dir); err != nil {
+		return "", err
 	}
 
 	if err := unTarGz(archivePath, dir); err != nil {
-		return fmt.Errorf("unpack reports: %w", err)
+		return "", fmt.Errorf("unpack reports: %w", err)
+	}
+
+	return root.Digest.String(), nil
+}
+
+// removeStoredReports empties dir but for the shard dirs and the narrowed
+// run's dir, which wait for gooze report merge. A missing dir is empty.
+func removeStoredReports(dir string) error {
+	entries, err := os.ReadDir(dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+
+	if err != nil {
+		return fmt.Errorf("read reports dir: %w", err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() && (entry.Name() == domain.RunDirName || strings.HasPrefix(entry.Name(), domain.ShardDirPrefix)) {
+			continue
+		}
+
+		if err := os.RemoveAll(filepath.Join(dir, entry.Name())); err != nil {
+			return fmt.Errorf("remove stored reports: %w", err)
+		}
 	}
 
 	return nil

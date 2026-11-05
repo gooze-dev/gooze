@@ -12,13 +12,15 @@ import (
 	domain "gooze.dev/pkg/gooze/internal/domain"
 	domainmocks "gooze.dev/pkg/gooze/internal/domain/mocks"
 	m "gooze.dev/pkg/gooze/internal/model"
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 func TestReportPublisher_Push(t *testing.T) {
 	reg := domainmocks.NewMockOCIRegistry(t)
 	reg.On("Push", mock.Anything, "ref:tag", m.Path("/r"), domain.RegistryOptions{PlainHTTP: true}).Return(nil)
 
-	pub := domain.NewReportPublisher(reg)
+	pub := domain.NewReportPublisher(reg, domainmocks.NewMockReportStore(t))
 
 	require.NoError(t, pub.Push(context.Background(), domain.PushArgs{Reports: "/r", Ref: "ref:tag", PlainHTTP: true}))
 	reg.AssertExpectations(t)
@@ -26,22 +28,34 @@ func TestReportPublisher_Push(t *testing.T) {
 
 func TestReportPublisher_Pull(t *testing.T) {
 	reg := domainmocks.NewMockOCIRegistry(t)
-	reg.On("Pull", mock.Anything, "ref:tag", m.Path("/r"), domain.RegistryOptions{Insecure: true}).Return(nil)
+	reg.On("Pull", mock.Anything, "ref:tag", m.Path("/r"), domain.RegistryOptions{Insecure: true}).Return("sha256:abc", nil)
 
-	pub := domain.NewReportPublisher(reg)
+	source := rpt.Source{Origin: &rpt.File{ShortPath: "a.go"}}
+	store := domainmocks.NewMockReportStore(t)
+	store.EXPECT().LoadSpillReports(mock.Anything, m.Path("/r")).Return(spillOf(t,
+		m.Report{Source: source, Result: m.Result{mgen.Arithmetic: {{MutationID: "1", Status: rpt.Killed}}}},
+		m.Report{Source: source, Result: m.Result{mgen.Comparison: {{MutationID: "2", Status: rpt.Survived}}}},
+	), nil)
 
-	require.NoError(t, pub.Pull(context.Background(), domain.PullArgs{Reports: "/r", Ref: "ref:tag", Insecure: true}))
-	reg.AssertExpectations(t)
+	pub := domain.NewReportPublisher(reg, store)
+
+	got, err := pub.Pull(context.Background(), domain.PullArgs{Reports: "/r", Ref: "ref:tag", Insecure: true})
+	require.NoError(t, err)
+	assert.Equal(t, "sha256:abc", got.Digest)
+	assert.Equal(t, uint64(2), got.Reports)
+	assert.Equal(t, 1, got.Score.Killed)
+	assert.Equal(t, 1, got.Score.Survived)
 }
 
 func TestReportPublisher_Validation(t *testing.T) {
-	pub := domain.NewReportPublisher(domainmocks.NewMockOCIRegistry(t))
+	pub := domain.NewReportPublisher(domainmocks.NewMockOCIRegistry(t), domainmocks.NewMockReportStore(t))
 
 	err := pub.Push(context.Background(), domain.PushArgs{Reports: "/r"}) // missing ref
 	require.Error(t, err)
 	assert.Equal(t, m.ExitUsage, exitCodeOf(err))
-	require.Error(t, pub.Push(context.Background(), domain.PushArgs{Ref: "x"}))      // missing reports
-	require.Error(t, pub.Pull(context.Background(), domain.PullArgs{Reports: "/r"})) // missing ref
+	require.Error(t, pub.Push(context.Background(), domain.PushArgs{Ref: "x"})) // missing reports
+	_, err = pub.Pull(context.Background(), domain.PullArgs{Reports: "/r"})     // missing ref
+	require.Error(t, err)
 }
 
 func TestReportPublisher_PropagatesError(t *testing.T) {
@@ -49,14 +63,15 @@ func TestReportPublisher_PropagatesError(t *testing.T) {
 	boom := errors.New("boom")
 	reg.On("Push", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(boom)
 
-	pub := domain.NewReportPublisher(reg)
+	pub := domain.NewReportPublisher(reg, domainmocks.NewMockReportStore(t))
 
 	err := pub.Push(context.Background(), domain.PushArgs{Reports: "/r", Ref: "x"})
 	require.ErrorIs(t, err, boom)
 	assert.Equal(t, m.ExitRegistry, exitCodeOf(err))
 
-	reg.On("Pull", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(boom)
-	assert.Equal(t, m.ExitRegistry, exitCodeOf(pub.Pull(context.Background(), domain.PullArgs{Reports: "/r", Ref: "x"})))
+	reg.On("Pull", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return("", boom)
+	_, err = pub.Pull(context.Background(), domain.PullArgs{Reports: "/r", Ref: "x"})
+	assert.Equal(t, m.ExitRegistry, exitCodeOf(err))
 }
 
 func TestReportPublisher_PushOCICompat(t *testing.T) {
@@ -90,7 +105,7 @@ func TestReportPublisher_PushOCICompat(t *testing.T) {
 			reg := domainmocks.NewMockOCIRegistry(t)
 			reg.On("Push", mock.Anything, tt.ref, m.Path("/r"), domain.RegistryOptions{OCICompat: tt.want}).Return(nil)
 
-			pub := domain.NewReportPublisher(reg)
+			pub := domain.NewReportPublisher(reg, domainmocks.NewMockReportStore(t))
 
 			require.NoError(t, pub.Push(context.Background(), domain.PushArgs{
 				Reports: "/r", Ref: tt.ref, OCICompat: tt.force, OCICompatHosts: tt.hosts,

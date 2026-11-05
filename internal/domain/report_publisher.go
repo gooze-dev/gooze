@@ -36,19 +36,28 @@ type PullArgs struct {
 	Insecure  bool
 }
 
+// PullResult describes the reports a pull stored.
+type PullResult struct {
+	Digest  string // the artifact's manifest digest
+	Reports uint64 // report files
+	Score   MutationScore
+}
+
 // ReportPublisher pushes and pulls mutation reports to/from an OCI registry.
 type ReportPublisher interface {
 	Push(ctx context.Context, args PushArgs) error
-	Pull(ctx context.Context, args PullArgs) error
+	Pull(ctx context.Context, args PullArgs) (PullResult, error)
 }
 
 type reportPublisher struct {
 	registry OCIRegistry
+	store    ReportStore
 }
 
-// NewReportPublisher creates a ReportPublisher backed by the given registry.
-func NewReportPublisher(registry OCIRegistry) ReportPublisher {
-	return &reportPublisher{registry: registry}
+// NewReportPublisher creates a ReportPublisher backed by registry; store
+// scores the pulled reports.
+func NewReportPublisher(registry OCIRegistry, store ReportStore) ReportPublisher {
+	return &reportPublisher{registry: registry, store: store}
 }
 
 func (p *reportPublisher) Push(ctx context.Context, args PushArgs) error {
@@ -68,8 +77,35 @@ func (p *reportPublisher) Push(ctx context.Context, args PushArgs) error {
 	return transfer(ctx, "push", args.Ref, args.Reports, opts, p.registry.Push)
 }
 
-func (p *reportPublisher) Pull(ctx context.Context, args PullArgs) error {
-	return transfer(ctx, "pull", args.Ref, args.Reports, RegistryOptions{PlainHTTP: args.PlainHTTP, Insecure: args.Insecure}, p.registry.Pull)
+func (p *reportPublisher) Pull(ctx context.Context, args PullArgs) (PullResult, error) {
+	var result PullResult
+
+	pull := func(ctx context.Context, ref string, dir m.Path, opts RegistryOptions) error {
+		digest, err := p.registry.Pull(ctx, ref, dir, opts)
+		result.Digest = digest
+
+		return err
+	}
+
+	if err := transfer(ctx, "pull", args.Ref, args.Reports, RegistryOptions{PlainHTTP: args.PlainHTTP, Insecure: args.Insecure}, pull); err != nil {
+		return PullResult{}, err
+	}
+
+	reports, err := p.store.LoadSpillReports(ctx, args.Reports)
+	if err != nil {
+		return PullResult{}, fmt.Errorf("load the pulled reports: %w", err)
+	}
+
+	defer closeSpill("pulled reports", reports)
+
+	result.Reports = reports.Len()
+
+	result.Score, err = scoreReports(reports, nil)
+	if err != nil {
+		return PullResult{}, fmt.Errorf("score the pulled reports: %w", err)
+	}
+
+	return result, nil
 }
 
 // transfer pushes or pulls (op) the reports at ref with move, the registry's

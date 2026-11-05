@@ -152,7 +152,10 @@ type RegistryOptions struct {
 // OCIRegistry stores and retrieves a reports directory as an OCI artifact.
 type OCIRegistry interface {
 	Push(ctx context.Context, ref string, dir m.Path, opts RegistryOptions) error
-	Pull(ctx context.Context, ref string, dir m.Path, opts RegistryOptions) error
+	// Pull replaces the stored reports in dir with the artifact at ref and
+	// returns its manifest digest. Shard dirs and a narrowed run's dir in dir
+	// are kept: they wait for gooze report merge.
+	Pull(ctx context.Context, ref string, dir m.Path, opts RegistryOptions) (digest string, err error)
 }
 
 // Differ renders a human-readable diff between the original and mutated source.

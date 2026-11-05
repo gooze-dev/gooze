@@ -27,21 +27,31 @@ func (_m *MockOCIRegistry) EXPECT() *MockOCIRegistry_Expecter {
 }
 
 // Pull provides a mock function with given fields: ctx, ref, dir, opts
-func (_m *MockOCIRegistry) Pull(ctx context.Context, ref string, dir model.Path, opts domain.RegistryOptions) error {
+func (_m *MockOCIRegistry) Pull(ctx context.Context, ref string, dir model.Path, opts domain.RegistryOptions) (string, error) {
 	ret := _m.Called(ctx, ref, dir, opts)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Pull")
 	}
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string, model.Path, domain.RegistryOptions) error); ok {
+	var r0 string
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, model.Path, domain.RegistryOptions) (string, error)); ok {
+		return rf(ctx, ref, dir, opts)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string, model.Path, domain.RegistryOptions) string); ok {
 		r0 = rf(ctx, ref, dir, opts)
 	} else {
-		r0 = ret.Error(0)
+		r0 = ret.Get(0).(string)
 	}
 
-	return r0
+	if rf, ok := ret.Get(1).(func(context.Context, string, model.Path, domain.RegistryOptions) error); ok {
+		r1 = rf(ctx, ref, dir, opts)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // MockOCIRegistry_Pull_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Pull'
@@ -65,12 +75,12 @@ func (_c *MockOCIRegistry_Pull_Call) Run(run func(ctx context.Context, ref strin
 	return _c
 }
 
-func (_c *MockOCIRegistry_Pull_Call) Return(_a0 error) *MockOCIRegistry_Pull_Call {
-	_c.Call.Return(_a0)
+func (_c *MockOCIRegistry_Pull_Call) Return(digest string, err error) *MockOCIRegistry_Pull_Call {
+	_c.Call.Return(digest, err)
 	return _c
 }
 
-func (_c *MockOCIRegistry_Pull_Call) RunAndReturn(run func(context.Context, string, model.Path, domain.RegistryOptions) error) *MockOCIRegistry_Pull_Call {
+func (_c *MockOCIRegistry_Pull_Call) RunAndReturn(run func(context.Context, string, model.Path, domain.RegistryOptions) (string, error)) *MockOCIRegistry_Pull_Call {
 	_c.Call.Return(run)
 	return _c
 }

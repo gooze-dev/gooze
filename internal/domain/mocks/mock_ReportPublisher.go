@@ -25,21 +25,31 @@ func (_m *MockReportPublisher) EXPECT() *MockReportPublisher_Expecter {
 }
 
 // Pull provides a mock function with given fields: ctx, args
-func (_m *MockReportPublisher) Pull(ctx context.Context, args domain.PullArgs) error {
+func (_m *MockReportPublisher) Pull(ctx context.Context, args domain.PullArgs) (domain.PullResult, error) {
 	ret := _m.Called(ctx, args)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Pull")
 	}
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, domain.PullArgs) error); ok {
+	var r0 domain.PullResult
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, domain.PullArgs) (domain.PullResult, error)); ok {
+		return rf(ctx, args)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, domain.PullArgs) domain.PullResult); ok {
 		r0 = rf(ctx, args)
 	} else {
-		r0 = ret.Error(0)
+		r0 = ret.Get(0).(domain.PullResult)
 	}
 
-	return r0
+	if rf, ok := ret.Get(1).(func(context.Context, domain.PullArgs) error); ok {
+		r1 = rf(ctx, args)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // MockReportPublisher_Pull_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Pull'
@@ -61,12 +71,12 @@ func (_c *MockReportPublisher_Pull_Call) Run(run func(ctx context.Context, args 
 	return _c
 }
 
-func (_c *MockReportPublisher_Pull_Call) Return(_a0 error) *MockReportPublisher_Pull_Call {
-	_c.Call.Return(_a0)
+func (_c *MockReportPublisher_Pull_Call) Return(_a0 domain.PullResult, _a1 error) *MockReportPublisher_Pull_Call {
+	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *MockReportPublisher_Pull_Call) RunAndReturn(run func(context.Context, domain.PullArgs) error) *MockReportPublisher_Pull_Call {
+func (_c *MockReportPublisher_Pull_Call) RunAndReturn(run func(context.Context, domain.PullArgs) (domain.PullResult, error)) *MockReportPublisher_Pull_Call {
 	_c.Call.Return(run)
 	return _c
 }
