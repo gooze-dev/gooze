@@ -25,12 +25,12 @@ type baseFile struct {
 }
 
 // mergeRunReports folds a narrowed run's reports (base/run and its shard
-// dirs) into base, then removes them. For a file unchanged since the main
+// dirs) into base, then removes them unless keep. For a file unchanged since the main
 // reports, the run's results replace the matching mutations and the rest are
 // kept, so a complete file stays complete. For a changed or new file, the
 // run's results replace the file's and keep their partial scope, so the next
 // full run re-tests it. Without a run directory it does nothing.
-func (w *workflow) mergeRunReports(ctx context.Context, base m.Path) error {
+func (w *workflow) mergeRunReports(ctx context.Context, base m.Path, keep bool) error {
 	runDir := filepath.Join(string(base), RunDirName)
 
 	shardDirs, err := findShardDirs(runDir)
@@ -51,6 +51,10 @@ func (w *workflow) mergeRunReports(ctx context.Context, base m.Path) error {
 
 	if err := w.overlayRunReports(ctx, base, runReports); err != nil {
 		return err
+	}
+
+	if keep {
+		return nil
 	}
 
 	if err := os.RemoveAll(runDir); err != nil {
