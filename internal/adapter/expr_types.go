@@ -35,7 +35,7 @@ type ExprTypes struct {
 
 // fileExprs are the spans of a file's expressions by kind.
 type fileExprs struct {
-	strings, indexed map[domain.Span]bool
+	strings, indexed, integers, unordered map[domain.Span]bool
 }
 
 // NewExprTypes returns an ExprTypes with nothing checked yet.
@@ -101,6 +101,16 @@ func (e *ExprTypes) IndexedExprs(ctx context.Context, file string) map[domain.Sp
 	return e.file(ctx, file).indexed
 }
 
+// IntegerExprs implements domain.ExprTypes.
+func (e *ExprTypes) IntegerExprs(ctx context.Context, file string) map[domain.Span]bool {
+	return e.file(ctx, file).integers
+}
+
+// UnorderedExprs implements domain.ExprTypes.
+func (e *ExprTypes) UnorderedExprs(ctx context.Context, file string) map[domain.Span]bool {
+	return e.file(ctx, file).unordered
+}
+
 // file returns the expressions of file, type-checking its package the first
 // time one of its files is asked for.
 func (e *ExprTypes) file(ctx context.Context, file string) fileExprs {
@@ -145,16 +155,20 @@ func (e *ExprTypes) check(ctx context.Context, dir string) map[string]fileExprs 
 
 		f, ok := exprs[start.Filename]
 		if !ok {
-			f = fileExprs{strings: map[domain.Span]bool{}, indexed: map[domain.Span]bool{}}
+			f = fileExprs{
+				strings: map[domain.Span]bool{}, indexed: map[domain.Span]bool{},
+				integers: map[domain.Span]bool{}, unordered: map[domain.Span]bool{},
+			}
 			exprs[start.Filename] = f
 		}
 
-		if isString(tv.Type) {
-			f.strings[span] = true
-		}
-
-		if isIndexed(tv.Type) {
-			f.indexed[span] = true
+		for _, kind := range []struct {
+			spans map[domain.Span]bool
+			is    func(types.Type) bool
+		}{{f.strings, isString}, {f.indexed, isIndexed}, {f.integers, isInteger}, {f.unordered, isUnordered}} {
+			if kind.is(tv.Type) {
+				kind.spans[span] = true
+			}
 		}
 	}
 
@@ -206,6 +220,48 @@ func isString(t types.Type) bool {
 	basic, ok := t.Underlying().(*types.Basic)
 
 	return ok && (basic.Kind() == types.String || basic.Kind() == types.UntypedString)
+}
+
+// isInteger reports whether t is an integer type: a typed or untyped integer
+// or rune, or a defined type whose underlying type is one.
+func isInteger(t types.Type) bool {
+	basic, ok := t.Underlying().(*types.Basic)
+
+	// Equivalent mutant: the flags are never negative.
+	return ok && basic.Info()&types.IsInteger != 0 //gooze:ignore comparison
+}
+
+// isUnordered reports whether a value of type t can't be an operand of <, <=,
+// > or >=: a bool, a complex number, untyped nil, or a type that isn't basic,
+// such as a struct, pointer or interface. A type parameter has no order when
+// its constraint lists no types (any, comparable, methods only).
+func isUnordered(t types.Type) bool {
+	if param, ok := t.(*types.TypeParam); ok {
+		iface, ok := param.Constraint().Underlying().(*types.Interface)
+
+		return ok && !hasTypeTerms(iface)
+	}
+
+	basic, ok := t.Underlying().(*types.Basic)
+	if !ok {
+		return true
+	}
+
+	// Equivalent mutant: the flags are never negative.
+	return basic.Info()&types.IsOrdered == 0 //gooze:ignore comparison
+}
+
+// hasTypeTerms reports whether iface, or an interface it embeds, lists
+// types, as ~int | ~float64 does; any and comparable don't.
+func hasTypeTerms(iface *types.Interface) bool {
+	for embedded := range iface.EmbeddedTypes() {
+		inner, ok := embedded.Underlying().(*types.Interface)
+		if !ok || hasTypeTerms(inner) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // isIndexed reports whether a range over a value of type t gives keys in

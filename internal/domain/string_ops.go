@@ -24,6 +24,28 @@ func (mg *mutagen) stringExprs(ctx context.Context, source rpt.Source, types []m
 	return mg.types.StringExprs(ctx, source.Origin.FullPath)
 }
 
+// integerExprs returns the spans of the integer expressions of source when a
+// mutagen in types can make a divisor zero (see buildChecks) and the mutagen
+// has type information; otherwise nil.
+func (mg *mutagen) integerExprs(ctx context.Context, source rpt.Source, types []mgen.Type) map[Span]bool {
+	if mg.types == nil || (!slices.Contains(types, mgen.Numbers) && !slices.Contains(types, mgen.Arithmetic)) {
+		return nil
+	}
+
+	return mg.types.IntegerExprs(ctx, source.Origin.FullPath)
+}
+
+// unorderedExprs returns the spans of the expressions of source whose type
+// has no order when types ask for comparison mutants and the mutagen has
+// type information; otherwise nil.
+func (mg *mutagen) unorderedExprs(ctx context.Context, source rpt.Source, types []mgen.Type) map[Span]bool {
+	if mg.types == nil || !slices.Contains(types, mgen.Comparison) {
+		return nil
+	}
+
+	return mg.types.UnorderedExprs(ctx, source.Origin.FullPath)
+}
+
 // dropStringOps drops the mutants of n that can't build because they put an
 // operator other than + on strings (strs, nil when unknown): every arithmetic
 // mutant of a string-typed binary expression, whose operator can only be +,
