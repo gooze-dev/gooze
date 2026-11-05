@@ -52,7 +52,8 @@ Below a --threshold-* minimum, or with more surviving mutants than
 --threshold-max-survivors, view exits with code 3. For the reports of a gooze
 run --diff (view -o .gooze-reports/run), the --threshold-diff-* minimums apply
 instead, as they do for the run, and only the survivors on the changed lines
-count.`
+count. --gate (report.gate) picks the scope whose thresholds decide the exit
+code: auto (the reports' own scope), diff, total or none.`
 
 func newViewCmd(deps Deps) *cobra.Command {
 	var (
@@ -112,6 +113,7 @@ type viewFlags struct {
 }
 
 func (f *viewFlags) register(cmd *cobra.Command) {
+	addGateFlag(cmd)
 	cmd.Flags().StringArrayVar(&f.writes, writeFlagName, nil,
 		"also write the report as <format>=<path>, repeatable: "+strings.Join(writeFormats(), ", ")+"; files hold the whole report")
 	cmd.Flags().BoolVar(&f.byLine, "by-line", false, "list the summary's survivors once per line of a file, with the changes folded")
@@ -128,21 +130,9 @@ func (f *viewFlags) viewArgs(cmd *cobra.Command) (domain.ViewArgs, func() error,
 		return domain.ViewArgs{}, nil, err
 	}
 
-	format, err := readFormat(cmd)
+	gate, err := f.check(cmd)
 	if err != nil {
 		return domain.ViewArgs{}, nil, err
-	}
-
-	if err := checkTop(f.top, f.all); err != nil {
-		return domain.ViewArgs{}, nil, err
-	}
-
-	if err := checkSummary(f.brief, f.all, f.byLine, format); err != nil {
-		return domain.ViewArgs{}, nil, err
-	}
-
-	if len(f.writes) > 0 && f.all {
-		return domain.ViewArgs{}, nil, domain.WithExitCode(m.ExitUsage, errors.New("--write writes the summary; --all lists every mutation"))
 	}
 
 	writes, closeWrites, err := openWrites(f.writes)
@@ -150,7 +140,7 @@ func (f *viewFlags) viewArgs(cmd *cobra.Command) (domain.ViewArgs, func() error,
 		return domain.ViewArgs{}, nil, err
 	}
 
-	view.All, view.ByLine, view.Summary, view.Top, view.Writes = f.all, f.byLine, f.brief, f.top, writes
+	view.All, view.ByLine, view.Summary, view.Top, view.Writes, view.Gate = f.all, f.byLine, f.brief, f.top, writes, gate
 	view.Sections = os.Getenv("GITLAB_CI") == "true"
 
 	if len(writes) > 0 && view.Output == nil {
@@ -158,6 +148,28 @@ func (f *viewFlags) viewArgs(cmd *cobra.Command) (domain.ViewArgs, func() error,
 	}
 
 	return view, closeWrites, nil
+}
+
+// check rejects flags that don't go together and returns the gate.
+func (f *viewFlags) check(cmd *cobra.Command) (domain.Gate, error) {
+	format, err := readFormat(cmd)
+	if err != nil {
+		return "", err
+	}
+
+	if err := checkTop(f.top, f.all); err != nil {
+		return "", err
+	}
+
+	if err := checkSummary(f.brief, f.all, f.byLine, format); err != nil {
+		return "", err
+	}
+
+	if len(f.writes) > 0 && f.all {
+		return "", domain.WithExitCode(m.ExitUsage, errors.New("--write writes the summary; --all lists every mutation"))
+	}
+
+	return readGate(cmd)
 }
 
 // checkTop rejects a negative --top, and --top with --all, which has no table.

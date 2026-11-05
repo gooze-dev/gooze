@@ -1,6 +1,7 @@
 package report
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"os"
@@ -117,4 +118,33 @@ func toolVersion() string {
 	}
 
 	return "(devel)"
+}
+
+const gateFlagName = "gate"
+
+// addGateFlag adds --gate, whose default comes from report.gate in the schema.
+func addGateFlag(cmd *cobra.Command) {
+	field, _ := config.Lookup(config.KeyReportGate)
+	value, _ := field.Default.(string)
+
+	cmd.Flags().String(gateFlagName, value, "the scope whose thresholds decide exit code 3: "+strings.Join(field.Enum, ", ")+
+		"; auto gates on the reports' own scope (config report.gate)")
+}
+
+// readGate returns the --gate flag or else report.gate, checked against the
+// schema's values.
+func readGate(cmd *cobra.Command) (domain.Gate, error) {
+	field, _ := config.Lookup(config.KeyReportGate)
+
+	value := cmp.Or(viper.GetString(config.KeyReportGate), string(domain.GateAuto))
+	if cmd.Flags().Changed(gateFlagName) {
+		value, _ = cmd.Flags().GetString(gateFlagName)
+	}
+
+	if !slices.Contains(field.Enum, value) {
+		return "", domain.WithExitCode(m.ExitUsage,
+			fmt.Errorf("invalid --%s %q: must be one of %s", gateFlagName, value, strings.Join(field.Enum, ", ")))
+	}
+
+	return domain.Gate(value), nil
 }

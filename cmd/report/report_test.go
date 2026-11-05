@@ -33,7 +33,7 @@ func TestReportView(t *testing.T) {
 	defer viper.Reset()
 
 	wf := domainmocks.NewMockWorkflow(t)
-	wf.On("View", mock.Anything, domain.ViewArgs{
+	wf.On("View", mock.Anything, domain.ViewArgs{Gate: domain.GateAuto,
 		Reports: m.Path("/tmp/reports"), Paths: []m.Path{},
 		Thresholds: domain.Thresholds{Key: "threshold"}, DiffThresholds: domain.Thresholds{Key: "threshold.diff"},
 	}).Return(nil)
@@ -49,7 +49,7 @@ func TestReportView_PathsAndAll(t *testing.T) {
 	defer viper.Reset()
 
 	wf := domainmocks.NewMockWorkflow(t)
-	wf.On("View", mock.Anything, domain.ViewArgs{
+	wf.On("View", mock.Anything, domain.ViewArgs{Gate: domain.GateAuto,
 		Reports:        m.Path("/tmp/reports"),
 		Paths:          []m.Path{"./internal/...", "cmd/run.go"},
 		All:            true,
@@ -68,7 +68,7 @@ func TestReportMerge(t *testing.T) {
 	defer viper.Reset()
 
 	wf := domainmocks.NewMockWorkflow(t)
-	wf.On("Merge", mock.Anything, domain.MergeArgs{Reports: m.Path("/tmp/reports"), Thresholds: domain.Thresholds{Key: "threshold"}, DiffThresholds: domain.Thresholds{Key: "threshold.diff"}}).Return(nil)
+	wf.On("Merge", mock.Anything, domain.MergeArgs{View: domain.ViewArgs{Gate: domain.GateAuto}, Reports: m.Path("/tmp/reports"), Thresholds: domain.Thresholds{Key: "threshold"}, DiffThresholds: domain.Thresholds{Key: "threshold.diff"}}).Return(nil)
 
 	deps := Deps{Workflow: wf, Publisher: domainmocks.NewMockReportPublisher(t), OutputKey: testOutputKey}
 

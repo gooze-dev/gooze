@@ -101,3 +101,19 @@ func TestReportView_SummaryUsageErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestReportView_Gate(t *testing.T) {
+	defer viper.Reset()
+
+	assert.Equal(t, domain.GateAuto, viewArgsFor(t).Gate)
+	assert.Equal(t, domain.GateDiff, viewArgsFor(t, "--gate", "diff").Gate)
+
+	viper.Set(config.KeyReportGate, "none")
+	assert.Equal(t, domain.GateNone, viewArgsFor(t).Gate, "report.gate sets the default")
+	assert.Equal(t, domain.GateTotal, viewArgsFor(t, "--gate", "total").Gate, "the flag wins")
+
+	deps := Deps{Workflow: domainmocks.NewMockWorkflow(t), Publisher: domainmocks.NewMockReportPublisher(t), OutputKey: testOutputKey}
+	err := execReport(t, deps, "view", "--gate", "changed")
+	require.EqualError(t, err, `invalid --gate "changed": must be one of auto, diff, total, none`)
+	assert.Equal(t, m.ExitUsage, codeOf(err))
+}

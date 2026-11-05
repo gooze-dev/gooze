@@ -18,7 +18,7 @@ func TestReportMerge_PassesTheDiffThresholds(t *testing.T) {
 	defer viper.Reset()
 
 	wf := domainmocks.NewMockWorkflow(t)
-	wf.On("Merge", mock.Anything, domain.MergeArgs{
+	wf.On("Merge", mock.Anything, domain.MergeArgs{View: domain.ViewArgs{Gate: domain.GateAuto},
 		Reports:        m.Path("/tmp/reports"),
 		Thresholds:     domain.Thresholds{Key: "threshold", Total: 85, MaxSurvivors: 2},
 		DiffThresholds: domain.Thresholds{Key: "threshold.diff", Total: 100, MaxSurvivors: 2},

@@ -321,3 +321,43 @@ func TestWorkflow_View_WritesBeforeTheThresholdFails(t *testing.T) {
 	require.EqualError(t, err, "mutation score 33.33% is below threshold.total 90%")
 	assert.Contains(t, metrics.String(), "# EOF")
 }
+
+func TestWorkflow_View_GatePicksTheScopeThatFails(t *testing.T) {
+	plain := m.Path(viewFixture(t))
+	diff := m.Path(viewFixture(t))
+	require.NoError(t, adapter.NewReportStore().SaveSelection(context.Background(), diff, rpt.Selection{Diff: "main"}))
+
+	low := domain.Thresholds{Key: "threshold", Total: 90}
+	lowDiff := domain.Thresholds{Key: "threshold.diff", Total: 90}
+
+	for name, tt := range map[string]struct {
+		reports m.Path
+		gate    domain.Gate
+		want    string
+	}{
+		"auto, total":       {reports: plain, gate: domain.GateAuto, want: "mutation score 33.33% is below threshold.total 90%"},
+		"auto, diff":        {reports: diff, gate: domain.GateAuto, want: "mutation score 33.33% is below threshold.diff.total 90%"},
+		"unset is auto":     {reports: diff, want: "mutation score 33.33% is below threshold.diff.total 90%"},
+		"total gate, total": {reports: plain, gate: domain.GateTotal, want: "mutation score 33.33% is below threshold.total 90%"},
+		"diff gate, diff":   {reports: diff, gate: domain.GateDiff, want: "mutation score 33.33% is below threshold.diff.total 90%"},
+		"diff gate, total":  {reports: plain, gate: domain.GateDiff},
+		"total gate, diff":  {reports: diff, gate: domain.GateTotal},
+		"no gate, total":    {reports: plain, gate: domain.GateNone},
+		"no gate, diff":     {reports: diff, gate: domain.GateNone},
+	} {
+		t.Run(name, func(t *testing.T) {
+			reporter := domainmocks.NewMockReporter(t)
+			reporter.EXPECT().DisplayReportSummary(mock.Anything, mock.Anything).Once()
+
+			wf := domain.NewWorkflow(nil, adapter.NewReportStore(), reporter, nil, nil)
+			err := wf.View(context.Background(), domain.ViewArgs{Reports: tt.reports, Gate: tt.gate, Thresholds: low, DiffThresholds: lowDiff})
+
+			if tt.want == "" {
+				require.NoError(t, err)
+				return
+			}
+
+			require.EqualError(t, err, tt.want)
+		})
+	}
+}

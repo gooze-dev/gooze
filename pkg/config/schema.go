@@ -83,7 +83,7 @@ func runField() Field {
 		{Name: "parallel", Kind: KindInt, Default: 1, Min: new(1), Doc: "Number of concurrent mutation workers."},
 		{Name: "mutation_timeout", Kind: KindInt, Default: 120, Min: new(1), Doc: "Per-mutation timeout in seconds."},
 		{Name: "coverage_profile", Kind: KindString, Default: "", Doc: "Go coverage profile; mutations on uncovered lines are reported as not_covered without running tests."},
-		{Name: "diff", Kind: KindString, Default: "", Doc: "Git ref to diff against; only lines changed since its merge base with HEAD are mutated. Requires git. Empty runs everything."},
+		{Name: diffName, Kind: KindString, Default: "", Doc: "Git ref to diff against; only lines changed since its merge base with HEAD are mutated. Requires git. Empty runs everything."},
 		{
 			Name: "mutagens", Kind: KindStringList, Default: []string{},
 			Enum: mgen.Names(),
@@ -126,7 +126,7 @@ func thresholdField() Field {
 			Doc: "Most surviving mutants allowed; a --diff run counts the ones on its changed lines.",
 		},
 		Field{
-			Name: "diff", Kind: KindObject, Doc: "Thresholds for --diff runs, scored on the changed lines; they replace the scores above there.",
+			Name: diffName, Kind: KindObject, Doc: "Thresholds for --diff runs, scored on the changed lines; they replace the scores above there.",
 			Children: thresholdFields("the changed lines' score", "the average of the changed files' scores", "the score every changed file must reach"),
 		},
 	)}
@@ -140,11 +140,18 @@ func thresholdFields(total, average, file string) []Field {
 	return []Field{percent("total", total), percent("average", average), percent("file", file)}
 }
 
+// diffName names the diff settings: run.diff, threshold.diff and the diff gate.
+const diffName = "diff"
+
 func reportField() Field {
 	return Field{Name: "report", Kind: KindObject, Doc: "Report output settings.", Children: []Field{
 		{
 			Name: "format", Kind: KindEnum, Default: "text", Enum: []string{"text", "github", "gitlab", "sarif", "codeclimate", "metrics"},
 			Doc: "How gooze report view writes surviving mutants: text, github (workflow annotations on the lines, then the text summary), sarif (a SARIF 2.1.0 log for code scanning), codeclimate (a Code Climate JSON report for GitLab Code Quality; gitlab is the same) or metrics (the score and counts as a GitLab metrics report).",
+		},
+		{
+			Name: "gate", Kind: KindEnum, Default: "auto", Enum: []string{"auto", diffName, "total", "none"},
+			Doc: "Which scope's thresholds decide exit code 3 in gooze report view and merge: the changed lines of a --diff run (diff), the whole project (total) or neither (none). auto gates on the reports' own scope.",
 		},
 		{Name: "oci", Kind: KindObject, Doc: "How gooze report push packages reports for an OCI registry.", Children: []Field{
 			{

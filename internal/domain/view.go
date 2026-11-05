@@ -139,18 +139,24 @@ func unmergedReportsHint(dir m.Path) string {
 }
 
 // viewThresholds returns the thresholds to check the viewed reports against:
-// the diff ones when a --diff run wrote them, the plain ones otherwise.
+// the diff ones when a --diff run wrote them, the plain ones otherwise, and
+// none when args.Gate leaves that scope out.
 func (w *workflow) viewThresholds(ctx context.Context, args ViewArgs) (Thresholds, error) {
 	selection, err := w.reports.LoadSelection(ctx, args.Reports)
 	if err != nil {
 		return Thresholds{}, fmt.Errorf("load the run's selection: %w", err)
 	}
 
-	if selection.Diff != "" {
-		return args.DiffThresholds, nil
-	}
+	diff := selection.Diff != ""
 
-	return args.Thresholds, nil
+	switch {
+	case !args.Gate.checks(diff):
+		return Thresholds{}, nil
+	case diff:
+		return args.DiffThresholds, nil
+	default:
+		return args.Thresholds, nil
+	}
 }
 
 // viewAll replays every mutation with its status, as a run displays them.

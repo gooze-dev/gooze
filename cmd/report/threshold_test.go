@@ -161,12 +161,12 @@ func TestReportViewAndMergePassMaxSurvivors(t *testing.T) {
 	defer viper.Reset()
 
 	wf := domainmocks.NewMockWorkflow(t)
-	wf.On("View", mock.Anything, domain.ViewArgs{
+	wf.On("View", mock.Anything, domain.ViewArgs{Gate: domain.GateAuto,
 		Reports: "/tmp/reports", Paths: []m.Path{},
 		Thresholds:     domain.Thresholds{Key: "threshold", MaxSurvivors: 3},
 		DiffThresholds: domain.Thresholds{Key: "threshold.diff", MaxSurvivors: 3},
 	}).Return(nil)
-	wf.On("Merge", mock.Anything, domain.MergeArgs{Reports: "/tmp/reports", Thresholds: domain.Thresholds{Key: "threshold", MaxSurvivors: 4}, DiffThresholds: domain.Thresholds{Key: "threshold.diff", MaxSurvivors: 4}}).Return(nil)
+	wf.On("Merge", mock.Anything, domain.MergeArgs{View: domain.ViewArgs{Gate: domain.GateAuto}, Reports: "/tmp/reports", Thresholds: domain.Thresholds{Key: "threshold", MaxSurvivors: 4}, DiffThresholds: domain.Thresholds{Key: "threshold.diff", MaxSurvivors: 4}}).Return(nil)
 
 	deps := Deps{Workflow: wf, Publisher: domainmocks.NewMockReportPublisher(t), OutputKey: testOutputKey}
 
@@ -186,8 +186,8 @@ func TestReportViewAndMergePassThresholds(t *testing.T) {
 	want := domain.Thresholds{Key: "threshold", Total: 75, Average: 50}
 
 	wf := domainmocks.NewMockWorkflow(t)
-	wf.On("View", mock.Anything, domain.ViewArgs{Reports: "/tmp/reports", Paths: []m.Path{}, Thresholds: want, DiffThresholds: domain.Thresholds{Key: "threshold.diff"}}).Return(nil)
-	wf.On("Merge", mock.Anything, domain.MergeArgs{Reports: "/tmp/reports", Thresholds: want, DiffThresholds: domain.Thresholds{Key: "threshold.diff"}}).Return(nil)
+	wf.On("View", mock.Anything, domain.ViewArgs{Gate: domain.GateAuto, Reports: "/tmp/reports", Paths: []m.Path{}, Thresholds: want, DiffThresholds: domain.Thresholds{Key: "threshold.diff"}}).Return(nil)
+	wf.On("Merge", mock.Anything, domain.MergeArgs{View: domain.ViewArgs{Gate: domain.GateAuto}, Reports: "/tmp/reports", Thresholds: want, DiffThresholds: domain.Thresholds{Key: "threshold.diff"}}).Return(nil)
 
 	deps := Deps{Workflow: wf, Publisher: domainmocks.NewMockReportPublisher(t), OutputKey: testOutputKey}
 
@@ -205,7 +205,7 @@ func TestReportViewPassesDiffThresholds(t *testing.T) {
 	defer viper.Reset()
 
 	wf := domainmocks.NewMockWorkflow(t)
-	wf.On("View", mock.Anything, domain.ViewArgs{
+	wf.On("View", mock.Anything, domain.ViewArgs{Gate: domain.GateAuto,
 		Reports: "/tmp/reports", Paths: []m.Path{},
 		Thresholds:     domain.Thresholds{Key: "threshold"},
 		DiffThresholds: domain.Thresholds{Key: "threshold.diff", Total: 100, Average: 60},
