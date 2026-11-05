@@ -223,7 +223,8 @@ func TestCache_GoEnvFails(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 
 	env, err := New().Prepare(context.Background(), 0)
-	require.Error(t, err)
+	require.ErrorIs(t, err, domain.ErrGoNotInstalled)
+	require.ErrorIs(t, err, exec.ErrNotFound)
 	assert.Empty(t, env)
 }
 

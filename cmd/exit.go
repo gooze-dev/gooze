@@ -15,7 +15,7 @@ func usageError(err error) error { return domain.WithExitCode(m.ExitUsage, err) 
 // ctx is the command's signal context: once it is done, the command was
 // interrupted, whatever error that caused. beforeRun is true when the error
 // came before any command ran (cobra rejected a flag, an argument or the
-// command name), which is a usage error.
+// command name), which is a usage error, like a missing go command.
 func exitCode(ctx context.Context, err error, beforeRun bool) m.ExitCode {
 	var coded *m.CodedError
 
@@ -28,7 +28,7 @@ func exitCode(ctx context.Context, err error, beforeRun bool) m.ExitCode {
 		return coded.Code
 	case errors.Is(err, domain.ErrGitNotInstalled), errors.Is(err, domain.ErrNotGitRepository), errors.Is(err, domain.ErrUnknownRef):
 		return m.ExitGit
-	case beforeRun:
+	case errors.Is(err, domain.ErrGoNotInstalled), beforeRun:
 		return m.ExitUsage
 	default:
 		return m.ExitFailure
