@@ -389,7 +389,12 @@ func (f shardFixture) merge(t *testing.T, dir string) domain.MutationScore {
 
 	var score domain.MutationScore
 
-	wf := domain.NewWorkflow(domainmocks.NewMockSourceFSAdapter(t), adapter.NewReportStore(), scoringReporter(t, &score),
+	// Merge prints the merged reports, as report view does.
+	reporter := domainmocks.NewMockReporter(t)
+	reporter.EXPECT().DisplayReportSummary(mock.Anything, mock.Anything).
+		Run(func(_ context.Context, s domain.ReportSummary) { score = s.Score }).Once()
+
+	wf := domain.NewWorkflow(domainmocks.NewMockSourceFSAdapter(t), adapter.NewReportStore(), reporter,
 		domainmocks.NewMockOrchestrator(t), f.mutations)
 	require.NoError(t, wf.Merge(context.Background(), domain.MergeArgs{Reports: m.Path(dir)}))
 

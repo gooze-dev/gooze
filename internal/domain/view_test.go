@@ -1,8 +1,10 @@
 package domain_test
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -162,11 +164,7 @@ func TestWorkflow_Merge_MissingReportsDirReturnsError(t *testing.T) {
 	ctx := context.Background()
 	missing := filepath.Join(t.TempDir(), "missing")
 
-	reporter := domainmocks.NewMockReporter(t)
-	reporter.EXPECT().StartTest(ctx).Return(nil).Once()
-	reporter.EXPECT().Close(ctx).Return().Once()
-
-	wf := domain.NewWorkflow(nil, adapter.NewReportStore(), reporter, nil, nil)
+	wf := domain.NewWorkflow(nil, adapter.NewReportStore(), domainmocks.NewMockReporter(t), nil, nil)
 	err := wf.Merge(ctx, domain.MergeArgs{Reports: m.Path(missing)})
 	require.ErrorContains(t, err, "no reports directory at "+missing)
 	assert.Equal(t, m.ExitNoReports, exitCodeOf(err))
@@ -257,4 +255,69 @@ func TestWorkflow_View_SummaryTopAndSections(t *testing.T) {
 	negative := viewSummary(t, domain.ViewArgs{Reports: dir, Top: -1})
 	assert.Len(t, negative.Files, 2, "a negative top lists every file")
 	assert.False(t, full.Brief)
+}
+
+// viewOutput runs a view in format and returns what it writes.
+func viewOutput(t *testing.T, dir m.Path, format domain.ViewFormat) string {
+	t.Helper()
+
+	var out bytes.Buffer
+
+	wf := domain.NewWorkflow(nil, adapter.NewReportStore(), domainmocks.NewMockReporter(t), nil, nil)
+	require.NoError(t, wf.View(context.Background(), domain.ViewArgs{Reports: dir, Format: format, Output: &out}))
+
+	return out.String()
+}
+
+func TestWorkflow_View_WritesEveryFormatFromOneLoad(t *testing.T) {
+	dir := m.Path(viewFixture(t))
+
+	var (
+		metrics, gitlab, text bytes.Buffer
+		shown, written        domain.ReportSummary
+	)
+
+	reporter := domainmocks.NewMockReporter(t)
+	reporter.EXPECT().DisplayReportSummary(mock.Anything, mock.Anything).
+		Run(func(_ context.Context, s domain.ReportSummary) { shown = s }).Once()
+	reporter.EXPECT().WriteReportSummary(mock.Anything, &text, mock.Anything).
+		Run(func(_ context.Context, _ io.Writer, s domain.ReportSummary) { written = s }).Return(nil).Once()
+
+	wf := domain.NewWorkflow(nil, adapter.NewReportStore(), reporter, nil, nil)
+	require.NoError(t, wf.View(context.Background(), domain.ViewArgs{
+		Reports: dir, Summary: true, Top: 1, Sections: true,
+		Writes: []domain.ReportWrite{
+			{Format: domain.FormatMetrics, Output: &metrics},
+			{Format: domain.FormatGitLab, Output: &gitlab},
+			{Format: domain.FormatText, Output: &text},
+		},
+	}))
+
+	assert.Equal(t, viewOutput(t, dir, domain.FormatMetrics), metrics.String())
+	assert.Equal(t, viewOutput(t, dir, domain.FormatGitLab), gitlab.String())
+
+	assert.True(t, shown.Brief, "stdout keeps the view's shape")
+	assert.Len(t, shown.Files, 1)
+	assert.False(t, written.Brief, "a text file holds the whole report")
+	assert.False(t, written.Sections)
+	assert.Zero(t, written.HiddenFiles)
+	assert.Len(t, written.Files, 2)
+	assert.Len(t, written.Survivors, 2)
+}
+
+func TestWorkflow_View_WritesBeforeTheThresholdFails(t *testing.T) {
+	var metrics bytes.Buffer
+
+	reporter := domainmocks.NewMockReporter(t)
+	reporter.EXPECT().DisplayReportSummary(mock.Anything, mock.Anything).Once()
+
+	wf := domain.NewWorkflow(nil, adapter.NewReportStore(), reporter, nil, nil)
+	err := wf.View(context.Background(), domain.ViewArgs{
+		Reports:    m.Path(viewFixture(t)),
+		Thresholds: domain.Thresholds{Key: "threshold", Total: 90},
+		Writes:     []domain.ReportWrite{{Format: domain.FormatMetrics, Output: &metrics}},
+	})
+
+	require.EqualError(t, err, "mutation score 33.33% is below threshold.total 90%")
+	assert.Contains(t, metrics.String(), "# EOF")
 }

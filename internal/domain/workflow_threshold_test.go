@@ -171,10 +171,7 @@ func TestWorkflow_Merge_ChecksThresholds(t *testing.T) {
 	dir := viewFixture(t)
 
 	reporter := domainmocks.NewMockReporter(t)
-	reporter.EXPECT().StartTest(ctx).Return(nil)
-	reporter.EXPECT().Close(ctx).Return()
-	reporter.EXPECT().Wait(ctx).Return().Maybe()
-	reporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Return()
+	reporter.EXPECT().DisplayReportSummary(ctx, mock.Anything).Return()
 
 	wf := domain.NewWorkflow(nil, adapter.NewReportStore(), reporter, nil, nil)
 	err := wf.Merge(ctx, domain.MergeArgs{Reports: m.Path(dir), Thresholds: domain.Thresholds{Key: "threshold", Total: 33.34}})

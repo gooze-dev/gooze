@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"io"
 
 	m "gooze.dev/pkg/gooze/internal/model"
 )
@@ -51,4 +52,7 @@ type Reporter interface {
 	// DisplayReportSummary prints a per-file summary of stored reports. It is
 	// static output: callers do not start the UI first.
 	DisplayReportSummary(ctx context.Context, summary ReportSummary)
+	// WriteReportSummary writes the text of a per-file summary to out, as
+	// DisplayReportSummary prints it.
+	WriteReportSummary(ctx context.Context, out io.Writer, summary ReportSummary) error
 }

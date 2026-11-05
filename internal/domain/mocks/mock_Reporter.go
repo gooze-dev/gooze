@@ -6,9 +6,11 @@ package mocks
 
 import (
 	context "context"
+	io "io"
+
+	domain "gooze.dev/pkg/gooze/internal/domain"
 
 	mock "github.com/stretchr/testify/mock"
-	domain "gooze.dev/pkg/gooze/internal/domain"
 
 	model "gooze.dev/pkg/gooze/internal/model"
 )
@@ -437,6 +439,54 @@ func (_c *MockReporter_Wait_Call) Return() *MockReporter_Wait_Call {
 
 func (_c *MockReporter_Wait_Call) RunAndReturn(run func(context.Context)) *MockReporter_Wait_Call {
 	_c.Run(run)
+	return _c
+}
+
+// WriteReportSummary provides a mock function with given fields: ctx, out, summary
+func (_m *MockReporter) WriteReportSummary(ctx context.Context, out io.Writer, summary domain.ReportSummary) error {
+	ret := _m.Called(ctx, out, summary)
+
+	if len(ret) == 0 {
+		panic("no return value specified for WriteReportSummary")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, io.Writer, domain.ReportSummary) error); ok {
+		r0 = rf(ctx, out, summary)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockReporter_WriteReportSummary_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'WriteReportSummary'
+type MockReporter_WriteReportSummary_Call struct {
+	*mock.Call
+}
+
+// WriteReportSummary is a helper method to define mock.On call
+//   - ctx context.Context
+//   - out io.Writer
+//   - summary domain.ReportSummary
+func (_e *MockReporter_Expecter) WriteReportSummary(ctx interface{}, out interface{}, summary interface{}) *MockReporter_WriteReportSummary_Call {
+	return &MockReporter_WriteReportSummary_Call{Call: _e.mock.On("WriteReportSummary", ctx, out, summary)}
+}
+
+func (_c *MockReporter_WriteReportSummary_Call) Run(run func(ctx context.Context, out io.Writer, summary domain.ReportSummary)) *MockReporter_WriteReportSummary_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(io.Writer), args[2].(domain.ReportSummary))
+	})
+	return _c
+}
+
+func (_c *MockReporter_WriteReportSummary_Call) Return(_a0 error) *MockReporter_WriteReportSummary_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockReporter_WriteReportSummary_Call) RunAndReturn(run func(context.Context, io.Writer, domain.ReportSummary) error) *MockReporter_WriteReportSummary_Call {
+	_c.Call.Return(run)
 	return _c
 }
 

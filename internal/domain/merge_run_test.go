@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -231,6 +232,7 @@ func TestMerge_KeepsOnlyMainResultsTheRunDidNotReplace(t *testing.T) {
 	})
 	store.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	store.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil)
+	store.EXPECT().LoadSelection(mock.Anything, m.Path(base)).Return(rpt.Selection{}, nil)
 
 	var saves [][]string
 
@@ -313,4 +315,32 @@ func TestMerge_ShardsWithDifferentSelectionsFail(t *testing.T) {
 	err := mergeWorkflow(t).Merge(context.Background(), domain.MergeArgs{Reports: m.Path(runDir)})
 	require.ErrorContains(t, err, "shards were run with different selections: "+filepath.Join(runDir, domain.ShardDirPrefix+"1")+" and "+filepath.Join(runDir, domain.ShardDirPrefix+"2"))
 	assert.DirExists(t, filepath.Join(runDir, domain.ShardDirPrefix+"0"), "nothing is merged")
+}
+
+func TestMerge_PrintsTheReportWithoutTheTestUI(t *testing.T) {
+	base := t.TempDir()
+	saveReports(t, filepath.Join(base, "shard_0"), mergeReport(mergeSource("h1"), "a", rpt.Killed, nil))
+	saveReports(t, filepath.Join(base, "shard_1"), mergeReport(mergeSource("h2"), "b", rpt.Survived, nil))
+
+	var (
+		shown   domain.ReportSummary
+		metrics strings.Builder
+	)
+
+	// A strict reporter: StartTest, Wait or DisplayMutationScore would fail.
+	reporter := domainmocks.NewMockReporter(t)
+	reporter.EXPECT().DisplayReportSummary(mock.Anything, mock.Anything).
+		Run(func(_ context.Context, s domain.ReportSummary) { shown = s }).Once()
+
+	wf := domain.NewWorkflow(domainmocks.NewMockSourceFSAdapter(t), adapter.NewReportStore(), reporter,
+		domainmocks.NewMockOrchestrator(t), domainmocks.NewMockMutagen(t))
+
+	require.NoError(t, wf.Merge(context.Background(), domain.MergeArgs{
+		Reports: m.Path(base),
+		View:    domain.ViewArgs{Summary: true, Writes: []domain.ReportWrite{{Format: domain.FormatMetrics, Output: &metrics}}},
+	}))
+
+	assert.True(t, shown.Brief)
+	assert.Equal(t, rpt.Summary{Total: 2, Killed: 1, Survived: 1}, shown.Score.Summary)
+	assert.Contains(t, metrics.String(), "gooze_mutants_total 2\n")
 }

@@ -250,6 +250,13 @@ func (t *TUI) DisplayMutationScore(ctx context.Context, score domain.MutationSco
 	t.send(mutationScoreMsg{score: score})
 }
 
+// WriteReportSummary writes the text of a per-file summary to out.
+func (t *TUI) WriteReportSummary(_ context.Context, out io.Writer, summary domain.ReportSummary) error {
+	_, err := io.WriteString(out, renderReportSummary(summary))
+
+	return err //nolint:wrapcheck // the caller names the report it writes.
+}
+
 // DisplayReportSummary prints a per-file summary of stored reports as plain
 // text: it is static output, so the interactive program is not started.
 func (t *TUI) DisplayReportSummary(ctx context.Context, summary domain.ReportSummary) {

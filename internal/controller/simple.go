@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 
 	"github.com/olekukonko/tablewriter"
 	"github.com/olekukonko/tablewriter/tw"
@@ -213,6 +214,13 @@ func (s *SimpleUI) DisplayMutationScore(ctx context.Context, score domain.Mutati
 	if hint := runReportsHint(score); hint != "" {
 		s.printf("%s\n", hint)
 	}
+}
+
+// WriteReportSummary writes the text of a per-file summary to out.
+func (s *SimpleUI) WriteReportSummary(_ context.Context, out io.Writer, summary domain.ReportSummary) error {
+	_, err := io.WriteString(out, renderReportSummary(summary))
+
+	return err //nolint:wrapcheck // the caller names the report it writes.
 }
 
 // DisplayReportSummary prints a per-file summary of stored reports.
