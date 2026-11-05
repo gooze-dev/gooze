@@ -90,6 +90,14 @@ type ViewArgs struct {
 	All bool
 	// ByLine has the text summary list the survivors per line of a file.
 	ByLine bool
+	// Summary leaves the survivors and build errors out of the text summary.
+	Summary bool
+	// Top limits the text summary's table to the files with the most
+	// mutations against the score; 0 lists every file.
+	Top int
+	// Sections wraps the text summary's long parts in collapsible CI log
+	// sections.
+	Sections bool
 	// Thresholds are the minimum scores of the viewed reports.
 	Thresholds Thresholds
 	// DiffThresholds replace Thresholds when the reports are a --diff run's,

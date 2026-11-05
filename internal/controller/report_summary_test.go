@@ -299,3 +299,74 @@ func TestFoldChanges(t *testing.T) {
 		})
 	}
 }
+
+func TestRenderReportSummary_Brief(t *testing.T) {
+	summary := sampleReportSummary()
+	summary.Brief = true
+	summary.BuildErrors = []domain.Survivor{{Path: "calc.go", Line: 3, Mutagen: "numbers", Status: rpt.Error}}
+
+	output := renderReportSummary(summary)
+
+	for _, want := range []string{"TOTAL FILES 2", "\nMutation score: 82.35% (14 killed, 2 survived, 1 not_covered)\n"} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output missing %q\noutput:\n%s", want, output)
+		}
+	}
+
+	for _, unwanted := range []string{"Survivors", "No survivors", "Build errors", "calc.go:10"} {
+		if strings.Contains(output, unwanted) {
+			t.Fatalf("a brief summary lists %q\noutput:\n%s", unwanted, output)
+		}
+	}
+}
+
+func TestRenderReportSummary_HiddenFiles(t *testing.T) {
+	summary := sampleReportSummary()
+	summary.Files = summary.Files[:1]
+	summary.HiddenFiles = 1
+
+	output := renderReportSummary(summary)
+
+	for _, want := range []string{"TOTAL FILES 2", "The 1 of 2 files with the most survivors.\n"} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output missing %q\noutput:\n%s", want, output)
+		}
+	}
+
+	summary.HiddenFiles = 0
+	if strings.Contains(renderReportSummary(summary), "most survivors") {
+		t.Fatal("a full table names no top files")
+	}
+}
+
+func TestRenderReportSummary_Sections(t *testing.T) {
+	previous := sectionClock
+	sectionClock = func() int64 { return 1700000000 }
+
+	t.Cleanup(func() { sectionClock = previous })
+
+	summary := sampleReportSummary()
+	summary.Sections = true
+	summary.BuildErrors = []domain.Survivor{{Path: "calc.go", Line: 3, Mutagen: "numbers", Status: rpt.Error}}
+
+	output := renderReportSummary(summary)
+
+	for _, want := range []string{
+		"\x1b[0Ksection_start:1700000000:gooze_files\r\x1b[0KMutation scores per file\n PATH",
+		"TOTAL FILES 2",
+		"\x1b[0Ksection_end:1700000000:gooze_files\r\x1b[0K\n",
+		"\x1b[0Ksection_start:1700000000:gooze_survivors[collapsed=true]\r\x1b[0KSurvivors (2):\ncalc.go:10:",
+		"\x1b[0Ksection_end:1700000000:gooze_survivors\r\x1b[0K\n",
+		"\x1b[0Ksection_start:1700000000:gooze_build_errors[collapsed=true]\r\x1b[0KBuild errors (1):\ncalc.go:3:",
+		"\x1b[0Ksection_end:1700000000:gooze_build_errors\r\x1b[0K\n",
+		"\nMutation score: 82.35%",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output missing %q\noutput:\n%q", want, output)
+		}
+	}
+
+	if strings.Contains(renderReportSummary(sampleReportSummary()), "section_start") {
+		t.Fatal("sections only when asked for")
+	}
+}

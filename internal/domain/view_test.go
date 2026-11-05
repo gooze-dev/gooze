@@ -238,3 +238,20 @@ func TestWorkflow_View_ReportsLeaveNoHint(t *testing.T) {
 
 	assert.Empty(t, viewSummary(t, domain.ViewArgs{Reports: m.Path(dir)}).Hint)
 }
+
+func TestWorkflow_View_SummaryTopAndSections(t *testing.T) {
+	dir := m.Path(viewFixture(t))
+
+	summary := viewSummary(t, domain.ViewArgs{Reports: dir, Summary: true, Top: 1, Sections: true})
+
+	assert.True(t, summary.Brief)
+	assert.True(t, summary.Sections)
+	assert.Equal(t, []domain.FileSummary{{Path: "cmd/b.go", Total: 1, NotCovered: 1}}, summary.Files)
+	assert.Equal(t, 1, summary.HiddenFiles)
+	assert.Len(t, summary.Score.Files, 2, "thresholds still check every file")
+
+	full := viewSummary(t, domain.ViewArgs{Reports: dir, Top: 2})
+	assert.Len(t, full.Files, 2)
+	assert.Zero(t, full.HiddenFiles, "a top as large as the files hides none")
+	assert.False(t, full.Brief)
+}
