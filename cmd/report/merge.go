@@ -10,16 +10,7 @@ import (
 	m "gooze.dev/pkg/gooze/internal/model"
 )
 
-func newMergeCmd(deps Deps) *cobra.Command {
-	var (
-		flags                      viewFlags
-		thresholds, diffThresholds ThresholdFlags
-	)
-
-	cmd := &cobra.Command{
-		Use:   "merge",
-		Short: "Merge sharded reports into a single directory",
-		Long: `Merge reports from shard_* subdirectories into a single reports directory.
+const mergeLongDescription = `Merge reports from shard_* subdirectories into a single reports directory.
 
 Each shard dir holds the results its run tested and copies of the stored
 (cached) results of the unchanged sources it owns, so the merge gives the same
@@ -33,8 +24,21 @@ as --write gitlab=gl-code-quality.json --write metrics=metrics.txt.
 Below a --threshold-* minimum, or with more surviving mutants than
 --threshold-max-survivors, merge exits with code 3. For the shards of a gooze
 run --diff (merge -o .gooze-reports/run), the --threshold-diff-* minimums
-apply instead, as they do for report view.`,
-		Args: cobra.ExactArgs(0),
+apply instead, as they do for report view. --gate (report.gate) picks the
+scope whose thresholds decide the exit code: auto (the reports' own scope),
+diff, total or none.`
+
+func newMergeCmd(deps Deps) *cobra.Command {
+	var (
+		flags                      viewFlags
+		thresholds, diffThresholds ThresholdFlags
+	)
+
+	cmd := &cobra.Command{
+		Use:   "merge",
+		Short: "Merge sharded reports into a single directory",
+		Long:  mergeLongDescription,
+		Args:  cobra.ExactArgs(0),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			minimums, diffMinimums, err := ReadGates(cmd, thresholds, diffThresholds)
 			if err != nil {

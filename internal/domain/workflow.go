@@ -113,10 +113,44 @@ type ViewArgs struct {
 	PathPrefix string
 	// ToolVersion is gooze's version, recorded in SARIF output.
 	ToolVersion string
+	// Gate picks the scope whose thresholds decide the exit code; the
+	// zero value is GateAuto.
+	Gate Gate
 	// Writes are the report files written besides Output, each in its
 	// format, from the same load of the reports. A text file holds the whole
 	// summary: Summary, Top and Sections shape only Output.
 	Writes []ReportWrite
+}
+
+// Gate is the scope whose thresholds decide exit code 3: the changed lines
+// of a --diff run, or the whole project.
+type Gate string
+
+const (
+	// GateAuto gates on the scope of the reports: the changed lines of a
+	// --diff run's, the whole project otherwise.
+	GateAuto Gate = "auto"
+	// GateDiff gates only on the changed lines.
+	GateDiff Gate = "diff"
+	// GateTotal gates only on the whole project.
+	GateTotal Gate = "total"
+	// GateNone reports every scope, and none fails.
+	GateNone Gate = "none"
+)
+
+// checks reports whether g gates on the changed lines (diff) or the whole
+// project.
+func (g Gate) checks(diff bool) bool {
+	switch g {
+	case GateDiff:
+		return diff
+	case GateTotal:
+		return !diff
+	case GateNone:
+		return false
+	default:
+		return true
+	}
 }
 
 // ReportWrite is a report file a view or merge writes in Format.
