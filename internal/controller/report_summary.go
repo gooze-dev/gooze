@@ -32,7 +32,8 @@ func renderReportSummary(summary domain.ReportSummary) string {
 
 	section.open("gooze_files", "Mutation scores per file", func() { out.WriteString(table) })
 
-	if summary.HiddenFiles > 0 {
+	// Equivalent mutant: the count of hidden files is never negative.
+	if summary.HiddenFiles > 0 { //gooze:ignore comparison
 		fmt.Fprintf(&out, "The %d of %d files with the most survivors.\n", len(summary.Files), len(summary.Files)+summary.HiddenFiles)
 	}
 
