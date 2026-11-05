@@ -221,13 +221,57 @@ func TestPushPull_RoundTrip(t *testing.T) {
 			require.NoError(t, pushTo(ctx, reportsFixture(t), registry, "main", compat))
 
 			dest := t.TempDir()
-			require.NoError(t, pullFrom(ctx, registry, "main", dest))
+			_, err := pullFrom(ctx, registry, "main", dest)
+			require.NoError(t, err)
 
 			got, err := os.ReadFile(filepath.Join(dest, "pkg", "report.json"))
 			require.NoError(t, err)
 			assert.JSONEq(t, `{"ok":true}`, string(got))
 		})
 	}
+}
+
+func TestPull_ReplacesStoredReports(t *testing.T) {
+	ctx := context.Background()
+	registry := memory.New()
+	require.NoError(t, pushTo(ctx, reportsFixture(t), registry, "main", false))
+
+	dest := t.TempDir()
+	writeFile(t, filepath.Join(dest, "stale.yaml"), "stale")
+	writeFile(t, filepath.Join(dest, "pkg", "old.yaml"), "stale")
+	writeFile(t, filepath.Join(dest, "stale", "old.yaml"), "stale")
+	writeFile(t, filepath.Join(dest, "shard_0", "kept.yaml"), "shard")
+	writeFile(t, filepath.Join(dest, "run", "kept.yaml"), "run")
+
+	digest, err := pullFrom(ctx, registry, "main", dest)
+	require.NoError(t, err)
+
+	want, err := registry.Resolve(ctx, "main")
+	require.NoError(t, err)
+	assert.Equal(t, want.Digest.String(), digest)
+
+	assert.NoFileExists(t, filepath.Join(dest, "stale.yaml"))
+	assert.NoFileExists(t, filepath.Join(dest, "pkg", "old.yaml"))
+	assert.NoDirExists(t, filepath.Join(dest, "stale"))
+	assert.FileExists(t, filepath.Join(dest, "pkg", "report.json"))
+	assert.FileExists(t, filepath.Join(dest, "shard_0", "kept.yaml"), "shard results wait for report merge")
+	assert.FileExists(t, filepath.Join(dest, "run", "kept.yaml"), "a narrowed run waits for report merge")
+}
+
+func TestPull_FailureKeepsTheReports(t *testing.T) {
+	dest := t.TempDir()
+	writeFile(t, filepath.Join(dest, "local.yaml"), "local")
+
+	_, err := pullFrom(context.Background(), memory.New(), "main", dest)
+	require.Error(t, err)
+	assert.FileExists(t, filepath.Join(dest, "local.yaml"))
+}
+
+func writeFile(t *testing.T, path, content string) {
+	t.Helper()
+
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o750))
+	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
 }
 
 func TestPull_PicksTheReportsLayer(t *testing.T) {
@@ -269,7 +313,8 @@ func TestPull_RejectsAnArtifactWithoutReports(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, registry.Tag(ctx, manifest, "main"))
 
-	require.ErrorContains(t, pullFrom(ctx, registry, "main", t.TempDir()), "not a gooze reports artifact")
+	_, err = pullFrom(ctx, registry, "main", t.TempDir())
+	require.ErrorContains(t, err, "not a gooze reports artifact")
 }
 
 func TestCompatHint(t *testing.T) {
@@ -382,18 +427,20 @@ func TestPushPull_RegistryErrors(t *testing.T) {
 	plain := domain.RegistryOptions{PlainHTTP: true}
 
 	// The fake serves no manifests, so a pull finds no tag.
-	err := NewORASRegistry().Pull(context.Background(), host+"/group/project:missing", m.Path(t.TempDir()), plain)
+	_, err := NewORASRegistry().Pull(context.Background(), host+"/group/project:missing", m.Path(t.TempDir()), plain)
 	require.ErrorContains(t, err, "pull from")
 
 	_, err = (&ORASRegistry{}).repository(registry.Reference{Registry: "bad host", Repository: "r"}, plain)
 	require.ErrorContains(t, err, "create repository client")
 
 	require.ErrorContains(t, NewORASRegistry().Push(context.Background(), "bad host/r:main", reports, plain), "parse reference")
-	require.ErrorContains(t, NewORASRegistry().Pull(context.Background(), "bad host/r:main", reports, plain), "parse reference")
+	_, err = NewORASRegistry().Pull(context.Background(), "bad host/r:main", reports, plain)
+	require.ErrorContains(t, err, "parse reference")
 
 	t.Setenv(registryUsernameEnv, "user")
 	t.Setenv(registryPasswordEnv, "")
 
 	require.ErrorContains(t, NewORASRegistry().Push(context.Background(), host+"/g/p:main", reports, plain), "is empty")
-	require.ErrorContains(t, NewORASRegistry().Pull(context.Background(), host+"/g/p:main", reports, plain), "is empty")
+	_, err = NewORASRegistry().Pull(context.Background(), host+"/g/p:main", reports, plain)
+	require.ErrorContains(t, err, "is empty")
 }

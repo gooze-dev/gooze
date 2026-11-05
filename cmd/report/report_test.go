@@ -5,12 +5,14 @@ import (
 	"testing"
 
 	"github.com/spf13/viper"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"gooze.dev/pkg/gooze/internal/domain"
 	domainmocks "gooze.dev/pkg/gooze/internal/domain/mocks"
 	m "gooze.dev/pkg/gooze/internal/model"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 const testOutputKey = "output"
@@ -100,12 +102,21 @@ func TestReportPull(t *testing.T) {
 		return args.Ref == "ghcr.io/org/repo:tag" &&
 			args.Reports == m.Path("/tmp/reports") &&
 			args.Insecure && !args.PlainHTTP
-	})).Return(nil)
+	})).Return(domain.PullResult{
+		Digest:  "sha256:abc",
+		Reports: 3,
+		Score:   domain.MutationScore{Summary: rpt.Summary{Total: 3, Killed: 2, Survived: 1}},
+	}, nil)
 
 	deps := Deps{Workflow: domainmocks.NewMockWorkflow(t), Publisher: pub, OutputKey: testOutputKey}
 
-	require.NoError(t, execReport(t, deps, "pull", "--insecure", "ghcr.io/org/repo:tag"))
-	pub.AssertExpectations(t)
+	cmd := New(deps)
+	out := &bytes.Buffer{}
+	cmd.SetOut(out)
+	cmd.SetArgs([]string{"pull", "--insecure", "ghcr.io/org/repo:tag"})
+
+	require.NoError(t, cmd.Execute())
+	assert.Equal(t, "Pulled ghcr.io/org/repo:tag (sha256:abc): 3 report files, mutation score 66.67% (2 killed, 1 survived)\n", out.String())
 }
 
 func TestReportPushRequiresReference(t *testing.T) {
@@ -128,4 +139,9 @@ func TestReportHasSubcommands(t *testing.T) {
 	for _, want := range []string{"view", "merge", "push", "pull"} {
 		require.Truef(t, got[want], "report should have %q subcommand", want)
 	}
+}
+
+func TestPulledScore(t *testing.T) {
+	assert.Equal(t, "n/a (no mutations)", pulledScore(domain.MutationScore{}))
+	assert.Equal(t, "100.00% (1 killed, 0 survived)", pulledScore(domain.MutationScore{Summary: rpt.Summary{Total: 1, Killed: 1}}))
 }

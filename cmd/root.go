@@ -74,7 +74,7 @@ func init() {
 		domain.WithBuildCache(gocache.New(), adapter.BuildEnvs{localTestAdapter, exprTypes}),
 		domain.WithTestFlags(localTestAdapter),
 	)
-	publisher = domain.NewReportPublisher(ociRegistry)
+	publisher = domain.NewReportPublisher(ociRegistry, reportStore)
 	releaseChecker = adapter.NewModuleProxyReleaseChecker()
 
 	rootCmd.AddCommand(report.New(report.Deps{
