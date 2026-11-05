@@ -72,6 +72,9 @@ func TestReportView_SummaryTopAndSections(t *testing.T) {
 
 	t.Setenv("GITLAB_CI", "true")
 	assert.True(t, viewArgsFor(t).Sections, "GitLab CI folds the long sections")
+
+	t.Setenv("GITLAB_CI", "yes")
+	assert.False(t, viewArgsFor(t).Sections, "only GITLAB_CI=true")
 }
 
 func TestReportView_SummaryUsageErrors(t *testing.T) {
@@ -79,11 +82,13 @@ func TestReportView_SummaryUsageErrors(t *testing.T) {
 		args []string
 		want string
 	}{
-		"all":      {args: []string{"--summary", "--all"}, want: "--summary shortens the per-file summary; --all lists every mutation"},
-		"by-line":  {args: []string{"--summary", "--by-line"}, want: "--summary lists no survivors to group by line"},
-		"sarif":    {args: []string{"--summary", "--format", "sarif"}, want: "--summary shortens the text summary; --format sarif writes none"},
-		"top":      {args: []string{"--top", "-1"}, want: "--top must be 0 (every file) or more, got -1"},
-		"top, all": {args: []string{"--top", "3", "--all"}, want: "--top limits the per-file summary; --all lists every mutation"},
+		"all":         {args: []string{"--summary", "--all"}, want: "--summary shortens the per-file summary; --all lists every mutation"},
+		"by-line":     {args: []string{"--summary", "--by-line"}, want: "--summary lists no survivors to group by line"},
+		"sarif":       {args: []string{"--summary", "--format", "sarif"}, want: "--summary shortens the text summary; --format sarif writes none"},
+		"top":         {args: []string{"--top", "-1"}, want: "--top must be 0 (every file) or more, got -1"},
+		"top, all":    {args: []string{"--top", "3", "--all"}, want: "--top limits the per-file summary; --all lists every mutation"},
+		"top 1, all":  {args: []string{"--top", "1", "--all"}, want: "--top limits the per-file summary; --all lists every mutation"},
+		"codeclimate": {args: []string{"--summary", "--format", "codeclimate"}, want: "--summary shortens the text summary; --format codeclimate writes none"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			stubShowPrefix(t, "", nil)
