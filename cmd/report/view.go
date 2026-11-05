@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -79,7 +80,7 @@ func newViewCmd(deps Deps) *cobra.Command {
 				return err
 			}
 
-			view, err := flags.viewArgs(cmd)
+			view, closeWrites, err := flags.viewArgs(cmd)
 			if err != nil {
 				return err
 			}
@@ -89,10 +90,11 @@ func newViewCmd(deps Deps) *cobra.Command {
 			view.Thresholds = minimums
 			view.DiffThresholds = diffMinimums
 
-			return deps.Workflow.View(cmd.Context(), view)
+			return errors.Join(deps.Workflow.View(cmd.Context(), view), closeWrites())
 		},
 	}
 
+	cmd.Flags().BoolVar(&flags.all, "all", false, "list every mutation with its status and diff instead of a per-file summary")
 	flags.register(cmd)
 	addFormatFlag(cmd)
 	thresholds = AddThresholdFlags(cmd, "threshold", "threshold")
@@ -101,44 +103,61 @@ func newViewCmd(deps Deps) *cobra.Command {
 	return cmd
 }
 
-// viewFlags are the flags that shape the view's output.
+// viewFlags are the flags that shape how report view and merge show the
+// reports. Only view has --all.
 type viewFlags struct {
 	all, byLine, brief bool
 	top                int
+	writes             []string
 }
 
 func (f *viewFlags) register(cmd *cobra.Command) {
-	cmd.Flags().BoolVar(&f.all, "all", false, "list every mutation with its status and diff instead of a per-file summary")
+	cmd.Flags().StringArrayVar(&f.writes, writeFlagName, nil,
+		"also write the report as <format>=<path>, repeatable: "+strings.Join(writeFormats(), ", ")+"; files hold the whole report")
 	cmd.Flags().BoolVar(&f.byLine, "by-line", false, "list the summary's survivors once per line of a file, with the changes folded")
 	cmd.Flags().BoolVar(&f.brief, "summary", false, "print only the per-file table, the score and the threshold verdict, without the survivors")
 	cmd.Flags().IntVar(&f.top, "top", 0, "list only the N files with the most mutations against the score in the table (0: every file)")
 }
 
-// viewArgs checks the flags together with the format and returns the view's
-// output settings. Under GitLab CI, the text summary uses collapsible sections.
-func (f *viewFlags) viewArgs(cmd *cobra.Command) (domain.ViewArgs, error) {
+// viewArgs checks the flags together with the format, creates the --write
+// files and returns the output settings with a function that closes the
+// files. Under GitLab CI, the text summary uses collapsible sections.
+func (f *viewFlags) viewArgs(cmd *cobra.Command) (domain.ViewArgs, func() error, error) {
 	view, err := viewFormatArgs(cmd, f.all, f.byLine)
 	if err != nil {
-		return domain.ViewArgs{}, err
+		return domain.ViewArgs{}, nil, err
 	}
 
 	format, err := readFormat(cmd)
 	if err != nil {
-		return domain.ViewArgs{}, err
+		return domain.ViewArgs{}, nil, err
 	}
 
 	if err := checkTop(f.top, f.all); err != nil {
-		return domain.ViewArgs{}, err
+		return domain.ViewArgs{}, nil, err
 	}
 
 	if err := checkSummary(f.brief, f.all, f.byLine, format); err != nil {
-		return domain.ViewArgs{}, err
+		return domain.ViewArgs{}, nil, err
 	}
 
-	view.All, view.ByLine, view.Summary, view.Top = f.all, f.byLine, f.brief, f.top
+	if len(f.writes) > 0 && f.all {
+		return domain.ViewArgs{}, nil, domain.WithExitCode(m.ExitUsage, errors.New("--write writes the summary; --all lists every mutation"))
+	}
+
+	writes, closeWrites, err := openWrites(f.writes)
+	if err != nil {
+		return domain.ViewArgs{}, nil, err
+	}
+
+	view.All, view.ByLine, view.Summary, view.Top, view.Writes = f.all, f.byLine, f.brief, f.top, writes
 	view.Sections = os.Getenv("GITLAB_CI") == "true"
 
-	return view, nil
+	if len(writes) > 0 && view.Output == nil {
+		view.PathPrefix, view.ToolVersion = repoPathPrefix(cmd.Context()), toolVersion()
+	}
+
+	return view, closeWrites, nil
 }
 
 // checkTop rejects a negative --top, and --top with --all, which has no table.

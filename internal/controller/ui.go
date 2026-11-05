@@ -3,6 +3,7 @@ package controller
 
 import (
 	"context"
+	"io"
 
 	"gooze.dev/pkg/gooze/internal/domain"
 	m "gooze.dev/pkg/gooze/internal/model"
@@ -56,6 +57,7 @@ type UI interface {
 	DisplayCompletedTestInfo(ctx context.Context, currentMutation m.Mutation, mutationResult m.Result)
 	DisplayMutationScore(ctx context.Context, score domain.MutationScore)
 	DisplayReportSummary(ctx context.Context, summary domain.ReportSummary)
+	WriteReportSummary(ctx context.Context, out io.Writer, summary domain.ReportSummary) error
 }
 
 // UpdateNotifier is implemented by UIs that can announce a newer gooze release

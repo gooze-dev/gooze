@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"fmt"
+	"io"
 	"slices"
 	"strings"
 
@@ -33,25 +34,51 @@ const (
 
 // displayView writes summary in args.Format.
 func (w *workflow) displayView(ctx context.Context, args ViewArgs, summary ReportSummary) error {
-	switch args.Format {
-	case FormatGitHub:
+	if args.Format == FormatGitHub {
 		for _, annotation := range gitHubAnnotations(summary.Survivors, args.PathPrefix) {
 			if _, err := fmt.Fprintln(args.Output, annotation); err != nil {
 				return fmt.Errorf("write annotations: %w", err)
 			}
 		}
-	case FormatSARIF:
-		return writeSARIF(args.Output, summary.Survivors, args.PathPrefix, args.ToolVersion)
-	case FormatCodeClimate, FormatGitLab:
-		return writeCodeClimate(args.Output, summary.Survivors, args.PathPrefix)
-	case FormatMetrics:
-		return w.viewMetrics(ctx, args, summary)
-	case FormatText:
+	}
+
+	if written, err := w.writeMachineFormat(ctx, args, args.Format, args.Output, summary); written || err != nil {
+		return err
 	}
 
 	w.progress.DisplayReportSummary(ctx, summary)
 
 	return nil
+}
+
+// writeView writes summary to a report file in its format; text as the
+// whole summary.
+func (w *workflow) writeView(ctx context.Context, args ViewArgs, write ReportWrite, summary ReportSummary) error {
+	if written, err := w.writeMachineFormat(ctx, args, write.Format, write.Output, summary); written || err != nil {
+		return err
+	}
+
+	if err := w.progress.WriteReportSummary(ctx, write.Output, summary); err != nil {
+		return fmt.Errorf("write the text report: %w", err)
+	}
+
+	return nil
+}
+
+// writeMachineFormat writes summary to out in format when it is one of the
+// formats for tools (SARIF, Code Climate, metrics), and reports whether it
+// was.
+func (w *workflow) writeMachineFormat(ctx context.Context, args ViewArgs, format ViewFormat, out io.Writer, summary ReportSummary) (bool, error) {
+	switch format {
+	case FormatSARIF:
+		return true, writeSARIF(out, summary.Survivors, args.PathPrefix, args.ToolVersion)
+	case FormatCodeClimate, FormatGitLab:
+		return true, writeCodeClimate(out, summary.Survivors, args.PathPrefix)
+	case FormatMetrics:
+		return true, w.viewMetrics(ctx, args.Reports, out, summary)
+	default:
+		return false, nil
+	}
 }
 
 // lineKey is a line of a file.

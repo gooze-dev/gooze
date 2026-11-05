@@ -1527,10 +1527,7 @@ func reportHashes(t *testing.T, dir string) []string {
 
 func mergeReporter(ctx context.Context, score *float64) *domainmocks.MockReporter {
 	reporter := new(domainmocks.MockReporter)
-	reporter.EXPECT().StartTest(ctx).Return(nil).Once()
-	reporter.EXPECT().Wait(ctx).Return().Maybe()
-	reporter.EXPECT().Close(ctx).Return().Once()
-	reporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Run(func(_ context.Context, s domain.MutationScore) { *score = s.Score() }).Once()
+	reporter.EXPECT().DisplayReportSummary(ctx, mock.Anything).Run(func(_ context.Context, s domain.ReportSummary) { *score = s.Score.Score() }).Once()
 
 	return reporter
 }

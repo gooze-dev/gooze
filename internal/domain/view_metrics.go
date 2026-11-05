@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	m "gooze.dev/pkg/gooze/internal/model"
 	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
@@ -56,11 +57,11 @@ func writeMetrics(w io.Writer, score rpt.Summary, diff bool) error {
 
 // viewMetrics writes the metrics of summary, named for a --diff run when the
 // viewed reports are one's.
-func (w *workflow) viewMetrics(ctx context.Context, args ViewArgs, summary ReportSummary) error {
-	selection, err := w.reports.LoadSelection(ctx, args.Reports)
+func (w *workflow) viewMetrics(ctx context.Context, reports m.Path, out io.Writer, summary ReportSummary) error {
+	selection, err := w.reports.LoadSelection(ctx, reports)
 	if err != nil {
 		return fmt.Errorf("load the run's selection: %w", err)
 	}
 
-	return writeMetrics(args.Output, summary.Score.Summary, selection.Diff != "")
+	return writeMetrics(out, summary.Score.Summary, selection.Diff != "")
 }

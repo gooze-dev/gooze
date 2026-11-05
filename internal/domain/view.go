@@ -66,6 +66,12 @@ func (w *workflow) View(ctx context.Context, args ViewArgs) error {
 		return w.viewAll(ctx, args)
 	}
 
+	return w.showReports(ctx, args)
+}
+
+// showReports loads the reports once, writes args.Writes, shows them in
+// args.Format and checks them against the thresholds.
+func (w *workflow) showReports(ctx context.Context, args ViewArgs) error {
 	slog.Info("Summarizing mutation test reports", "path", args.Reports, "paths", args.Paths)
 
 	reports, err := w.loadReports(ctx, args.Reports)
@@ -86,6 +92,14 @@ func (w *workflow) View(ctx context.Context, args ViewArgs) error {
 
 	if len(summary.Files) == 0 {
 		summary.Hint = unmergedReportsHint(args.Reports)
+	}
+
+	if args.ByLine {
+		summary.SurvivorLines = groupByLine(summary.Survivors)
+	}
+
+	if err := w.writeViews(ctx, args, summary); err != nil {
+		return err
 	}
 
 	shapeSummary(&summary, args)
@@ -258,13 +272,20 @@ func summarizeView(reports pkg.FileSpill[m.Report], paths []m.Path) (ReportSumma
 	return summary, nil
 }
 
-// shapeSummary applies the view's output settings to summary: survivors per
-// line, a brief summary, the top files and collapsible sections.
-func shapeSummary(summary *ReportSummary, args ViewArgs) {
-	if args.ByLine {
-		summary.SurvivorLines = groupByLine(summary.Survivors)
+// writeViews writes summary to each of args.Writes.
+func (w *workflow) writeViews(ctx context.Context, args ViewArgs, summary ReportSummary) error {
+	for _, write := range args.Writes {
+		if err := w.writeView(ctx, args, write, summary); err != nil {
+			return err
+		}
 	}
 
+	return nil
+}
+
+// shapeSummary applies the view's output settings to summary: a brief
+// summary, the top files and collapsible sections.
+func shapeSummary(summary *ReportSummary, args ViewArgs) {
 	summary.Brief, summary.Sections = args.Summary, args.Sections
 	if args.Top > 0 && args.Top < len(summary.Files) {
 		summary.HiddenFiles = len(summary.Files) - args.Top

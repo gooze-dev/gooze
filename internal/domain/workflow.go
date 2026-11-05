@@ -113,11 +113,24 @@ type ViewArgs struct {
 	PathPrefix string
 	// ToolVersion is gooze's version, recorded in SARIF output.
 	ToolVersion string
+	// Writes are the report files written besides Output, each in its
+	// format, from the same load of the reports. A text file holds the whole
+	// summary: Summary, Top and Sections shape only Output.
+	Writes []ReportWrite
+}
+
+// ReportWrite is a report file a view or merge writes in Format.
+type ReportWrite struct {
+	Format ViewFormat
+	Output io.Writer
 }
 
 // MergeArgs contains the arguments for merging sharded mutation test reports.
 type MergeArgs struct {
 	Reports m.Path
+	// View is how the merged reports are shown and written, as report view
+	// does; its Reports, Paths, All and thresholds are set by the merge.
+	View ViewArgs
 	// Thresholds are the minimum scores of the merged reports.
 	Thresholds Thresholds
 	// DiffThresholds replace Thresholds when the shards are a --diff run's.
@@ -594,40 +607,41 @@ func (w *workflow) Merge(ctx context.Context, args MergeArgs) error {
 		return fmt.Errorf("reports directory path is required")
 	}
 
-	return w.withTestUI(ctx, func() error {
-		shardDirs, err := w.findShardDirs(base)
-		if err != nil {
-			slog.Error("Failed to find shard directories", "error", err, "basePath", base)
-			return err
-		}
+	shardDirs, err := w.findShardDirs(base)
+	if err != nil {
+		slog.Error("Failed to find shard directories", "error", err, "basePath", base)
+		return err
+	}
 
-		selection, err := w.shardSelection(ctx, shardDirs)
-		if err != nil {
-			return err
-		}
+	selection, err := w.shardSelection(ctx, shardDirs)
+	if err != nil {
+		return err
+	}
 
-		if err := w.mergeShards(ctx, base, shardDirs); err != nil {
-			return err
-		}
+	if err := w.mergeShards(ctx, base, shardDirs); err != nil {
+		return err
+	}
 
-		if !sameSelection(selection, rpt.Selection{}) {
-			if err := w.reports.SaveSelection(ctx, base, selection); err != nil {
-				return fmt.Errorf("save selection: %w", err)
-			}
+	if !sameSelection(selection, rpt.Selection{}) {
+		if err := w.reports.SaveSelection(ctx, base, selection); err != nil {
+			return fmt.Errorf("save selection: %w", err)
 		}
+	}
 
-		if err := w.mergeRunReports(ctx, base); err != nil {
-			slog.Error("Failed to merge the run reports", "error", err, "basePath", base)
-			return err
-		}
+	if err := w.mergeRunReports(ctx, base); err != nil {
+		slog.Error("Failed to merge the run reports", "error", err, "basePath", base)
+		return err
+	}
 
-		thresholds := args.Thresholds
-		if selection.Diff != "" {
-			thresholds = args.DiffThresholds
-		}
+	if err := w.regenerateIndex(ctx, base); err != nil {
+		return err
+	}
 
-		return w.regenerateIndexAndScore(ctx, base, thresholds)
-	})
+	view := args.View
+	view.Reports, view.Paths = base, nil
+	view.Thresholds, view.DiffThresholds = args.Thresholds, args.DiffThresholds
+
+	return w.showReports(ctx, view)
 }
 
 // mergeShards moves the shard reports into base and removes the shard dirs.
@@ -668,34 +682,6 @@ func (w *workflow) mergeShards(ctx context.Context, base m.Path, shardDirs []str
 	slog.Info("Merged shard reports", "basePath", base)
 
 	return w.removeShardDirs(shardDirs)
-}
-
-func (w *workflow) regenerateIndexAndScore(ctx context.Context, base m.Path, thresholds Thresholds) error {
-	if err := w.regenerateIndex(ctx, base); err != nil {
-		return err
-	}
-
-	return w.displayScore(ctx, base, thresholds)
-}
-
-// displayScore shows the score of the reports at base and checks it against
-// thresholds.
-func (w *workflow) displayScore(ctx context.Context, base m.Path, thresholds Thresholds) error {
-	reports, err := w.reports.LoadSpillReports(ctx, base)
-	if err != nil {
-		return fmt.Errorf("load reports from base: %w", err)
-	}
-
-	defer closeSpill("reports", reports)
-
-	score, err := scoreReports(reports, nil)
-	if err != nil {
-		return fmt.Errorf("calculate mutation score: %w", err)
-	}
-
-	w.progress.DisplayMutationScore(ctx, score)
-
-	return thresholds.Err(score)
 }
 
 func (w *workflow) findShardDirs(base m.Path) ([]string, error) {
