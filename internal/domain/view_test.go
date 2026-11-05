@@ -253,5 +253,8 @@ func TestWorkflow_View_SummaryTopAndSections(t *testing.T) {
 	full := viewSummary(t, domain.ViewArgs{Reports: dir, Top: 2})
 	assert.Len(t, full.Files, 2)
 	assert.Zero(t, full.HiddenFiles, "a top as large as the files hides none")
+
+	negative := viewSummary(t, domain.ViewArgs{Reports: dir, Top: -1})
+	assert.Len(t, negative.Files, 2, "a negative top lists every file")
 	assert.False(t, full.Brief)
 }
