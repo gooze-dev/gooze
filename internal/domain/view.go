@@ -72,48 +72,95 @@ func (w *workflow) View(ctx context.Context, args ViewArgs) error {
 // showReports loads the reports once, writes args.Writes, shows them in
 // args.Format and checks them against the thresholds.
 func (w *workflow) showReports(ctx context.Context, args ViewArgs) error {
+	_, breach, err := w.showScope(ctx, args)
+
+	return cmp.Or(err, breach)
+}
+
+// showScope is showReports for one scope: it returns the score of the
+// reports, the threshold breach, if any, and any other error apart.
+func (w *workflow) showScope(ctx context.Context, args ViewArgs) (MutationScore, error, error) {
 	slog.Info("Summarizing mutation test reports", "path", args.Reports, "paths", args.Paths)
 
 	reports, err := w.loadReports(ctx, args.Reports)
 	if err != nil {
-		return err
+		return MutationScore{}, nil, err
 	}
 
 	defer closeSpill("reports", reports)
 
+	selection, err := w.reports.LoadSelection(ctx, args.Reports)
+	if err != nil {
+		return MutationScore{}, nil, fmt.Errorf("load the run's selection: %w", err)
+	}
+
+	summary, err := summarizeScope(reports, args, selection)
+	if err != nil {
+		return MutationScore{}, nil, err
+	}
+
+	scope := viewScope{args: args, diff: selection.Diff != ""}
+
+	if err := w.writeViews(ctx, scope, summary); err != nil {
+		return MutationScore{}, nil, err
+	}
+
+	shapeSummary(&summary, args)
+
+	if err := w.displayView(ctx, scope, summary); err != nil {
+		return MutationScore{}, nil, err
+	}
+
+	return summary.Score, scope.thresholds().Err(summary.Score), nil
+}
+
+// summarizeScope summarizes the reports of a scope: per file, with the
+// changed lines named in the score of a --diff run's reports, survivors per
+// line when asked for, and a hint when there are none.
+func summarizeScope(reports pkg.FileSpill[m.Report], args ViewArgs, selection rpt.Selection) (ReportSummary, error) {
 	summary, err := summarizeView(reports, args.Paths)
 	if err != nil {
-		return fmt.Errorf("summarize reports: %w", err)
+		return ReportSummary{}, fmt.Errorf("summarize reports: %w", err)
 	}
 
 	if len(summary.Files) == 0 && len(args.Paths) > 0 {
-		return WithExitCode(m.ExitNoReports, fmt.Errorf("no reports in %s match %s", args.Reports, joinPaths(args.Paths)))
+		return ReportSummary{}, WithExitCode(m.ExitNoReports, fmt.Errorf("no reports in %s match %s", args.Reports, joinPaths(args.Paths)))
 	}
 
 	if len(summary.Files) == 0 {
 		summary.Hint = unmergedReportsHint(args.Reports)
 	}
 
+	if selection.Diff != "" {
+		summary.Score.Selection = "changed lines since " + selection.Diff
+	}
+
 	if args.ByLine {
 		summary.SurvivorLines = groupByLine(summary.Survivors)
 	}
 
-	if err := w.writeViews(ctx, args, summary); err != nil {
-		return err
+	return summary, nil
+}
+
+// viewScope is a view of the reports of one scope: the changed lines of a
+// --diff run (diff) or the whole project.
+type viewScope struct {
+	args ViewArgs
+	diff bool
+}
+
+// thresholds returns the thresholds to check the scope against: the diff
+// ones for the changed lines, the plain ones otherwise, and none when the
+// gate leaves the scope out.
+func (s viewScope) thresholds() Thresholds {
+	switch {
+	case !s.args.Gate.checks(s.diff):
+		return Thresholds{}
+	case s.diff:
+		return s.args.DiffThresholds
+	default:
+		return s.args.Thresholds
 	}
-
-	shapeSummary(&summary, args)
-
-	if err := w.displayView(ctx, args, summary); err != nil {
-		return err
-	}
-
-	thresholds, err := w.viewThresholds(ctx, args)
-	if err != nil {
-		return err
-	}
-
-	return thresholds.Err(summary.Score)
 }
 
 // unmergedReportsHint points at the reports in dir that report view doesn't
@@ -138,25 +185,15 @@ func unmergedReportsHint(dir m.Path) string {
 	return "the last --diff or --run reports are not merged; see them with: gooze report view -o " + runDir
 }
 
-// viewThresholds returns the thresholds to check the viewed reports against:
-// the diff ones when a --diff run wrote them, the plain ones otherwise, and
-// none when args.Gate leaves that scope out.
+// viewThresholds returns the thresholds to check the viewed reports against
+// (see viewScope.thresholds).
 func (w *workflow) viewThresholds(ctx context.Context, args ViewArgs) (Thresholds, error) {
 	selection, err := w.reports.LoadSelection(ctx, args.Reports)
 	if err != nil {
 		return Thresholds{}, fmt.Errorf("load the run's selection: %w", err)
 	}
 
-	diff := selection.Diff != ""
-
-	switch {
-	case !args.Gate.checks(diff):
-		return Thresholds{}, nil
-	case diff:
-		return args.DiffThresholds, nil
-	default:
-		return args.Thresholds, nil
-	}
+	return viewScope{args: args, diff: selection.Diff != ""}.thresholds(), nil
 }
 
 // viewAll replays every mutation with its status, as a run displays them.
@@ -279,9 +316,9 @@ func summarizeView(reports pkg.FileSpill[m.Report], paths []m.Path) (ReportSumma
 }
 
 // writeViews writes summary to each of args.Writes.
-func (w *workflow) writeViews(ctx context.Context, args ViewArgs, summary ReportSummary) error {
-	for _, write := range args.Writes {
-		if err := w.writeView(ctx, args, write, summary); err != nil {
+func (w *workflow) writeViews(ctx context.Context, scope viewScope, summary ReportSummary) error {
+	for _, write := range scope.args.Writes {
+		if err := w.writeView(ctx, scope, write, summary); err != nil {
 			return err
 		}
 	}

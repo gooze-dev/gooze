@@ -116,6 +116,9 @@ type ViewArgs struct {
 	// Gate picks the scope whose thresholds decide the exit code; the
 	// zero value is GateAuto.
 	Gate Gate
+	// DiffScore, when set, is the changed lines' score that a metrics report
+	// of the whole project adds as gooze_diff_*, for a merge of both scopes.
+	DiffScore *rpt.Summary
 	// Writes are the report files written besides Output, each in its
 	// format, from the same load of the reports. A text file holds the whole
 	// summary: Summary, Top and Sections shape only Output.
@@ -165,6 +168,12 @@ type MergeArgs struct {
 	// View is how the merged reports are shown and written, as report view
 	// does; its Reports, Paths, All and thresholds are set by the merge.
 	View ViewArgs
+	// Scopes reports both scopes: it merges the --diff shards in the run
+	// dir and shows the changed lines, then folds them into the base, keeps
+	// the merged run dir and shows the whole project.
+	Scopes bool
+	// DiffWrites are the report files of the changed lines' scope.
+	DiffWrites []ReportWrite
 	// Thresholds are the minimum scores of the merged reports.
 	Thresholds Thresholds
 	// DiffThresholds replace Thresholds when the shards are a --diff run's.
@@ -641,28 +650,15 @@ func (w *workflow) Merge(ctx context.Context, args MergeArgs) error {
 		return fmt.Errorf("reports directory path is required")
 	}
 
-	shardDirs, err := w.findShardDirs(base)
-	if err != nil {
-		slog.Error("Failed to find shard directories", "error", err, "basePath", base)
+	if err := w.mergeShardDirs(ctx, base); err != nil {
 		return err
 	}
 
-	selection, err := w.shardSelection(ctx, shardDirs)
-	if err != nil {
-		return err
+	if args.Scopes {
+		return w.mergeScopes(ctx, args)
 	}
 
-	if err := w.mergeShards(ctx, base, shardDirs); err != nil {
-		return err
-	}
-
-	if !sameSelection(selection, rpt.Selection{}) {
-		if err := w.reports.SaveSelection(ctx, base, selection); err != nil {
-			return fmt.Errorf("save selection: %w", err)
-		}
-	}
-
-	if err := w.mergeRunReports(ctx, base); err != nil {
+	if err := w.mergeRunReports(ctx, base, false); err != nil {
 		slog.Error("Failed to merge the run reports", "error", err, "basePath", base)
 		return err
 	}
@@ -676,6 +672,35 @@ func (w *workflow) Merge(ctx context.Context, args MergeArgs) error {
 	view.Thresholds, view.DiffThresholds = args.Thresholds, args.DiffThresholds
 
 	return w.showReports(ctx, view)
+}
+
+// mergeShardDirs merges the shard dirs of dir into it, and keeps the
+// selection they share.
+func (w *workflow) mergeShardDirs(ctx context.Context, dir m.Path) error {
+	shardDirs, err := w.findShardDirs(dir)
+	if err != nil {
+		slog.Error("Failed to find shard directories", "error", err, "basePath", dir)
+		return err
+	}
+
+	selection, err := w.shardSelection(ctx, shardDirs)
+	if err != nil {
+		return err
+	}
+
+	if err := w.mergeShards(ctx, dir, shardDirs); err != nil {
+		return err
+	}
+
+	if sameSelection(selection, rpt.Selection{}) {
+		return nil
+	}
+
+	if err := w.reports.SaveSelection(ctx, dir, selection); err != nil {
+		return fmt.Errorf("save selection: %w", err)
+	}
+
+	return nil
 }
 
 // mergeShards moves the shard reports into base and removes the shard dirs.
