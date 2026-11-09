@@ -95,6 +95,24 @@ func (s *DiffScope) ReportScope(source rpt.Source) *rpt.Scope {
 	return &rpt.Scope{Base: s.changes.Base, Lines: lines}
 }
 
+// ChangedTests counts the changed test files. With no mutation in scope, none
+// of them paired with a source, so the run tested none of them.
+func (s *DiffScope) ChangedTests() int {
+	if s == nil {
+		return 0
+	}
+
+	count := 0
+
+	for path := range s.changes.Files {
+		if strings.HasSuffix(path, "_test.go") {
+			count++
+		}
+	}
+
+	return count
+}
+
 // testChanged reports whether source's own x_test.go changed. A source without
 // one runs with another test file of its package, which says nothing about
 // what that file tests, so no test change puts it in scope.

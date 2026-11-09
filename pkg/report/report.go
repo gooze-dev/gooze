@@ -25,6 +25,33 @@ type Selection struct {
 	Run string `json:"run,omitempty"`
 	// Mutagens are the --mutagens names.
 	Mutagens []string `json:"mutagens,omitempty"`
+	// ChangedTests counts the test files a --diff run found changed.
+	ChangedTests int `json:"changed_tests,omitempty"`
+}
+
+// PartialFileName is the record, in a reports directory, of a run that
+// stopped before it tested every mutant.
+const PartialFileName = "_partial.json"
+
+// Partial records a run that stopped before it tested every mutant: the
+// fail-fast policy that stopped it, or an interrupt, and how many mutants it
+// took from the cache, tested and was to test. The zero value is a complete
+// run.
+type Partial struct {
+	FailFast    string `json:"fail_fast,omitempty"`
+	Interrupted bool   `json:"interrupted,omitempty"`
+	Cached      int    `json:"cached,omitempty"`
+	Tested      int    `json:"tested,omitempty"`
+	Planned     int    `json:"planned,omitempty"`
+}
+
+// Add sums other's counts into p and keeps the first policy and interrupt.
+func (p *Partial) Add(other Partial) {
+	p.FailFast = cmp.Or(p.FailFast, other.FailFast)
+	p.Interrupted = p.Interrupted || other.Interrupted
+	p.Cached += other.Cached
+	p.Tested += other.Tested
+	p.Planned += other.Planned
 }
 
 // TestStatus is the outcome of testing one mutation. It is stored in report

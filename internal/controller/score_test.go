@@ -255,3 +255,14 @@ func TestFormatMutationScore_TimeoutsKilled(t *testing.T) {
 	score.Selection = "whole project"
 	assert.Equal(t, "75.00% (2 killed, 1 survived, 1 timeout; whole project; timeouts count as killed)", formatMutationScore(score))
 }
+
+func TestFormatMutationScore_ChangedTestsOnly(t *testing.T) {
+	score := domain.MutationScore{ChangedTests: 2, Selection: "changed lines since main"}
+	assert.Equal(t, "100.00% (2 changed test files, no changed source lines to mutate; changed lines since main)", formatMutationScore(score))
+
+	score.ChangedTests = 1
+	assert.Equal(t, "100.00% (1 changed test file, no changed source lines to mutate; changed lines since main)", formatMutationScore(score))
+
+	score.Summary = rpt.Summary{Total: 1, Killed: 1}
+	assert.Equal(t, "100.00% (1 killed, 0 survived; changed lines since main)", formatMutationScore(score), "only when nothing was mutated")
+}

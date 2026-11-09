@@ -75,3 +75,12 @@ func TestReport_ScopeRoundTrip(t *testing.T) {
 	require.NoError(t, yaml.Unmarshal(data, &out))
 	assert.Equal(t, in, out)
 }
+
+func TestPartial_Add(t *testing.T) {
+	p := Partial{FailFast: "gate", Cached: 5, Tested: 3, Planned: 10}
+	p.Add(Partial{FailFast: "first", Interrupted: true, Cached: 2, Tested: 1, Planned: 4})
+	p.Add(Partial{Tested: 2, Planned: 2})
+
+	assert.Equal(t, Partial{FailFast: "gate", Interrupted: true, Cached: 7, Tested: 6, Planned: 16}, p,
+		"counts add up; the first policy and any interrupt stay")
+}

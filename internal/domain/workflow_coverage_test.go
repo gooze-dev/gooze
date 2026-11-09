@@ -68,6 +68,7 @@ func TestWorkflow_Test_CoverageGateSkipsUncovered(t *testing.T) {
 			return nil
 		})
 	mockReportStore.EXPECT().RegenerateIndex(ctx, mock.Anything).Return(nil).Maybe()
+	mockReportStore.EXPECT().SavePartial(ctx, mock.Anything, rpt.Partial{}).Return(nil)
 
 	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockReporter, mockOrchestrator, mockMutagen)
 

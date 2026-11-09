@@ -36,6 +36,8 @@ type MutationScore struct {
 	FailFast FailFast
 	// Shard is a shard's -s value, e.g. "1/3", and "" for an unsharded run.
 	Shard string
+	// ChangedTests counts the test files a --diff run found changed.
+	ChangedTests int
 }
 
 // scoreReports counts the results of the reports whose source include
@@ -104,4 +106,17 @@ func (s MutationScore) timeoutsKilled(killed bool) MutationScore {
 	}
 
 	return s
+}
+
+// partial returns what a run that stopped early records about itself, or the
+// zero value for a complete run.
+func (s MutationScore) partial() rpt.Partial {
+	return rpt.Partial{FailFast: string(s.FailFast), Interrupted: s.Interrupted, Cached: s.Cached, Tested: s.Tested, Planned: s.Planned}
+}
+
+// stoppedEarly sets what partial records on s, for a view of the reports of a
+// run that stopped before it tested every mutant.
+func (s *MutationScore) stoppedEarly(partial rpt.Partial) {
+	s.FailFast, s.Interrupted = FailFast(partial.FailFast), partial.Interrupted
+	s.Cached, s.Tested, s.Planned = partial.Cached, partial.Tested, partial.Planned
 }

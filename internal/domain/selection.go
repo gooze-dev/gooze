@@ -35,7 +35,7 @@ func (s Selection) record() rpt.Selection {
 
 	if s.Diff != nil {
 		info := s.Diff.Info()
-		record.Diff, record.Base = info.Ref, info.Base
+		record.Diff, record.Base, record.ChangedTests = info.Ref, info.Base, s.Diff.ChangedTests()
 	}
 
 	if s.Run != nil {

@@ -60,11 +60,7 @@ func runReportsHint(score domain.MutationScore) string {
 func scoreBreakdown(score domain.MutationScore) string {
 	// Equivalent mutants: counts and lengths are never negative.
 	if score.Total == 0 { //gooze:ignore comparison
-		if score.Shard != "" {
-			return "no mutations in shard " + score.Shard
-		}
-
-		return "no mutations"
+		return noMutations(score)
 	}
 
 	parts := []string{
@@ -162,4 +158,20 @@ func selectionLine(estimation domain.Estimation) string {
 	}
 
 	return "Only " + strings.Join(parts, ", ") + "."
+}
+
+// noMutations explains a score without mutations: a shard's slice, the
+// changed test files of a --diff run, or no mutations at all.
+func noMutations(score domain.MutationScore) string {
+	switch {
+	case score.Shard != "":
+		return "no mutations in shard " + score.Shard
+	case score.ChangedTests == 1:
+		return "1 changed test file, no changed source lines to mutate"
+	// Equivalent mutants: 1 is handled above, so > 1 is >= 1 and > 0.
+	case score.ChangedTests > 1: //gooze:ignore comparison, numbers
+		return fmt.Sprintf("%d changed test files, no changed source lines to mutate", score.ChangedTests)
+	default:
+		return "no mutations"
+	}
 }

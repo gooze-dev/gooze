@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gooze.dev/pkg/gooze/internal/adapter"
 	domain "gooze.dev/pkg/gooze/internal/domain"
 	m "gooze.dev/pkg/gooze/internal/model"
 	rpt "gooze.dev/pkg/gooze/pkg/report"
@@ -294,4 +295,29 @@ func TestWorkflow_Test_FailFastFirstIgnoresNotCoveredMutants(t *testing.T) {
 
 	require.EqualError(t, err, "stopped at the first surviving mutant, c.go:1 (fail-fast first)")
 	assert.Equal(t, []string{"a-3", "a-4", "c-1"}, ws.ran)
+}
+
+func TestWorkflow_Test_FailFastRecordsThePartialRun(t *testing.T) {
+	fx := newInterruptFixture(t)
+	store := adapter.NewReportStore()
+
+	_, _, _ = fx.failFastRun(t, domain.FailFastFirst, domain.Thresholds{}, "a-2")
+
+	partial, err := store.LoadPartial(context.Background(), m.Path(fx.reports))
+	require.NoError(t, err)
+	assert.Equal(t, rpt.Partial{FailFast: "first", Tested: 2, Planned: 6}, partial)
+
+	viewed := viewSummary(t, domain.ViewArgs{Reports: m.Path(fx.reports)})
+	assert.Equal(t, domain.FailFastFirst, viewed.Score.FailFast, "a view says the results are partial")
+	assert.Equal(t, 2, viewed.Score.Tested)
+	assert.Equal(t, 6, viewed.Score.Planned)
+	assert.Equal(t, rpt.Summary{Total: 2, Killed: 1, Survived: 1}, viewed.Score.Summary, "and scores the results it has")
+
+	_, ran, _ := fx.failFastRun(t, domain.FailFastOff, domain.Thresholds{}, "a-2")
+	assert.Equal(t, []string{"a-3", "a-4", "c-1", "c-2"}, ran, "the next run tests the rest")
+
+	partial, err = store.LoadPartial(context.Background(), m.Path(fx.reports))
+	require.NoError(t, err)
+	assert.Equal(t, rpt.Partial{}, partial, "a complete run clears the record")
+	assert.Empty(t, viewSummary(t, domain.ViewArgs{Reports: m.Path(fx.reports)}).Score.FailFast)
 }
