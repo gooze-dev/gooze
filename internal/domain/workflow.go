@@ -113,6 +113,8 @@ type ViewArgs struct {
 	PathPrefix string
 	// ToolVersion is gooze's version, recorded in SARIF output.
 	ToolVersion string
+	// Scope names the scope when a merge shows two.
+	Scope ReportScope
 	// Gate picks the scope whose thresholds decide the exit code; the
 	// zero value is GateAuto.
 	Gate Gate

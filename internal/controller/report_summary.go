@@ -27,10 +27,10 @@ const lineRemoved = "(line removed)"
 func renderReportSummary(summary domain.ReportSummary) string {
 	var out strings.Builder
 
-	section := logSection{out: &out, on: summary.Sections}
+	section := logSection{out: &out, on: summary.Sections, scope: summary.Scope}
 	table := renderFileSummaryTable(summary)
 
-	section.open("gooze_files", "Mutation scores per file", func() { out.WriteString(table) })
+	section.open("files", "Mutation scores per file", func() { out.WriteString(table) })
 
 	// Equivalent mutant: the count of hidden files is never negative.
 	if summary.HiddenFiles > 0 { //gooze:ignore comparison
@@ -47,7 +47,7 @@ func renderReportSummary(summary domain.ReportSummary) string {
 
 	if len(summary.BuildErrors) > 0 {
 		out.WriteString("\n")
-		section.list("gooze_build_errors", fmt.Sprintf("Build errors (%d):", len(summary.BuildErrors)), func() {
+		section.list("build_errors", fmt.Sprintf("Build errors (%d):", len(summary.BuildErrors)), func() {
 			for _, buildError := range summary.BuildErrors {
 				out.WriteString(formatSurvivor(buildError))
 				out.WriteString("\n")
@@ -74,22 +74,30 @@ func writeScore(out *strings.Builder, summary domain.ReportSummary) string {
 var sectionClock = func() int64 { return time.Now().Unix() }
 
 // logSection writes parts of a report as GitLab CI collapsible log sections
-// when on, and as they are otherwise.
+// when on, and as they are otherwise. A summary of one of two scopes names its
+// sections after the scope, so the CI log keeps them apart.
 type logSection struct {
-	out *strings.Builder
-	on  bool
+	out   *strings.Builder
+	on    bool
+	scope domain.ReportScope
 }
 
 // open writes what body writes as an open section named name, whose title
-// shows only in the CI log.
+// shows only in the CI log. The scope's title heads it: as a line of its own
+// outside a CI log, in the section title inside one.
 func (s logSection) open(name, title string, body func()) {
-	if !s.on {
+	switch {
+	case s.on && s.scope.Title != "":
+		s.write(name, "", title+": "+s.scope.Title, body)
+	case s.on:
+		s.write(name, "", title, body)
+	case s.scope.Title != "":
+		// A blank line keeps it apart from the scope shown before it.
+		s.out.WriteString("\n" + s.scope.Title + "\n")
 		body()
-
-		return
+	default:
+		body()
 	}
-
-	s.write(name, "", title, body)
 }
 
 // list writes a heading and the list body writes, as a section named name
@@ -109,6 +117,7 @@ func (s logSection) list(name, heading string, body func()) {
 // writes, and the section_end marker.
 func (s logSection) write(name, options, title string, body func()) {
 	now := sectionClock()
+	name = strings.Join(slices.DeleteFunc([]string{"gooze", s.scope.Name, name}, func(part string) bool { return part == "" }), "_")
 	fmt.Fprintf(s.out, "\x1b[0Ksection_start:%d:%s%s\r\x1b[0K%s\n", now, name, options, title)
 	body()
 	fmt.Fprintf(s.out, "\x1b[0Ksection_end:%d:%s\r\x1b[0K\n", now, name)
@@ -121,7 +130,7 @@ func writeSurvivors(out *strings.Builder, summary domain.ReportSummary, section 
 	case len(summary.Survivors) == 0:
 		out.WriteString("No survivors.\n")
 	case lines == 0:
-		section.list("gooze_survivors", fmt.Sprintf("Survivors (%d):", len(summary.Survivors)), func() {
+		section.list("survivors", fmt.Sprintf("Survivors (%d):", len(summary.Survivors)), func() {
 			for _, survivor := range summary.Survivors {
 				out.WriteString(formatSurvivor(survivor))
 				out.WriteString("\n")
@@ -134,7 +143,7 @@ func writeSurvivors(out *strings.Builder, summary domain.ReportSummary, section 
 			noun = "line"
 		}
 
-		section.list("gooze_survivors", fmt.Sprintf("Survivors (%d on %d %s):", len(summary.Survivors), lines, noun), func() {
+		section.list("survivors", fmt.Sprintf("Survivors (%d on %d %s):", len(summary.Survivors), lines, noun), func() {
 			for _, line := range summary.SurvivorLines {
 				out.WriteString(formatSurvivorLine(line))
 				out.WriteString("\n")

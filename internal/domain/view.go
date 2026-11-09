@@ -40,6 +40,17 @@ type ReportSummary struct {
 	// Sections wraps the long parts of the text summary in collapsible CI
 	// log sections (GitLab's section_start / section_end).
 	Sections bool
+	// Scope names the summary's scope when a merge shows two; zero otherwise.
+	Scope ReportScope
+}
+
+// ReportScope names one of the scopes gooze report merge --scope diff,total
+// shows: Name keeps their CI log sections apart, Title heads their table, and
+// Selection, when set, names them in the score line.
+type ReportScope struct {
+	Name      string
+	Title     string
+	Selection string
 }
 
 // FileSummary counts the mutation results of one source file.
@@ -134,6 +145,9 @@ func summarizeScope(reports pkg.FileSpill[m.Report], args ViewArgs, selection rp
 	if selection.Diff != "" {
 		summary.Score.Selection = "changed lines since " + selection.Diff
 	}
+
+	summary.Scope = args.Scope
+	summary.Score.Selection = cmp.Or(args.Scope.Selection, summary.Score.Selection)
 
 	if args.ByLine {
 		summary.SurvivorLines = groupByLine(summary.Survivors)

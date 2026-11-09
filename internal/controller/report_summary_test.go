@@ -370,3 +370,39 @@ func TestRenderReportSummary_Sections(t *testing.T) {
 		t.Fatal("sections only when asked for")
 	}
 }
+
+func TestRenderReportSummary_Scope(t *testing.T) {
+	summary := sampleReportSummary()
+	if output := renderReportSummary(summary); !strings.HasPrefix(output, " PATH") {
+		t.Fatalf("a summary without a scope starts with its table\noutput:\n%q", output)
+	}
+
+	summary.Scope = domain.ReportScope{Name: "diff", Title: "Changed lines since main"}
+
+	output := renderReportSummary(summary)
+	if !strings.HasPrefix(output, "\nChanged lines since main\n PATH") {
+		t.Fatalf("a scope's title heads its table\noutput:\n%s", output)
+	}
+
+	previous := sectionClock
+	sectionClock = func() int64 { return 1700000000 }
+
+	t.Cleanup(func() { sectionClock = previous })
+
+	summary.Sections = true
+	output = renderReportSummary(summary)
+
+	for _, want := range []string{
+		"\x1b[0Ksection_start:1700000000:gooze_diff_files\r\x1b[0KMutation scores per file: Changed lines since main\n PATH",
+		"\x1b[0Ksection_end:1700000000:gooze_diff_files\r\x1b[0K\n",
+		"\x1b[0Ksection_start:1700000000:gooze_diff_survivors[collapsed=true]\r\x1b[0KSurvivors (2):\n",
+	} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("output missing %q\noutput:\n%q", want, output)
+		}
+	}
+
+	if strings.Contains(output, "\nChanged lines since main\n") {
+		t.Fatalf("in a CI log the section title names the scope, without a heading line\noutput:\n%q", output)
+	}
+}
