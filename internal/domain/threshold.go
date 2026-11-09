@@ -22,11 +22,13 @@ type Thresholds struct {
 	Average float64
 	// File is the minimum score of every file.
 	File float64
-	// MaxSurvivors is the most surviving mutants allowed; --diff runs share it.
+	// MaxSurvivors is the most surviving mutants allowed.
 	MaxSurvivors int
 }
 
-const maxSurvivorsKey = "threshold.max_survivors"
+// maxSurvivorsSuffix ends the key of a survivor cap, such as
+// threshold.diff.max_survivors.
+const maxSurvivorsSuffix = ".max_survivors"
 
 // Set reports whether any threshold is on.
 func (t Thresholds) Set() bool {
@@ -45,7 +47,7 @@ type Breach struct {
 }
 
 func (b Breach) String() string {
-	if b.Key == maxSurvivorsKey {
+	if strings.HasSuffix(b.Key, maxSurvivorsSuffix) {
 		return fmt.Sprintf("%d surviving mutants are above %s %d", int(b.Score), b.Key, int(b.Min))
 	}
 
@@ -98,7 +100,7 @@ func (t Thresholds) Check(score MutationScore) []Breach {
 
 	// Equivalent: max survivors are validated to be 0 or more, so > 0 is != 0.
 	if t.MaxSurvivors > 0 && score.Survived > t.MaxSurvivors { //gooze:ignore comparison
-		breaches = append(breaches, Breach{Key: maxSurvivorsKey, Score: float64(score.Survived), Min: float64(t.MaxSurvivors)})
+		breaches = append(breaches, Breach{Key: t.Key + maxSurvivorsSuffix, Score: float64(score.Survived), Min: float64(t.MaxSurvivors)})
 	}
 
 	files := slices.SortedFunc(slices.Values(score.Files), func(a, b FileSummary) int { return strings.Compare(a.Path, b.Path) })

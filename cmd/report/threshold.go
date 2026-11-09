@@ -1,6 +1,7 @@
 package report
 
 import (
+	"cmp"
 	"fmt"
 	"strconv"
 	"strings"
@@ -26,6 +27,13 @@ type ThresholdFlags struct {
 
 const maxSurvivors = "max_survivors"
 
+// plainThresholds and diffThresholds are the config objects of the whole
+// project's and the changed lines' thresholds.
+const (
+	plainThresholds = "threshold"
+	diffThresholds  = "threshold.diff"
+)
+
 // thresholdHelp describes each threshold flag.
 var thresholdHelp = map[string]string{
 	"total":   "the mutation score",
@@ -44,12 +52,20 @@ func AddThresholdFlags(cmd *cobra.Command, key, prefix string) ThresholdFlags {
 		cmd.Flags().Float64(prefix+"-"+name, 0, fmt.Sprintf("exit with code 3 when %s is below this percent (config %s.%s; 0 is off)", thresholdHelp[name], key, name))
 	}
 
-	_, survivors := config.Lookup(key + "." + maxSurvivors)
+	help, survivors := survivorsHelp[key]
 	if survivors {
-		cmd.Flags().Int(prefix+"-max-survivors", 0, fmt.Sprintf("exit with code 3 when more mutants than this survive (config %s.%s; 0 is off)", key, maxSurvivors))
+		cmd.Flags().Int(prefix+"-max-survivors", 0, help)
 	}
 
 	return ThresholdFlags{key: key, prefix: prefix, survivors: survivors}
+}
+
+// survivorsHelp is the help of each config object's survivor cap; the other
+// objects have none.
+var survivorsHelp = map[string]string{
+	plainThresholds: fmt.Sprintf("exit with code 3 when more mutants than this survive (config %s.%s; 0 is off)", plainThresholds, maxSurvivors),
+	diffThresholds: fmt.Sprintf("exit with code 3 when more mutants than this survive on the changed lines (config %s.%s; 0 uses %s.%s)",
+		diffThresholds, maxSurvivors, plainThresholds, maxSurvivors),
 }
 
 // Read returns the thresholds cmd's flags set, or else the config, checked to
@@ -138,8 +154,8 @@ func (f ThresholdFlags) survivorCap(cmd *cobra.Command) (int, error) {
 	return value, nil
 }
 
-// ReadGates returns the plain and the --diff thresholds; both share
-// threshold.max_survivors.
+// ReadGates returns the plain and the --diff thresholds. Without its own cap
+// (threshold.diff.max_survivors), the --diff gate uses threshold.max_survivors.
 func ReadGates(cmd *cobra.Command, plain, diff ThresholdFlags) (domain.Thresholds, domain.Thresholds, error) {
 	minimums, err := plain.Read(cmd)
 	if err != nil {
@@ -151,7 +167,7 @@ func ReadGates(cmd *cobra.Command, plain, diff ThresholdFlags) (domain.Threshold
 		return domain.Thresholds{}, domain.Thresholds{}, err
 	}
 
-	diffMinimums.MaxSurvivors = minimums.MaxSurvivors
+	diffMinimums.MaxSurvivors = cmp.Or(diffMinimums.MaxSurvivors, minimums.MaxSurvivors)
 
 	return minimums, diffMinimums, nil
 }

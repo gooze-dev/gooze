@@ -123,11 +123,16 @@ func thresholdField() Field {
 		thresholdFields("the score of all mutations", "the average of the per-file scores", "the score every file must reach"),
 		Field{
 			Name: "max_survivors", Kind: KindInt, Default: 0, Min: new(0),
-			Doc: "Most surviving mutants allowed; a --diff run counts the ones on its changed lines.",
+			Doc: "Most surviving mutants allowed; a --diff run counts the ones on its changed lines, unless threshold.diff.max_survivors sets their own cap.",
 		},
 		Field{
 			Name: diffName, Kind: KindObject, Doc: "Thresholds for --diff runs, scored on the changed lines; they replace the scores above there.",
-			Children: thresholdFields("the changed lines' score", "the average of the changed files' scores", "the score every changed file must reach"),
+			Children: append(thresholdFields("the changed lines' score", "the average of the changed files' scores", "the score every changed file must reach"),
+				Field{
+					Name: "max_survivors", Kind: KindInt, Default: 0, Min: new(0),
+					Doc: "Most surviving mutants allowed on the changed lines; 0 uses threshold.max_survivors.",
+				},
+			),
 		},
 	)}
 }
@@ -151,7 +156,7 @@ func reportField() Field {
 		},
 		{
 			Name: "gate", Kind: KindEnum, Default: "auto", Enum: []string{"auto", diffName, "total", "none"},
-			Doc: "Which scope's thresholds decide exit code 3 in gooze report view and merge: the changed lines of a --diff run (diff), the whole project (total) or neither (none). auto gates on the reports' own scope.",
+			Doc: "Which scope's thresholds decide exit code 3 in gooze report view and merge: the changed lines of a --diff run (diff), the whole project (total) or neither (none). auto gates every scope shown: the reports' own, or both with gooze report merge --scope diff,total.",
 		},
 		{Name: "oci", Kind: KindObject, Doc: "How gooze report push packages reports for an OCI registry.", Children: []Field{
 			{
