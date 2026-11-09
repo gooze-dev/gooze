@@ -24,6 +24,9 @@ type Thresholds struct {
 	File float64
 	// MaxSurvivors is the most surviving mutants allowed.
 	MaxSurvivors int
+	// TimeoutsKilled counts timed-out mutants as killed in the score the
+	// thresholds check (threshold.timeouts: killed).
+	TimeoutsKilled bool
 }
 
 // maxSurvivorsSuffix ends the key of a survivor cap, such as
@@ -88,7 +91,8 @@ func (t Thresholds) Err(score MutationScore) error {
 	return WithExitCode(m.ExitBelowThreshold, &ThresholdError{Breaches: breaches})
 }
 
-// Check returns the scores below their thresholds: the total, the survivor
+// Check returns the scores below their thresholds, with timed-out mutants
+// counted as killed when TimeoutsKilled is set: the total, the survivor
 // count, the average of the file scores, then each low file by path. Scores are compared as gooze
 // prints them, rounded to two decimals. A threshold of 0 is off: no score is
 // below it. Files with no scored mutations (none, or none that compile) have
@@ -96,6 +100,7 @@ func (t Thresholds) Err(score MutationScore) error {
 // average, and a set without scored mutations scores 100%, which meets every
 // threshold.
 func (t Thresholds) Check(score MutationScore) []Breach {
+	score = score.timeoutsKilled(t.TimeoutsKilled)
 	breaches := appendBelow(nil, t.Key+".total", "", percent(score.Score()), t.Total)
 
 	// Equivalent: max survivors are validated to be 0 or more, so > 0 is != 0.

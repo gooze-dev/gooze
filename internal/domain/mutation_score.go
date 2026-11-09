@@ -87,3 +87,21 @@ func summarizeReport(report m.Report) rpt.Summary {
 
 	return summary
 }
+
+// timeoutsKilled returns score with its timed-out mutations counted as killed,
+// in total and per file, when killed is set (threshold.timeouts: killed), and
+// score itself otherwise. It leaves score's files as they are.
+func (s MutationScore) timeoutsKilled(killed bool) MutationScore {
+	if !killed {
+		return s
+	}
+
+	s.TimeoutsKilled = true
+	s.Files = slices.Clone(s.Files)
+
+	for i := range s.Files {
+		s.Files[i].TimeoutsKilled = true
+	}
+
+	return s
+}

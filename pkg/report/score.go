@@ -9,6 +9,9 @@ type Summary struct {
 	Timeout    int
 	Error      int
 	NotCovered int
+	// TimeoutsKilled counts timed-out mutations as killed in the score
+	// (threshold.timeouts: killed); Timeout still counts them.
+	TimeoutsKilled bool
 }
 
 // Add counts one mutation result. Unknown statuses count only towards Total.
@@ -40,6 +43,7 @@ func (s *Summary) Merge(other Summary) {
 	s.Timeout += other.Timeout
 	s.Error += other.Error
 	s.NotCovered += other.NotCovered
+	s.TimeoutsKilled = s.TimeoutsKilled || other.TimeoutsKilled
 }
 
 // Scored returns the number of mutations that count towards the score: all of
@@ -48,9 +52,15 @@ func (s Summary) Scored() int {
 	return s.Total - s.Error
 }
 
-// Score returns the mutation score of s, see Score.
+// Score returns the mutation score of s, see Score; with TimeoutsKilled,
+// timed-out mutations count as killed.
 func (s Summary) Score() float64 {
-	return Score(s.Killed, s.Scored())
+	killed := s.Killed
+	if s.TimeoutsKilled {
+		killed += s.Timeout
+	}
+
+	return Score(killed, s.Scored())
 }
 
 // Summarize counts the mutation results of r.

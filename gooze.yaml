@@ -31,6 +31,7 @@ threshold:                    # Quality gates: minimum mutation scores in percen
   average: 0                  # Minimum for the average of the per-file scores.
   file: 0                     # Minimum for the score every file must reach.
   max_survivors: 0            # Most surviving mutants allowed; a --diff run counts the ones on its changed lines, unless threshold.diff.max_survivors sets their own cap.
+  timeouts: survived          # How timed-out mutants count in the score and every gate: survived (not killed) or killed, since a test that hangs on a mutant still detects it.
   diff:                       # Thresholds for --diff runs, scored on the changed lines; they replace the scores above there.
     total: 100                # Minimum for the changed lines' score.
     average: 0                # Minimum for the average of the changed files' scores.

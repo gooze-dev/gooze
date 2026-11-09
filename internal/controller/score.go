@@ -19,6 +19,10 @@ func formatMutationScore(score domain.MutationScore) string {
 		breakdown += "; " + score.Selection
 	}
 
+	if score.TimeoutsKilled {
+		breakdown += "; timeouts count as killed"
+	}
+
 	switch {
 	case score.Interrupted:
 		breakdown += fmt.Sprintf("; interrupted after %d of %d", score.Tested, score.Planned)

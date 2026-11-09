@@ -26,6 +26,7 @@ const (
 	KeyThresholdDiffAverage        = "threshold.diff.average"
 	KeyThresholdDiffFile           = "threshold.diff.file"
 	KeyThresholdDiffMaxSurvivors   = "threshold.diff.max_survivors"
+	KeyThresholdTimeouts           = "threshold.timeouts"
 	KeyReportFormat                = "report.format"
 	KeyReportGate                  = "report.gate"
 	KeyReportOCICompat             = "report.oci.compat"

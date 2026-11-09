@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"gooze.dev/pkg/gooze/internal/domain"
 	m "gooze.dev/pkg/gooze/internal/model"
 	rpt "gooze.dev/pkg/gooze/pkg/report"
@@ -243,4 +245,13 @@ func TestRunReportsHint_ShardWithThresholds(t *testing.T) {
 	if !strings.HasPrefix(got, "Reports of this run are in run/shard_0;") || !strings.HasSuffix(got, "\n"+want) {
 		t.Errorf("runReportsHint() = %q, want the reports line, then %q", got, want)
 	}
+}
+
+func TestFormatMutationScore_TimeoutsKilled(t *testing.T) {
+	score := domain.MutationScore{Summary: rpt.Summary{Total: 4, Killed: 2, Survived: 1, Timeout: 1, TimeoutsKilled: true}}
+
+	assert.Equal(t, "75.00% (2 killed, 1 survived, 1 timeout; timeouts count as killed)", formatMutationScore(score))
+
+	score.Selection = "whole project"
+	assert.Equal(t, "75.00% (2 killed, 1 survived, 1 timeout; whole project; timeouts count as killed)", formatMutationScore(score))
 }

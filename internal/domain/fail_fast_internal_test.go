@@ -9,6 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	m "gooze.dev/pkg/gooze/internal/model"
+	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
+	rpt "gooze.dev/pkg/gooze/pkg/report"
 )
 
 func TestNewFailFastWatch(t *testing.T) {
@@ -33,6 +35,9 @@ func TestNewFailFastWatch(t *testing.T) {
 		"file on a shard":                        {FailFastFile, all, true, nil},
 		"first needs no gates":                   {FailFastFirst, Thresholds{}, false, &Thresholds{}},
 		"first on a shard":                       {FailFastFirst, all, true, &Thresholds{}},
+		"file keeps the timeout policy":          {FailFastFile, Thresholds{Key: "threshold", File: 60, TimeoutsKilled: true}, false, &Thresholds{Key: "threshold", File: 60, TimeoutsKilled: true}},
+		"gate on a shard keeps the timeout policy": {FailFastGate, Thresholds{Key: "threshold", MaxSurvivors: 3, TimeoutsKilled: true}, true,
+			&Thresholds{Key: "threshold", MaxSurvivors: 3, TimeoutsKilled: true}},
 	}
 
 	for name, tc := range cases {
@@ -90,4 +95,24 @@ func TestUntestedErr_FailingTestsOutrankOnlyAGateVerdict(t *testing.T) {
 
 	assert.Equal(t, verdict, untestedErr(verdict, &untestedPackages{}))
 	assert.NoError(t, untestedErr(nil, &untestedPackages{}))
+}
+
+func TestFailFastWatch_TimeoutsKilled(t *testing.T) {
+	for name, tc := range map[string]struct {
+		killed, halts bool
+	}{
+		"a timeout fails a 100% gate":         {killed: false, halts: true},
+		"a timeout counted as killed doesn't": {killed: true, halts: false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var verdict error
+
+			watch := newFailFastWatch(FailFastGate, Thresholds{Key: "threshold", Total: 100, TimeoutsKilled: tc.killed}, false, func(err error) { verdict = err })
+			mutation := m.Mutation{ID: "1", Type: mgen.Comparison, Source: rpt.Source{Origin: &rpt.File{ShortPath: "calc.go", Hash: "h"}}}
+			watch.file(mutation.Source.Key()).untested = 1
+
+			watch.record(mutation, m.Result{mutation.Type: {{MutationID: "1", Status: rpt.Timeout}}})
+			assert.Equal(t, tc.halts, verdict != nil, "verdict: %v", verdict)
+		})
+	}
 }
