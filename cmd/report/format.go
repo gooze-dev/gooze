@@ -128,7 +128,7 @@ func addGateFlag(cmd *cobra.Command) {
 	value, _ := field.Default.(string)
 
 	cmd.Flags().String(gateFlagName, value, "the scope whose thresholds decide exit code 3: "+strings.Join(field.Enum, ", ")+
-		"; auto gates on the reports' own scope (config report.gate)")
+		"; auto gates every scope shown (config report.gate)")
 }
 
 // readGate returns the --gate flag or else report.gate, checked against the

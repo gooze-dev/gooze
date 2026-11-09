@@ -126,11 +126,45 @@ func TestMaxSurvivorsFlag_HelpShowsOff(t *testing.T) {
 	assert.Equal(t, "exit with code 3 when more mutants than this survive (config threshold.max_survivors; 0 is off)", flag.Usage)
 }
 
-func TestMaxSurvivorsFlag_HasNoDiffCopy(t *testing.T) {
+func TestReadGates_DiffMaxSurvivors(t *testing.T) {
+	defer viper.Reset()
+
+	read := func(args ...string) (int, int) {
+		t.Helper()
+
+		cmd := &cobra.Command{Use: "x", RunE: func(*cobra.Command, []string) error { return nil }}
+		plain := AddThresholdFlags(cmd, "threshold", "threshold")
+		diff := AddThresholdFlags(cmd, "threshold.diff", "threshold-diff")
+		require.NoError(t, cmd.ParseFlags(args))
+
+		minimums, diffMinimums, err := ReadGates(cmd, plain, diff)
+		require.NoError(t, err)
+
+		return minimums.MaxSurvivors, diffMinimums.MaxSurvivors
+	}
+
+	total, changed := read("--threshold-max-survivors", "4")
+	assert.Equal(t, []int{4, 4}, []int{total, changed}, "without its own cap, the diff gate uses threshold.max_survivors")
+
+	total, changed = read("--threshold-max-survivors", "4", "--threshold-diff-max-survivors", "1")
+	assert.Equal(t, []int{4, 1}, []int{total, changed})
+
+	viper.Set(config.KeyThresholdDiffMaxSurvivors, 2)
+
+	total, changed = read()
+	assert.Equal(t, []int{0, 2}, []int{total, changed}, "the config sets the diff cap alone")
+
+	total, changed = read("--threshold-diff-max-survivors", "0", "--threshold-max-survivors", "5")
+	assert.Equal(t, []int{5, 5}, []int{total, changed}, "0 falls back to threshold.max_survivors")
+}
+
+func TestMaxSurvivorsFlag_DiffHelp(t *testing.T) {
 	cmd := &cobra.Command{Use: "x"}
 	AddThresholdFlags(cmd, "threshold.diff", "threshold-diff")
 
-	assert.Nil(t, cmd.Flags().Lookup("threshold-diff-max-survivors"), "a --diff run counts its own survivors against threshold.max_survivors")
+	flag := cmd.Flags().Lookup("threshold-diff-max-survivors")
+	require.NotNil(t, flag)
+	assert.Equal(t, "exit with code 3 when more mutants than this survive on the changed lines (config threshold.diff.max_survivors; 0 uses threshold.max_survivors)", flag.Usage)
 }
 
 func TestMaxSurvivorsFlag_Invalid(t *testing.T) {

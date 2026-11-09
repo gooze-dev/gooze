@@ -52,15 +52,17 @@ merges the --diff shards in <reports>/run and shows the changed lines
 (--write-diff writes their files), then folds them into the baseline in
 <reports>, keeps the merged run dir for report view -o <reports>/run, and
 shows the whole project (--write). The metrics of the whole project then add
-gooze_diff_* for the changed lines, with one # EOF. The gate defaults to the
-changed lines; --format applies to the whole project.
+gooze_diff_* for the changed lines, with one # EOF. Each scope is gated on its
+own thresholds, --threshold-diff-* for the changed lines and --threshold-* for
+the whole project, and every breach is reported; --format applies to the whole
+project.
 
 Below a --threshold-* minimum, or with more surviving mutants than
 --threshold-max-survivors, merge exits with code 3. For the shards of a gooze
 run --diff (merge -o .gooze-reports/run), the --threshold-diff-* minimums
 apply instead, as they do for report view. --gate (report.gate) picks the
-scope whose thresholds decide the exit code: auto (the reports' own scope),
-diff, total or none.`
+scopes whose thresholds decide the exit code: auto (every scope shown), diff,
+total or none.`
 
 func newMergeCmd(deps Deps) *cobra.Command {
 	var (

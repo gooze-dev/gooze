@@ -13,8 +13,8 @@ import (
 // mergeScopes merges and shows both scopes of a --diff run: it merges the
 // shards in the run dir and shows the changed lines, then folds them into
 // the base, keeps the merged run dir and shows the whole project, whose
-// metrics add the changed lines'. The gate's scope decides the error; auto
-// gates on the changed lines.
+// metrics add the changed lines'. Auto gates both scopes, each on its own
+// thresholds; diff, total and none narrow that.
 func (w *workflow) mergeScopes(ctx context.Context, args MergeArgs) error {
 	base := args.Reports
 	runDir := m.Path(filepath.Join(string(base), RunDirName))
@@ -23,15 +23,10 @@ func (w *workflow) mergeScopes(ctx context.Context, args MergeArgs) error {
 		return err
 	}
 
-	// A gate that checks the changed lines (auto or diff) gates only on them
-	// here: auto doesn't gate on the whole project too.
-	gate := args.View.Gate
-	if gate.checks(true) {
-		gate = GateDiff
-	}
-
+	// Each scope is checked against its own thresholds; --gate leaves one or
+	// both out.
 	diffView := args.View
-	diffView.Reports, diffView.Paths, diffView.Gate = runDir, nil, gate
+	diffView.Reports, diffView.Paths = runDir, nil
 	diffView.Thresholds, diffView.DiffThresholds = args.Thresholds, args.DiffThresholds
 	// The changed lines' stdout is the text summary; --format is the whole
 	// project's.

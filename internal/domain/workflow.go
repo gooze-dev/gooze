@@ -130,8 +130,8 @@ type ViewArgs struct {
 type Gate string
 
 const (
-	// GateAuto gates on the scope of the reports: the changed lines of a
-	// --diff run's, the whole project otherwise.
+	// GateAuto gates every scope shown, each on its own thresholds: the
+	// scope of the reports, or both with --scope diff,total.
 	GateAuto Gate = "auto"
 	// GateDiff gates only on the changed lines.
 	GateDiff Gate = "diff"

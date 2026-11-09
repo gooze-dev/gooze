@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -109,10 +110,10 @@ func TestMerge_ScopesGate(t *testing.T) {
 		gate domain.Gate
 		want string
 	}{
-		"auto is diff": {gate: domain.GateAuto, want: "mutation score 50.00% is below threshold.diff.total 60%"},
-		"diff":         {gate: domain.GateDiff, want: "mutation score 50.00% is below threshold.diff.total 60%"},
-		"total":        {gate: domain.GateTotal, want: "mutation score 66.67% is below threshold.total 70%"},
-		"none":         {gate: domain.GateNone},
+		"auto checks both": {gate: domain.GateAuto, want: "mutation score 50.00% is below threshold.diff.total 60%\nmutation score 66.67% is below threshold.total 70%"},
+		"diff":             {gate: domain.GateDiff, want: "mutation score 50.00% is below threshold.diff.total 60%"},
+		"total":            {gate: domain.GateTotal, want: "mutation score 66.67% is below threshold.total 70%"},
+		"none":             {gate: domain.GateNone},
 	} {
 		t.Run(name, func(t *testing.T) {
 			shown, err := mergeScopes(t, scopeFixture(t), domain.MergeArgs{
@@ -126,7 +127,69 @@ func TestMerge_ScopesGate(t *testing.T) {
 				return
 			}
 
-			require.EqualError(t, err, tt.want, "one error, naming its scope by its key")
+			require.EqualError(t, err, tt.want, "an error per gated scope, each naming its scope by its key")
+			assert.Equal(t, m.ExitBelowThreshold, exitCodeOf(err))
+		})
+	}
+}
+
+// TestMerge_ScopesApplyEveryGate sets every threshold of both scopes and
+// checks that each breach is reported at once, and that --gate narrows them.
+func TestMerge_ScopesApplyEveryGate(t *testing.T) {
+	// The changed calc.go is re-tested as x killed, y and z survived: 33.33%
+	// with 2 survivors; with other.go the whole project scores 50.00%, its
+	// files average 66.67%.
+	fixture := func(t *testing.T) string {
+		t.Helper()
+
+		base := t.TempDir()
+		saveReports(t, base, mergeReport(mergeSource("h1"), "a", rpt.Killed, nil), mergeReport(otherSource(), "c", rpt.Killed, nil))
+
+		for i, status := range []rpt.TestStatus{rpt.Killed, rpt.Survived, rpt.Survived} {
+			shard := filepath.Join(base, domain.RunDirName, domain.ShardDirPrefix+string(rune('0'+i)))
+			saveReports(t, shard, mergeReport(mergeSource("h2"), []string{"x", "y", "z"}[i], status, nil))
+			saveSelection(t, shard, rpt.Selection{Diff: "main"})
+		}
+
+		return base
+	}
+
+	diffGates := domain.Thresholds{Key: "threshold.diff", Total: 40, Average: 40, File: 40, MaxSurvivors: 1}
+	totalGates := domain.Thresholds{Key: "threshold", Total: 60, Average: 70, File: 40, MaxSurvivors: 1}
+
+	diffBreaches := []string{
+		"mutation score 33.33% is below threshold.diff.total 40%",
+		"2 surviving mutants are above threshold.diff.max_survivors 1",
+		"average file score 33.33% is below threshold.diff.average 40%",
+		"calc.go: score 33.33% is below threshold.diff.file 40%",
+	}
+	totalBreaches := []string{
+		"mutation score 50.00% is below threshold.total 60%",
+		"2 surviving mutants are above threshold.max_survivors 1",
+		"average file score 66.67% is below threshold.average 70%",
+		"calc.go: score 33.33% is below threshold.file 40%",
+	}
+
+	for name, tt := range map[string]struct {
+		gate domain.Gate
+		want []string
+	}{
+		"auto":  {gate: domain.GateAuto, want: append(slices.Clone(diffBreaches), totalBreaches...)},
+		"diff":  {gate: domain.GateDiff, want: diffBreaches},
+		"total": {gate: domain.GateTotal, want: totalBreaches},
+		"none":  {gate: domain.GateNone},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := mergeScopes(t, fixture(t), domain.MergeArgs{
+				View: domain.ViewArgs{Gate: tt.gate}, Thresholds: totalGates, DiffThresholds: diffGates,
+			})
+
+			if tt.want == nil {
+				require.NoError(t, err)
+				return
+			}
+
+			require.EqualError(t, err, strings.Join(tt.want, "\n"))
 			assert.Equal(t, m.ExitBelowThreshold, exitCodeOf(err))
 		})
 	}

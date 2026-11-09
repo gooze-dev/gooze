@@ -576,6 +576,17 @@ func TestRunCmd_MaxSurvivors(t *testing.T) {
 		thresholdsOfRun(t, "--diff", "main", "--threshold-max-survivors", "5", "./..."))
 }
 
+func TestRunCmd_DiffMaxSurvivors(t *testing.T) {
+	assert.Equal(t, domain.Thresholds{Key: "threshold.diff", MaxSurvivors: 1},
+		thresholdsOfRun(t, "--diff", "main", "--threshold-max-survivors", "5", "--threshold-diff-max-survivors", "1", "./..."),
+		"a --diff run counts its survivors against its own cap")
+
+	t.Setenv("GOOZE_THRESHOLD_DIFF_MAX_SURVIVORS", "2")
+
+	assert.Equal(t, domain.Thresholds{Key: "threshold.diff", MaxSurvivors: 2}, thresholdsOfRun(t, "--diff", "main", "./..."))
+	assert.Equal(t, domain.Thresholds{Key: "threshold"}, thresholdsOfRun(t, "./..."), "a full run keeps threshold.max_survivors")
+}
+
 func TestRunCmd_MaxSurvivorsFromEnv(t *testing.T) {
 	t.Setenv("GOOZE_THRESHOLD_MAX_SURVIVORS", "3")
 

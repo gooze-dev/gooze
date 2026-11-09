@@ -57,6 +57,7 @@ func TestConfigDefaults(t *testing.T) {
 		"threshold.diff.total":           0.0,
 		"threshold.diff.average":         0.0,
 		"threshold.diff.file":            0.0,
+		"threshold.diff.max_survivors":   0,
 		"report.format":                  "text",
 		"report.gate":                    "auto",
 		"report.oci.compat":              false,

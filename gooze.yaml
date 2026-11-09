@@ -30,11 +30,12 @@ threshold:                    # Quality gates: minimum mutation scores in percen
   total: 0                    # Minimum for the score of all mutations.
   average: 0                  # Minimum for the average of the per-file scores.
   file: 0                     # Minimum for the score every file must reach.
-  max_survivors: 0            # Most surviving mutants allowed; a --diff run counts the ones on its changed lines.
+  max_survivors: 0            # Most surviving mutants allowed; a --diff run counts the ones on its changed lines, unless threshold.diff.max_survivors sets their own cap.
   diff:                       # Thresholds for --diff runs, scored on the changed lines; they replace the scores above there.
     total: 100                # Minimum for the changed lines' score.
     average: 0                # Minimum for the average of the changed files' scores.
     file: 0                   # Minimum for the score every changed file must reach.
+    max_survivors: 0          # Most surviving mutants allowed on the changed lines; 0 uses threshold.max_survivors.
 
 report:                       # Report output settings.
   format: text                # How gooze report view writes surviving mutants: text, github (workflow annotations on the lines, then the text summary), sarif (a SARIF 2.1.0 log for code scanning) or codeclimate (a Code Climate JSON report for GitLab Code Quality; gitlab is the same).
