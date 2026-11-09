@@ -23,6 +23,9 @@ type ThresholdFlags struct {
 	key       string
 	prefix    string
 	survivors bool
+	// timeouts is set on the whole project's flags, which carry
+	// --threshold-timeouts for both scopes.
+	timeouts bool
 }
 
 const maxSurvivors = "max_survivors"
@@ -57,8 +60,22 @@ func AddThresholdFlags(cmd *cobra.Command, key, prefix string) ThresholdFlags {
 		cmd.Flags().Int(prefix+"-max-survivors", 0, help)
 	}
 
-	return ThresholdFlags{key: key, prefix: prefix, survivors: survivors}
+	timeouts := timeoutsKeys[key]
+	if timeouts {
+		field, _ := config.Lookup(config.KeyThresholdTimeouts)
+		value, _ := field.Default.(string)
+		cmd.Flags().String(timeoutsFlagName, value, fmt.Sprintf("how timed-out mutants count in the score and the gates: %s (config %s)",
+			strings.Join(field.Enum, " or "), config.KeyThresholdTimeouts))
+	}
+
+	return ThresholdFlags{key: key, prefix: prefix, survivors: survivors, timeouts: timeouts}
 }
+
+const timeoutsFlagName = "threshold-timeouts"
+
+// timeoutsKeys holds the config objects whose flags carry
+// --threshold-timeouts: one policy covers both scopes.
+var timeoutsKeys = map[string]bool{plainThresholds: true}
 
 // survivorsHelp is the help of each config object's survivor cap; the other
 // objects have none.
@@ -92,7 +109,36 @@ func (f ThresholdFlags) Read(cmd *cobra.Command) (domain.Thresholds, error) {
 		t.MaxSurvivors = value
 	}
 
+	if f.timeouts {
+		killed, err := timeoutsKilled(cmd)
+		if err != nil {
+			return domain.Thresholds{}, domain.WithExitCode(m.ExitUsage, err)
+		}
+
+		t.TimeoutsKilled = killed
+	}
+
 	return t, nil
+}
+
+// timeoutsKilled reads --threshold-timeouts, or else threshold.timeouts, and
+// reports whether timed-out mutants count as killed.
+func timeoutsKilled(cmd *cobra.Command) (bool, error) {
+	field, _ := config.Lookup(config.KeyThresholdTimeouts)
+	name, value := config.KeyThresholdTimeouts, viper.GetString(config.KeyThresholdTimeouts)
+
+	if cmd.Flags().Changed(timeoutsFlagName) {
+		name = "--" + timeoutsFlagName
+		value, _ = cmd.Flags().GetString(timeoutsFlagName)
+	}
+
+	// The schema lists survived, then killed.
+	killed, ok := map[string]bool{field.Enum[0]: false, field.Enum[1]: true}[cmp.Or(value, field.Enum[0])]
+	if !ok {
+		return false, fmt.Errorf("invalid %s %q: must be one of %s", name, value, strings.Join(field.Enum, ", "))
+	}
+
+	return killed, nil
 }
 
 // value returns the threshold name from its flag or the config.
@@ -168,6 +214,7 @@ func ReadGates(cmd *cobra.Command, plain, diff ThresholdFlags) (domain.Threshold
 	}
 
 	diffMinimums.MaxSurvivors = cmp.Or(diffMinimums.MaxSurvivors, minimums.MaxSurvivors)
+	diffMinimums.TimeoutsKilled = minimums.TimeoutsKilled
 
 	return minimums, diffMinimums, nil
 }

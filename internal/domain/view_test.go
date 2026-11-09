@@ -361,3 +361,28 @@ func TestWorkflow_View_GatePicksTheScopeThatFails(t *testing.T) {
 		})
 	}
 }
+
+func TestWorkflow_View_TimeoutsKilled(t *testing.T) {
+	dir := t.TempDir()
+	saveReports(t, dir, mergeReport(mergeSource("h1"), "a", rpt.Killed, nil), mergeReport(otherSource(), "b", rpt.Timeout, nil))
+
+	gates := domain.Thresholds{Key: "threshold", Total: 100, File: 100}
+
+	reporter := domainmocks.NewMockReporter(t)
+	reporter.EXPECT().DisplayReportSummary(mock.Anything, mock.Anything).Return()
+	wf := domain.NewWorkflow(nil, adapter.NewReportStore(), reporter, nil, nil)
+
+	err := wf.View(context.Background(), domain.ViewArgs{Reports: m.Path(dir), Thresholds: gates})
+	require.EqualError(t, err, "mutation score 50.00% is below threshold.total 100%\nother.go: score 0.00% is below threshold.file 100%")
+
+	gates.TimeoutsKilled = true
+	summary := viewSummary(t, domain.ViewArgs{Reports: m.Path(dir), Thresholds: gates})
+
+	assert.InDelta(t, 1.0, summary.Score.Score(), 0, "the timeout counts as killed")
+	assert.Equal(t, 1, summary.Score.Timeout, "and is still counted as a timeout")
+	assert.True(t, summary.Score.TimeoutsKilled)
+
+	for _, file := range summary.Files {
+		assert.InDelta(t, 1.0, file.Score(), 0, "%s: the table's scores count it too", file.Path)
+	}
+}

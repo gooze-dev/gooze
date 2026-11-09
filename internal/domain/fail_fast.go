@@ -68,10 +68,10 @@ func newFailFastWatch(policy FailFast, gates Thresholds, sharded bool, stop cont
 	switch policy {
 	case FailFastGate:
 		if sharded {
-			gates = Thresholds{Key: gates.Key, MaxSurvivors: gates.MaxSurvivors}
+			gates = Thresholds{Key: gates.Key, MaxSurvivors: gates.MaxSurvivors, TimeoutsKilled: gates.TimeoutsKilled}
 		}
 	case FailFastFile:
-		gates = Thresholds{Key: gates.Key, File: gates.File}
+		gates = Thresholds{Key: gates.Key, File: gates.File, TimeoutsKilled: gates.TimeoutsKilled}
 		if sharded {
 			gates = Thresholds{}
 		}

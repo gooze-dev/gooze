@@ -263,3 +263,56 @@ func codeOf(err error) m.ExitCode {
 
 	return m.ExitFailure
 }
+
+func TestReadGates_Timeouts(t *testing.T) {
+	defer viper.Reset()
+
+	read := func(args ...string) (domain.Thresholds, domain.Thresholds, error) {
+		t.Helper()
+
+		cmd := &cobra.Command{Use: "x", RunE: func(*cobra.Command, []string) error { return nil }}
+		plain := AddThresholdFlags(cmd, "threshold", "threshold")
+		diff := AddThresholdFlags(cmd, "threshold.diff", "threshold-diff")
+		require.NoError(t, cmd.ParseFlags(args))
+
+		return ReadGates(cmd, plain, diff)
+	}
+
+	minimums, diffMinimums, err := read()
+	require.NoError(t, err)
+	assert.False(t, minimums.TimeoutsKilled || diffMinimums.TimeoutsKilled, "timeouts count as survived by default")
+
+	minimums, diffMinimums, err = read("--threshold-timeouts", "killed")
+	require.NoError(t, err)
+	assert.True(t, minimums.TimeoutsKilled && diffMinimums.TimeoutsKilled, "both scopes")
+
+	viper.Set(config.KeyThresholdTimeouts, "killed")
+
+	minimums, _, err = read()
+	require.NoError(t, err)
+	assert.True(t, minimums.TimeoutsKilled, "from the config")
+
+	minimums, _, err = read("--threshold-timeouts", "survived")
+	require.NoError(t, err)
+	assert.False(t, minimums.TimeoutsKilled, "the flag wins")
+
+	_, _, err = read("--threshold-timeouts", "passed")
+	require.EqualError(t, err, `invalid --threshold-timeouts "passed": must be one of survived, killed`)
+	assert.Equal(t, m.ExitUsage, codeOf(err))
+
+	viper.Set(config.KeyThresholdTimeouts, "maybe")
+	_, _, err = read()
+	require.EqualError(t, err, `invalid threshold.timeouts "maybe": must be one of survived, killed`)
+}
+
+func TestTimeoutsFlag_Help(t *testing.T) {
+	cmd := &cobra.Command{Use: "x"}
+	AddThresholdFlags(cmd, "threshold", "threshold")
+	AddThresholdFlags(cmd, "threshold.diff", "threshold-diff")
+
+	flag := cmd.Flags().Lookup("threshold-timeouts")
+	require.NotNil(t, flag)
+	assert.Equal(t, "survived", flag.DefValue)
+	assert.Equal(t, "how timed-out mutants count in the score and the gates: survived or killed (config threshold.timeouts)", flag.Usage)
+	assert.Nil(t, cmd.Flags().Lookup("threshold-diff-timeouts"), "one policy for both scopes")
+}

@@ -126,6 +126,10 @@ func thresholdField() Field {
 			Doc: "Most surviving mutants allowed; a --diff run counts the ones on its changed lines, unless threshold.diff.max_survivors sets their own cap.",
 		},
 		Field{
+			Name: "timeouts", Kind: KindEnum, Default: "survived", Enum: []string{"survived", "killed"},
+			Doc: "How timed-out mutants count in the score and every gate: survived (not killed) or killed, since a test that hangs on a mutant still detects it.",
+		},
+		Field{
 			Name: diffName, Kind: KindObject, Doc: "Thresholds for --diff runs, scored on the changed lines; they replace the scores above there.",
 			Children: append(thresholdFields("the changed lines' score", "the average of the changed files' scores", "the score every changed file must reach"),
 				Field{

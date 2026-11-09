@@ -147,6 +147,8 @@ func summarizeScope(reports pkg.FileSpill[m.Report], args ViewArgs, selection rp
 	}
 
 	summary.Scope = args.Scope
+	summary.Score = summary.Score.timeoutsKilled(args.Thresholds.TimeoutsKilled)
+	summary.Files = summary.Score.Files
 	summary.Score.Selection = cmp.Or(args.Scope.Selection, summary.Score.Selection)
 
 	if args.ByLine {
@@ -233,6 +235,8 @@ func (w *workflow) viewAll(ctx context.Context, args ViewArgs) error {
 		if err != nil {
 			return fmt.Errorf("calculate mutation score: %w", err)
 		}
+
+		score = score.timeoutsKilled(args.Thresholds.TimeoutsKilled)
 
 		slog.Info("Calculated mutation score", "score", score.Score(), "reportsCount", reports.Len(), "mutationsCount", total)
 		w.progress.DisplayUpcomingTestsInfo(ctx, total)

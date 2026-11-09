@@ -587,6 +587,15 @@ func TestRunCmd_DiffMaxSurvivors(t *testing.T) {
 	assert.Equal(t, domain.Thresholds{Key: "threshold"}, thresholdsOfRun(t, "./..."), "a full run keeps threshold.max_survivors")
 }
 
+func TestRunCmd_TimeoutsKilled(t *testing.T) {
+	assert.Equal(t, domain.Thresholds{Key: "threshold.diff", TimeoutsKilled: true},
+		thresholdsOfRun(t, "--diff", "main", "--threshold-timeouts", "killed", "./..."))
+
+	t.Setenv("GOOZE_THRESHOLD_TIMEOUTS", "killed")
+
+	assert.Equal(t, domain.Thresholds{Key: "threshold", TimeoutsKilled: true}, thresholdsOfRun(t, "./..."))
+}
+
 func TestRunCmd_MaxSurvivorsFromEnv(t *testing.T) {
 	t.Setenv("GOOZE_THRESHOLD_MAX_SURVIVORS", "3")
 
