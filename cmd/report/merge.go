@@ -55,7 +55,8 @@ shows the whole project (--write). The metrics of the whole project then add
 gooze_diff_* for the changed lines, with one # EOF. Each scope is gated on its
 own thresholds, --threshold-diff-* for the changed lines and --threshold-* for
 the whole project, and every breach is reported; --format applies to the whole
-project.
+project. The text output titles each scope's table, lists the survivors once,
+under the changed lines, and names the scope in each score line.
 
 Below a --threshold-* minimum, or with more surviving mutants than
 --threshold-max-survivors, merge exits with code 3. For the shards of a gooze

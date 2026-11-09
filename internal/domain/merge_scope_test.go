@@ -78,7 +78,12 @@ func TestMerge_ScopesShowTheDiffThenTheWholeProject(t *testing.T) {
 	assert.Equal(t, rpt.Summary{Total: 2, Killed: 1, Survived: 1}, shown[0].Score.Summary, "the changed lines")
 	assert.Equal(t, "changed lines since main", shown[0].Score.Selection)
 	assert.Equal(t, rpt.Summary{Total: 3, Killed: 2, Survived: 1}, shown[1].Score.Summary, "the baseline with the run folded in")
-	assert.Empty(t, shown[1].Score.Selection)
+	assert.Equal(t, "whole project", shown[1].Score.Selection)
+
+	assert.Equal(t, domain.ReportScope{Name: "diff", Title: "Changed lines since main"}, shown[0].Scope)
+	assert.Equal(t, domain.ReportScope{Name: "total", Title: "Whole project", Selection: "whole project"}, shown[1].Scope)
+	assert.False(t, shown[0].Brief, "the changed lines list their survivors")
+	assert.True(t, shown[1].Brief, "the whole project doesn't list them again")
 
 	assert.Contains(t, diffCQ.String(), `"check_name": "gooze/survived"`)
 	assert.Equal(t, "gooze_mutation_score_percent 66.67\n"+
