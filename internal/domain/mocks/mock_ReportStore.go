@@ -147,6 +147,63 @@ func (_c *MockReportStore_CleanReports_Call) RunAndReturn(run func(context.Conte
 	return _c
 }
 
+// LoadPartial provides a mock function with given fields: ctx, path
+func (_m *MockReportStore) LoadPartial(ctx context.Context, path model.Path) (report.Partial, error) {
+	ret := _m.Called(ctx, path)
+
+	if len(ret) == 0 {
+		panic("no return value specified for LoadPartial")
+	}
+
+	var r0 report.Partial
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, model.Path) (report.Partial, error)); ok {
+		return rf(ctx, path)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, model.Path) report.Partial); ok {
+		r0 = rf(ctx, path)
+	} else {
+		r0 = ret.Get(0).(report.Partial)
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, model.Path) error); ok {
+		r1 = rf(ctx, path)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockReportStore_LoadPartial_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'LoadPartial'
+type MockReportStore_LoadPartial_Call struct {
+	*mock.Call
+}
+
+// LoadPartial is a helper method to define mock.On call
+//   - ctx context.Context
+//   - path model.Path
+func (_e *MockReportStore_Expecter) LoadPartial(ctx interface{}, path interface{}) *MockReportStore_LoadPartial_Call {
+	return &MockReportStore_LoadPartial_Call{Call: _e.mock.On("LoadPartial", ctx, path)}
+}
+
+func (_c *MockReportStore_LoadPartial_Call) Run(run func(ctx context.Context, path model.Path)) *MockReportStore_LoadPartial_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(model.Path))
+	})
+	return _c
+}
+
+func (_c *MockReportStore_LoadPartial_Call) Return(_a0 report.Partial, _a1 error) *MockReportStore_LoadPartial_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockReportStore_LoadPartial_Call) RunAndReturn(run func(context.Context, model.Path) (report.Partial, error)) *MockReportStore_LoadPartial_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // LoadSelection provides a mock function with given fields: ctx, path
 func (_m *MockReportStore) LoadSelection(ctx context.Context, path model.Path) (report.Selection, error) {
 	ret := _m.Called(ctx, path)
@@ -306,6 +363,54 @@ func (_c *MockReportStore_RegenerateIndex_Call) Return(_a0 error) *MockReportSto
 }
 
 func (_c *MockReportStore_RegenerateIndex_Call) RunAndReturn(run func(context.Context, model.Path) error) *MockReportStore_RegenerateIndex_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SavePartial provides a mock function with given fields: ctx, path, partial
+func (_m *MockReportStore) SavePartial(ctx context.Context, path model.Path, partial report.Partial) error {
+	ret := _m.Called(ctx, path, partial)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SavePartial")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, model.Path, report.Partial) error); ok {
+		r0 = rf(ctx, path, partial)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockReportStore_SavePartial_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SavePartial'
+type MockReportStore_SavePartial_Call struct {
+	*mock.Call
+}
+
+// SavePartial is a helper method to define mock.On call
+//   - ctx context.Context
+//   - path model.Path
+//   - partial report.Partial
+func (_e *MockReportStore_Expecter) SavePartial(ctx interface{}, path interface{}, partial interface{}) *MockReportStore_SavePartial_Call {
+	return &MockReportStore_SavePartial_Call{Call: _e.mock.On("SavePartial", ctx, path, partial)}
+}
+
+func (_c *MockReportStore_SavePartial_Call) Run(run func(ctx context.Context, path model.Path, partial report.Partial)) *MockReportStore_SavePartial_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(model.Path), args[2].(report.Partial))
+	})
+	return _c
+}
+
+func (_c *MockReportStore_SavePartial_Call) Return(_a0 error) *MockReportStore_SavePartial_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockReportStore_SavePartial_Call) RunAndReturn(run func(context.Context, model.Path, report.Partial) error) *MockReportStore_SavePartial_Call {
 	_c.Call.Return(run)
 	return _c
 }

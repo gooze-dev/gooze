@@ -143,6 +143,12 @@ type ReportStore interface {
 	CleanReports(ctx context.Context, path m.Path, sources pkg.FileSpill[rpt.Source]) error
 	// SaveSelection records a narrowed run's selection in path.
 	SaveSelection(ctx context.Context, path m.Path, selection rpt.Selection) error
+	// SavePartial records in path a run that stopped before it tested every
+	// mutant, or removes the record when partial is the zero value.
+	SavePartial(ctx context.Context, path m.Path, partial rpt.Partial) error
+	// LoadPartial returns the partial run recorded in path, or the zero value
+	// when the reports are complete.
+	LoadPartial(ctx context.Context, path m.Path) (rpt.Partial, error)
 	// LoadSelection returns the selection recorded in path, or an empty one
 	// when there is none.
 	LoadSelection(ctx context.Context, path m.Path) (rpt.Selection, error)

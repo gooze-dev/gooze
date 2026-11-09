@@ -386,3 +386,12 @@ func TestWorkflow_View_TimeoutsKilled(t *testing.T) {
 		assert.InDelta(t, 1.0, file.Score(), 0, "%s: the table's scores count it too", file.Path)
 	}
 }
+
+func TestWorkflow_View_DiffRunNamesItsChangedTests(t *testing.T) {
+	dir := t.TempDir()
+	saveReports(t, dir)
+	saveSelection(t, dir, rpt.Selection{Diff: "main", ChangedTests: 2})
+
+	summary := viewSummary(t, domain.ViewArgs{Reports: m.Path(dir)})
+	assert.Equal(t, 2, summary.Score.ChangedTests)
+}

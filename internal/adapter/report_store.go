@@ -141,16 +141,52 @@ func (rs *LocalReportStore) writeIndex(dirPath string, builder *indexBuilder) er
 // SaveSelection writes selection to rpt.SelectionFileName in path, which
 // SaveReports has created.
 func (rs *LocalReportStore) SaveSelection(ctx context.Context, path m.Path, selection rpt.Selection) error {
+	return writeRecord(ctx, path, rpt.SelectionFileName, selection)
+}
+
+// SavePartial writes partial to rpt.PartialFileName in path, or removes the
+// file when partial is the zero value of a complete run.
+func (rs *LocalReportStore) SavePartial(ctx context.Context, path m.Path, partial rpt.Partial) error {
+	if partial != (rpt.Partial{}) {
+		return writeRecord(ctx, path, rpt.PartialFileName, partial)
+	}
+
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 
-	data, err := json.Marshal(selection)
-	if err != nil {
-		return fmt.Errorf("marshal selection: %w", err)
+	file := filepath.Join(string(path), rpt.PartialFileName)
+	if err := os.Remove(file); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("remove %s: %w", file, err)
 	}
 
-	file := filepath.Join(string(path), rpt.SelectionFileName)
+	return nil
+}
+
+// LoadPartial reads rpt.PartialFileName from path; a missing file is the
+// zero value of a complete run.
+func (rs *LocalReportStore) LoadPartial(ctx context.Context, path m.Path) (rpt.Partial, error) {
+	return readRecord[rpt.Partial](ctx, path, rpt.PartialFileName)
+}
+
+// LoadSelection reads rpt.SelectionFileName from path; a missing file is an
+// empty selection.
+func (rs *LocalReportStore) LoadSelection(ctx context.Context, path m.Path) (rpt.Selection, error) {
+	return readRecord[rpt.Selection](ctx, path, rpt.SelectionFileName)
+}
+
+// writeRecord writes value as JSON to the file name in path.
+func writeRecord(ctx context.Context, path m.Path, name string, value any) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	data, err := json.Marshal(value)
+	if err != nil {
+		return fmt.Errorf("marshal %s: %w", name, err)
+	}
+
+	file := filepath.Join(string(path), name)
 	if err := os.WriteFile(file, data, 0o600); err != nil {
 		return fmt.Errorf("write %s: %w", file, err)
 	}
@@ -158,30 +194,32 @@ func (rs *LocalReportStore) SaveSelection(ctx context.Context, path m.Path, sele
 	return nil
 }
 
-// LoadSelection reads rpt.SelectionFileName from path; a missing file is an
-// empty selection.
-func (rs *LocalReportStore) LoadSelection(ctx context.Context, path m.Path) (rpt.Selection, error) {
+// readRecord reads the JSON file name in path; a missing file is T's zero
+// value.
+func readRecord[T any](ctx context.Context, path m.Path, name string) (T, error) {
+	var record T
+
 	if err := ctx.Err(); err != nil {
-		return rpt.Selection{}, err
+		return record, err
 	}
 
-	file := filepath.Join(string(path), rpt.SelectionFileName)
+	file := filepath.Join(string(path), name)
 
 	data, err := os.ReadFile(file) //nolint:gosec // the path is the configured reports directory.
 	if errors.Is(err, os.ErrNotExist) {
-		return rpt.Selection{}, nil
+		return record, nil
 	}
 
 	if err != nil {
-		return rpt.Selection{}, fmt.Errorf("read %s: %w", file, err)
+		return record, fmt.Errorf("read %s: %w", file, err)
 	}
 
-	var selection rpt.Selection
-	if err := json.Unmarshal(data, &selection); err != nil {
-		return rpt.Selection{}, fmt.Errorf("parse %s: %w", file, err)
+	if err := json.Unmarshal(data, &record); err != nil {
+		var zero T
+		return zero, fmt.Errorf("parse %s: %w", file, err)
 	}
 
-	return selection, nil
+	return record, nil
 }
 
 // LoadSpillReports loads previously saved reports from disk into a FileSpill.

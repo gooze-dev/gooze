@@ -232,7 +232,9 @@ func TestMerge_KeepsOnlyMainResultsTheRunDidNotReplace(t *testing.T) {
 	})
 	store.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	store.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil)
+	store.EXPECT().SavePartial(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	store.EXPECT().LoadSelection(mock.Anything, m.Path(base)).Return(rpt.Selection{}, nil)
+	store.EXPECT().LoadPartial(mock.Anything, m.Path(base)).Return(rpt.Partial{}, nil)
 
 	var saves [][]string
 

@@ -64,6 +64,8 @@ func TestDiffScope(t *testing.T) {
 	assert.False(t, scope.Includes(rpt.Source{}, 1))
 
 	assert.Equal(t, domain.DiffInfo{Ref: "main", Base: "abc"}, scope.Info())
+	assert.Equal(t, 1, scope.ChangedTests(), "tested_test.go is the one changed test file")
+	assert.Zero(t, (*domain.DiffScope)(nil).ChangedTests())
 }
 
 func TestDiffScope_NilIncludesEverything(t *testing.T) {

@@ -92,6 +92,7 @@ func TestWorkflow_Test_Success(t *testing.T) {
 	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
+	mockReportStore.EXPECT().SavePartial(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
 	mockReporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Return().Maybe()
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
@@ -125,6 +126,7 @@ func TestWorkflow_Test_Success(t *testing.T) {
 	mockOrchestrator.EXPECT().NewWorkspace(mock.Anything).Return(mockWorkspace).Maybe()
 	mockReportStore.EXPECT().SaveReports(ctx, mock.Anything, mock.Anything).Return(nil)
 	mockReportStore.EXPECT().RegenerateIndex(ctx, mock.Anything).Return(nil)
+	mockReportStore.EXPECT().SavePartial(ctx, m.Path("reports.json"), rpt.Partial{}).Return(nil)
 
 	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockReporter, mockOrchestrator, mockMutagen)
 
@@ -153,6 +155,7 @@ func TestWorkflow_Test_GetSourcesError(t *testing.T) {
 	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
+	mockReportStore.EXPECT().SavePartial(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
 	mockReporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Return().Maybe()
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
@@ -188,6 +191,7 @@ func TestWorkflow_Test_GenerateMutationsError(t *testing.T) {
 	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
+	mockReportStore.EXPECT().SavePartial(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
 	mockReporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Return().Maybe()
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
@@ -230,6 +234,7 @@ func TestWorkflow_Test_TestMutationError(t *testing.T) {
 	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(ctx, mock.Anything).Return(nil).Maybe()
+	mockReportStore.EXPECT().SavePartial(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
 	mockReporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Return().Maybe()
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
@@ -282,6 +287,7 @@ func TestWorkflow_Test_SaveReportsError(t *testing.T) {
 	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(ctx, mock.Anything).Return(nil).Maybe()
+	mockReportStore.EXPECT().SavePartial(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
 	mockReporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Return().Maybe()
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
@@ -337,6 +343,7 @@ func TestWorkflow_Test_NoMutations(t *testing.T) {
 	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
+	mockReportStore.EXPECT().SavePartial(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
 	mockReporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Return().Maybe()
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
@@ -363,6 +370,7 @@ func TestWorkflow_Test_NoMutations(t *testing.T) {
 		return reports.Len() == 0
 	})).Return(nil)
 	mockReportStore.EXPECT().RegenerateIndex(ctx, mock.Anything).Return(nil)
+	mockReportStore.EXPECT().SavePartial(ctx, mock.Anything, rpt.Partial{}).Return(nil).Maybe()
 
 	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockReporter, mockOrchestrator, mockMutagen)
 
@@ -390,6 +398,7 @@ func TestWorkflow_Test_MultipleThreads(t *testing.T) {
 	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(ctx, mock.Anything).Return(nil).Maybe()
+	mockReportStore.EXPECT().SavePartial(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
 	mockReporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Return().Maybe()
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
@@ -425,6 +434,7 @@ func TestWorkflow_Test_MultipleThreads(t *testing.T) {
 		return reports.Len() == 3
 	})).Return(nil)
 	mockReportStore.EXPECT().RegenerateIndex(ctx, mock.Anything).Return(nil)
+	mockReportStore.EXPECT().SavePartial(ctx, mock.Anything, rpt.Partial{}).Return(nil).Maybe()
 
 	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockReporter, mockOrchestrator, mockMutagen)
 
@@ -492,6 +502,7 @@ func TestWorkflow_Test_WithSharding(t *testing.T) {
 		return true
 	})).Return(nil)
 	mockReportStore.EXPECT().RegenerateIndex(ctx, expectedShardDir).Return(nil)
+	mockReportStore.EXPECT().SavePartial(ctx, expectedShardDir, rpt.Partial{}).Return(nil)
 
 	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockReporter, mockOrchestrator, mockMutagen)
 
@@ -517,6 +528,7 @@ func TestWorkflow_TestThreadsZeroDoesNotPanic(t *testing.T) {
 	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(ctx, mock.Anything).Return(nil).Maybe()
+	mockReportStore.EXPECT().SavePartial(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
 	mockReporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Return().Maybe()
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
@@ -547,6 +559,7 @@ func TestWorkflow_TestThreadsZeroDoesNotPanic(t *testing.T) {
 	mockOrchestrator.EXPECT().NewWorkspace(mock.Anything).Return(mockWorkspace).Maybe()
 	mockReportStore.EXPECT().SaveReports(ctx, mock.Anything, mock.Anything).Return(nil)
 	mockReportStore.EXPECT().RegenerateIndex(ctx, mock.Anything).Return(nil)
+	mockReportStore.EXPECT().SavePartial(ctx, mock.Anything, rpt.Partial{}).Return(nil).Maybe()
 	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockReporter, mockOrchestrator, mockMutagen)
 
 	// Act
@@ -569,6 +582,7 @@ func TestWorkflow_TestThreadIDWithinBounds(t *testing.T) {
 	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
+	mockReportStore.EXPECT().SavePartial(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
 	mockReporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Return().Maybe()
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
@@ -604,6 +618,7 @@ func TestWorkflow_TestThreadIDWithinBounds(t *testing.T) {
 		return reports.Len() == 2
 	})).Return(nil)
 	mockReportStore.EXPECT().RegenerateIndex(ctx, mock.Anything).Return(nil)
+	mockReportStore.EXPECT().SavePartial(ctx, mock.Anything, rpt.Partial{}).Return(nil).Maybe()
 
 	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockReporter, mockOrchestrator, mockMutagen)
 
@@ -627,6 +642,7 @@ func TestWorkflow_TestThreadIDIsUniqueForThreadsTwo(t *testing.T) {
 	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
+	mockReportStore.EXPECT().SavePartial(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
 	mockReporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Return().Maybe()
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
@@ -679,6 +695,7 @@ func TestWorkflow_TestThreadIDIsUniqueForThreadsTwo(t *testing.T) {
 		return reports.Len() == 2
 	})).Return(nil)
 	mockReportStore.EXPECT().RegenerateIndex(ctx, mock.Anything).Return(nil)
+	mockReportStore.EXPECT().SavePartial(ctx, mock.Anything, rpt.Partial{}).Return(nil).Maybe()
 
 	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockReporter, mockOrchestrator, mockMutagen)
 
@@ -705,6 +722,7 @@ func TestWorkflow_TestWithSkippedMutation(t *testing.T) {
 	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
+	mockReportStore.EXPECT().SavePartial(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
 	mockReporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Return().Maybe()
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
@@ -784,6 +802,7 @@ func TestWorkflow_TestMutationIDExactMatchDoesNotUseHigherID(t *testing.T) {
 	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
+	mockReportStore.EXPECT().SavePartial(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
 	mockReporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Return().Maybe()
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
@@ -866,6 +885,7 @@ func TestWorkflow_TestEmptyResultEntriesReturnsError(t *testing.T) {
 	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
+	mockReportStore.EXPECT().SavePartial(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
 	mockReporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Return().Maybe()
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
@@ -945,6 +965,7 @@ func TestWorkflow_Test_MultipleSources(t *testing.T) {
 	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
+	mockReportStore.EXPECT().SavePartial(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
 	mockReporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Return().Maybe()
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
@@ -1014,6 +1035,7 @@ func TestWorkflow_NewWorkflowV2(t *testing.T) {
 	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
+	mockReportStore.EXPECT().SavePartial(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
 	mockReporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Return().Maybe()
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
@@ -1034,6 +1056,7 @@ func TestWorkflow_TestWithSurvivedMutation(t *testing.T) {
 	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
+	mockReportStore.EXPECT().SavePartial(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
 	mockReporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Return().Maybe()
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
@@ -1121,6 +1144,7 @@ func TestWorkflow_TestWithKilledMutation(t *testing.T) {
 	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
+	mockReportStore.EXPECT().SavePartial(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
 	mockReporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Return().Maybe()
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
@@ -1208,6 +1232,7 @@ func TestWorkflow_Estimate_Success(t *testing.T) {
 	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
+	mockReportStore.EXPECT().SavePartial(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
 	mockReporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Return().Maybe()
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
@@ -1249,6 +1274,7 @@ func TestWorkflow_Estimate_StartError(t *testing.T) {
 	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
+	mockReportStore.EXPECT().SavePartial(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
 	mockReporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Return().Maybe()
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
@@ -1274,6 +1300,7 @@ func TestWorkflow_Estimate_GetMutationsError(t *testing.T) {
 	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
+	mockReportStore.EXPECT().SavePartial(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
 	mockReporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Return().Maybe()
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
@@ -1302,6 +1329,7 @@ func TestWorkflow_Estimate_DisplayError(t *testing.T) {
 	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
+	mockReportStore.EXPECT().SavePartial(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
 	mockReporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Return().Maybe()
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
@@ -1343,6 +1371,7 @@ func TestWorkflow_TestThreadIDStartsAtZero(t *testing.T) {
 	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
+	mockReportStore.EXPECT().SavePartial(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
 	mockReporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Return().Maybe()
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
@@ -1377,6 +1406,7 @@ func TestWorkflow_TestThreadIDStartsAtZero(t *testing.T) {
 	mockOrchestrator.EXPECT().NewWorkspace(mock.Anything).Return(mockWorkspace).Maybe()
 	mockReportStore.EXPECT().SaveReports(ctx, mock.Anything, mock.Anything).Return(nil)
 	mockReportStore.EXPECT().RegenerateIndex(ctx, mock.Anything).Return(nil)
+	mockReportStore.EXPECT().SavePartial(ctx, mock.Anything, rpt.Partial{}).Return(nil).Maybe()
 
 	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockReporter, mockOrchestrator, mockMutagen)
 
@@ -1400,6 +1430,7 @@ func TestWorkflow_TestExactMutationIDMatch(t *testing.T) {
 	mockReportStore := new(domainmocks.MockReportStore)
 	mockReportStore.EXPECT().CleanReports(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
+	mockReportStore.EXPECT().SavePartial(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReporter := new(domainmocks.MockReporter)
 	mockReporter.EXPECT().DisplayMutationScore(ctx, mock.Anything).Return().Maybe()
 	mockOrchestrator := new(domainmocks.MockOrchestrator)
@@ -1656,6 +1687,7 @@ func TestWorkflow_Test_CleansStaleReportsForTestedSources(t *testing.T) {
 			order = append(order, "index")
 			return nil
 		}).Once()
+	mockReportStore.EXPECT().SavePartial(ctx, m.Path("reports"), rpt.Partial{}).Return(nil).Once()
 
 	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockReporter, mockOrchestrator, mockMutagen)
 	err := wf.Test(ctx, domain.TestArgs{
@@ -1707,6 +1739,7 @@ func TestWorkflow_Test_GeneratesMutationsOncePerSource(t *testing.T) {
 	mockReportStore.EXPECT().CleanReports(ctx, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().SaveReports(ctx, mock.Anything, mock.Anything).Return(nil)
 	mockReportStore.EXPECT().RegenerateIndex(ctx, mock.Anything).Return(nil)
+	mockReportStore.EXPECT().SavePartial(ctx, mock.Anything, rpt.Partial{}).Return(nil).Maybe()
 
 	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockReporter, mockOrchestrator, mockMutagen)
 	require.NoError(t, wf.Test(ctx, domain.TestArgs{
@@ -1868,10 +1901,12 @@ func TestWorkflow_Test_ShardedRunRebuildsBaseIndexAfterCleaningDeleted(t *testin
 	mockReportStore.EXPECT().CheckUpdates(ctx, m.Path("reports"), mock.Anything, mock.Anything).Return(spillOf[rpt.Source](t), spillOf(t, gone), nil)
 	mockReportStore.EXPECT().CleanReports(ctx, m.Path("reports"), mock.Anything).Return(nil).Once()
 	mockReportStore.EXPECT().RegenerateIndex(ctx, m.Path("reports")).Return(nil).Once()
+	mockReportStore.EXPECT().SavePartial(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().LoadSpillReports(ctx, m.Path("reports")).Return(spillOf[m.Report](t), nil).Once()
 	mockReportStore.EXPECT().CleanReports(ctx, shardDir, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().SaveReports(ctx, shardDir, mock.Anything).Return(nil).Once()
 	mockReportStore.EXPECT().RegenerateIndex(ctx, shardDir).Return(nil).Once()
+	mockReportStore.EXPECT().SavePartial(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 
 	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockReporter, mockOrchestrator, mockMutagen)
 	require.NoError(t, wf.Test(ctx, domain.TestArgs{
@@ -1977,6 +2012,7 @@ func TestWorkflow_Merge_StoreErrorsAreReturned(t *testing.T) {
 		store.EXPECT().LoadSpillReports(ctx, m.Path(filepath.Join(base, domain.ShardDirPrefix+"0"))).Return(shard, nil).Maybe()
 		configure(store)
 		store.EXPECT().LoadSelection(ctx, mock.Anything).Return(rpt.Selection{}, nil).Maybe()
+		store.EXPECT().LoadPartial(ctx, mock.Anything).Return(rpt.Partial{}, nil).Maybe()
 
 		reporter := new(domainmocks.MockReporter)
 		reporter.EXPECT().StartTest(ctx).Return(nil).Once()
@@ -2015,7 +2051,25 @@ func TestWorkflow_Merge_StoreErrorsAreReturned(t *testing.T) {
 			store.EXPECT().CleanReports(ctx, mock.Anything, mock.Anything).Return(nil)
 			store.EXPECT().SaveReports(ctx, mock.Anything, mock.Anything).Return(nil)
 			store.EXPECT().RegenerateIndex(ctx, mock.Anything).Return(nil).Maybe()
+			store.EXPECT().SavePartial(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 			store.EXPECT().SaveSelection(ctx, mock.Anything, rpt.Selection{Diff: "main", Base: "abc"}).Return(boom)
+		})
+		require.ErrorIs(t, err, boom)
+	})
+
+	t.Run("load shard partial run", func(t *testing.T) {
+		err := run(t, func(store *domainmocks.MockReportStore) {
+			store.EXPECT().LoadPartial(ctx, mock.Anything).Return(rpt.Partial{}, boom)
+		})
+		require.ErrorIs(t, err, boom)
+	})
+
+	t.Run("save merged partial run", func(t *testing.T) {
+		err := run(t, func(store *domainmocks.MockReportStore) {
+			store.EXPECT().CleanReports(ctx, mock.Anything, mock.Anything).Return(nil)
+			store.EXPECT().SaveReports(ctx, mock.Anything, mock.Anything).Return(nil)
+			store.EXPECT().RegenerateIndex(ctx, mock.Anything).Return(nil).Maybe()
+			store.EXPECT().SavePartial(ctx, mock.Anything, rpt.Partial{}).Return(boom)
 		})
 		require.ErrorIs(t, err, boom)
 	})
@@ -2067,6 +2121,7 @@ func TestWorkflow_Test_ShardedRunWithoutDeletedSourcesLeavesBaseUntouched(t *tes
 	mockReportStore.EXPECT().CleanReports(ctx, shardDir, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().SaveReports(ctx, shardDir, mock.Anything).Return(nil).Once()
 	mockReportStore.EXPECT().RegenerateIndex(ctx, shardDir).Return(nil).Once()
+	mockReportStore.EXPECT().SavePartial(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 
 	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockReporter, mockOrchestrator, new(domainmocks.MockMutagen))
 	require.NoError(t, wf.Test(ctx, domain.TestArgs{
@@ -2144,6 +2199,7 @@ func TestWorkflow_Test_ShardFilterExcludesOtherShardsMutations(t *testing.T) {
 	mockReportStore.EXPECT().CleanReports(ctx, mock.Anything, mock.Anything).Return(nil).Maybe()
 	mockReportStore.EXPECT().SaveReports(ctx, mock.Anything, mock.Anything).Return(nil)
 	mockReportStore.EXPECT().RegenerateIndex(ctx, mock.Anything).Return(nil)
+	mockReportStore.EXPECT().SavePartial(ctx, mock.Anything, rpt.Partial{}).Return(nil).Maybe()
 
 	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockReporter, mockOrchestrator, mockMutagen)
 	require.NoError(t, wf.Test(ctx, domain.TestArgs{
@@ -2200,4 +2256,66 @@ func TestWorkflow_Test_MergedMutagensResultsAreCached(t *testing.T) {
 
 	ran, _ = runAddLess(t, cachedTestArgs(reports))
 	assert.Empty(t, ran)
+}
+
+func TestWorkflow_Merge_KeepsFailFastShardsAndSumsTheirRecords(t *testing.T) {
+	ctx := context.Background()
+	store := adapter.NewReportStore()
+	base := t.TempDir()
+
+	shards := []struct {
+		report  m.Report
+		partial rpt.Partial
+	}{
+		{mergeReport(mergeSource("h1"), "a", rpt.Survived, nil), rpt.Partial{FailFast: "gate", Cached: 1, Tested: 1, Planned: 4}},
+		{mergeReport(otherSource(), "b", rpt.Killed, nil), rpt.Partial{FailFast: "gate", Tested: 1, Planned: 3}},
+	}
+
+	for i, shard := range shards {
+		dir := filepath.Join(base, domain.ShardDirPrefix+fmt.Sprint(i))
+		saveReports(t, dir, shard.report)
+		require.NoError(t, store.SavePartial(ctx, m.Path(dir), shard.partial))
+	}
+
+	var score float64
+
+	wf := domain.NewWorkflow(nil, store, mergeReporter(ctx, &score), nil, nil)
+	require.NoError(t, wf.Merge(ctx, domain.MergeArgs{Reports: m.Path(base)}))
+	assert.InDelta(t, 0.5, score, 0, "the fail-fast shards' results are merged")
+
+	partial, err := store.LoadPartial(ctx, m.Path(base))
+	require.NoError(t, err)
+	assert.Equal(t, rpt.Partial{FailFast: "gate", Cached: 1, Tested: 2, Planned: 7}, partial, "the merged reports are partial too")
+
+	for i := range shards {
+		dir := filepath.Join(base, domain.ShardDirPrefix+fmt.Sprint(i))
+		saveReports(t, dir, shards[i].report)
+	}
+
+	wf = domain.NewWorkflow(nil, store, mergeReporter(ctx, &score), nil, nil)
+	require.NoError(t, wf.Merge(ctx, domain.MergeArgs{Reports: m.Path(base)}))
+
+	partial, err = store.LoadPartial(ctx, m.Path(base))
+	require.NoError(t, err)
+	assert.Equal(t, rpt.Partial{}, partial, "complete shards clear the record")
+}
+
+func TestWorkflow_Merge_WithoutShardsKeepsTheRecord(t *testing.T) {
+	ctx := context.Background()
+	store := adapter.NewReportStore()
+	base := t.TempDir()
+
+	saveReports(t, base, mergeReport(mergeSource("h1"), "a", rpt.Survived, nil))
+
+	want := rpt.Partial{FailFast: "first", Tested: 1, Planned: 5}
+	require.NoError(t, store.SavePartial(ctx, m.Path(base), want))
+
+	var score float64
+
+	wf := domain.NewWorkflow(nil, store, mergeReporter(ctx, &score), nil, nil)
+	require.NoError(t, wf.Merge(ctx, domain.MergeArgs{Reports: m.Path(base)}))
+
+	partial, err := store.LoadPartial(ctx, m.Path(base))
+	require.NoError(t, err)
+	assert.Equal(t, want, partial, "a merge without shards leaves the run's record")
 }

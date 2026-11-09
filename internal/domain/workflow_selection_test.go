@@ -126,6 +126,7 @@ func TestWorkflow_Test_RunAndMutagensSelectAndRecordScope(t *testing.T) {
 		})
 	})
 	store.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil)
+	store.EXPECT().SavePartial(mock.Anything, mock.Anything, rpt.Partial{}).Return(nil).Maybe()
 	store.EXPECT().SaveSelection(mock.Anything, m.Path(".gooze-reports/run"), rpt.Selection{Run: "Next$", Mutagens: []string{"comparison"}}).Return(nil)
 
 	wf := domain.NewWorkflow(fs, store, reporter, orchestrator, mutagen)
@@ -211,6 +212,7 @@ func newNarrowedRunFixture(t *testing.T, types ...mgen.Type) *narrowedRunFixture
 		return nil
 	})
 	store.EXPECT().SaveSelection(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+	store.EXPECT().SavePartial(mock.Anything, mock.Anything, rpt.Partial{}).Return(nil).Maybe()
 
 	for _, call := range []string{"StartTest", "Wait", "Close", "DisplayConcurrencyInfo", "DisplayUpcomingTestsInfo", "DisplayStartingTestInfo", "DisplayCompletedTestInfo"} {
 		reporter.On(call, mock.Anything).Return(nil).Maybe()

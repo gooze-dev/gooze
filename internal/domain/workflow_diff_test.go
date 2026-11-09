@@ -238,6 +238,7 @@ func newDiffRunFixture(t *testing.T) *diffRunFixture {
 		})
 	}).Maybe()
 	f.store.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
+	f.store.EXPECT().SavePartial(mock.Anything, mock.Anything, rpt.Partial{}).Return(nil).Maybe()
 	f.store.EXPECT().SaveSelection(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, _ m.Path, sel rpt.Selection) error {
 		f.selection = &sel
 		return nil
@@ -267,8 +268,8 @@ func TestWorkflow_Test_DiffTestsOnlyChangedLines(t *testing.T) {
 	assert.ElementsMatch(t, []string{"c3a", "c3b", "t5"}, f.tested, "calc.go line 3 and all of tested.go")
 	// Only the sources a diff run tests lose their stored reports; same.go keeps its own.
 	assert.ElementsMatch(t, []string{"calc.go", "tested.go"}, f.cleaned)
-	assert.Equal(t, &rpt.Selection{Diff: "origin/main", Base: "1a2b3c4d"}, f.selection,
-		"the run records that it is a diff run, for report view's diff thresholds")
+	assert.Equal(t, &rpt.Selection{Diff: "origin/main", Base: "1a2b3c4d", ChangedTests: 1}, f.selection,
+		"the run records that it is a diff run, for report view's diff thresholds, and its changed test files")
 
 	require.Len(t, f.saved, 3)
 
@@ -328,4 +329,20 @@ func TestWorkflow_Test_DiffErrorStopsTheRun(t *testing.T) {
 	require.ErrorIs(t, err, domain.ErrUnknownRef)
 	assert.Empty(t, f.tested)
 	f.fs.AssertNotCalled(t, "Stream", mock.Anything, mock.Anything)
+}
+
+func TestWorkflow_Test_DiffOfOnlyTestFilesRecordsThem(t *testing.T) {
+	f := newDiffRunFixture(t)
+	f.changes.EXPECT().Changes(mock.Anything, mock.Anything, "origin/main").Return(domain.ChangeSet{
+		Ref: "origin/main", Base: "1a2b3c4d",
+		Files: map[string]domain.FileChange{
+			"/p/extra_test.go": {Whole: true},
+			"/p/more_test.go":  {Lines: []domain.LineRange{{Start: 2, End: 2}}},
+		},
+	}, nil).Once()
+
+	require.NoError(t, f.wf.Test(context.Background(), diffTestArgs(0, 1)))
+
+	assert.Empty(t, f.tested, "no source pairs with the changed tests")
+	assert.Equal(t, &rpt.Selection{Diff: "origin/main", Base: "1a2b3c4d", ChangedTests: 2}, f.selection)
 }

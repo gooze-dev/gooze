@@ -105,10 +105,17 @@ func (w *workflow) showScope(ctx context.Context, args ViewArgs) (MutationScore,
 		return MutationScore{}, nil, fmt.Errorf("load the run's selection: %w", err)
 	}
 
+	partial, err := w.reports.LoadPartial(ctx, args.Reports)
+	if err != nil {
+		return MutationScore{}, nil, fmt.Errorf("load the partial run: %w", err)
+	}
+
 	summary, err := summarizeScope(reports, args, selection)
 	if err != nil {
 		return MutationScore{}, nil, err
 	}
+
+	summary.Score.stoppedEarly(partial)
 
 	scope := viewScope{args: args, diff: selection.Diff != ""}
 
@@ -145,6 +152,8 @@ func summarizeScope(reports pkg.FileSpill[m.Report], args ViewArgs, selection rp
 	if selection.Diff != "" {
 		summary.Score.Selection = "changed lines since " + selection.Diff
 	}
+
+	summary.Score.ChangedTests = selection.ChangedTests
 
 	summary.Scope = args.Scope
 	summary.Score = summary.Score.timeoutsKilled(args.Thresholds.TimeoutsKilled)

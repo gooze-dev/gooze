@@ -510,23 +510,9 @@ func (w *workflow) finalizeReports(ctx context.Context, args TestArgs, sel Selec
 		return err
 	}
 
-	score, err := runScore(sel, reportsDir, sources, reports, run)
+	score, err := w.scoreRun(ctx, args, sel, reportsDir, sources, reports, run)
 	if err != nil {
-		return fmt.Errorf("calculate mutation score: %w", err)
-	}
-
-	score = score.timeoutsKilled(args.Thresholds.TimeoutsKilled)
-
-	score.ThresholdsSkipped = args.Thresholds.Set() && args.Sharded()
-	if args.Sharded() {
-		score.Shard = fmt.Sprintf("%d/%d", args.ShardIndex, args.TotalShardCount)
-	}
-
-	score.Interrupted = run.interrupted
-	score.FailFast = run.failFast
-
-	if run.partial() {
-		score.Planned = run.planned
+		return err
 	}
 
 	slog.Info("Calculated mutation score", "score", score.Score(), "cached", score.Cached, "tested", score.Tested)
@@ -545,6 +531,39 @@ func (w *workflow) finalizeReports(ctx context.Context, args TestArgs, sel Selec
 	}
 
 	return codedStop(run.stop)
+}
+
+// scoreRun scores the run (see runScore) and records in reportsDir whether it
+// stopped before it tested every mutant, so report view and merge can say so.
+func (w *workflow) scoreRun(ctx context.Context, args TestArgs, sel Selection, reportsDir m.Path, sources sourceSet, reports pkg.FileSpill[m.Report], run testedRun) (MutationScore, error) {
+	score, err := runScore(sel, reportsDir, sources, reports, run)
+	if err != nil {
+		return MutationScore{}, fmt.Errorf("calculate mutation score: %w", err)
+	}
+
+	score = score.timeoutsKilled(args.Thresholds.TimeoutsKilled)
+	score.ChangedTests = sel.Diff.ChangedTests()
+
+	score.ThresholdsSkipped = args.Thresholds.Set() && args.Sharded()
+	if args.Sharded() {
+		score.Shard = fmt.Sprintf("%d/%d", args.ShardIndex, args.TotalShardCount)
+	}
+
+	score.Interrupted = run.interrupted
+	score.FailFast = run.failFast
+
+	var partial rpt.Partial
+
+	if run.partial() {
+		score.Planned = run.planned
+		partial = score.partial()
+	}
+
+	if err := w.reports.SavePartial(ctx, reportsDir, partial); err != nil {
+		return MutationScore{}, fmt.Errorf("record the partial run: %w", err)
+	}
+
+	return score, nil
 }
 
 // codedStop returns a fail-fast stop's verdict with exit code 3, or nil.
@@ -692,8 +711,25 @@ func (w *workflow) mergeShardDirs(ctx context.Context, dir m.Path) error {
 		return err
 	}
 
+	partial, err := w.shardsPartial(ctx, shardDirs)
+	if err != nil {
+		return err
+	}
+
 	if err := w.mergeShards(ctx, dir, shardDirs); err != nil {
 		return err
+	}
+
+	// Without shards there is nothing to merge, and no shard selection or
+	// partial run to record. Equivalent mutant: a length is never negative.
+	if len(shardDirs) == 0 { //gooze:ignore comparison
+		return nil
+	}
+
+	// The merged reports are partial when a shard's were, and complete
+	// otherwise; their results are merged either way.
+	if err := w.reports.SavePartial(ctx, dir, partial); err != nil {
+		return fmt.Errorf("record the partial run: %w", err)
 	}
 
 	if sameSelection(selection, rpt.Selection{}) {
@@ -730,6 +766,22 @@ func (w *workflow) shardSelection(ctx context.Context, shardDirs []string) (rpt.
 	}
 
 	return selection, nil
+}
+
+// shardsPartial sums the partial runs the shards recorded.
+func (w *workflow) shardsPartial(ctx context.Context, shardDirs []string) (rpt.Partial, error) {
+	var partial rpt.Partial
+
+	for _, dir := range shardDirs {
+		shard, err := w.reports.LoadPartial(ctx, m.Path(dir))
+		if err != nil {
+			return rpt.Partial{}, fmt.Errorf("load the partial run of %s: %w", dir, err)
+		}
+
+		partial.Add(shard)
+	}
+
+	return partial, nil
 }
 
 func sameSelection(a, b rpt.Selection) bool {

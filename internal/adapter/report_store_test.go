@@ -1648,3 +1648,33 @@ func TestLocalReportStore_CheckUpdates_OnlyLinesOrFunctionsLeftOutMakeASourcePar
 		})
 	}
 }
+
+func TestLocalReportStore_Partial(t *testing.T) {
+	ctx := context.Background()
+	dir := m.Path(t.TempDir())
+	rs := NewReportStore()
+
+	got, err := rs.LoadPartial(ctx, dir)
+	require.NoError(t, err)
+	assert.Equal(t, rpt.Partial{}, got, "no record: the reports are complete")
+
+	want := rpt.Partial{FailFast: "first", Cached: 3, Tested: 2, Planned: 6}
+	require.NoError(t, rs.SavePartial(ctx, dir, want))
+
+	got, err = rs.LoadPartial(ctx, dir)
+	require.NoError(t, err)
+	assert.Equal(t, want, got)
+
+	reports, err := rs.LoadSpillReports(ctx, dir)
+	require.NoError(t, err)
+	assert.Equal(t, uint64(0), reports.Len(), "the record isn't a report")
+	require.NoError(t, reports.Close())
+
+	require.NoError(t, rs.SavePartial(ctx, dir, rpt.Partial{}), "a complete run removes the record")
+	assert.NoFileExists(t, filepath.Join(string(dir), rpt.PartialFileName))
+	require.NoError(t, rs.SavePartial(ctx, dir, rpt.Partial{}), "also when there is none")
+
+	require.NoError(t, os.WriteFile(filepath.Join(string(dir), rpt.PartialFileName), []byte("{"), 0o600))
+	_, err = rs.LoadPartial(ctx, dir)
+	require.Error(t, err)
+}

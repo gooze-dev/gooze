@@ -101,6 +101,7 @@ func runChecked(t *testing.T, ctx context.Context, ws domain.Workspace, mutation
 			})
 		}).Maybe()
 	mockReportStore.EXPECT().RegenerateIndex(mock.Anything, mock.Anything).Return(nil).Maybe()
+	mockReportStore.EXPECT().SavePartial(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 
 	wf := domain.NewWorkflow(mockFSAdapter, mockReportStore, mockReporter, mockOrchestrator, mockMutagen)
 
