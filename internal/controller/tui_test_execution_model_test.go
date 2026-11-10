@@ -225,7 +225,7 @@ func TestTestExecutionModel_WindowSizeAndViews(t *testing.T) {
 		t.Fatalf("viewResults missing title")
 	}
 
-	box := m.renderResultsBox("6")
+	box := m.renderResultsBox()
 	if !strings.Contains(box, "ID") {
 		t.Fatalf("renderResultsBox missing headers")
 	}
@@ -238,7 +238,7 @@ func TestTestExecutionModel_WindowSizeAndViews(t *testing.T) {
 	m.threads = 2
 	m.threadFiles = map[int]string{0: "", 1: "path/to/long/file.go"}
 	m.threadMutationIDs = map[int]string{1: "abcd5678"}
-	threadBox := m.renderThreadBox("6")
+	threadBox := m.renderThreadBox()
 	if !strings.Contains(threadBox, "Thread") {
 		t.Fatalf("renderThreadBox missing thread label")
 	}
@@ -247,7 +247,7 @@ func TestTestExecutionModel_WindowSizeAndViews(t *testing.T) {
 	m.threads = 1
 	m.threadFiles = map[int]string{0: "file.go"}
 	m.threadMutationIDs = map[int]string{0: ""}
-	threadBox = m.renderThreadBox("6")
+	threadBox = m.renderThreadBox()
 	if strings.Contains(threadBox, "Thread") {
 		t.Fatalf("single thread mode should not have Thread label")
 	}
@@ -492,5 +492,53 @@ func TestTestResultDelegate_BoldIDAndStatus(t *testing.T) {
 		if !idStyle.GetBold() || !statusStyle.GetBold() {
 			t.Fatalf("selected=%v: id bold %v, status bold %v; want both bold", selected, idStyle.GetBold(), statusStyle.GetBold())
 		}
+	}
+}
+
+func TestDiffLineStyle(t *testing.T) {
+	tests := []struct {
+		line   string
+		fg, bg lipgloss.TerminalColor
+		bold   bool
+	}{
+		{"+++ mutated", themeToxic, themeToxicFill, true},
+		{"--- original", themeAccent, lipgloss.NoColor{}, true},
+		{"@@ -1 +1 @@", themeMuted, lipgloss.NoColor{}, true},
+		{"+	return a - b", themeToxic, themeToxicFill, false},
+		{"-	return a + b", themeAccent, lipgloss.NoColor{}, false},
+		{"   ", themeMuted, lipgloss.NoColor{}, false},
+		{" 	x := 1", themeText, lipgloss.NoColor{}, false},
+	}
+
+	for _, tt := range tests {
+		style := diffLineStyle(tt.line)
+		if got := style.GetForeground(); got != tt.fg {
+			t.Errorf("diffLineStyle(%q) foreground = %+v, want %+v", tt.line, got, tt.fg)
+		}
+
+		if got := style.GetBackground(); got != tt.bg {
+			t.Errorf("diffLineStyle(%q) background = %+v, want %+v", tt.line, got, tt.bg)
+		}
+
+		if got := style.GetBold(); got != tt.bold {
+			t.Errorf("diffLineStyle(%q) bold = %v, want %v", tt.line, got, tt.bold)
+		}
+	}
+}
+
+func TestTestResultDelegate_ThemeColors(t *testing.T) {
+	delegate := testResultDelegate{}
+	result := testResult{id: "abcd", file: "a.go", typ: "comparison", status: "survived"}
+
+	idStyle, statusStyle, typeStyle, fileStyle, _ := delegate.getStylesAndFile(result, false, 20)
+	if idStyle.GetForeground() != themeText || typeStyle.GetForeground() != themeMuted ||
+		fileStyle.GetForeground() != themeAccent || statusStyle.GetForeground() != themeOrange {
+		t.Fatalf("unselected row colors: id %+v type %+v file %+v status %+v",
+			idStyle.GetForeground(), typeStyle.GetForeground(), fileStyle.GetForeground(), statusStyle.GetForeground())
+	}
+
+	idStyle, _, _, fileStyle, _ = delegate.getStylesAndFile(result, true, 20)
+	if idStyle.GetBackground() != themeHighlight || fileStyle.GetForeground() != themeHighlightText {
+		t.Fatalf("selected row: id bg %+v file fg %+v, want highlight", idStyle.GetBackground(), fileStyle.GetForeground())
 	}
 }

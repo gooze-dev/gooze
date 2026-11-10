@@ -12,7 +12,7 @@ func withUpdateNotice(title, latest string) string {
 	}
 
 	notice := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("3")). // Yellow
+		Foreground(themeAccent).
 		Padding(1, 0, 0, 3).
 		Render("⬆ gooze " + latest + " available")
 

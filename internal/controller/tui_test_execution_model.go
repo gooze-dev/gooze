@@ -85,7 +85,7 @@ func (d testResultDelegate) Render(w io.Writer, m list.Model, index int, item li
 
 func (d testResultDelegate) getStylesAndFile(result testResult, isSelected bool, fileWidth int) (lipgloss.Style, lipgloss.Style, lipgloss.Style, lipgloss.Style, string) {
 	if isSelected {
-		base := lipgloss.NewStyle().Foreground(lipgloss.Color("0")).Background(lipgloss.Color("6")).Bold(true)
+		base := themeSelectedStyle()
 
 		return base.Width(idColumnWidth).Align(lipgloss.Left),
 			base.Width(statusColumnWidth).Align(lipgloss.Left),
@@ -94,24 +94,12 @@ func (d testResultDelegate) getStylesAndFile(result testResult, isSelected bool,
 			animateScroll(result.file, fileWidth, d.offset)
 	}
 
-	idStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Bold(true).Width(idColumnWidth).Align(lipgloss.Left)
-	statusStyle := lipgloss.NewStyle().Foreground(statusColor(result.status)).Bold(true).Width(statusColumnWidth).Align(lipgloss.Left)
-	typeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("5")).Width(typeColumnWidth).Align(lipgloss.Left)
-	fileStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
+	idStyle := lipgloss.NewStyle().Foreground(themeText).Bold(true).Width(idColumnWidth).Align(lipgloss.Left)
+	statusStyle := themeStatusStyle(result.status).Width(statusColumnWidth).Align(lipgloss.Left)
+	typeStyle := lipgloss.NewStyle().Foreground(themeMuted).Width(typeColumnWidth).Align(lipgloss.Left)
+	fileStyle := lipgloss.NewStyle().Foreground(themeAccent)
 
 	return idStyle, statusStyle, typeStyle, fileStyle, truncateToWidth(result.file, fileWidth)
-}
-
-// statusColor maps a mutation status to its display color.
-func statusColor(status string) lipgloss.Color {
-	switch status {
-	case "killed":
-		return lipgloss.Color("2") // Green
-	case "survived", "error":
-		return lipgloss.Color("1") // Red
-	default:
-		return lipgloss.Color("8") // Gray
-	}
 }
 
 // testExecutionModel handles the TUI display during mutation testing.
@@ -269,22 +257,17 @@ func (m testExecutionModel) View() string {
 }
 
 func (m testExecutionModel) viewProgress() string {
-	accentColor := lipgloss.Color("6") // Cyan
-
 	// Styles
-	titleStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("205")).
-		Bold(true).
-		Padding(1, 0, 0, 2)
+	titleStyle := themeTitleStyle()
 
 	summaryStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("252")).
+		Foreground(themeText).
 		Padding(0, 0, 1, 2)
 
-	accentStyle := lipgloss.NewStyle().Foreground(accentColor) // Cyan
+	accentStyle := lipgloss.NewStyle().Foreground(themeAccent)
 
 	footerStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("8")).
+		Foreground(themeMuted).
 		Align(lipgloss.Center).
 		Width(m.width).
 		Padding(0, 0)
@@ -310,7 +293,7 @@ func (m testExecutionModel) viewProgress() string {
 	progressView := lipgloss.NewStyle().Padding(0, 2).Render(m.progressBar.ViewAs(m.progressPercent))
 
 	// 4. Thread Progress Section
-	threadsBox := m.renderThreadBox(accentColor)
+	threadsBox := m.renderThreadBox()
 
 	return lipgloss.JoinVertical(lipgloss.Left,
 		title,
@@ -331,10 +314,10 @@ func (m testExecutionModel) progressSummary(summaryStyle, accentStyle lipgloss.S
 	))
 }
 
-func (m testExecutionModel) renderThreadBox(accentColor lipgloss.Color) string {
+func (m testExecutionModel) renderThreadBox() string {
 	contentStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(accentColor).
+		BorderForeground(themeAccent).
 		Padding(0, 1).
 		Margin(1, 1, 1, 0).
 		Width(m.width - 4)
@@ -379,25 +362,20 @@ func (m testExecutionModel) threadLineContent(thread, fileBudget int) string {
 	remainingForFile := max(fileBudget-len(idStr), 10)
 
 	return fmt.Sprintf("%s%s",
-		lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Render(idStr), // Grey for ID
-		lipgloss.NewStyle().Foreground(lipgloss.Color("14")).Render(truncateToWidth(file, remainingForFile)),
+		lipgloss.NewStyle().Foreground(themeMuted).Render(idStr),
+		lipgloss.NewStyle().Foreground(themeAccent).Render(truncateToWidth(file, remainingForFile)),
 	)
 }
 
 func (m testExecutionModel) viewResults() string {
-	accentColor := lipgloss.Color("6") // Cyan
-
 	// Styles
-	titleStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("205")).
-		Bold(true).
-		Padding(1, 0, 0, 2)
+	titleStyle := themeTitleStyle()
 
 	summaryStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("252")).
+		Foreground(themeText).
 		Padding(0, 0, 1, 2)
 
-	accentStyle := lipgloss.NewStyle().Foreground(accentColor)
+	accentStyle := lipgloss.NewStyle().Foreground(themeAccent)
 
 	// 1. Title
 	title := withUpdateNotice(titleStyle.Render("🧬 Gooze Test Results"), m.updateLatest)
@@ -422,11 +400,11 @@ func (m testExecutionModel) viewResults() string {
 	summary := summaryStyle.Render(summaryText)
 
 	// 3. Results table with list
-	resultsBox := m.renderResultsBox(accentColor)
+	resultsBox := m.renderResultsBox()
 
 	// 4. Footer
 	footerStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("8")).
+		Foreground(themeMuted).
 		Align(lipgloss.Center).
 		Width(m.width)
 
@@ -440,7 +418,7 @@ func (m testExecutionModel) viewResults() string {
 	)
 }
 
-func (m testExecutionModel) renderResultsBox(accentColor lipgloss.Color) string {
+func (m testExecutionModel) renderResultsBox() string {
 	listWidth := m.width - 4
 	diffBoxHeight := m.diffBoxHeight()
 
@@ -450,18 +428,16 @@ func (m testExecutionModel) renderResultsBox(accentColor lipgloss.Color) string 
 	m.resultsList.SetWidth(listWidth)
 
 	// Column Headers
-	headerStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("8")).
-		Bold(true).
+	headerStyle := themeHeaderStyle().
 		Border(lipgloss.NormalBorder(), false, false, true, false).
-		BorderForeground(lipgloss.Color("8")).
+		BorderForeground(themeMuted).
 		Width(listWidth)
 
 	headers := headerStyle.Render(fmt.Sprintf("%6s  %10s  %12s  %s", "ID", "Status", "Type", "File"))
 
 	resultsStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(accentColor).
+		BorderForeground(themeAccent).
 		Margin(0, 1, 0, 0).
 		Padding(0, 1)
 
@@ -472,7 +448,7 @@ func (m testExecutionModel) renderResultsBox(accentColor lipgloss.Color) string 
 		),
 	)
 
-	diffBox, _ := m.renderDiffBox(accentColor, listWidth)
+	diffBox, _ := m.renderDiffBox(listWidth)
 	if diffBox == "" {
 		return resultsBox
 	}
@@ -666,7 +642,7 @@ func (m testExecutionModel) diffBoxHeight() int {
 	return len(lines) + 3
 }
 
-func (m testExecutionModel) renderDiffBox(accentColor lipgloss.Color, width int) (string, int) {
+func (m testExecutionModel) renderDiffBox(width int) (string, int) {
 	if !m.showDiff {
 		return "", 0
 	}
@@ -678,14 +654,14 @@ func (m testExecutionModel) renderDiffBox(accentColor lipgloss.Color, width int)
 
 	contentWidth := max(width-4, 10)
 
-	header := lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Bold(true).
+	header := themeHeaderStyle().
 		Render(truncateToWidth(m.diffHeader(), contentWidth))
 
 	body := lipgloss.JoinVertical(lipgloss.Left, m.diffBodyLines(diff, contentWidth)...)
 
 	box := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(accentColor).
+		BorderForeground(themeAccent).
 		Margin(0, 1, 0, 0).
 		Padding(0, 1).
 		Width(width).
@@ -728,26 +704,30 @@ func (m testExecutionModel) diffBodyLines(diff string, contentWidth int) []strin
 }
 
 func renderDiffLine(line string, width int) string {
-	trimmed := strings.TrimSpace(line)
+	return diffLineStyle(line).Render(truncateToWidth(line, width))
+}
 
-	style := lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
+// diffLineStyle colors a diff line like the site's MutationDiff: the original
+// side in Gopher Blue, the mutated side in toxic.
+func diffLineStyle(line string) lipgloss.Style {
+	style := lipgloss.NewStyle()
 
 	switch {
 	case strings.HasPrefix(line, "+++"):
-		style = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
+		return style.Foreground(themeToxic).Background(themeToxicFill).Bold(true)
 	case strings.HasPrefix(line, "---"):
-		style = lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Bold(true)
+		return style.Foreground(themeAccent).Bold(true)
 	case strings.HasPrefix(line, "@@"):
-		style = lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Bold(true)
+		return style.Foreground(themeMuted).Bold(true)
 	case strings.HasPrefix(line, "+"):
-		style = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
+		return style.Foreground(themeToxic).Background(themeToxicFill)
 	case strings.HasPrefix(line, "-"):
-		style = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
-	case trimmed == "":
-		style = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+		return style.Foreground(themeAccent)
+	case strings.TrimSpace(line) == "":
+		return style.Foreground(themeMuted)
+	default:
+		return style.Foreground(themeText)
 	}
-
-	return style.Render(truncateToWidth(line, width))
 }
 
 func (m testExecutionModel) handleWindowSize(msg tea.WindowSizeMsg) testExecutionModel {

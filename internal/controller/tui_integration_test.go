@@ -229,7 +229,7 @@ func TestRenderThreadBoxEdgeCases(t *testing.T) {
 
 	// Test with very narrow width
 	m.width = 10
-	box := m.renderThreadBox("6")
+	box := m.renderThreadBox()
 	if box == "" {
 		t.Fatalf("renderThreadBox should not be empty")
 	}
@@ -239,14 +239,14 @@ func TestRenderThreadBoxEdgeCases(t *testing.T) {
 	m.threads = 1
 	m.threadFiles = map[int]string{0: "path/to/file.go"}
 	m.threadMutationIDs = map[int]string{}
-	box = m.renderThreadBox("6")
+	box = m.renderThreadBox()
 	if !strings.Contains(box, "file.go") {
 		t.Fatalf("renderThreadBox missing filename")
 	}
 
 	// Test with both file and mutation ID
 	m.threadMutationIDs = map[int]string{0: "abcd1234"}
-	box = m.renderThreadBox("6")
+	box = m.renderThreadBox()
 	if !strings.Contains(box, "ID:") {
 		t.Fatalf("renderThreadBox missing ID label")
 	}
@@ -260,7 +260,7 @@ func TestRenderResultsBoxEdgeCases(t *testing.T) {
 
 	// Test with very small height
 	m.height = 5
-	box := m.renderResultsBox("6")
+	box := m.renderResultsBox()
 	if !strings.Contains(box, "ID") {
 		t.Fatalf("renderResultsBox missing headers")
 	}
@@ -268,7 +268,7 @@ func TestRenderResultsBoxEdgeCases(t *testing.T) {
 	// Test with normal size
 	m.height = 30
 	m.width = 80
-	box = m.renderResultsBox("6")
+	box = m.renderResultsBox()
 	if !strings.Contains(box, "Status") {
 		t.Fatalf("renderResultsBox missing Status header")
 	}
