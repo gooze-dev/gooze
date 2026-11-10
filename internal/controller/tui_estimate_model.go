@@ -42,22 +42,16 @@ func (d estimateDelegate) Render(w io.Writer, m list.Model, index int, item list
 	}
 
 	if isSelected {
-		pathStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("0")).
-			Background(lipgloss.Color("6")).
-			Bold(true)
-		countStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("0")).
-			Background(lipgloss.Color("6")).
-			Bold(true).
+		pathStyle = themeSelectedStyle()
+		countStyle = themeSelectedStyle().
 			Width(6).
 			Align(lipgloss.Right)
 
 		displayPath = animateScroll(file.path, width, d.offset)
 	} else {
-		pathStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
+		pathStyle = lipgloss.NewStyle().Foreground(themeAccent)
 		countStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("11")).
+			Foreground(themeText).
 			Bold(true).
 			Width(6).
 			Align(lipgloss.Right)
@@ -71,7 +65,7 @@ func (d estimateDelegate) Render(w io.Writer, m list.Model, index int, item list
 	)
 
 	if file.cached {
-		line += lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render(cachedMarker)
+		line += lipgloss.NewStyle().Foreground(themeMuted).Render(cachedMarker)
 	}
 
 	_, _ = fmt.Fprint(w, line)
@@ -218,16 +212,13 @@ func (m estimateModel) View() string {
 	}
 
 	// Styles
-	titleStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("205")).
-		Bold(true).
-		Padding(1, 0, 0, 2)
+	titleStyle := themeTitleStyle()
 
 	summaryStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("252")).
+		Foreground(themeText).
 		Padding(0, 0, 1, 2)
 
-	accentStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("6")) // Cyan
+	accentStyle := lipgloss.NewStyle().Foreground(themeAccent)
 
 	// 1. Title
 	title := withUpdateNotice(titleStyle.Render("🧬 Gooze Mutation Estimate"), m.updateLatest)
@@ -249,7 +240,7 @@ func (m estimateModel) View() string {
 
 	// 4. Footer
 	footerStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("8")).
+		Foreground(themeMuted).
 		Align(lipgloss.Center).
 		Width(m.width)
 
@@ -293,18 +284,16 @@ func (m estimateModel) renderTable() string {
 	m.fileList.SetWidth(listWidth)
 
 	// Column Headers inside the table area
-	headerStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("8")).
-		Bold(true).
+	headerStyle := themeHeaderStyle().
 		Border(lipgloss.NormalBorder(), false, false, true, false).
-		BorderForeground(lipgloss.Color("8")).
+		BorderForeground(themeMuted).
 		Width(listWidth)
 
 	headers := headerStyle.Render(fmt.Sprintf("%6s  %s", "Count", "File Path"))
 
 	tableContainer := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("6")).
+		BorderForeground(themeAccent).
 		Margin(0, 1). // Outer margin
 		Padding(0, 1) // Inner padding
 
