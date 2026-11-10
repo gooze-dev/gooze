@@ -1,0 +1,23 @@
+                                                                                        
+  🧬 Gooze Test Results                                                                 
+  Total: 3  •  Killed: 1  •  Survived: 1  •  Errors: 1  •  Score: 100.00% (no mutations)
+                                                                                        
+╭────────────────────────────────────────────────────────────────────╮                  
+│     ID      Status          Type  File                             │                  
+│ ────────────────────────────────────────────────────────────────── │                  
+│                                                                    │                  
+│ 0000    killed         arithmetic    internal/adapter/some/…       │                  
+│ 1111    survived       arithmetic    rnal/adapter/some/deepl       │                  
+│ 2222    error          arithmetic    internal/adapter/some/…       │                  
+│                                                                    │                  
+│                                                                    │                  
+│                                                                    │                  
+│                                                                    │                  
+│                                                                    │                  
+│                                                                    │                  
+│                                                                    │                  
+│                                                                    │                  
+│                                                                    │                  
+╰────────────────────────────────────────────────────────────────────╯                  
+↑/k up • ↓/j down • g/G top/bottom • / filter • enter/space/click diff                  
+                               • q quit                                                 

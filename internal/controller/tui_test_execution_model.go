@@ -39,6 +39,13 @@ const (
 
 var statusColumnWidth = longestStatusLabel() + 2
 
+// Tick intervals: the first tick after start, then the one that drives the
+// results view's scrolling file names.
+const (
+	startTickInterval     = 100 * time.Millisecond
+	animationTickInterval = 150 * time.Millisecond
+)
+
 // longestStatusLabel returns the length of the longest TestStatus name.
 func longestStatusLabel() int {
 	// Equivalent: every label is longer than 1, so starting at 1 changes nothing.
@@ -162,7 +169,7 @@ func newTestExecutionModel() testExecutionModel {
 }
 
 func (m testExecutionModel) Init() tea.Cmd {
-	return tea.Tick(time.Millisecond*100, func(t time.Time) tea.Msg {
+	return tea.Tick(startTickInterval, func(t time.Time) tea.Msg {
 		return tickMsg(t)
 	})
 }
@@ -269,8 +276,7 @@ func (m testExecutionModel) viewProgress() string {
 	footerStyle := lipgloss.NewStyle().
 		Foreground(themeMuted).
 		Align(lipgloss.Center).
-		Width(m.width).
-		Padding(0, 0)
+		Width(m.width)
 
 	footer := footerStyle.Render("Press q to quit")
 
@@ -322,11 +328,14 @@ func (m testExecutionModel) renderThreadBox() string {
 		Margin(1, 1, 1, 0).
 		Width(m.width - 4)
 
-	// Width available for a thread line: box width minus border(2) and padding(2).
-	fileBudget := m.width - 4 - 2 - 2
+	// Width available for a thread line: the box width (m.width-4) minus its
+	// border (2) and padding (2).
+	fileBudget := m.width - 8
 	threadLabelFormat := ""
 
-	if m.threads > 1 {
+	// Equivalent: with no threads there are no lines to label, so != 1 renders
+	// the same as > 1.
+	if m.threads > 1 { //gooze:ignore comparison
 		digits := len(fmt.Sprintf("%d", m.threads-1))
 		fileBudget -= 7 + digits + 2 // "Thread " + digits + ": "
 		threadLabelFormat = fmt.Sprintf("Thread %%%dd: %%s", digits)
@@ -336,7 +345,7 @@ func (m testExecutionModel) renderThreadBox() string {
 
 	for i := range m.threads {
 		line := m.threadLineContent(i, fileBudget)
-		if m.threads > 1 {
+		if m.threads > 1 { //gooze:ignore comparison
 			line = fmt.Sprintf(threadLabelFormat, i, line)
 		}
 
@@ -513,7 +522,8 @@ func (m testExecutionModel) handleCompletedMutation(msg completedMutationMsg) te
 		if m.completedCount == m.totalMutations {
 			m.testingFinished = true
 		}
-	} else if m.totalMutations == 0 {
+	} else if m.totalMutations == 0 { //gooze:ignore comparison
+		// Equivalent: this branch has totalMutations <= 0, so >= 0 is the same as == 0.
 		// If there are no mutations to test (e.g., due to caching), mark as finished immediately
 		m.testingFinished = true
 		m.progressPercent = 1.0
@@ -632,14 +642,8 @@ func (m testExecutionModel) diffBoxHeight() int {
 		return 0
 	}
 
-	lines := strings.Split(diff, "\n")
-
-	maxLines := m.diffMaxLines()
-	if len(lines) > maxLines {
-		lines = lines[:maxLines]
-	}
-
-	return len(lines) + 3
+	// The shown lines, capped like diffBodyLines, plus the border and header.
+	return min(strings.Count(diff, "\n")+1, m.diffMaxLines()) + 3
 }
 
 func (m testExecutionModel) renderDiffBox(width int) (string, int) {
@@ -691,7 +695,7 @@ func (m testExecutionModel) diffBodyLines(diff string, contentWidth int) []strin
 		truncated = true
 	}
 
-	bodyLines := make([]string, 0, len(lines)+1)
+	bodyLines := make([]string, 0, len(lines))
 	for _, line := range lines {
 		bodyLines = append(bodyLines, renderDiffLine(line, contentWidth))
 	}
@@ -747,7 +751,7 @@ func (m testExecutionModel) handleTickMsg(_ tickMsg) (testExecutionModel, tea.Cm
 		m.resultsList.SetDelegate(m.delegate)
 	}
 
-	return m, tea.Tick(time.Millisecond*150, func(t time.Time) tea.Msg {
+	return m, tea.Tick(animationTickInterval, func(t time.Time) tea.Msg {
 		return tickMsg(t)
 	})
 }
