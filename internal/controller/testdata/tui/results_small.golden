@@ -1,0 +1,15 @@
+                                                      
+  🧬 Gooze Test Results                               
+  Total: 3  •  Killed: 1  •  Survived: 1  •  Errors: 1
+                                                      
+╭────────────────────────────────────────────────╮    
+│     ID      Status          Type  File         │    
+│ ────────────────────────────────────────────── │    
+│                                                │    
+│ 0000    killed         arithmetic    in…       │    
+│ 1111    survived       arithmetic    rna       │    
+│ 2222    error          arithmetic    in…       │    
+│                                                │    
+╰────────────────────────────────────────────────╯    
+ ↑/k up • ↓/j down • g/G top/bottom • / filter •      
+         enter/space/click diff • q quit              

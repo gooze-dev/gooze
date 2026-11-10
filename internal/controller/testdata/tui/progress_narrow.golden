@@ -1,0 +1,21 @@
+                                                   
+  🧬 Gooze Mutation Testing                        
+  Progress: 0 / 10  •  Threads: 10  •  Shard: 0 / 1
+                                                   
+  ░░░░░░░░░░░░░░░░░░░░░░                           
+                                                   
+╭──────────────────────────╮                       
+│ Thread 0: ID: abcd       │                       
+│ internal/…               │                       
+│ Thread 1: idle           │                       
+│ Thread 2: idle           │                       
+│ Thread 3: idle           │                       
+│ Thread 4: idle           │                       
+│ Thread 5: idle           │                       
+│ Thread 6: idle           │                       
+│ Thread 7: idle           │                       
+│ Thread 8: idle           │                       
+│ Thread 9: idle           │                       
+╰──────────────────────────╯                       
+                                                   
+       Press q to quit                             
