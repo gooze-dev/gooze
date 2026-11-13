@@ -15,7 +15,7 @@ func TestDefaults(t *testing.T) {
 		KeyPathsExclude:                []string{},
 		KeyRunParallel:                 1,
 		KeyRunMutationTimeout:          120,
-		KeyRunMutationMemory:           4096,
+		KeyRunMutationMemory:           0,
 		KeyRunCoverageProfile:          "",
 		KeyRunDiff:                     "",
 		KeyRunMutagens:                 []string{},
@@ -291,5 +291,23 @@ func TestField_CheckFloat(t *testing.T) {
 
 			assert.EqualError(t, err, tt.wantErr)
 		})
+	}
+}
+
+// Init is what gooze config init writes for a key in place of its default:
+// a setting gooze recommends but doesn't apply by itself.
+func TestSchema_Init(t *testing.T) {
+	want := map[string]any{KeyRunMutationMemory: 4096}
+
+	for _, key := range Keys() {
+		field, ok := Lookup(key)
+		require.True(t, ok, key)
+		assert.Equal(t, want[key], field.Init, key)
+
+		if field.Init != nil {
+			assert.IsType(t, field.Default, field.Init, key)
+			assert.NotEqual(t, field.Default, field.Init, key)
+			assert.NoError(t, field.CheckInt(field.Init.(int)), key)
+		}
 	}
 }

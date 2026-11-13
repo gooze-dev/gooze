@@ -118,7 +118,7 @@ func configureRunFlags(cmd *cobra.Command) (report.ThresholdFlags, report.Thresh
 	cmd.Flags().Int64Var(&mutationTimeoutFlag, mutationTimeoutFlagName, int64(schemaDefault[int](config.KeyRunMutationTimeout)), "timeout duration for testing a mutation in seconds")
 	bindFlagToConfig(cmd.Flags().Lookup(mutationTimeoutFlagName), config.KeyRunMutationTimeout)
 
-	cmd.Flags().Int64Var(&mutationMemoryFlag, mutationMemoryFlagName, int64(schemaDefault[int](config.KeyRunMutationMemory)), "memory limit of a mutation's tests in MiB, all their processes together; 0 is no limit (linux only)")
+	cmd.Flags().Int64Var(&mutationMemoryFlag, mutationMemoryFlagName, int64(schemaDefault[int](config.KeyRunMutationMemory)), "memory limit of a mutation's tests in MiB, all their processes together; 0, the default, is no limit (linux only)")
 	bindFlagToConfig(cmd.Flags().Lookup(mutationMemoryFlagName), config.KeyRunMutationMemory)
 
 	cmd.Flags().IntVarP(&runParallelFlag, runParallelFlagName, "p", schemaDefault[int](config.KeyRunParallel), "number of parallel workers for mutation testing")

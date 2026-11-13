@@ -40,7 +40,7 @@ func TestConfigDefaults(t *testing.T) {
 		"paths.exclude":                  []string{},
 		"run.parallel":                   1,
 		"run.mutation_timeout":           120,
-		"run.mutation_memory":            4096,
+		"run.mutation_memory":            0,
 		"run.coverage_profile":           "",
 		"run.diff":                       "",
 		"run.mutagens":                   []string{},
