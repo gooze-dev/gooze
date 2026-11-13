@@ -69,7 +69,7 @@ func (a *LocalTestRunnerAdapter) RunGoTest(ctx context.Context, workDir, testFil
 	}
 
 	overMemory := watchMemory(cmd, a.memoryLimit)
-	overDisk := watchDisk(func() { killGroup(cmd) }, []string{buildTmp, testTmp}, a.diskLimit)
+	overDisk := watchDisk(func() { _ = killGroup(cmd) }, []string{buildTmp, testTmp}, a.diskLimit)
 	err := cmd.Wait()
 
 	output := stdout.String() + stderr.String()
