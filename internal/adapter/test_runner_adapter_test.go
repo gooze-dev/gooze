@@ -248,7 +248,7 @@ func TestLong(t *testing.T) {
 }
 
 // memoryHungryModule writes a module whose test takes 128 MiB every 50 ms
-// until it holds 1.5 GiB, then passes.
+// until it holds 768 MiB, then passes.
 func memoryHungryModule(t *testing.T) string {
 	t.Helper()
 
@@ -264,7 +264,7 @@ import (
 func TestHungry(t *testing.T) {
 	var held [][]byte
 
-	for range 12 {
+	for range 6 {
 		buf := make([]byte, 128<<20)
 		for i := range buf {
 			buf[i] = 1
@@ -289,11 +289,13 @@ func TestLocalTestRunnerAdapter_RunGoTest_MemoryLimit(t *testing.T) {
 
 	dir := memoryHungryModule(t)
 	runner := NewLocalTestRunnerAdapter()
-	runner.SetMemoryLimit(512 << 20)
+	runner.SetMemoryLimit(384 << 20)
 
 	out, err := runner.RunGoTest(context.Background(), dir, filepath.Join(dir, "hungry_test.go"), "")
 
 	require.ErrorIs(t, err, domain.ErrMemoryLimit, out)
+	require.EqualError(t, err, "go test held more than 384 MiB: memory limit exceeded")
+	require.Contains(t, out, "=== RUN   TestHungry", "the build stayed under the limit")
 	require.NotContains(t, out, "--- PASS", "the test was killed before it finished")
 }
 
