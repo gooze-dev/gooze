@@ -37,7 +37,7 @@ func TestRunCmd_TestMode(t *testing.T) {
 			args.TotalShardCount == 1 &&
 			args.Reports == m.Path(".gooze-reports") &&
 			args.MutationTimeout == 120*time.Second &&
-			args.MutationMemory == 4096<<20
+			args.MutationMemory == 0
 	})).Return(nil)
 
 	cmd.SetArgs([]string{"run", "--parallel", "2", "./..."})
@@ -633,7 +633,7 @@ func TestRunCmd_FlagDefaultsMatchSchema(t *testing.T) {
 	for _, cmd := range []*cobra.Command{runCmd, newRunCmd()} {
 		assert.Equal(t, "1", cmd.Flags().Lookup(runParallelFlagName).DefValue)
 		assert.Equal(t, "120", cmd.Flags().Lookup(mutationTimeoutFlagName).DefValue)
-		assert.Equal(t, "4096", cmd.Flags().Lookup(mutationMemoryFlagName).DefValue)
+		assert.Equal(t, "0", cmd.Flags().Lookup(mutationMemoryFlagName).DefValue)
 		assert.Empty(t, cmd.Flags().Lookup(coverageProfileFlagName).DefValue)
 		assert.Empty(t, cmd.Flags().Lookup(diffFlagName).DefValue)
 		assert.Equal(t, "[]", cmd.Flags().Lookup(mutagensFlagName).DefValue)
@@ -659,7 +659,7 @@ func TestRunCmd_HelpShowsSchemaDefaults(t *testing.T) {
 
 	assert.Regexp(t, `--parallel int\s+number of parallel workers for mutation testing \(default 1\)`, output.String())
 	assert.Regexp(t, `--mutation-timeout int\s+timeout duration for testing a mutation in seconds \(default 120\)`, output.String())
-	assert.Regexp(t, `--mutation-memory int\s+memory limit of a mutation's tests in MiB, all their processes together; 0 is no limit \(linux only\) \(default 4096\)`, output.String())
+	assert.Regexp(t, `--mutation-memory int\s+memory limit of a mutation's tests in MiB, all their processes together; 0, the default, is no limit \(linux only\)\n`, output.String())
 	assert.Regexp(t, `--workspace string\s+how mutants are built: .*\(default "overlay"\)`, output.String())
 	assert.Regexp(t, `--output string\s+output directory for mutation testing reports \(default "\.gooze-reports"\)`, output.String())
 	assert.NotContains(t, output.String(), "env.out")
@@ -670,16 +670,24 @@ func TestRunCmd_MutationMemory(t *testing.T) {
 	for name, tt := range map[string]struct {
 		args []string
 		env  string
+		file int // run.mutation_memory in gooze.yaml
 		want int64
 	}{
-		"flag":          {args: []string{"run", "--mutation-memory", "512", "./..."}, want: 512 << 20},
-		"no limit":      {args: []string{"run", "--mutation-memory=0", "./..."}, want: 0},
-		"env":           {args: []string{"run", "./..."}, env: "2048", want: 2048 << 20},
-		"flag over env": {args: []string{"run", "--mutation-memory", "1", "./..."}, env: "2048", want: 1 << 20},
+		"flag":           {args: []string{"run", "--mutation-memory", "512", "./..."}, want: 512 << 20},
+		"no limit":       {args: []string{"run", "./..."}, want: 0},
+		"file":           {args: []string{"run", "./..."}, file: 4096, want: 4096 << 20},
+		"flag over file": {args: []string{"run", "--mutation-memory=0", "./..."}, file: 4096, want: 0},
+		"env":            {args: []string{"run", "./..."}, env: "2048", want: 2048 << 20},
+		"flag over env":  {args: []string{"run", "--mutation-memory", "1", "./..."}, env: "2048", want: 1 << 20},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if tt.env != "" {
 				t.Setenv("GOOZE_RUN_MUTATION_MEMORY", tt.env)
+			}
+
+			if tt.file != 0 {
+				require.NoError(t, viper.MergeConfigMap(map[string]any{"run": map[string]any{"mutation_memory": tt.file}}))
+				t.Cleanup(func() { _ = viper.MergeConfigMap(map[string]any{"run": map[string]any{"mutation_memory": 0}}) })
 			}
 
 			mockWorkflow := domainmocks.NewMockWorkflow(t)
