@@ -104,6 +104,9 @@ type GoFileAdapter interface {
 	Parse(ctx context.Context, fileSet *token.FileSet, filename string, src []byte) (*ast.File, error)
 }
 
+// ErrDiskLimit is the error of a RunGoTest killed over the disk limit.
+var ErrDiskLimit = errors.New("disk limit exceeded")
+
 // ErrMemoryLimit is the error of a RunGoTest killed over the memory limit.
 var ErrMemoryLimit = errors.New("memory limit exceeded")
 

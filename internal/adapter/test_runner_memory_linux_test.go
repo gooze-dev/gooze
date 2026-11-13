@@ -70,6 +70,7 @@ func sleepingGroup(t *testing.T) (*exec.Cmd, int, string) {
 	t.Cleanup(func() {
 		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 		_ = cmd.Wait()
+		reapOrphans(cmd)
 	})
 
 	line, err := bufio.NewReader(stdout).ReadString('\n')
@@ -123,7 +124,7 @@ func TestWatchGroupMemory_LeavesTheGroupAtOrUnderTheLimit(t *testing.T) {
 
 			stop := watchGroupMemory(proc, cmd.Process.Pid, limit)
 
-			time.Sleep(4 * memoryCheckInterval)
+			time.Sleep(4 * limitCheckInterval)
 
 			require.False(t, stop())
 			require.True(t, alive(cmd.Process.Pid))

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -123,7 +124,7 @@ func sleepingModule(t *testing.T) string {
 	dir := t.TempDir()
 	files := map[string]string{
 		"go.mod":    "module sleeping\n\ngo 1.21\n",
-		"a_test.go": "package sleeping\n\nimport (\n\t\"testing\"\n\t\"time\"\n)\n\nfunc TestSleep(t *testing.T) { time.Sleep(time.Minute) }\n",
+		"a_test.go": "package sleeping\n\nimport (\n\t\"testing\"\n\t\"time\"\n)\n\nfunc TestSleep(t *testing.T) { time.Sleep(20 * time.Second) }\n",
 	}
 
 	for name, content := range files {
@@ -402,4 +403,124 @@ func TestTestTempDir(t *testing.T) {
 
 	t.Setenv("TMPDIR", filepath.Join(sysTmp, "missing"))
 	assert.Empty(t, testTempDir())
+}
+
+func diskHungryModule(t *testing.T, tempDir string) string {
+	t.Helper()
+
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/writer\n\ngo 1.24\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "writer_test.go"), []byte(`package writer
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+)
+
+func TestWriter(t *testing.T) {
+	file, err := os.Create(filepath.Join(`+tempDir+`, "big"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer file.Close()
+
+	chunk := make([]byte, 16<<20)
+
+	for range 8 {
+		if _, err := file.Write(chunk); err != nil {
+			t.Fatal(err)
+		}
+
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+`), 0o600))
+
+	return dir
+}
+
+func TestLocalTestRunnerAdapter_RunGoTest_DiskLimit(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("TMPDIR names the temp directory on unix only")
+	}
+
+	for name, tempDir := range map[string]string{"the temp directory": "os.TempDir()", "the test's own": "t.TempDir()"} {
+		t.Run(name, func(t *testing.T) {
+			dir := diskHungryModule(t, tempDir)
+			runner := NewLocalTestRunnerAdapter()
+
+			out, err := runner.RunGoTest(context.Background(), dir, filepath.Join(dir, "writer_test.go"), "")
+			require.NoError(t, err, "no limit: %s", out)
+
+			runner.SetDiskLimit(1 << 30)
+
+			out, err = runner.RunGoTest(context.Background(), dir, filepath.Join(dir, "writer_test.go"), "")
+			require.NoError(t, err, "under the limit: %s", out)
+
+			runner.SetDiskLimit(64 << 20)
+
+			out, err = runner.RunGoTest(context.Background(), dir, filepath.Join(dir, "writer_test.go"), "")
+			require.ErrorIs(t, err, domain.ErrDiskLimit, out)
+			require.EqualError(t, err, "go test wrote more than 64 MiB: disk limit exceeded")
+			require.Contains(t, out, "=== RUN   TestWriter")
+			require.NotContains(t, out, "--- PASS")
+		})
+	}
+}
+
+func TestLocalTestRunnerAdapter_RunGoTest_MemoryLimitComesFirst(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("the memory limit is enforced on linux only")
+	}
+
+	dir := memoryHungryModule(t)
+	runner := NewLocalTestRunnerAdapter()
+	runner.SetMemoryLimit(384 << 20)
+	runner.SetDiskLimit(1 << 30)
+
+	_, err := runner.RunGoTest(context.Background(), dir, filepath.Join(dir, "hungry_test.go"), "")
+	require.ErrorIs(t, err, domain.ErrMemoryLimit)
+	require.NotErrorIs(t, err, domain.ErrDiskLimit)
+}
+
+func TestLocalTestRunnerAdapter_RunGoTest_LeavesNoProcessBehind(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("orphans are reaped on linux only")
+	}
+
+	dir := t.TempDir()
+	pidFile := filepath.Join(dir, "pid")
+	survivedFile := filepath.Join(dir, "survived")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/spawner\n\ngo 1.24\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "spawner_test.go"), []byte(`package spawner
+
+import (
+	"os"
+	"os/exec"
+	"strconv"
+	"testing"
+)
+
+func TestSpawner(t *testing.T) {
+	cmd := exec.Command("sh", "-c", "sleep 3; touch "+`+strconv.Quote(strconv.Quote(survivedFile))+`)
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(`+strconv.Quote(pidFile)+`, []byte(strconv.Itoa(cmd.Process.Pid)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+`), 0o600))
+
+	out, err := NewLocalTestRunnerAdapter().RunGoTest(context.Background(), dir, filepath.Join(dir, "spawner_test.go"), "")
+	require.NoError(t, err, out)
+
+	pid, err := os.ReadFile(pidFile)
+	require.NoError(t, err)
+	require.NoFileExists(t, filepath.Join("/proc", string(pid), "stat"), "the process the test left is neither running nor a zombie")
+	require.NoFileExists(t, survivedFile, "it was killed, not waited for")
 }
