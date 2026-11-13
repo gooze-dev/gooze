@@ -70,6 +70,7 @@ func sleepingGroup(t *testing.T) (*exec.Cmd, int, string) {
 	t.Cleanup(func() {
 		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 		_ = cmd.Wait()
+		reapOrphans(cmd)
 	})
 
 	line, err := bufio.NewReader(stdout).ReadString('\n')
