@@ -350,6 +350,7 @@ func TestLocalTestRunnerAdapter_RunGoTest_KilledTestLeavesNoTempFiles(t *testing
 
 	sysTmp := t.TempDir()
 	t.Setenv("TMPDIR", sysTmp)
+	t.Setenv("GOTMPDIR", sysTmp)
 
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/leaky\n\ngo 1.24\n"), 0o600))
@@ -383,7 +384,7 @@ func TestLeaky(t *testing.T) {
 
 	out, err := NewLocalTestRunnerAdapter().RunGoTest(context.Background(), dir, filepath.Join(dir, "leaky_test.go"), "")
 	require.Error(t, err, out)
-	require.Contains(t, out, "wrote "+sysTmp+string(filepath.Separator), "the test's temp files are under the system's temp directory")
+	require.Contains(t, out, " "+filepath.Join(sysTmp, "gz"), "the test's temp file is in the directory gooze gave it")
 
 	left, err := os.ReadDir(sysTmp)
 	require.NoError(t, err)
