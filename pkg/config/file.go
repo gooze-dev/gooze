@@ -21,7 +21,7 @@ const commentColumn = 30
 func DefaultFile() []byte {
 	var out bytes.Buffer
 
-	out.WriteString("# gooze.yaml: every key is optional; these are the defaults.\n")
+	out.WriteString("# gooze.yaml: every key is optional; these are the defaults, unless a comment gives another.\n")
 	out.WriteString("# Reference: https://gooze.dev/docs/config/\n")
 
 	writeFields(&out, Schema(), 0)
@@ -47,12 +47,17 @@ func writeFields(out *bytes.Buffer, fields []Field, depth int) {
 			continue
 		}
 
-		line := field.Name + ": " + yamlValue(field.Default)
+		value, doc := field.Default, field.Doc
+		if field.Init != nil {
+			value, doc = field.Init, doc+" Default: "+yamlValue(field.Default)+"."
+		}
+
+		line := field.Name + ": " + yamlValue(value)
 		if field.Unset {
 			line = "# " + line
 		}
 
-		writeLine(out, indent+line, field.Doc)
+		writeLine(out, indent+line, doc)
 	}
 }
 

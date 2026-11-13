@@ -43,6 +43,11 @@ func TestDefaultFile_HoldsEveryKeyWithItsDefault(t *testing.T) {
 
 		got := lookupPath(t, doc, key)
 
+		if field.Init != nil {
+			assert.Equal(t, field.Init, got, key)
+			continue
+		}
+
 		switch field.Kind {
 		case KindStringList:
 			assert.Empty(t, got, key)
@@ -59,7 +64,8 @@ func TestDefaultFile_HoldsEveryKeyWithItsDefault(t *testing.T) {
 func TestDefaultFile_Layout(t *testing.T) {
 	lines := strings.Split(strings.TrimSuffix(string(DefaultFile()), "\n"), "\n")
 
-	require.Equal(t, "# gooze.yaml: every key is optional; these are the defaults.", lines[0])
+	require.Equal(t, "# gooze.yaml: every key is optional; these are the defaults, unless a comment gives another.", lines[0])
+	assert.Contains(t, lines, "  mutation_memory: 1024       # Memory limit of a mutation's tests in MiB, all their processes together; above it they are killed and the mutation is reported as a timeout. 0 is no limit. Linux only. Default: 0.")
 	assert.Contains(t, lines, "no_cache: false               # Disable incremental caching and force a full re-run.")
 	assert.Contains(t, lines, "")
 	assert.Contains(t, lines, "run:                          # Mutation run settings.")

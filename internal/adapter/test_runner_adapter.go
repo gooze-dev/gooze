@@ -1,18 +1,21 @@
 package adapter
 
 import (
-	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"time"
+
+	"gooze.dev/pkg/gooze/internal/domain"
 )
 
 // LocalTestRunnerAdapter provides a concrete implementation using os/exec.
 type LocalTestRunnerAdapter struct {
-	env   []string
-	flags []string
+	env         []string
+	flags       []string
+	memoryLimit int64
 }
 
 // NewLocalTestRunnerAdapter constructs a LocalTestRunnerAdapter.
@@ -30,6 +33,11 @@ func (a *LocalTestRunnerAdapter) SetTestFlags(flags []string) {
 	a.flags = flags
 }
 
+// SetMemoryLimit sets the memory, in bytes, one go test may hold; 0 is no limit.
+func (a *LocalTestRunnerAdapter) SetMemoryLimit(limit int64) {
+	a.memoryLimit = limit
+}
+
 // RunGoTest runs 'go test -vet=off' for the package that contains testFile,
 // with -overlay when overlay is set.
 func (a *LocalTestRunnerAdapter) RunGoTest(ctx context.Context, workDir, testFile, overlay string) (string, error) {
@@ -40,16 +48,28 @@ func (a *LocalTestRunnerAdapter) RunGoTest(ctx context.Context, workDir, testFil
 	buildTmp := buildTempDir()
 	defer os.RemoveAll(buildTmp) //nolint:errcheck // best effort cleanup.
 
-	cmd.Env = append(append(os.Environ(), "GOTMPDIR="+buildTmp), a.env...)
+	testTmp := testTempDir()
+	defer os.RemoveAll(testTmp) //nolint:errcheck // best effort cleanup.
 
-	var stdout, stderr bytes.Buffer
+	cmd.Env = append(append(os.Environ(), "GOTMPDIR="+buildTmp, "TMPDIR="+testTmp), a.env...)
+
+	var stdout, stderr outputBuffer
 
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	err := cmd.Run()
+	if err := cmd.Start(); err != nil {
+		return "", err
+	}
+
+	overLimit := watchMemory(cmd, a.memoryLimit)
+	err := cmd.Wait()
 
 	output := stdout.String() + stderr.String()
+
+	if overLimit() {
+		return output, fmt.Errorf("go test held more than %d MiB: %w", a.memoryLimit>>20, domain.ErrMemoryLimit)
+	}
 
 	return output, err
 }
@@ -91,6 +111,15 @@ func packageArg(workDir, testFile string) string {
 // the choice to go.
 func buildTempDir() string {
 	dir, err := os.MkdirTemp(os.Getenv("GOTMPDIR"), "gooze-gotest-")
+	if err != nil {
+		return ""
+	}
+
+	return dir
+}
+
+func testTempDir() string {
+	dir, err := os.MkdirTemp("", "gz")
 	if err != nil {
 		return ""
 	}

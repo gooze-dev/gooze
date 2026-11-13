@@ -4,12 +4,14 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gooze.dev/pkg/gooze/internal/domain"
 )
 
 // These tests exercise LocalTestRunnerAdapter against the real example
@@ -243,4 +245,161 @@ func TestLong(t *testing.T) {
 
 	out, err := runner.RunGoTest(context.Background(), dir, filepath.Join(dir, "p_test.go"), "")
 	require.NoError(t, err, out)
+}
+
+func memoryHungryModule(t *testing.T) string {
+	t.Helper()
+
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/hungry\n\ngo 1.24\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "hungry_test.go"), []byte(`package hungry
+
+import (
+	"testing"
+	"time"
+)
+
+func TestHungry(t *testing.T) {
+	var held [][]byte
+
+	for range 6 {
+		buf := make([]byte, 128<<20)
+		for i := range buf {
+			buf[i] = 1
+		}
+
+		held = append(held, buf)
+
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	t.Log("held", len(held))
+}
+`), 0o600))
+
+	return dir
+}
+
+func TestLocalTestRunnerAdapter_RunGoTest_MemoryLimit(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("the memory limit is enforced on linux only")
+	}
+
+	dir := memoryHungryModule(t)
+	runner := NewLocalTestRunnerAdapter()
+	runner.SetMemoryLimit(384 << 20)
+
+	out, err := runner.RunGoTest(context.Background(), dir, filepath.Join(dir, "hungry_test.go"), "")
+
+	require.ErrorIs(t, err, domain.ErrMemoryLimit, out)
+	require.EqualError(t, err, "go test held more than 384 MiB: memory limit exceeded")
+	require.Contains(t, out, "=== RUN   TestHungry", "the build stayed under the limit")
+	require.NotContains(t, out, "--- PASS", "the test was killed before it finished")
+}
+
+func TestLocalTestRunnerAdapter_RunGoTest_UnderMemoryLimit(t *testing.T) {
+	dir := memoryHungryModule(t)
+	runner := NewLocalTestRunnerAdapter()
+
+	out, err := runner.RunGoTest(context.Background(), dir, filepath.Join(dir, "hungry_test.go"), "")
+	require.NoError(t, err, "no limit: %s", out)
+
+	runner.SetMemoryLimit(8 << 30)
+
+	out, err = runner.RunGoTest(context.Background(), dir, filepath.Join(dir, "hungry_test.go"), "")
+	require.NoError(t, err, "under the limit: %s", out)
+	require.Contains(t, out, "--- PASS")
+}
+
+func TestLocalTestRunnerAdapter_RunGoTest_KeepsTheStartAndTheEndOfLongOutput(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/loud\n\ngo 1.24\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "loud_test.go"), []byte(`package loud
+
+import (
+	"fmt"
+	"os"
+	"strings"
+	"testing"
+)
+
+func TestLoud(t *testing.T) {
+	line := strings.Repeat("x", 1023)
+	for range 8 << 10 {
+		fmt.Println(line)
+		fmt.Fprintln(os.Stderr, line)
+	}
+}
+`), 0o600))
+
+	out, err := NewLocalTestRunnerAdapter().RunGoTest(context.Background(), dir, filepath.Join(dir, "loud_test.go"), "")
+	require.NoError(t, err)
+
+	require.Less(t, len(out), 2*outputKeep+1024)
+	require.GreaterOrEqual(t, len(out), 2*outputKeep)
+	require.True(t, strings.HasPrefix(out, "=== RUN   TestLoud\n"), out[:64])
+	require.Contains(t, out, "bytes of output ...\n")
+	require.Contains(t, out, "--- PASS: TestLoud")
+	require.Contains(t, out, "\nok  \texample.com/loud")
+}
+
+func TestLocalTestRunnerAdapter_RunGoTest_KilledTestLeavesNoTempFiles(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("TMPDIR names the temp directory on unix only")
+	}
+
+	sysTmp := t.TempDir()
+	t.Setenv("TMPDIR", sysTmp)
+	t.Setenv("GOTMPDIR", sysTmp)
+
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/leaky\n\ngo 1.24\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "leaky_test.go"), []byte(`package leaky
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"syscall"
+	"testing"
+)
+
+func TestLeaky(t *testing.T) {
+	kept := filepath.Join(t.TempDir(), "kept")
+	if err := os.WriteFile(kept, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	file, err := os.CreateTemp("", "leak-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Println("wrote", kept, file.Name())
+
+	_ = syscall.Kill(os.Getpid(), syscall.SIGKILL)
+	select {}
+}
+`), 0o600))
+
+	out, err := NewLocalTestRunnerAdapter().RunGoTest(context.Background(), dir, filepath.Join(dir, "leaky_test.go"), "")
+	require.Error(t, err, out)
+	require.Contains(t, out, " "+filepath.Join(sysTmp, "gz"), "the test's temp file is in the directory gooze gave it")
+
+	left, err := os.ReadDir(sysTmp)
+	require.NoError(t, err)
+	require.Empty(t, left, "nothing stays behind")
+}
+
+func TestTestTempDir(t *testing.T) {
+	sysTmp := t.TempDir()
+	t.Setenv("TMPDIR", sysTmp)
+
+	dir := testTempDir()
+	require.DirExists(t, dir)
+	assert.Equal(t, sysTmp, filepath.Dir(dir))
+	assert.LessOrEqual(t, len(filepath.Base(dir)), 12, "short: paths of unix sockets under it have little room")
+
+	t.Setenv("TMPDIR", filepath.Join(sysTmp, "missing"))
+	assert.Empty(t, testTempDir())
 }

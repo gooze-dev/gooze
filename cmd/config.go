@@ -28,6 +28,7 @@ const (
 	runParallelFlagName = "parallel"
 
 	mutationTimeoutFlagName = "mutation-timeout"
+	mutationMemoryFlagName  = "mutation-memory"
 
 	coverageProfileFlagName = "coverage-profile"
 

@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"errors"
 	"go/ast"
 	"go/token"
 	"os"
@@ -102,6 +103,9 @@ type GoFileAdapter interface {
 	// Parse builds an AST using the provided file set and optional source bytes.
 	Parse(ctx context.Context, fileSet *token.FileSet, filename string, src []byte) (*ast.File, error)
 }
+
+// ErrMemoryLimit is the error of a RunGoTest killed over the memory limit.
+var ErrMemoryLimit = errors.New("memory limit exceeded")
 
 // TestRunnerAdapter abstracts test execution operations for mutation testing.
 type TestRunnerAdapter interface {

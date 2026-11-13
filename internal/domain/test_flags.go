@@ -47,6 +47,7 @@ func notAFlag(value string) error {
 // TestCommand takes the extra flags of the go test commands that test mutants.
 type TestCommand interface {
 	SetTestFlags(flags []string)
+	SetMemoryLimit(limit int64)
 }
 
 // WithTestFlags passes each run's TestArgs.TestFlags to command.

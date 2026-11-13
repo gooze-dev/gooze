@@ -22,6 +22,7 @@ type Field struct {
 	// Default is the value gooze uses when the key is not set: a string, bool,
 	// int, float64 or []string matching Kind, and nil for objects.
 	Default any
+	Init    any
 	// Doc is a one-line description of the key.
 	Doc string
 	// Enum lists the accepted values of a KindEnum field, or of each item of
@@ -82,6 +83,7 @@ func runField() Field {
 	return Field{Name: "run", Kind: KindObject, Doc: "Mutation run settings.", Children: []Field{
 		{Name: "parallel", Kind: KindInt, Default: 1, Min: new(1), Doc: "Number of concurrent mutation workers."},
 		{Name: "mutation_timeout", Kind: KindInt, Default: 120, Min: new(1), Doc: "Per-mutation timeout in seconds."},
+		{Name: "mutation_memory", Kind: KindInt, Default: 0, Init: 1024, Min: new(0), Doc: "Memory limit of a mutation's tests in MiB, all their processes together; above it they are killed and the mutation is reported as a timeout. 0 is no limit. Linux only."},
 		{Name: "coverage_profile", Kind: KindString, Default: "", Doc: "Go coverage profile; mutations on uncovered lines are reported as not_covered without running tests."},
 		{Name: diffName, Kind: KindString, Default: "", Doc: "Git ref to diff against; only lines changed since its merge base with HEAD are mutated. Requires git. Empty runs everything."},
 		{

@@ -16,7 +16,10 @@ import (
 	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
 )
 
+const mebibyteShift = 20
+
 var mutationTimeoutFlag int64
+var mutationMemoryFlag int64
 var runParallelFlag int
 var runShardFlag string
 var runEstimateFlag bool
@@ -96,6 +99,7 @@ func runTestArgs(estimateArgs domain.EstimateArgs, shardIndex, totalShards int, 
 		ShardIndex:      shardIndex,
 		TotalShardCount: totalShards,
 		MutationTimeout: time.Duration(configInt(config.KeyRunMutationTimeout)) * time.Second,
+		MutationMemory:  int64(configInt(config.KeyRunMutationMemory)) << mebibyteShift,
 		CoverageProfile: m.Path(viper.GetString(config.KeyRunCoverageProfile)),
 		Workspace:       domain.WorkspaceMode(viper.GetString(config.KeyRunWorkspace)),
 		Thresholds:      minimums,
@@ -112,6 +116,9 @@ func init() {
 func configureRunFlags(cmd *cobra.Command) (report.ThresholdFlags, report.ThresholdFlags) {
 	cmd.Flags().Int64Var(&mutationTimeoutFlag, mutationTimeoutFlagName, int64(schemaDefault[int](config.KeyRunMutationTimeout)), "timeout duration for testing a mutation in seconds")
 	bindFlagToConfig(cmd.Flags().Lookup(mutationTimeoutFlagName), config.KeyRunMutationTimeout)
+
+	cmd.Flags().Int64Var(&mutationMemoryFlag, mutationMemoryFlagName, int64(schemaDefault[int](config.KeyRunMutationMemory)), "memory limit of a mutation's tests in MiB, all their processes together; 0, the default, is no limit (linux only)")
+	bindFlagToConfig(cmd.Flags().Lookup(mutationMemoryFlagName), config.KeyRunMutationMemory)
 
 	cmd.Flags().IntVarP(&runParallelFlag, runParallelFlagName, "p", schemaDefault[int](config.KeyRunParallel), "number of parallel workers for mutation testing")
 	bindFlagToConfig(cmd.Flags().Lookup(runParallelFlagName), config.KeyRunParallel)

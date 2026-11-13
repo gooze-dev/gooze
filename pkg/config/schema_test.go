@@ -15,6 +15,7 @@ func TestDefaults(t *testing.T) {
 		KeyPathsExclude:                []string{},
 		KeyRunParallel:                 1,
 		KeyRunMutationTimeout:          120,
+		KeyRunMutationMemory:           0,
 		KeyRunCoverageProfile:          "",
 		KeyRunDiff:                     "",
 		KeyRunMutagens:                 []string{},
@@ -74,7 +75,7 @@ func TestLookup_Object(t *testing.T) {
 		names = append(names, child.Name)
 	}
 
-	assert.Equal(t, []string{"parallel", "mutation_timeout", "coverage_profile", "diff", "mutagens", "workspace", "fail_fast", "go_cache", "go_cache_size", "go_cache_prewarm", "test_flags"}, names)
+	assert.Equal(t, []string{"parallel", "mutation_timeout", "mutation_memory", "coverage_profile", "diff", "mutagens", "workspace", "fail_fast", "go_cache", "go_cache_size", "go_cache_prewarm", "test_flags"}, names)
 }
 
 func TestLookup_Missing(t *testing.T) {
@@ -160,6 +161,7 @@ func TestSchema_Bounds(t *testing.T) {
 	want := map[string][2]*int{
 		KeyRunParallel:               {new(1), nil},
 		KeyRunMutationTimeout:        {new(1), nil},
+		KeyRunMutationMemory:         {new(0), nil},
 		KeyThresholdMaxSurvivors:     {new(0), nil},
 		KeyThresholdDiffMaxSurvivors: {new(0), nil},
 		KeyRunGoCacheSize:            {new(0), nil},
@@ -289,5 +291,21 @@ func TestField_CheckFloat(t *testing.T) {
 
 			assert.EqualError(t, err, tt.wantErr)
 		})
+	}
+}
+
+func TestSchema_Init(t *testing.T) {
+	want := map[string]any{KeyRunMutationMemory: 1024}
+
+	for _, key := range Keys() {
+		field, ok := Lookup(key)
+		require.True(t, ok, key)
+		assert.Equal(t, want[key], field.Init, key)
+
+		if field.Init != nil {
+			assert.IsType(t, field.Default, field.Init, key)
+			assert.NotEqual(t, field.Default, field.Init, key)
+			assert.NoError(t, field.CheckInt(field.Init.(int)), key)
+		}
 	}
 }

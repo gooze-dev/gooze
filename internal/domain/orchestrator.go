@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"path/filepath"
@@ -257,7 +258,7 @@ func testStatus(ctx context.Context, testAdapter TestRunnerAdapter, workDir, tes
 
 	output, testErr := testAdapter.RunGoTest(ctx, string(workDir), string(testPath), string(overlay))
 	if testErr != nil {
-		if ctx.Err() != nil {
+		if ctx.Err() != nil || errors.Is(testErr, ErrMemoryLimit) {
 			return rpt.Timeout
 		}
 
@@ -286,9 +287,10 @@ func runUnmutatedTests(ctx context.Context, testAdapter TestRunnerAdapter, workD
 	}
 
 	return &FailingTestsError{
-		Package:  packageOf(mutation.Source.Origin.ShortPath),
-		Output:   output,
-		TimedOut: ctx.Err() != nil,
+		Package:    packageOf(mutation.Source.Origin.ShortPath),
+		Output:     output,
+		TimedOut:   ctx.Err() != nil,
+		OverMemory: errors.Is(err, ErrMemoryLimit),
 	}
 }
 
