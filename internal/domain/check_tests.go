@@ -36,11 +36,16 @@ type FailingTestsError struct {
 	// timeout.
 	TimedOut   bool
 	OverMemory bool
+	OverDisk   bool
 }
 
 func (e *FailingTestsError) Error() string {
 	if e.OverMemory {
 		return fmt.Sprintf("tests of %s use more memory than run.mutation_memory allows without any mutation", e.Package)
+	}
+
+	if e.OverDisk {
+		return fmt.Sprintf("tests of %s write more temp files than run.mutation_disk allows without any mutation", e.Package)
 	}
 
 	if e.TimedOut {
