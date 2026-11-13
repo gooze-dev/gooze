@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -483,4 +484,41 @@ func TestLocalTestRunnerAdapter_RunGoTest_MemoryLimitComesFirst(t *testing.T) {
 	_, err := runner.RunGoTest(context.Background(), dir, filepath.Join(dir, "hungry_test.go"), "")
 	require.ErrorIs(t, err, domain.ErrMemoryLimit)
 	require.NotErrorIs(t, err, domain.ErrDiskLimit)
+}
+
+func TestLocalTestRunnerAdapter_RunGoTest_LeavesNoProcessBehind(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("orphans are reaped on linux only")
+	}
+
+	dir := t.TempDir()
+	pidFile := filepath.Join(dir, "pid")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/spawner\n\ngo 1.24\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "spawner_test.go"), []byte(`package spawner
+
+import (
+	"os"
+	"os/exec"
+	"strconv"
+	"testing"
+)
+
+func TestSpawner(t *testing.T) {
+	cmd := exec.Command("sleep", "300")
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(`+strconv.Quote(pidFile)+`, []byte(strconv.Itoa(cmd.Process.Pid)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+`), 0o600))
+
+	out, err := NewLocalTestRunnerAdapter().RunGoTest(context.Background(), dir, filepath.Join(dir, "spawner_test.go"), "")
+	require.NoError(t, err, out)
+
+	pid, err := os.ReadFile(pidFile)
+	require.NoError(t, err)
+	require.NoFileExists(t, filepath.Join("/proc", string(pid), "stat"), "the process the test left is neither running nor a zombie")
 }

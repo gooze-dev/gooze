@@ -11,6 +11,8 @@ import (
 
 const procDir = "/proc"
 
+const pgrpField, sessionField, rssField = 2, 3, 21
+
 func watchMemory(cmd *exec.Cmd, limit int64) func() bool {
 	return watchGroupMemory(procDir, cmd.Process.Pid, limit)
 }
@@ -26,19 +28,28 @@ func watchGroupMemory(procDir string, pgid int, limit int64) func() bool {
 }
 
 func groupRSS(procDir string, pgid int) int64 {
+	var pages int64
+
+	eachProcess(procDir, func(_ int, fields [][]byte) {
+		pages += statRSS(fields, pgid)
+	})
+
+	return pages * int64(os.Getpagesize())
+}
+
+func eachProcess(procDir string, visit func(pid int, fields [][]byte)) {
 	dir, err := os.Open(procDir) //nolint:gosec // /proc, or a test's copy of it.
 	if err != nil {
-		return 0
+		return
 	}
 
 	defer dir.Close() //nolint:errcheck // read only.
 
 	names, _ := dir.Readdirnames(0)
 
-	var pages int64
-
 	for _, name := range names {
-		if _, err := strconv.Atoi(name); err != nil {
+		pid, err := strconv.Atoi(name)
+		if err != nil {
 			continue
 		}
 
@@ -47,20 +58,14 @@ func groupRSS(procDir string, pgid int) int64 {
 			continue
 		}
 
-		pages += statRSS(stat, pgid)
+		fields := bytes.Fields(stat[bytes.LastIndexByte(stat, ')')+1:])
+		if len(fields) > rssField {
+			visit(pid, fields)
+		}
 	}
-
-	return pages * int64(os.Getpagesize())
 }
 
-func statRSS(stat []byte, pgid int) int64 {
-	const pgrpField, rssField = 2, 21
-
-	fields := bytes.Fields(stat[bytes.LastIndexByte(stat, ')')+1:])
-	if len(fields) <= rssField {
-		return 0
-	}
-
+func statRSS(fields [][]byte, pgid int) int64 {
 	if pgrp, err := strconv.Atoi(string(fields[pgrpField])); err != nil || pgrp != pgid {
 		return 0
 	}
