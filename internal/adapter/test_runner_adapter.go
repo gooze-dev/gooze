@@ -3,16 +3,20 @@ package adapter
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"time"
+
+	"gooze.dev/pkg/gooze/internal/domain"
 )
 
 // LocalTestRunnerAdapter provides a concrete implementation using os/exec.
 type LocalTestRunnerAdapter struct {
-	env   []string
-	flags []string
+	env         []string
+	flags       []string
+	memoryLimit int64
 }
 
 // NewLocalTestRunnerAdapter constructs a LocalTestRunnerAdapter.
@@ -30,8 +34,15 @@ func (a *LocalTestRunnerAdapter) SetTestFlags(flags []string) {
 	a.flags = flags
 }
 
+// SetMemoryLimit sets the memory, in bytes, the processes of one go test may
+// hold together; 0 is no limit. It is enforced on linux only.
+func (a *LocalTestRunnerAdapter) SetMemoryLimit(limit int64) {
+	a.memoryLimit = limit
+}
+
 // RunGoTest runs 'go test -vet=off' for the package that contains testFile,
-// with -overlay when overlay is set.
+// with -overlay when overlay is set. It kills the test and returns a
+// domain.ErrMemoryLimit when its processes hold more than the memory limit.
 func (a *LocalTestRunnerAdapter) RunGoTest(ctx context.Context, workDir, testFile, overlay string) (string, error) {
 	cmd := newGoTestCommand(ctx, workDir, testFile, overlay, a.flags)
 
@@ -47,9 +58,18 @@ func (a *LocalTestRunnerAdapter) RunGoTest(ctx context.Context, workDir, testFil
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	err := cmd.Run()
+	if err := cmd.Start(); err != nil {
+		return "", err
+	}
+
+	overLimit := watchMemory(cmd, a.memoryLimit)
+	err := cmd.Wait()
 
 	output := stdout.String() + stderr.String()
+
+	if overLimit() {
+		return output, fmt.Errorf("go test held more than %d MiB: %w", a.memoryLimit>>20, domain.ErrMemoryLimit)
+	}
 
 	return output, err
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"testing"
@@ -287,6 +288,31 @@ func TestOrchestrator_Overlay_ContextCancelledReturnsTimeout(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
+
+	result, err := orch.TestMutation(ctx, domain.WorkspaceOverlay, mutation)
+	require.NoError(t, err)
+	require.Equal(t, rpt.Timeout, result[mutation.Type][0].Status)
+}
+
+// A mutant whose tests were killed over the memory limit ran away like one
+// that hangs, so it gets the same status, whatever the tests printed.
+func TestOrchestrator_Overlay_MemoryLimitMarksTimeout(t *testing.T) {
+	fsAdapter := domainmocks.NewMockSourceFSAdapter(t)
+	trAdapter := domainmocks.NewMockTestRunnerAdapter(t)
+	orch := domain.NewOrchestrator(fsAdapter, trAdapter)
+	ctx := context.Background()
+	mutation := makeTestMutation()
+	tmpDir := m.Path("/tmp/ovl")
+
+	fsAdapter.EXPECT().FindProjectRoot(ctx, m.Path("/project/main.go")).Return(m.Path("/project"), nil)
+	fsAdapter.EXPECT().CreateTempDir(ctx, "gooze-overlay-*").Return(tmpDir, nil)
+	fsAdapter.EXPECT().JoinPath(ctx, string(tmpDir), "mutant.go").Return(m.Path("/tmp/ovl/mutant.go"))
+	fsAdapter.EXPECT().JoinPath(ctx, string(tmpDir), "overlay.json").Return(m.Path("/tmp/ovl/overlay.json"))
+	fsAdapter.EXPECT().WriteFile(ctx, m.Path("/tmp/ovl/mutant.go"), mutation.MutatedCode, os.FileMode(0o600)).Return(nil)
+	fsAdapter.EXPECT().WriteFile(ctx, m.Path("/tmp/ovl/overlay.json"), mock.Anything, os.FileMode(0o600)).Return(nil)
+	trAdapter.EXPECT().RunGoTest(ctx, "/project", "/project/main.go", "/tmp/ovl/overlay.json").
+		Return("FAIL\texample.com/p [build failed]\n", fmt.Errorf("go test held more than 4096 MiB: %w", domain.ErrMemoryLimit))
+	fsAdapter.EXPECT().RemoveAll(mock.Anything, tmpDir).Return(nil)
 
 	result, err := orch.TestMutation(ctx, domain.WorkspaceOverlay, mutation)
 	require.NoError(t, err)

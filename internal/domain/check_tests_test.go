@@ -3,6 +3,7 @@ package domain_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/mock"
@@ -70,4 +71,28 @@ func TestOrchestrator_DeepCopy_CheckTestsRunsInTheCopy(t *testing.T) {
 	require.Equal(t, ".", failing.Package)
 	require.True(t, failing.TimedOut)
 	require.EqualError(t, err, "tests of . don't finish within the mutation timeout without any mutation")
+}
+
+func TestOrchestrator_Overlay_CheckTestsOverMemoryLimit(t *testing.T) {
+	fsAdapter := domainmocks.NewMockSourceFSAdapter(t)
+	trAdapter := domainmocks.NewMockTestRunnerAdapter(t)
+	ctx := context.Background()
+	mutation := makeTestMutation()
+	mutation.Source.Origin.ShortPath = "internal/max/main.go"
+
+	fsAdapter.EXPECT().FindProjectRoot(ctx, m.Path("/project/main.go")).Return(m.Path("/project"), nil)
+	trAdapter.EXPECT().RunGoTest(ctx, "/project", "/project/main.go", "").
+		Return("=== RUN   TestMax\n", fmt.Errorf("go test held more than 4096 MiB: %w", domain.ErrMemoryLimit)).Once()
+
+	ws := domain.NewOrchestrator(fsAdapter, trAdapter).NewWorkspace(domain.WorkspaceOverlay)
+	defer ws.Close(ctx)
+
+	err := ws.(domain.TestChecker).CheckTests(ctx, mutation)
+
+	var failing *domain.FailingTestsError
+	require.ErrorAs(t, err, &failing)
+	require.Equal(t, "./internal/max", failing.Package)
+	require.True(t, failing.OverMemory)
+	require.False(t, failing.TimedOut)
+	require.EqualError(t, err, "tests of ./internal/max use more memory than run.mutation_memory allows without any mutation")
 }

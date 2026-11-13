@@ -35,9 +35,16 @@ type FailingTestsError struct {
 	// TimedOut is set when the tests didn't finish within the mutation
 	// timeout.
 	TimedOut bool
+	// OverMemory is set when the tests were killed because they held more
+	// memory than the run allows.
+	OverMemory bool
 }
 
 func (e *FailingTestsError) Error() string {
+	if e.OverMemory {
+		return fmt.Sprintf("tests of %s use more memory than run.mutation_memory allows without any mutation", e.Package)
+	}
+
 	if e.TimedOut {
 		return fmt.Sprintf("tests of %s don't finish within the mutation timeout without any mutation", e.Package)
 	}

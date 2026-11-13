@@ -4,12 +4,14 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gooze.dev/pkg/gooze/internal/domain"
 )
 
 // These tests exercise LocalTestRunnerAdapter against the real example
@@ -243,4 +245,68 @@ func TestLong(t *testing.T) {
 
 	out, err := runner.RunGoTest(context.Background(), dir, filepath.Join(dir, "p_test.go"), "")
 	require.NoError(t, err, out)
+}
+
+// memoryHungryModule writes a module whose test takes 128 MiB every 50 ms
+// until it holds 1.5 GiB, then passes.
+func memoryHungryModule(t *testing.T) string {
+	t.Helper()
+
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/hungry\n\ngo 1.24\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "hungry_test.go"), []byte(`package hungry
+
+import (
+	"testing"
+	"time"
+)
+
+func TestHungry(t *testing.T) {
+	var held [][]byte
+
+	for range 12 {
+		buf := make([]byte, 128<<20)
+		for i := range buf {
+			buf[i] = 1
+		}
+
+		held = append(held, buf)
+
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	t.Log("held", len(held))
+}
+`), 0o600))
+
+	return dir
+}
+
+func TestLocalTestRunnerAdapter_RunGoTest_MemoryLimit(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("the memory limit is enforced on linux only")
+	}
+
+	dir := memoryHungryModule(t)
+	runner := NewLocalTestRunnerAdapter()
+	runner.SetMemoryLimit(512 << 20)
+
+	out, err := runner.RunGoTest(context.Background(), dir, filepath.Join(dir, "hungry_test.go"), "")
+
+	require.ErrorIs(t, err, domain.ErrMemoryLimit, out)
+	require.NotContains(t, out, "--- PASS", "the test was killed before it finished")
+}
+
+func TestLocalTestRunnerAdapter_RunGoTest_UnderMemoryLimit(t *testing.T) {
+	dir := memoryHungryModule(t)
+	runner := NewLocalTestRunnerAdapter()
+
+	out, err := runner.RunGoTest(context.Background(), dir, filepath.Join(dir, "hungry_test.go"), "")
+	require.NoError(t, err, "no limit: %s", out)
+
+	runner.SetMemoryLimit(8 << 30)
+
+	out, err = runner.RunGoTest(context.Background(), dir, filepath.Join(dir, "hungry_test.go"), "")
+	require.NoError(t, err, "under the limit: %s", out)
+	require.Contains(t, out, "--- PASS")
 }

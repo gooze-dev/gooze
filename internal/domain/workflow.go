@@ -78,6 +78,9 @@ type TestArgs struct {
 	// TestFlags are extra go test flags (see ParseTestFlags), for the tests
 	// of every mutant and the build cache prewarm.
 	TestFlags []string
+	// MutationMemory is the memory, in bytes, the tests of one mutant may
+	// hold; 0 is no limit.
+	MutationMemory int64
 }
 
 // ViewArgs contains the arguments for viewing mutation test reports.
@@ -270,6 +273,7 @@ func (w *workflow) Test(ctx context.Context, args TestArgs) error {
 
 		if w.testCommand != nil {
 			w.testCommand.SetTestFlags(args.TestFlags)
+			w.testCommand.SetMemoryLimit(args.MutationMemory)
 		}
 
 		w.progress.DisplayConcurrencyInfo(ctx, args.Threads, args.ShardIndex, args.TotalShardCount)
