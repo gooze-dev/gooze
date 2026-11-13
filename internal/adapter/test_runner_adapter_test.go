@@ -124,7 +124,7 @@ func sleepingModule(t *testing.T) string {
 	dir := t.TempDir()
 	files := map[string]string{
 		"go.mod":    "module sleeping\n\ngo 1.21\n",
-		"a_test.go": "package sleeping\n\nimport (\n\t\"testing\"\n\t\"time\"\n)\n\nfunc TestSleep(t *testing.T) { time.Sleep(time.Minute) }\n",
+		"a_test.go": "package sleeping\n\nimport (\n\t\"testing\"\n\t\"time\"\n)\n\nfunc TestSleep(t *testing.T) { time.Sleep(20 * time.Second) }\n",
 	}
 
 	for name, content := range files {
@@ -493,6 +493,7 @@ func TestLocalTestRunnerAdapter_RunGoTest_LeavesNoProcessBehind(t *testing.T) {
 
 	dir := t.TempDir()
 	pidFile := filepath.Join(dir, "pid")
+	survivedFile := filepath.Join(dir, "survived")
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/spawner\n\ngo 1.24\n"), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "spawner_test.go"), []byte(`package spawner
 
@@ -504,7 +505,7 @@ import (
 )
 
 func TestSpawner(t *testing.T) {
-	cmd := exec.Command("sleep", "300")
+	cmd := exec.Command("sh", "-c", "sleep 3; touch "+`+strconv.Quote(strconv.Quote(survivedFile))+`)
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -521,4 +522,5 @@ func TestSpawner(t *testing.T) {
 	pid, err := os.ReadFile(pidFile)
 	require.NoError(t, err)
 	require.NoFileExists(t, filepath.Join("/proc", string(pid), "stat"), "the process the test left is neither running nor a zombie")
+	require.NoFileExists(t, survivedFile, "it was killed, not waited for")
 }
