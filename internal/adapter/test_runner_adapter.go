@@ -42,7 +42,8 @@ func (a *LocalTestRunnerAdapter) SetMemoryLimit(limit int64) {
 // RunGoTest runs 'go test -vet=off' for the package that contains testFile,
 // with -overlay when overlay is set. It kills the test and returns a
 // domain.ErrMemoryLimit when its processes hold more than the memory limit.
-// Of long output it returns the start and the end of each stream.
+// Of long output it returns the start and the end of each stream. On unix
+// the tests get a temp directory of their own, removed when they end.
 func (a *LocalTestRunnerAdapter) RunGoTest(ctx context.Context, workDir, testFile, overlay string) (string, error) {
 	cmd := newGoTestCommand(ctx, workDir, testFile, overlay, a.flags)
 
@@ -51,7 +52,12 @@ func (a *LocalTestRunnerAdapter) RunGoTest(ctx context.Context, workDir, testFil
 	buildTmp := buildTempDir()
 	defer os.RemoveAll(buildTmp) //nolint:errcheck // best effort cleanup.
 
-	cmd.Env = append(append(os.Environ(), "GOTMPDIR="+buildTmp), a.env...)
+	// A killed test doesn't remove its temp files either. An empty TMPDIR
+	// is the system's temp directory.
+	testTmp := testTempDir()
+	defer os.RemoveAll(testTmp) //nolint:errcheck // best effort cleanup.
+
+	cmd.Env = append(append(os.Environ(), "GOTMPDIR="+buildTmp, "TMPDIR="+testTmp), a.env...)
 
 	var stdout, stderr outputBuffer
 
@@ -111,6 +117,19 @@ func packageArg(workDir, testFile string) string {
 // the choice to go.
 func buildTempDir() string {
 	dir, err := os.MkdirTemp(os.Getenv("GOTMPDIR"), "gooze-gotest-")
+	if err != nil {
+		return ""
+	}
+
+	return dir
+}
+
+// testTempDir creates the directory the tests of one go test get as their
+// temp directory, in the system's. When it can't be created it returns "",
+// which leaves them the system's.
+func testTempDir() string {
+	// A short name: the paths of unix sockets under it have little room.
+	dir, err := os.MkdirTemp("", "gz")
 	if err != nil {
 		return ""
 	}
