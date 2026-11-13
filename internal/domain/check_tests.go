@@ -34,9 +34,7 @@ type FailingTestsError struct {
 	Output string
 	// TimedOut is set when the tests didn't finish within the mutation
 	// timeout.
-	TimedOut bool
-	// OverMemory is set when the tests were killed because they held more
-	// memory than the run allows.
+	TimedOut   bool
 	OverMemory bool
 }
 

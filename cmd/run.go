@@ -16,7 +16,6 @@ import (
 	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
 )
 
-// mebibyteShift turns MiB into bytes.
 const mebibyteShift = 20
 
 var mutationTimeoutFlag int64

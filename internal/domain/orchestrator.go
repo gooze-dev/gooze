@@ -258,7 +258,6 @@ func testStatus(ctx context.Context, testAdapter TestRunnerAdapter, workDir, tes
 
 	output, testErr := testAdapter.RunGoTest(ctx, string(workDir), string(testPath), string(overlay))
 	if testErr != nil {
-		// Tests killed over the memory limit ran away as the ones that hang do.
 		if ctx.Err() != nil || errors.Is(testErr, ErrMemoryLimit) {
 			return rpt.Timeout
 		}

@@ -247,8 +247,6 @@ func TestLong(t *testing.T) {
 	require.NoError(t, err, out)
 }
 
-// memoryHungryModule writes a module whose test takes 128 MiB every 50 ms
-// until it holds 768 MiB, then passes.
 func memoryHungryModule(t *testing.T) string {
 	t.Helper()
 
@@ -337,7 +335,6 @@ func TestLoud(t *testing.T) {
 	out, err := NewLocalTestRunnerAdapter().RunGoTest(context.Background(), dir, filepath.Join(dir, "loud_test.go"), "")
 	require.NoError(t, err)
 
-	// go test writes both streams of the test, 16 MiB, to its stdout.
 	require.Less(t, len(out), 2*outputKeep+1024)
 	require.GreaterOrEqual(t, len(out), 2*outputKeep)
 	require.True(t, strings.HasPrefix(out, "=== RUN   TestLoud\n"), out[:64])
@@ -346,8 +343,6 @@ func TestLoud(t *testing.T) {
 	require.Contains(t, out, "\nok  \texample.com/loud")
 }
 
-// A killed test never runs its cleanup, so what it left in the temp
-// directory is removed with the directory gooze gave it.
 func TestLocalTestRunnerAdapter_RunGoTest_KilledTestLeavesNoTempFiles(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("TMPDIR names the temp directory on unix only")

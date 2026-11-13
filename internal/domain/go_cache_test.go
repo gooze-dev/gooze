@@ -29,7 +29,7 @@ type recordingBuildCache struct {
 	dirs       []string
 	flags      []string // the go test flags of the prewarm
 	testFlags  []string // the go test flags that reached the runner
-	memory     int64    // the memory limit that reached the runner
+	memory     int64
 	builds     []string // the environment that reached the runner
 	generated  []string // the environment when the first mutant was generated
 	generating bool

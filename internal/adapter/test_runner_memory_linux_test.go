@@ -22,23 +22,18 @@ func TestGroupRSS(t *testing.T) {
 		dir := filepath.Join(proc, strconv.Itoa(pid))
 		require.NoError(t, os.Mkdir(dir, 0o700))
 
-		// The fields of proc(5)'s /proc/pid/stat: pgrp is the 5th, rss the 24th.
 		line := strconv.Itoa(pid) + " (" + comm + ") S 1 " + strconv.Itoa(pgrp) +
 			" 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 " + strconv.Itoa(rssPages) + " 25 26\n"
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "stat"), []byte(line), 0o600))
 	}
 
 	stat(100, "go", 100, 10)
-	// A command name may hold spaces and parentheses.
 	stat(101, "a b) (c", 100, 5)
 	stat(102, "x.test", 100, 0)
 	stat(900, "nine", 100, 2)
-	// Another group, whose pid and other fields equal the group asked for.
 	stat(200, "other", 201, 1000)
 	stat(201, "100", 201, 100)
 
-	// What else /proc holds: entries that aren't processes, a process that
-	// ended between the listing and the read, and lines that can't be read.
 	require.NoError(t, os.Mkdir(filepath.Join(proc, "self"), 0o700))
 	require.NoError(t, os.WriteFile(filepath.Join(proc, "self", "stat"), []byte("100 (go) S 1 100 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 999 25\n"), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(proc, "uptime"), []byte("1 (x) S 1 100 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 999 25\n"), 0o600))
@@ -54,7 +49,6 @@ func TestGroupRSS(t *testing.T) {
 
 	page := int64(os.Getpagesize())
 
-	// A line that ends just before the rss field.
 	require.NoError(t, os.Mkdir(filepath.Join(proc, "305"), 0o700))
 	require.NoError(t, os.WriteFile(filepath.Join(proc, "305", "stat"), []byte("305 (cut) S 1 100 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23\n"), 0o600))
 
@@ -64,9 +58,6 @@ func TestGroupRSS(t *testing.T) {
 	require.Zero(t, groupRSS(filepath.Join(proc, "missing"), 100), "no proc directory")
 }
 
-// sleepingGroup starts a shell that leads a process group with one child,
-// and a proc directory in which the group holds 10 pages. It returns the
-// shell, the child's pid and the directory.
 func sleepingGroup(t *testing.T) (*exec.Cmd, int, string) {
 	t.Helper()
 
@@ -97,7 +88,14 @@ func sleepingGroup(t *testing.T) (*exec.Cmd, int, string) {
 }
 
 func alive(pid int) bool {
-	return syscall.Kill(pid, 0) == nil
+	stat, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "stat"))
+	if err != nil {
+		return false
+	}
+
+	state := strings.Fields(string(stat[strings.LastIndexByte(string(stat), ')')+1:]))
+
+	return len(state) > 0 && state[0] != "Z"
 }
 
 func TestWatchGroupMemory_KillsTheGroupOverTheLimit(t *testing.T) {
