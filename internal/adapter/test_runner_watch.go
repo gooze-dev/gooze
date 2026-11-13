@@ -52,10 +52,6 @@ func dirsSize(dirs []string) int64 {
 	var size int64
 
 	for _, dir := range dirs {
-		if dir == "" {
-			continue
-		}
-
 		_ = filepath.WalkDir(dir, func(_ string, entry fs.DirEntry, err error) error {
 			if err != nil || entry.IsDir() {
 				return nil //nolint:nilerr // a file removed since the listing counts for nothing.
