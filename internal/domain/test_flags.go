@@ -44,9 +44,11 @@ func notAFlag(value string) error {
 	return fmt.Errorf("run.test_flags: %q is not a flag; write a flag's value with =, as in -skip=%s", value, value)
 }
 
-// TestCommand takes the extra flags of the go test commands that test mutants.
+// TestCommand takes the extra flags of the go test commands that test mutants
+// and the memory, in bytes, each of them may hold (0 is no limit).
 type TestCommand interface {
 	SetTestFlags(flags []string)
+	SetMemoryLimit(limit int64)
 }
 
 // WithTestFlags passes each run's TestArgs.TestFlags to command.

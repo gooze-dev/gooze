@@ -14,6 +14,7 @@ func TestKeys(t *testing.T) {
 		KeyPathsExclude,
 		KeyRunParallel,
 		KeyRunMutationTimeout,
+		KeyRunMutationMemory,
 		KeyRunCoverageProfile,
 		KeyRunDiff,
 		KeyRunMutagens,
@@ -50,7 +51,7 @@ func TestKeys(t *testing.T) {
 func TestKeyValues(t *testing.T) {
 	assert.Equal(t, []string{
 		"output", "no_cache", "no_update_check", "paths.exclude",
-		"run.parallel", "run.mutation_timeout", "run.coverage_profile", "run.diff", "run.mutagens",
+		"run.parallel", "run.mutation_timeout", "run.mutation_memory", "run.coverage_profile", "run.diff", "run.mutagens",
 		"run.workspace", "run.fail_fast", "run.go_cache", "run.go_cache_size", "run.go_cache_prewarm",
 		"run.test_flags",
 		"mutagen.comparison.enum_bounds",

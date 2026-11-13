@@ -8,6 +8,7 @@ const (
 	KeyPathsExclude                = "paths.exclude"
 	KeyRunParallel                 = "run.parallel"
 	KeyRunMutationTimeout          = "run.mutation_timeout"
+	KeyRunMutationMemory           = "run.mutation_memory"
 	KeyRunCoverageProfile          = "run.coverage_profile"
 	KeyRunDiff                     = "run.diff"
 	KeyRunMutagens                 = "run.mutagens"
