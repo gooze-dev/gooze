@@ -312,3 +312,36 @@ func TestLocalTestRunnerAdapter_RunGoTest_UnderMemoryLimit(t *testing.T) {
 	require.NoError(t, err, "under the limit: %s", out)
 	require.Contains(t, out, "--- PASS")
 }
+
+func TestLocalTestRunnerAdapter_RunGoTest_KeepsTheStartAndTheEndOfLongOutput(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/loud\n\ngo 1.24\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "loud_test.go"), []byte(`package loud
+
+import (
+	"fmt"
+	"os"
+	"strings"
+	"testing"
+)
+
+func TestLoud(t *testing.T) {
+	line := strings.Repeat("x", 1023)
+	for range 8 << 10 {
+		fmt.Println(line)
+		fmt.Fprintln(os.Stderr, line)
+	}
+}
+`), 0o600))
+
+	out, err := NewLocalTestRunnerAdapter().RunGoTest(context.Background(), dir, filepath.Join(dir, "loud_test.go"), "")
+	require.NoError(t, err)
+
+	// go test writes both streams of the test, 16 MiB, to its stdout.
+	require.Less(t, len(out), 2*outputKeep+1024)
+	require.GreaterOrEqual(t, len(out), 2*outputKeep)
+	require.True(t, strings.HasPrefix(out, "=== RUN   TestLoud\n"), out[:64])
+	require.Contains(t, out, "bytes of output ...\n")
+	require.Contains(t, out, "--- PASS: TestLoud")
+	require.Contains(t, out, "\nok  \texample.com/loud")
+}

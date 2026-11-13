@@ -1,7 +1,6 @@
 package adapter
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -43,6 +42,7 @@ func (a *LocalTestRunnerAdapter) SetMemoryLimit(limit int64) {
 // RunGoTest runs 'go test -vet=off' for the package that contains testFile,
 // with -overlay when overlay is set. It kills the test and returns a
 // domain.ErrMemoryLimit when its processes hold more than the memory limit.
+// Of long output it returns the start and the end of each stream.
 func (a *LocalTestRunnerAdapter) RunGoTest(ctx context.Context, workDir, testFile, overlay string) (string, error) {
 	cmd := newGoTestCommand(ctx, workDir, testFile, overlay, a.flags)
 
@@ -53,7 +53,7 @@ func (a *LocalTestRunnerAdapter) RunGoTest(ctx context.Context, workDir, testFil
 
 	cmd.Env = append(append(os.Environ(), "GOTMPDIR="+buildTmp), a.env...)
 
-	var stdout, stderr bytes.Buffer
+	var stdout, stderr outputBuffer
 
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
