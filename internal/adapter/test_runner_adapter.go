@@ -64,6 +64,8 @@ func (a *LocalTestRunnerAdapter) RunGoTest(ctx context.Context, workDir, testFil
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
+	adoptOrphans()
+
 	if err := cmd.Start(); err != nil {
 		return "", err
 	}
@@ -71,6 +73,8 @@ func (a *LocalTestRunnerAdapter) RunGoTest(ctx context.Context, workDir, testFil
 	overMemory := watchMemory(cmd, a.memoryLimit)
 	overDisk := watchDisk(func() { _ = killGroup(cmd) }, []string{buildTmp, testTmp}, a.diskLimit)
 	err := cmd.Wait()
+
+	reapOrphans(cmd)
 
 	output := stdout.String() + stderr.String()
 	memory, disk := overMemory(), overDisk()
