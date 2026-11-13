@@ -104,8 +104,7 @@ type GoFileAdapter interface {
 	Parse(ctx context.Context, fileSet *token.FileSet, filename string, src []byte) (*ast.File, error)
 }
 
-// ErrMemoryLimit is the error of a RunGoTest whose processes were killed
-// because together they held more memory than the run allows.
+// ErrMemoryLimit is the error of a RunGoTest killed over the memory limit.
 var ErrMemoryLimit = errors.New("memory limit exceeded")
 
 // TestRunnerAdapter abstracts test execution operations for mutation testing.

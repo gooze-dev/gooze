@@ -294,8 +294,6 @@ func TestOrchestrator_Overlay_ContextCancelledReturnsTimeout(t *testing.T) {
 	require.Equal(t, rpt.Timeout, result[mutation.Type][0].Status)
 }
 
-// A mutant whose tests were killed over the memory limit ran away like one
-// that hangs, so it gets the same status, whatever the tests printed.
 func TestOrchestrator_Overlay_MemoryLimitMarksTimeout(t *testing.T) {
 	fsAdapter := domainmocks.NewMockSourceFSAdapter(t)
 	trAdapter := domainmocks.NewMockTestRunnerAdapter(t)

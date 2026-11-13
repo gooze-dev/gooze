@@ -22,9 +22,7 @@ type Field struct {
 	// Default is the value gooze uses when the key is not set: a string, bool,
 	// int, float64 or []string matching Kind, and nil for objects.
 	Default any
-	// Init is the value gooze config init writes when it isn't Default: a
-	// setting gooze recommends but doesn't apply by itself. Nil writes Default.
-	Init any
+	Init    any
 	// Doc is a one-line description of the key.
 	Doc string
 	// Enum lists the accepted values of a KindEnum field, or of each item of

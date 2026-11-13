@@ -670,7 +670,7 @@ func TestRunCmd_MutationMemory(t *testing.T) {
 	for name, tt := range map[string]struct {
 		args []string
 		env  string
-		file int // run.mutation_memory in gooze.yaml
+		file int
 		want int64
 	}{
 		"flag":           {args: []string{"run", "--mutation-memory", "512", "./..."}, want: 512 << 20},

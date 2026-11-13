@@ -77,9 +77,7 @@ type TestArgs struct {
 	FailFast FailFast
 	// TestFlags are extra go test flags (see ParseTestFlags), for the tests
 	// of every mutant and the build cache prewarm.
-	TestFlags []string
-	// MutationMemory is the memory, in bytes, the tests of one mutant may
-	// hold; 0 is no limit.
+	TestFlags      []string
 	MutationMemory int64
 }
 
