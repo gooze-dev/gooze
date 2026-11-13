@@ -31,15 +31,14 @@ func (b *outputBuffer) Write(p []byte) (int, error) {
 	// Of a write longer than the ring only the end stays.
 	p = p[max(0, len(p)-outputKeep):]
 
-	for len(p) > 0 {
-		if b.ring == nil {
-			b.ring = make([]byte, outputKeep)
-		}
-
-		copied := copy(b.ring[b.next:], p)
-		p = p[copied:]
-		b.next = (b.next + copied) % outputKeep
+	if b.ring == nil {
+		b.ring = make([]byte, outputKeep)
 	}
+
+	// Up to the end of the ring, then the rest from its start.
+	copied := copy(b.ring[b.next:], p)
+	copy(b.ring, p[copied:])
+	b.next = (b.next + len(p)) % outputKeep
 
 	return written, nil
 }
