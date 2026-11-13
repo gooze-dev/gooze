@@ -297,7 +297,7 @@ func TestField_CheckFloat(t *testing.T) {
 // Init is what gooze config init writes for a key in place of its default:
 // a setting gooze recommends but doesn't apply by itself.
 func TestSchema_Init(t *testing.T) {
-	want := map[string]any{KeyRunMutationMemory: 4096}
+	want := map[string]any{KeyRunMutationMemory: 1024}
 
 	for _, key := range Keys() {
 		field, ok := Lookup(key)

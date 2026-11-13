@@ -13,7 +13,7 @@ paths:                        # Path selection settings.
 run:                          # Mutation run settings.
   parallel: 1                 # Number of concurrent mutation workers.
   mutation_timeout: 120       # Per-mutation timeout in seconds.
-  mutation_memory: 4096       # Memory limit of a mutation's tests in MiB, all their processes together; above it they are killed and the mutation is reported as a timeout. 0 is no limit. Linux only. Default: 0.
+  mutation_memory: 1024       # Memory limit of a mutation's tests in MiB, all their processes together; above it they are killed and the mutation is reported as a timeout. 0 is no limit. Linux only. Default: 0.
   coverage_profile: ''        # Go coverage profile; mutations on uncovered lines are reported as not_covered without running tests.
   diff: ''                    # Git ref to diff against; only lines changed since its merge base with HEAD are mutated. Requires git. Empty runs everything.
   mutagens: []                # Mutagens to run (arithmetic, boolean, numbers, comparison, logical, unary, bitwise, increment, assignment, branch, statement, loop); empty runs the default ones, all but branch, statement and loop.
