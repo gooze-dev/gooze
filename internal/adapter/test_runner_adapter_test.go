@@ -345,3 +345,65 @@ func TestLoud(t *testing.T) {
 	require.Contains(t, out, "--- PASS: TestLoud")
 	require.Contains(t, out, "\nok  \texample.com/loud")
 }
+
+// A killed test never runs its cleanup, so what it left in the temp
+// directory is removed with the directory gooze gave it.
+func TestLocalTestRunnerAdapter_RunGoTest_KilledTestLeavesNoTempFiles(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("TMPDIR names the temp directory on unix only")
+	}
+
+	sysTmp := t.TempDir()
+	t.Setenv("TMPDIR", sysTmp)
+
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/leaky\n\ngo 1.24\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "leaky_test.go"), []byte(`package leaky
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"syscall"
+	"testing"
+)
+
+func TestLeaky(t *testing.T) {
+	kept := filepath.Join(t.TempDir(), "kept")
+	if err := os.WriteFile(kept, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	file, err := os.CreateTemp("", "leak-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Println("wrote", kept, file.Name())
+
+	_ = syscall.Kill(os.Getpid(), syscall.SIGKILL)
+	select {}
+}
+`), 0o600))
+
+	out, err := NewLocalTestRunnerAdapter().RunGoTest(context.Background(), dir, filepath.Join(dir, "leaky_test.go"), "")
+	require.Error(t, err, out)
+	require.Contains(t, out, "wrote "+sysTmp+string(filepath.Separator), "the test's temp files are under the system's temp directory")
+
+	left, err := os.ReadDir(sysTmp)
+	require.NoError(t, err)
+	require.Empty(t, left, "nothing stays behind")
+}
+
+func TestTestTempDir(t *testing.T) {
+	sysTmp := t.TempDir()
+	t.Setenv("TMPDIR", sysTmp)
+
+	dir := testTempDir()
+	require.DirExists(t, dir)
+	assert.Equal(t, sysTmp, filepath.Dir(dir))
+	assert.LessOrEqual(t, len(filepath.Base(dir)), 12, "short: paths of unix sockets under it have little room")
+
+	t.Setenv("TMPDIR", filepath.Join(sysTmp, "missing"))
+	assert.Empty(t, testTempDir())
+}
