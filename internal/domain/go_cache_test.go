@@ -30,6 +30,7 @@ type recordingBuildCache struct {
 	flags      []string // the go test flags of the prewarm
 	testFlags  []string // the go test flags that reached the runner
 	memory     int64
+	disk       int64
 	builds     []string // the environment that reached the runner
 	generated  []string // the environment when the first mutant was generated
 	generating bool
@@ -77,6 +78,10 @@ func (c *recordingBuildCache) SetTestFlags(flags []string) {
 
 func (c *recordingBuildCache) SetMemoryLimit(limit int64) {
 	c.memory = limit
+}
+
+func (c *recordingBuildCache) SetDiskLimit(limit int64) {
+	c.disk = limit
 }
 
 func (c *recordingBuildCache) Close(ctx context.Context) error {
@@ -171,6 +176,7 @@ func runSourcesWithBuildCache(t *testing.T, cache *recordingBuildCache, mode dom
 		TotalShardCount: 1,
 		TestFlags:       testFlags,
 		MutationMemory:  512 << 20,
+		MutationDisk:    256 << 20,
 	}
 	args.Reports = args.EstimateArgs.Reports
 
@@ -317,4 +323,5 @@ func TestWorkflow_Test_MemoryLimitReachesTheTests(t *testing.T) {
 
 	require.NoError(t, runWithBuildCache(t, cache, domain.GoCacheShared, false))
 	assert.Equal(t, int64(512<<20), cache.memory)
+	assert.Equal(t, int64(256<<20), cache.disk)
 }

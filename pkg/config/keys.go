@@ -9,6 +9,7 @@ const (
 	KeyRunParallel                 = "run.parallel"
 	KeyRunMutationTimeout          = "run.mutation_timeout"
 	KeyRunMutationMemory           = "run.mutation_memory"
+	KeyRunMutationDisk             = "run.mutation_disk"
 	KeyRunCoverageProfile          = "run.coverage_profile"
 	KeyRunDiff                     = "run.diff"
 	KeyRunMutagens                 = "run.mutagens"

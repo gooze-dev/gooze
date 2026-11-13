@@ -123,7 +123,7 @@ func TestWatchGroupMemory_LeavesTheGroupAtOrUnderTheLimit(t *testing.T) {
 
 			stop := watchGroupMemory(proc, cmd.Process.Pid, limit)
 
-			time.Sleep(4 * memoryCheckInterval)
+			time.Sleep(4 * limitCheckInterval)
 
 			require.False(t, stop())
 			require.True(t, alive(cmd.Process.Pid))

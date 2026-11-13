@@ -20,6 +20,7 @@ const mebibyteShift = 20
 
 var mutationTimeoutFlag int64
 var mutationMemoryFlag int64
+var mutationDiskFlag int64
 var runParallelFlag int
 var runShardFlag string
 var runEstimateFlag bool
@@ -100,6 +101,7 @@ func runTestArgs(estimateArgs domain.EstimateArgs, shardIndex, totalShards int, 
 		TotalShardCount: totalShards,
 		MutationTimeout: time.Duration(configInt(config.KeyRunMutationTimeout)) * time.Second,
 		MutationMemory:  int64(configInt(config.KeyRunMutationMemory)) << mebibyteShift,
+		MutationDisk:    int64(configInt(config.KeyRunMutationDisk)) << mebibyteShift,
 		CoverageProfile: m.Path(viper.GetString(config.KeyRunCoverageProfile)),
 		Workspace:       domain.WorkspaceMode(viper.GetString(config.KeyRunWorkspace)),
 		Thresholds:      minimums,
@@ -119,6 +121,9 @@ func configureRunFlags(cmd *cobra.Command) (report.ThresholdFlags, report.Thresh
 
 	cmd.Flags().Int64Var(&mutationMemoryFlag, mutationMemoryFlagName, int64(schemaDefault[int](config.KeyRunMutationMemory)), "memory limit of a mutation's tests in MiB, all their processes together; 0, the default, is no limit (linux only)")
 	bindFlagToConfig(cmd.Flags().Lookup(mutationMemoryFlagName), config.KeyRunMutationMemory)
+
+	cmd.Flags().Int64Var(&mutationDiskFlag, mutationDiskFlagName, int64(schemaDefault[int](config.KeyRunMutationDisk)), "disk space limit of a mutation's tests in MiB, for their temp files and their build; 0, the default, is no limit")
+	bindFlagToConfig(cmd.Flags().Lookup(mutationDiskFlagName), config.KeyRunMutationDisk)
 
 	cmd.Flags().IntVarP(&runParallelFlag, runParallelFlagName, "p", schemaDefault[int](config.KeyRunParallel), "number of parallel workers for mutation testing")
 	bindFlagToConfig(cmd.Flags().Lookup(runParallelFlagName), config.KeyRunParallel)

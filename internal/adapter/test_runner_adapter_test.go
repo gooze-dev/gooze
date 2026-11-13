@@ -403,3 +403,84 @@ func TestTestTempDir(t *testing.T) {
 	t.Setenv("TMPDIR", filepath.Join(sysTmp, "missing"))
 	assert.Empty(t, testTempDir())
 }
+
+func diskHungryModule(t *testing.T, tempDir string) string {
+	t.Helper()
+
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/writer\n\ngo 1.24\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "writer_test.go"), []byte(`package writer
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+)
+
+func TestWriter(t *testing.T) {
+	file, err := os.Create(filepath.Join(`+tempDir+`, "big"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer file.Close()
+
+	chunk := make([]byte, 16<<20)
+
+	for range 8 {
+		if _, err := file.Write(chunk); err != nil {
+			t.Fatal(err)
+		}
+
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+`), 0o600))
+
+	return dir
+}
+
+func TestLocalTestRunnerAdapter_RunGoTest_DiskLimit(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("TMPDIR names the temp directory on unix only")
+	}
+
+	for name, tempDir := range map[string]string{"the temp directory": "os.TempDir()", "the test's own": "t.TempDir()"} {
+		t.Run(name, func(t *testing.T) {
+			dir := diskHungryModule(t, tempDir)
+			runner := NewLocalTestRunnerAdapter()
+
+			out, err := runner.RunGoTest(context.Background(), dir, filepath.Join(dir, "writer_test.go"), "")
+			require.NoError(t, err, "no limit: %s", out)
+
+			runner.SetDiskLimit(1 << 30)
+
+			out, err = runner.RunGoTest(context.Background(), dir, filepath.Join(dir, "writer_test.go"), "")
+			require.NoError(t, err, "under the limit: %s", out)
+
+			runner.SetDiskLimit(64 << 20)
+
+			out, err = runner.RunGoTest(context.Background(), dir, filepath.Join(dir, "writer_test.go"), "")
+			require.ErrorIs(t, err, domain.ErrDiskLimit, out)
+			require.EqualError(t, err, "go test wrote more than 64 MiB: disk limit exceeded")
+			require.Contains(t, out, "=== RUN   TestWriter")
+			require.NotContains(t, out, "--- PASS")
+		})
+	}
+}
+
+func TestLocalTestRunnerAdapter_RunGoTest_MemoryLimitComesFirst(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("the memory limit is enforced on linux only")
+	}
+
+	dir := memoryHungryModule(t)
+	runner := NewLocalTestRunnerAdapter()
+	runner.SetMemoryLimit(384 << 20)
+	runner.SetDiskLimit(1 << 30)
+
+	_, err := runner.RunGoTest(context.Background(), dir, filepath.Join(dir, "hungry_test.go"), "")
+	require.ErrorIs(t, err, domain.ErrMemoryLimit)
+	require.NotErrorIs(t, err, domain.ErrDiskLimit)
+}

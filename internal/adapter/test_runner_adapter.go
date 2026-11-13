@@ -16,6 +16,7 @@ type LocalTestRunnerAdapter struct {
 	env         []string
 	flags       []string
 	memoryLimit int64
+	diskLimit   int64
 }
 
 // NewLocalTestRunnerAdapter constructs a LocalTestRunnerAdapter.
@@ -36,6 +37,11 @@ func (a *LocalTestRunnerAdapter) SetTestFlags(flags []string) {
 // SetMemoryLimit sets the memory, in bytes, one go test may hold; 0 is no limit.
 func (a *LocalTestRunnerAdapter) SetMemoryLimit(limit int64) {
 	a.memoryLimit = limit
+}
+
+// SetDiskLimit sets the bytes one go test may write to its temp directories; 0 is no limit.
+func (a *LocalTestRunnerAdapter) SetDiskLimit(limit int64) {
+	a.diskLimit = limit
 }
 
 // RunGoTest runs 'go test -vet=off' for the package that contains testFile,
@@ -62,13 +68,18 @@ func (a *LocalTestRunnerAdapter) RunGoTest(ctx context.Context, workDir, testFil
 		return "", err
 	}
 
-	overLimit := watchMemory(cmd, a.memoryLimit)
+	overMemory := watchMemory(cmd, a.memoryLimit)
+	overDisk := watchDisk(func() { killGroup(cmd) }, []string{buildTmp, testTmp}, a.diskLimit)
 	err := cmd.Wait()
 
 	output := stdout.String() + stderr.String()
+	memory, disk := overMemory(), overDisk()
 
-	if overLimit() {
+	switch {
+	case memory:
 		return output, fmt.Errorf("go test held more than %d MiB: %w", a.memoryLimit>>20, domain.ErrMemoryLimit)
+	case disk:
+		return output, fmt.Errorf("go test wrote more than %d MiB: %w", a.diskLimit>>20, domain.ErrDiskLimit)
 	}
 
 	return output, err
