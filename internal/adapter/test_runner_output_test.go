@@ -65,3 +65,16 @@ func TestOutputBuffer_DropsOneByte(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, strings.Repeat("a", outputKeep)+"\n... gooze dropped 1 bytes of output ...\n"+strings.Repeat("z", outputKeep), buf.String())
 }
+
+func TestOutputBuffer_KeepsSingleBytesAfterTheStart(t *testing.T) {
+	var buf outputBuffer
+
+	start := strings.Repeat("a", outputKeep)
+
+	for _, part := range []string{start, "x", "y", ""} {
+		_, err := buf.Write([]byte(part))
+		require.NoError(t, err)
+	}
+
+	require.Equal(t, start+"xy", buf.String())
+}
