@@ -7,13 +7,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"syscall"
-	"time"
 )
 
 const procDir = "/proc"
-
-// Equivalent: a shorter interval measures more often and kills the same tests.
-const memoryCheckInterval = 100 * time.Millisecond //gooze:ignore arithmetic numbers
 
 func watchMemory(cmd *exec.Cmd, limit int64) func() bool {
 	return watchGroupMemory(procDir, cmd.Process.Pid, limit)
@@ -24,34 +20,9 @@ func watchGroupMemory(procDir string, pgid int, limit int64) func() bool {
 		return func() bool { return false }
 	}
 
-	done := make(chan struct{})
-	killed := make(chan bool)
+	kill := func() { _ = syscall.Kill(-pgid, syscall.SIGKILL) }
 
-	go func() {
-		ticker := time.NewTicker(memoryCheckInterval)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-done:
-				killed <- false
-				return
-			case <-ticker.C:
-				if groupRSS(procDir, pgid) > limit {
-					_ = syscall.Kill(-pgid, syscall.SIGKILL)
-
-					killed <- true
-
-					return
-				}
-			}
-		}
-	}()
-
-	return func() bool {
-		close(done)
-		return <-killed
-	}
+	return watchLimit(kill, func() bool { return groupRSS(procDir, pgid) > limit })
 }
 
 func groupRSS(procDir string, pgid int) int64 {

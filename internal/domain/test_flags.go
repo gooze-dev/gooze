@@ -48,6 +48,7 @@ func notAFlag(value string) error {
 type TestCommand interface {
 	SetTestFlags(flags []string)
 	SetMemoryLimit(limit int64)
+	SetDiskLimit(limit int64)
 }
 
 // WithTestFlags passes each run's TestArgs.TestFlags to command.

@@ -29,6 +29,7 @@ const (
 
 	mutationTimeoutFlagName = "mutation-timeout"
 	mutationMemoryFlagName  = "mutation-memory"
+	mutationDiskFlagName    = "mutation-disk"
 
 	coverageProfileFlagName = "coverage-profile"
 

@@ -258,7 +258,7 @@ func testStatus(ctx context.Context, testAdapter TestRunnerAdapter, workDir, tes
 
 	output, testErr := testAdapter.RunGoTest(ctx, string(workDir), string(testPath), string(overlay))
 	if testErr != nil {
-		if ctx.Err() != nil || errors.Is(testErr, ErrMemoryLimit) {
+		if ctx.Err() != nil || errors.Is(testErr, ErrMemoryLimit) || errors.Is(testErr, ErrDiskLimit) {
 			return rpt.Timeout
 		}
 
@@ -291,6 +291,7 @@ func runUnmutatedTests(ctx context.Context, testAdapter TestRunnerAdapter, workD
 		Output:     output,
 		TimedOut:   ctx.Err() != nil,
 		OverMemory: errors.Is(err, ErrMemoryLimit),
+		OverDisk:   errors.Is(err, ErrDiskLimit),
 	}
 }
 

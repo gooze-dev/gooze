@@ -79,6 +79,7 @@ type TestArgs struct {
 	// of every mutant and the build cache prewarm.
 	TestFlags      []string
 	MutationMemory int64
+	MutationDisk   int64
 }
 
 // ViewArgs contains the arguments for viewing mutation test reports.
@@ -272,6 +273,7 @@ func (w *workflow) Test(ctx context.Context, args TestArgs) error {
 		if w.testCommand != nil {
 			w.testCommand.SetTestFlags(args.TestFlags)
 			w.testCommand.SetMemoryLimit(args.MutationMemory)
+			w.testCommand.SetDiskLimit(args.MutationDisk)
 		}
 
 		w.progress.DisplayConcurrencyInfo(ctx, args.Threads, args.ShardIndex, args.TotalShardCount)

@@ -316,3 +316,26 @@ func TestOrchestrator_Overlay_MemoryLimitMarksTimeout(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, rpt.Timeout, result[mutation.Type][0].Status)
 }
+
+func TestOrchestrator_Overlay_DiskLimitMarksTimeout(t *testing.T) {
+	fsAdapter := domainmocks.NewMockSourceFSAdapter(t)
+	trAdapter := domainmocks.NewMockTestRunnerAdapter(t)
+	orch := domain.NewOrchestrator(fsAdapter, trAdapter)
+	ctx := context.Background()
+	mutation := makeTestMutation()
+	tmpDir := m.Path("/tmp/ovl")
+
+	fsAdapter.EXPECT().FindProjectRoot(ctx, m.Path("/project/main.go")).Return(m.Path("/project"), nil)
+	fsAdapter.EXPECT().CreateTempDir(ctx, "gooze-overlay-*").Return(tmpDir, nil)
+	fsAdapter.EXPECT().JoinPath(ctx, string(tmpDir), "mutant.go").Return(m.Path("/tmp/ovl/mutant.go"))
+	fsAdapter.EXPECT().JoinPath(ctx, string(tmpDir), "overlay.json").Return(m.Path("/tmp/ovl/overlay.json"))
+	fsAdapter.EXPECT().WriteFile(ctx, m.Path("/tmp/ovl/mutant.go"), mutation.MutatedCode, os.FileMode(0o600)).Return(nil)
+	fsAdapter.EXPECT().WriteFile(ctx, m.Path("/tmp/ovl/overlay.json"), mock.Anything, os.FileMode(0o600)).Return(nil)
+	trAdapter.EXPECT().RunGoTest(ctx, "/project", "/project/main.go", "/tmp/ovl/overlay.json").
+		Return("FAIL\texample.com/p [build failed]\n", fmt.Errorf("go test wrote more than 1024 MiB: %w", domain.ErrDiskLimit))
+	fsAdapter.EXPECT().RemoveAll(mock.Anything, tmpDir).Return(nil)
+
+	result, err := orch.TestMutation(ctx, domain.WorkspaceOverlay, mutation)
+	require.NoError(t, err)
+	require.Equal(t, rpt.Timeout, result[mutation.Type][0].Status)
+}
