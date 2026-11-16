@@ -572,7 +572,7 @@ func (a *LocalSourceFSAdapter) detectTestFile(ctx context.Context, sourcePath m.
 		return nil
 	}
 
-	file, err := a.buildTestFile(ctx, testPath, projectRoot)
+	file, err := a.buildTestFile(ctx, sourcePath, testPath, projectRoot)
 	if err != nil {
 		return nil
 	}
@@ -593,12 +593,12 @@ func (a *LocalSourceFSAdapter) resolveTestPath(ctx context.Context, sourcePath m
 	return testPath
 }
 
-func (a *LocalSourceFSAdapter) buildTestFile(ctx context.Context, testPath m.Path, projectRoot m.Path) (*rpt.File, error) {
+func (a *LocalSourceFSAdapter) buildTestFile(ctx context.Context, sourcePath, testPath m.Path, projectRoot m.Path) (*rpt.File, error) {
 	if err := a.validateGoFile(ctx, testPath); err != nil {
 		return nil, err
 	}
 
-	testHash, err := a.packageTestHash(ctx, testPath)
+	testHash, err := a.packageTestHash(ctx, sourcePath, testPath)
 	if err != nil {
 		return nil, err
 	}
@@ -613,16 +613,17 @@ func (a *LocalSourceFSAdapter) buildTestFile(ctx context.Context, testPath m.Pat
 	return file, nil
 }
 
-// packageTestHash hashes testPath, then every other _test.go file next to it,
-// by name and content: go test compiles them all, so any of them can kill a
-// mutant. With no other test file it is testPath's own hash.
-func (a *LocalSourceFSAdapter) packageTestHash(ctx context.Context, testPath m.Path) (string, error) {
+// packageTestHash hashes testPath, then every other Go file next to it but
+// sourcePath, by name and content: go test compiles them all, so another test
+// file can kill a mutant of sourcePath and another source can change what the
+// mutant does. With no other Go file it is testPath's own hash.
+func (a *LocalSourceFSAdapter) packageTestHash(ctx context.Context, sourcePath, testPath m.Path) (string, error) {
 	content, err := a.ReadFile(ctx, testPath)
 	if err != nil {
 		return "", err
 	}
 
-	others, err := filepath.Glob(filepath.Join(filepath.Dir(string(testPath)), "*_test.go"))
+	others, err := filepath.Glob(filepath.Join(filepath.Dir(string(testPath)), "*.go"))
 	if err != nil {
 		return "", err
 	}
@@ -633,7 +634,7 @@ func (a *LocalSourceFSAdapter) packageTestHash(ctx context.Context, testPath m.P
 	h.Write(content)
 
 	for _, other := range others {
-		if other == string(testPath) {
+		if other == string(testPath) || other == string(sourcePath) {
 			continue
 		}
 
