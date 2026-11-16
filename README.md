@@ -93,7 +93,7 @@ Turn it off with `no-update-check: true` in `gooze.yaml`, `--no-update-check`,
 or `GOOZE_NO_UPDATE_CHECK=true`.
 
 Cached results for a file are invalidated when its source content hash changes,
-its test file content hash changes, a mutator version changes (e.g. after upgrading
+a test file or another source file of its package changes, a mutator version changes (e.g. after upgrading
 Gooze), or the source file is deleted. The score `gooze run` prints covers every
 file in the run's paths, cached and newly tested alike, e.g.
 `Mutation score: 87.50% (14 killed, 2 survived; 16 cached, 0 tested)`; a sharded
