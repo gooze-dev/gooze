@@ -57,3 +57,32 @@ func WithTestFlags(command TestCommand) WorkflowOption {
 		w.testCommand = command
 	}
 }
+
+// TestFlagTags returns the build tags of the last -tags flag in flags, the
+// one go test goes by, and nil when there is none.
+func TestFlagTags(flags []string) []string {
+	var tags []string
+
+	for _, flag := range flags {
+		if name, value, _ := strings.Cut(strings.TrimLeft(flag, "-"), "="); name == "tags" {
+			tags = strings.Split(value, ",")
+		}
+	}
+
+	return tags
+}
+
+// WithBuildTags passes each run's and estimate's EstimateArgs.BuildTags to
+// tags, so files are selected with the tags the tests are built with.
+func WithBuildTags(tags BuildTags) WorkflowOption {
+	return func(w *workflow) {
+		w.buildTags = tags
+	}
+}
+
+// setBuildTags passes the build tags of args on.
+func (w *workflow) setBuildTags(args EstimateArgs) {
+	if w.buildTags != nil {
+		w.buildTags.SetBuildTags(args.BuildTags)
+	}
+}

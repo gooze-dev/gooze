@@ -56,7 +56,8 @@ func init() {
 	// Initialize shared dependencies.
 	ui = controller.NewUI(rootCmd, controller.IsTTY(os.Stdout))
 	goFileAdapter = adapter.NewLocalGoFileAdapter()
-	sourceFSAdapter = adapter.NewLocalSourceFSAdapter()
+	localSourceFS := adapter.NewLocalSourceFSAdapter()
+	sourceFSAdapter = localSourceFS
 	reportStore = adapter.NewReportStore()
 	localTestAdapter := adapter.NewLocalTestRunnerAdapter()
 	testAdapter = localTestAdapter
@@ -73,6 +74,7 @@ func init() {
 		domain.WithChangeDetector(adapter.NewGitChangeDetector()),
 		domain.WithBuildCache(gocache.New(), adapter.BuildEnvs{localTestAdapter, exprTypes}),
 		domain.WithTestFlags(localTestAdapter),
+		domain.WithBuildTags(adapter.BuildTagSetters{localSourceFS, exprTypes}),
 	)
 	publisher = domain.NewReportPublisher(ociRegistry, reportStore)
 	releaseChecker = adapter.NewModuleProxyReleaseChecker()

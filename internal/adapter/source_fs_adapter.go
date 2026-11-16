@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"go/ast"
-	"go/build"
 	"go/parser"
 	"go/token"
 	"io"
@@ -27,7 +26,9 @@ import (
 // LocalSourceFSAdapter is the concrete implementation that will back the
 // SourceFSAdapter interface. It currently returns ErrNotImplemented so tests
 // can drive the actual logic.
-type LocalSourceFSAdapter struct{}
+type LocalSourceFSAdapter struct {
+	buildTags
+}
 
 // NewLocalSourceFSAdapter constructs a LocalSourceFSAdapter instance ready to
 // be wired into the workflow.
@@ -480,7 +481,7 @@ func (a *LocalSourceFSAdapter) processFilePath(ctx context.Context, path string,
 		return rpt.Source{}, nil
 	}
 
-	if excludedFromBuild(path) {
+	if a.excludes(path) {
 		slog.Debug("Skipping source file excluded by build constraints", "path", path)
 
 		return rpt.Source{}, nil
@@ -733,29 +734,4 @@ func relativeToCwd(path string) (string, bool) {
 
 func isInvalidSourceErr(err error) bool {
 	return errors.Is(err, errInvalidSource)
-}
-
-// excludedFromBuild reports whether go test leaves path out of its package:
-// its file name or //go:build line doesn't match GOOS, GOARCH and the -tags in
-// GOFLAGS. Its mutants could never be compiled.
-func excludedFromBuild(path string) bool {
-	ctxt := build.Default
-	ctxt.BuildTags = goflagsTags(os.Getenv("GOFLAGS"))
-
-	match, err := ctxt.MatchFile(filepath.Dir(path), filepath.Base(path))
-
-	return err == nil && !match
-}
-
-// goflagsTags returns the tags of the last -tags flag in goflags.
-func goflagsTags(goflags string) []string {
-	var tags []string
-
-	for _, flag := range strings.Fields(goflags) {
-		if name, value, _ := strings.Cut(strings.TrimLeft(flag, "-"), "="); name == "tags" {
-			tags = strings.Split(value, ",")
-		}
-	}
-
-	return tags
 }
