@@ -51,6 +51,10 @@ type EstimateArgs struct {
 	// GoCache is where the go command caches its builds: the mutants', and
 	// those generating mutants needs (the type checks of their packages).
 	GoCache GoCache
+	// BuildTags are the build tags of the -tags in run.test_flags (see
+	// TestFlagTags): the files they select are the ones mutated. Nil leaves
+	// the selection to GOFLAGS.
+	BuildTags []string
 }
 
 // mutationOptions returns the options of the mutations args generates.
@@ -202,6 +206,7 @@ type workflow struct {
 	buildCache   BuildCache       // nil leaves mutant builds in the shared cache
 	buildEnv     BuildEnvironment // receives the environment buildCache returns
 	testCommand  TestCommand      // receives a run's go test flags, or nil
+	buildTags    BuildTags        // receives a run's build tags, or nil
 }
 
 // NewWorkflow creates a new Workflow instance with the provided dependencies.
@@ -229,6 +234,8 @@ func NewWorkflow(
 }
 
 func (w *workflow) Estimate(ctx context.Context, args EstimateArgs) error {
+	w.setBuildTags(args)
+
 	if err := w.progress.StartEstimate(ctx); err != nil {
 		slog.Error("Failed to start workflow UI", "error", err)
 		return err
@@ -269,6 +276,8 @@ func (w *workflow) Estimate(ctx context.Context, args EstimateArgs) error {
 func (w *workflow) Test(ctx context.Context, args TestArgs) error {
 	return w.withTestUI(ctx, func() error {
 		slog.Info("Starting mutation testing", "threads", args.Threads, "shardIndex", args.ShardIndex, "totalShardCount", args.TotalShardCount, "testFlags", args.TestFlags)
+
+		w.setBuildTags(args.EstimateArgs)
 
 		if w.testCommand != nil {
 			w.testCommand.SetTestFlags(args.TestFlags)

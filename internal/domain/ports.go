@@ -137,6 +137,12 @@ type BuildEnvironment interface {
 	SetBuildEnv(env []string)
 }
 
+// BuildTags holds the build tags that select the files of a package.
+type BuildTags interface {
+	// SetBuildTags sets the tags; nil leaves the selection to GOFLAGS.
+	SetBuildTags(tags []string)
+}
+
 // ReportStore persists and loads mutation reports.
 type ReportStore interface {
 	SaveReports(ctx context.Context, path m.Path, reports pkg.FileSpill[m.Report]) error

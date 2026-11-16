@@ -55,6 +55,14 @@ func newRunCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			estimateArgs := runEstimateArgs(args)
 
+			testFlags, err := domain.ParseTestFlags(viper.GetStringSlice(config.KeyRunTestFlags))
+			if err != nil {
+				return usageError(err)
+			}
+
+			// The tags the tests are built with select the files to mutate.
+			estimateArgs.BuildTags = domain.TestFlagTags(testFlags)
+
 			if runEstimateFlag {
 				return workflow.Estimate(cmd.Context(), estimateArgs)
 			}
@@ -71,11 +79,6 @@ func newRunCmd() *cobra.Command {
 			minimums, err := runThresholds(cmd, estimateArgs.Diff != "", thresholds, diffThresholds)
 			if err != nil {
 				return err
-			}
-
-			testFlags, err := domain.ParseTestFlags(viper.GetStringSlice(config.KeyRunTestFlags))
-			if err != nil {
-				return usageError(err)
 			}
 
 			testArgs := runTestArgs(estimateArgs, shardIndex, totalShards, minimums)

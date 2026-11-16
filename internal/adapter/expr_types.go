@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"go/ast"
-	"go/build"
 	"go/importer"
 	"go/parser"
 	"go/token"
@@ -25,6 +24,8 @@ import (
 // builds). One importer serves every package, so an import is loaded once per
 // run, and each package's result is kept by its directory.
 type ExprTypes struct {
+	buildTags
+
 	mu       sync.Mutex
 	fset     *token.FileSet
 	importer types.Importer
@@ -74,7 +75,8 @@ func (e *ExprTypes) SetBuildEnv(env []string) {
 // package in dir. Packages that don't build have none, so their types stay
 // unknown.
 func (e *ExprTypes) loadExports(ctx context.Context, dir string) {
-	cmd := exec.CommandContext(ctx, "go", "list", "-e", "-export", "-deps", "-f", "{{if .Export}}{{.ImportPath}}={{.Export}}{{end}}", ".")
+	args := e.goArgs("list", "-e", "-export", "-deps", "-f", "{{if .Export}}{{.ImportPath}}={{.Export}}{{end}}")
+	cmd := exec.CommandContext(ctx, "go", append(args, ".")...) //nolint:gosec // the tags come from the run's own test flags.
 	cmd.Dir = dir
 
 	cmd.Env = append(os.Environ(), e.env...)
@@ -185,7 +187,7 @@ func (e *ExprTypes) parse(dir string) []*ast.File {
 	var files []*ast.File
 
 	for _, entry := range entries {
-		if !packageSource(dir, entry) {
+		if !e.packageSource(dir, entry) {
 			continue
 		}
 
@@ -204,14 +206,12 @@ func (e *ExprTypes) parse(dir string) []*ast.File {
 // packageSource reports whether entry is a non-test file of dir that the
 // build context selects. A selected file that isn't Go, such as assembly,
 // fails to parse and is left out there.
-func packageSource(dir string, entry os.DirEntry) bool {
+func (e *ExprTypes) packageSource(dir string, entry os.DirEntry) bool {
 	if strings.HasSuffix(entry.Name(), "_test.go") {
 		return false
 	}
 
-	match, err := build.Default.MatchFile(dir, entry.Name())
-
-	return err == nil && match
+	return !e.excludes(filepath.Join(dir, entry.Name()))
 }
 
 // isString reports whether t is a string type: string, an untyped string

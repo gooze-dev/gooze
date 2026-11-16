@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -972,6 +973,70 @@ func TestRunCmd_RejectsGoozesOwnTestFlags(t *testing.T) {
 	defer func() { runTestFlagsFlag = nil }()
 
 	cmd.SetArgs([]string{"run", "--test-flags=-json", "./..."})
+	err := cmd.Execute()
+	require.EqualError(t, err, "run.test_flags: gooze sets -json itself or can't run with it")
+	assert.Equal(t, m.ExitUsage, exitCode(context.Background(), err, false))
+}
+
+func TestRunCmd_TestFlagTagsSelectTheFiles(t *testing.T) {
+	for name, tt := range map[string]struct {
+		args []string
+		want []string
+	}{
+		"no tags":  {args: []string{"./..."}},
+		"tags":     {args: []string{"--test-flags=-short -tags=integration,e2e", "./..."}, want: []string{"integration", "e2e"}},
+		"the last": {args: []string{"--test-flags=-tags=a", "--test-flags=--tags=b", "./..."}, want: []string{"b"}},
+	} {
+		for _, estimate := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s, estimate %t", name, estimate), func(t *testing.T) {
+				mockWorkflow := domainmocks.NewMockWorkflow(t)
+
+				cmd := newRootCmd()
+				cmd.AddCommand(newRunCmd())
+				cmd.SetOut(&bytes.Buffer{})
+				cmd.SetErr(&bytes.Buffer{})
+
+				originalWorkflow := workflow
+				workflow = mockWorkflow
+				defer func() { workflow = originalWorkflow }()
+				defer newRunCmd()
+				defer func() { runTestFlagsFlag, runEstimateFlag = nil, false }()
+
+				args := append([]string{"run"}, tt.args...)
+
+				if estimate {
+					args = append(args, "--estimate")
+
+					mockWorkflow.On("Estimate", mock.Anything, mock.MatchedBy(func(args domain.EstimateArgs) bool {
+						return slices.Equal(args.BuildTags, tt.want)
+					})).Return(nil)
+				} else {
+					mockWorkflow.On("Test", mock.Anything, mock.MatchedBy(func(args domain.TestArgs) bool {
+						return slices.Equal(args.BuildTags, tt.want)
+					})).Return(nil)
+				}
+
+				cmd.SetArgs(args)
+				require.NoError(t, cmd.Execute())
+				mockWorkflow.AssertExpectations(t)
+			})
+		}
+	}
+}
+
+func TestRunCmd_EstimateRejectsBadTestFlags(t *testing.T) {
+	cmd := newRootCmd()
+	cmd.AddCommand(newRunCmd())
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+
+	originalWorkflow := workflow
+	workflow = domainmocks.NewMockWorkflow(t)
+	defer func() { workflow = originalWorkflow }()
+	defer newRunCmd()
+	defer func() { runTestFlagsFlag, runEstimateFlag = nil, false }()
+
+	cmd.SetArgs([]string{"run", "--estimate", "--test-flags=-json", "./..."})
 	err := cmd.Execute()
 	require.EqualError(t, err, "run.test_flags: gooze sets -json itself or can't run with it")
 	assert.Equal(t, m.ExitUsage, exitCode(context.Background(), err, false))

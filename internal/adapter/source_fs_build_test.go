@@ -85,5 +85,34 @@ func TestGoflagsTags(t *testing.T) {
 }
 
 func TestExcludedFromBuild_UnreadableFileIsNotExcluded(t *testing.T) {
-	assert.False(t, excludedFromBuild(filepath.Join(t.TempDir(), "missing_"+runtime.GOOS+".go")))
+	assert.False(t, (&buildTags{}).excludes(filepath.Join(t.TempDir(), "missing_"+runtime.GOOS+".go")))
+}
+
+func TestLocalSourceFSAdapter_SetBuildTagsReplaceGOFLAGSTags(t *testing.T) {
+	root, _ := writeBuildConstraintModule(t)
+	names := func(a *LocalSourceFSAdapter) []string {
+		sources, err := a.Get(context.Background(), []m.Path{m.Path(root)})
+		require.NoError(t, err)
+
+		names := make([]string, 0, len(sources))
+		for _, source := range sources {
+			names = append(names, filepath.Base(source.Origin.FullPath))
+		}
+
+		return names
+	}
+
+	t.Setenv("GOFLAGS", "")
+
+	a := NewLocalSourceFSAdapter()
+	a.SetBuildTags([]string{"other", "strict"})
+	assert.ElementsMatch(t, []string{"a.go", "strict.go"}, names(a), "the tags select the files they enable and drop the ones they disable")
+
+	t.Setenv("GOFLAGS", "-tags=strict")
+
+	a.SetBuildTags([]string{})
+	assert.ElementsMatch(t, []string{"a.go", "loose.go"}, names(a), "tags that were set win over GOFLAGS, as a go test flag does, even when empty")
+
+	a.SetBuildTags(nil)
+	assert.ElementsMatch(t, []string{"a.go", "strict.go"}, names(a), "without tags of its own it follows GOFLAGS")
 }

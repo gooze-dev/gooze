@@ -256,3 +256,31 @@ func F[T comparable, N ~int | ~float64](a, b point, p *int, n id, f float64, c c
 		assert.False(t, unordered[spanIn(t, src, expr, strings.Fields(expr)[0])], "%s: ordered or ordered by its constraint", expr)
 	}
 }
+
+func TestExprTypes_SetBuildTagsSelectTheFilesAndTheirImports(t *testing.T) {
+	const (
+		a      = "package p\n\nvar A = \"a\"\n"
+		tagged = "//go:build foo\n\npackage p\n\nimport \"strconv\"\n\nfunc F(n int) string { return strconv.Itoa(n) }\n"
+		plain  = "//go:build !foo\n\npackage p\n\nvar G = \"g\"\n"
+	)
+
+	t.Setenv("GOFLAGS", "")
+
+	dir := writeModule(t, map[string]string{"a.go": a, "f.go": tagged, "g.go": plain})
+
+	without := newTestExprTypes(t)
+	assert.Empty(t, without.StringExprs(context.Background(), filepath.Join(dir, "f.go")), "without the tag the file is not built")
+	assert.True(t, without.StringExprs(context.Background(), filepath.Join(dir, "g.go"))[spanOf(t, plain, `"g"`)])
+
+	with := newTestExprTypes(t)
+	with.SetBuildTags([]string{"foo"})
+
+	strs := with.StringExprs(context.Background(), filepath.Join(dir, "f.go"))
+	assert.True(t, strs[spanOf(t, tagged, "strconv.Itoa(n)")], "the tag selects the file, and go list reads its imports with the tag")
+	assert.Empty(t, with.StringExprs(context.Background(), filepath.Join(dir, "g.go")), "and leaves out the file it disables")
+
+	t.Setenv("GOFLAGS", "-tags=foo")
+
+	fromEnv := newTestExprTypes(t)
+	assert.True(t, fromEnv.StringExprs(context.Background(), filepath.Join(dir, "f.go"))[spanOf(t, tagged, "strconv.Itoa(n)")], "without tags of its own it follows GOFLAGS")
+}
