@@ -40,6 +40,9 @@ type ReportSummary struct {
 	// Sections wraps the long parts of the text summary in collapsible CI
 	// log sections (GitLab's section_start / section_end).
 	Sections bool
+	// MaxPerFile is how many lines with survivors the text summary lists per
+	// file; 0 lists them all.
+	MaxPerFile int
 	// Scope names the summary's scope when a merge shows two; zero otherwise.
 	Scope ReportScope
 }
@@ -354,9 +357,9 @@ func (w *workflow) writeViews(ctx context.Context, scope viewScope, summary Repo
 }
 
 // shapeSummary applies the view's output settings to summary: a brief
-// summary, the top files and collapsible sections.
+// summary, the top files, the lines listed per file and collapsible sections.
 func shapeSummary(summary *ReportSummary, args ViewArgs) {
-	summary.Brief, summary.Sections = args.Summary, args.Sections
+	summary.Brief, summary.Sections, summary.MaxPerFile = args.Summary, args.Sections, args.MaxPerFile
 	if args.Top > 0 && args.Top < len(summary.Files) {
 		summary.HiddenFiles = len(summary.Files) - args.Top
 		summary.Files = topFiles(summary.Files, args.Top)

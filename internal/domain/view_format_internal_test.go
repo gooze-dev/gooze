@@ -53,7 +53,7 @@ func TestGitHubAnnotation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, []string{tt.want}, gitHubAnnotations([]Survivor{tt.survivor}, ""))
+			assert.Equal(t, []string{tt.want}, gitHubAnnotations([]Survivor{tt.survivor}, "", 0))
 		})
 	}
 }
@@ -62,7 +62,7 @@ func TestGitHubAnnotation_PathPrefix(t *testing.T) {
 	survivor := Survivor{Path: "pkg/a.go", Line: 2, Mutagen: "comparison", Status: rpt.NotCovered, Original: "a < b", Mutated: "a <= b"}
 
 	assert.Equal(t, []string{"::notice file=mod/pkg/a.go,line=2,title=Uncovered mutant (comparison)::No test covers `a < b` changed to `a <= b`"},
-		gitHubAnnotations([]Survivor{survivor}, "mod/"))
+		gitHubAnnotations([]Survivor{survivor}, "mod/", 0))
 }
 
 func TestGitHubAnnotations_CombinesMutantsOnOneLine(t *testing.T) {
@@ -80,7 +80,7 @@ func TestGitHubAnnotations_CombinesMutantsOnOneLine(t *testing.T) {
 		"::warning file=a.go,line=12,title=2 surviving mutants (comparison)::" +
 			"Tests still pass with `if n > hi {` changed to `if n >= hi {`%0ATests still pass with `if n > hi {` changed to `if n != hi {`",
 		"::notice file=b.go,line=10,title=Timed-out mutant (boolean)::Tests time out with `ok := true` changed to `ok := false`",
-	}, gitHubAnnotations(survivors, ""))
+	}, gitHubAnnotations(survivors, "", 0))
 }
 
 func TestGitHubAnnotations_GroupsOnlyTheSameFileAndLine(t *testing.T) {
@@ -90,7 +90,7 @@ func TestGitHubAnnotations_GroupsOnlyTheSameFileAndLine(t *testing.T) {
 		{Path: "b.go", Line: 5, Mutagen: "comparison", Status: rpt.Survived, Original: "c < d", Mutated: "c != d"},
 	}
 
-	annotations := gitHubAnnotations(survivors, "")
+	annotations := gitHubAnnotations(survivors, "", 0)
 
 	require.Len(t, annotations, 2)
 	assert.Contains(t, annotations[0], "file=a.go,line=5,title=Surviving mutant (comparison)::")
@@ -106,5 +106,5 @@ func TestGitHubAnnotations_MixedStatusesWhenTheFirstSurvived(t *testing.T) {
 	assert.Equal(t, []string{
 		"::warning file=a.go,line=7,title=2 mutants (arithmetic%2C comparison)::" +
 			"Tests still pass with `a + b` changed to `a - b`%0ANo test covers `a + b` changed to `a * b`",
-	}, gitHubAnnotations(survivors, ""))
+	}, gitHubAnnotations(survivors, "", 0))
 }

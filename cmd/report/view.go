@@ -38,6 +38,11 @@ table; the total and the score still count every file. Under GitLab CI
 (GITLAB_CI=true), the table, the survivors and the build errors are collapsible
 sections of the job log, and the survivors and build errors start collapsed.
 
+--max-per-file N (report.max_per_file) lists the survivors of at most N lines
+per file in the text summary and the github annotations, then "and M more
+lines" for the file. The other formats, the --write files, the score and the
+thresholds take every survivor.
+
 --format github writes a GitHub workflow annotation for each line with
 surviving mutants before the summary, so they show on the pull request's
 changed files; --format sarif writes a SARIF 2.1.0 log instead of the summary,
@@ -69,7 +74,8 @@ func newViewCmd(deps Deps) *cobra.Command {
   gooze report view ./internal/domain/... # only files under internal/domain
   gooze report view --all ./cmd/run.go    # every mutation of one file
   gooze report view --by-line             # one entry per line with survivors
-  gooze report view --summary --top 10    # the 10 files with the most survivors, no list`,
+  gooze report view --summary --top 10    # the 10 files with the most survivors, no list
+  gooze report view --max-per-file 7      # at most 7 lines with survivors per file`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			paths := make([]m.Path, 0, len(args))
 			for _, arg := range args {
@@ -114,6 +120,7 @@ type viewFlags struct {
 
 func (f *viewFlags) register(cmd *cobra.Command) {
 	addGateFlag(cmd)
+	addMaxPerFileFlag(cmd)
 	cmd.Flags().StringArrayVar(&f.writes, writeFlagName, nil,
 		"also write the report as <format>=<path>, repeatable: "+strings.Join(writeFormats(), ", ")+"; files hold the whole report")
 	cmd.Flags().BoolVar(&f.byLine, "by-line", false, "list the summary's survivors once per line of a file, with the changes folded")
@@ -131,6 +138,11 @@ func (f *viewFlags) viewArgs(cmd *cobra.Command) (domain.ViewArgs, func() error,
 	}
 
 	gate, err := f.check(cmd)
+	if err != nil {
+		return domain.ViewArgs{}, nil, err
+	}
+
+	view.MaxPerFile, err = readMaxPerFile(cmd)
 	if err != nil {
 		return domain.ViewArgs{}, nil, err
 	}

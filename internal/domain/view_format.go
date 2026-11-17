@@ -36,7 +36,7 @@ const (
 func (w *workflow) displayView(ctx context.Context, scope viewScope, summary ReportSummary) error {
 	args := scope.args
 	if args.Format == FormatGitHub {
-		for _, annotation := range gitHubAnnotations(summary.Survivors, args.PathPrefix) {
+		for _, annotation := range gitHubAnnotations(summary.Survivors, args.PathPrefix, args.MaxPerFile) {
 			if _, err := fmt.Fprintln(args.Output, annotation); err != nil {
 				return fmt.Errorf("write annotations: %w", err)
 			}
@@ -186,13 +186,20 @@ func lineSurvived(line SurvivorLine) bool {
 
 // gitHubAnnotations returns one workflow command per line with survivors: a
 // warning when a mutant on it survived, a notice when they were only not
-// covered, timed out or skipped.
-func gitHubAnnotations(survivors []Survivor, prefix string) []string {
-	lines := groupByLine(survivors)
-	annotations := make([]string, 0, len(lines))
+// covered, timed out or skipped. With a limit, a file gets that many, then a
+// notice that counts its other lines.
+func gitHubAnnotations(survivors []Survivor, prefix string, limit int) []string {
+	var annotations []string
 
-	for _, line := range lines {
-		annotations = append(annotations, gitHubAnnotation(line, prefix))
+	for _, file := range ListedLines(survivors, limit) {
+		for _, line := range file.Lines {
+			annotations = append(annotations, gitHubAnnotation(line, prefix))
+		}
+
+		// Equivalent: a count is never negative, so != 0 is > 0.
+		if file.Hidden > 0 { //gooze:ignore comparison
+			annotations = append(annotations, hiddenAnnotation(file, limit, prefix))
+		}
 	}
 
 	return annotations

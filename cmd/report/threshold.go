@@ -169,10 +169,15 @@ func (f ThresholdFlags) value(cmd *cobra.Command, name string) (float64, error) 
 
 // survivorCap returns threshold.max_survivors from its flag or the config.
 func (f ThresholdFlags) survivorCap(cmd *cobra.Command) (int, error) {
-	key := f.key + "." + maxSurvivors
+	return readCount(cmd, f.prefix+"-max-survivors", f.key+"."+maxSurvivors)
+}
+
+// readCount returns the whole number of the flag when it is set, or else of
+// the config key, checked against the key's bounds; 0 when neither is set.
+func readCount(cmd *cobra.Command, flag, key string) (int, error) {
 	field, _ := config.Lookup(key)
 
-	if flag := f.prefix + "-max-survivors"; cmd.Flags().Changed(flag) {
+	if cmd.Flags().Changed(flag) {
 		value, _ := cmd.Flags().GetInt(flag)
 		if err := field.CheckInt(value); err != nil {
 			return 0, fmt.Errorf("invalid --%s: %w", flag, err)
