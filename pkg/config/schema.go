@@ -53,6 +53,7 @@ func Schema() []Field {
 		pathsField(),
 		runField(),
 		mutagenField(),
+		aridField(),
 		thresholdField(),
 		reportField(),
 		logField(),
@@ -62,6 +63,26 @@ func Schema() []Field {
 func pathsField() Field {
 	return Field{Name: "paths", Kind: KindObject, Doc: "Path selection settings.", Children: []Field{
 		{Name: "exclude", Kind: KindStringList, Default: []string{}, Doc: "Regular-expression patterns of files to skip (e.g. '^vendor/')."},
+	}}
+}
+
+// aridRules are the families of arid code, arid.rules's values.
+var aridRules = []string{"logging", "time", "flags", "metrics"}
+
+func aridField() Field {
+	return Field{Name: "arid", Kind: KindObject, Doc: "Arid code: code whose mutants only a test of a log text, a timeout, a flag default or a metric could kill.", Children: []Field{
+		{
+			Name: "enabled", Kind: KindBool, Default: false,
+			Doc: "Don't mutate arid code, nor the conditions that only guard it. gooze run --ignored lists what is left out.",
+		},
+		{
+			Name: "rules", Kind: KindStringList, Default: []string{}, Enum: slices.Clone(aridRules),
+			Doc: "The arid code to leave out (" + strings.Join(aridRules, ", ") + "); empty leaves out all of it: logging calls (but those that exit or panic), time values handed to timers, timeouts and deadlines, flag definitions, and metrics and tracing calls.",
+		},
+		{
+			Name: "calls", Kind: KindStringList, Default: []string{},
+			Doc: "More calls to treat as arid, as receiver.Function: the receiver is an import path, a package name or the name of a variable or field, and either side may be * (e.g. 'example.com/app/audit.*' or '*.Tracef').",
+		},
 	}}
 }
 

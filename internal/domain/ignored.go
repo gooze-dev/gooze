@@ -136,7 +136,8 @@ func walkIgnored(
 }
 
 // markIgnored reports whether a directive ignores mutation, which a node on
-// nodeLine generates, and then sets its line, functions and why it is ignored. The enum
+// nodeLine generates, or its code is arid, and then sets its line, functions
+// and why it is ignored: the directive's reason, else AridReason. The enum
 // bound mutants (see isEnumBoundMutant) are left out without a directive, so
 // they don't count.
 func (ix ignoreIndex) markIgnored(mutation *m.Mutation, nodeLine int, fset *token.FileSet, tokenFile *token.File, content []byte, funcs funcIndex) bool {
@@ -148,14 +149,18 @@ func (ix ignoreIndex) markIgnored(mutation *m.Mutation, nodeLine int, fset *toke
 	changedLine := fset.PositionFor(tokenFile.Pos(offset), true).Line
 	replacement := func() string { return replacementOf(content, mutation.MutatedCode) }
 
+	reason := AridReason
+
 	rule, ok := ix.ruleFor(nodeLine, changedLine, mutation.Type, replacement)
-	if !ok {
+	if ok {
+		reason = rule.reason(mutation.Type)
+	} else if !ix.arid.contains(offset) {
 		return false
 	}
 
 	mutation.Line = lineForOffset(content, offset)
 	mutation.Funcs = funcs.at(mutation.Line)
-	mutation.Ignored = &m.Ignored{Reason: rule.reason(mutation.Type)}
+	mutation.Ignored = &m.Ignored{Reason: reason}
 
 	return true
 }
