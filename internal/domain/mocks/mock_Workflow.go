@@ -71,6 +71,53 @@ func (_c *MockWorkflow_Estimate_Call) RunAndReturn(run func(context.Context, dom
 	return _c
 }
 
+// Ignored provides a mock function with given fields: ctx, args
+func (_m *MockWorkflow) Ignored(ctx context.Context, args domain.IgnoredArgs) error {
+	ret := _m.Called(ctx, args)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Ignored")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, domain.IgnoredArgs) error); ok {
+		r0 = rf(ctx, args)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockWorkflow_Ignored_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Ignored'
+type MockWorkflow_Ignored_Call struct {
+	*mock.Call
+}
+
+// Ignored is a helper method to define mock.On call
+//   - ctx context.Context
+//   - args domain.IgnoredArgs
+func (_e *MockWorkflow_Expecter) Ignored(ctx interface{}, args interface{}) *MockWorkflow_Ignored_Call {
+	return &MockWorkflow_Ignored_Call{Call: _e.mock.On("Ignored", ctx, args)}
+}
+
+func (_c *MockWorkflow_Ignored_Call) Run(run func(ctx context.Context, args domain.IgnoredArgs)) *MockWorkflow_Ignored_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(domain.IgnoredArgs))
+	})
+	return _c
+}
+
+func (_c *MockWorkflow_Ignored_Call) Return(_a0 error) *MockWorkflow_Ignored_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockWorkflow_Ignored_Call) RunAndReturn(run func(context.Context, domain.IgnoredArgs) error) *MockWorkflow_Ignored_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Merge provides a mock function with given fields: ctx, args
 func (_m *MockWorkflow) Merge(ctx context.Context, args domain.MergeArgs) error {
 	ret := _m.Called(ctx, args)

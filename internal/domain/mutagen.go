@@ -41,6 +41,9 @@ type MutationOptions struct {
 	// enum's lowest and highest constants bound its type (mutagen.comparison.enum_bounds,
 	// see enumBoundMutants).
 	EnumBounds bool
+	// Ignored streams the mutations that the //gooze:ignore directives keep
+	// from being tested, each with its Ignored set, instead of the others.
+	Ignored bool
 }
 
 // mutagen handles pure mutation generation logic.
@@ -133,8 +136,13 @@ func (mg *mutagen) StreamMutationsWith(ctx context.Context, source rpt.Source, o
 	}
 	checks := newBuildChecks(file, fset, typed)
 
+	walk := walkMutations
+	if opts.Ignored {
+		walk = walkIgnored
+	}
+
 	for _, mutationType := range mutationTypes {
-		if err := walkMutations(mutationType, file, fset, content, source, ignore, funcs, checks, mg.differ, fn); err != nil {
+		if err := walk(mutationType, file, fset, content, source, ignore, funcs, checks, mg.differ, fn); err != nil {
 			return err
 		}
 	}

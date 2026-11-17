@@ -118,6 +118,10 @@ const runLongDescription = `Run mutation testing for the given paths. With no pa
 Use --estimate to list source files and applicable mutation counts without
 running tests.
 
+Use --ignored to list the mutants that //gooze:ignore directives keep from
+being tested, with the reason= of each directive, then their counts by reason
+and by mutagen. Paths, --mutagens, --diff and --run select them as for a run.
+
 ` + pathPatternsHelp
 
 // rootCmd represents the base command when called without any subcommands.

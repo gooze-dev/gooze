@@ -16,6 +16,9 @@ import (
 type ignoreRule struct {
 	all   bool
 	names map[string]map[string]struct{}
+	// reasons holds the reason of the directives per lower-case mutagen
+	// name, and under "" of those that ignore every mutagen.
+	reasons map[string]string
 }
 
 // ignores reports whether the rule ignores every mutant of mutationType.
@@ -48,6 +51,8 @@ func (r ignoreRule) ignoresMutant(mutationType mgen.Type, replacement func() str
 }
 
 func mergeIgnoreRule(dst *ignoreRule, src ignoreRule) {
+	mergeReasons(dst, src.reasons)
+
 	if src.all {
 		dst.all = true
 		dst.names = nil
@@ -96,10 +101,10 @@ func parseIgnoreDirective(commentText string) (ignoreRule, bool) {
 	}
 
 	if d.IgnoresAll() {
-		return ignoreRule{all: true}, true
+		return ignoreRule{all: true, reasons: directiveReasons(d)}, true
 	}
 
-	rule := ignoreRule{names: make(map[string]map[string]struct{}, len(d.Names))}
+	rule := ignoreRule{names: make(map[string]map[string]struct{}, len(d.Names)), reasons: directiveReasons(d)}
 	for _, name := range d.Names {
 		var replacements map[string]struct{}
 		if name.Replacements != nil {
