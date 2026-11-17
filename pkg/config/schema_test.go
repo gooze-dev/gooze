@@ -38,6 +38,7 @@ func TestDefaults(t *testing.T) {
 		KeyThresholdTimeouts:           "survived",
 		KeyReportFormat:                "text",
 		KeyReportGate:                  "auto",
+		KeyReportMaxPerFile:            0,
 		KeyReportOCICompat:             false,
 		KeyReportOCICompatHosts:        []string{},
 		KeyLogFilename:                 ".gooze.log",
@@ -119,6 +120,7 @@ func TestLookup_Kinds(t *testing.T) {
 		"report":                     KindObject,
 		KeyReportFormat:              KindEnum,
 		KeyReportGate:                KindEnum,
+		KeyReportMaxPerFile:          KindInt,
 		"report.oci":                 KindObject,
 		KeyReportOCICompat:           KindBool,
 		KeyReportOCICompatHosts:      KindStringList,
@@ -167,6 +169,7 @@ func TestSchema_Bounds(t *testing.T) {
 		KeyThresholdMaxSurvivors:     {new(0), nil},
 		KeyThresholdDiffMaxSurvivors: {new(0), nil},
 		KeyRunGoCacheSize:            {new(0), nil},
+		KeyReportMaxPerFile:          {new(0), nil},
 	}
 
 	for _, key := range thresholdKeys {

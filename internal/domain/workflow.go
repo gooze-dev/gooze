@@ -104,6 +104,10 @@ type ViewArgs struct {
 	// Sections wraps the text summary's long parts in collapsible CI log
 	// sections.
 	Sections bool
+	// MaxPerFile is how many lines with survivors the text summary and the
+	// GitHub annotations list per file; 0 lists them all. The other formats
+	// and the gates take every survivor.
+	MaxPerFile int
 	// Thresholds are the minimum scores of the viewed reports.
 	Thresholds Thresholds
 	// DiffThresholds replace Thresholds when the reports are a --diff run's,
@@ -129,7 +133,7 @@ type ViewArgs struct {
 	DiffScore *rpt.Summary
 	// Writes are the report files written besides Output, each in its
 	// format, from the same load of the reports. A text file holds the whole
-	// summary: Summary, Top and Sections shape only Output.
+	// summary: Summary, Top, MaxPerFile and Sections shape only Output.
 	Writes []ReportWrite
 }
 

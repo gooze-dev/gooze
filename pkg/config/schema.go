@@ -165,6 +165,10 @@ func reportField() Field {
 			Name: "gate", Kind: KindEnum, Default: "auto", Enum: []string{"auto", diffName, "total", "none"},
 			Doc: "Which scope's thresholds decide exit code 3 in gooze report view and merge: the changed lines of a --diff run (diff), the whole project (total) or neither (none). auto gates every scope shown: the reports' own, or both with gooze report merge --scope diff,total.",
 		},
+		{
+			Name: "max_per_file", Kind: KindInt, Default: 0, Min: new(0),
+			Doc: "Most lines with survivors gooze report view and merge list per file in the text summary and the github annotations, with a count of the rest; 0 lists every line. The other formats, the score and the thresholds take every survivor.",
+		},
 		{Name: "oci", Kind: KindObject, Doc: "How gooze report push packages reports for an OCI registry.", Children: []Field{
 			{
 				Name: "compat", Kind: KindBool, Default: false, Unset: true,

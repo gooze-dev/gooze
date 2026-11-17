@@ -49,6 +49,8 @@ Paths filter the files like `gooze run` arguments, relative to the module root
 status and diff instead; `--by-line` lists the survivors once per line of a file.
 For a CI log, `--summary` prints only the table, the score and the threshold verdict, and
 `--top N` keeps the N files with the most survivors in the table.
+`--max-per-file N` (`report.max_per_file`) lists the survivors of at most N lines per file, then
+"and M more lines"; the score, the thresholds and the machine formats still take every survivor.
 
 ## Documentation
 

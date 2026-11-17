@@ -60,6 +60,7 @@ func TestConfigDefaults(t *testing.T) {
 		"threshold.diff.average":         0.0,
 		"threshold.diff.file":            0.0,
 		"threshold.diff.max_survivors":   0,
+		"report.max_per_file":            0,
 		"threshold.timeouts":             "survived",
 		"report.format":                  "text",
 		"report.gate":                    "auto",

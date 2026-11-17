@@ -123,35 +123,6 @@ func (s logSection) write(name, options, title string, body func()) {
 	fmt.Fprintf(s.out, "\x1b[0Ksection_end:%d:%s\r\x1b[0K\n", now, name)
 }
 
-// writeSurvivors lists the summary's survivors, once per line of a file when it
-// has them per line.
-func writeSurvivors(out *strings.Builder, summary domain.ReportSummary, section logSection) {
-	switch lines := len(summary.SurvivorLines); {
-	case len(summary.Survivors) == 0:
-		out.WriteString("No survivors.\n")
-	case lines == 0:
-		section.list("survivors", fmt.Sprintf("Survivors (%d):", len(summary.Survivors)), func() {
-			for _, survivor := range summary.Survivors {
-				out.WriteString(formatSurvivor(survivor))
-				out.WriteString("\n")
-			}
-		})
-	default:
-		noun := "lines"
-		// Equivalent: this case has at least one line, so <= 1 is == 1.
-		if lines == 1 { //gooze:ignore comparison
-			noun = "line"
-		}
-
-		section.list("survivors", fmt.Sprintf("Survivors (%d on %d %s):", len(summary.Survivors), lines, noun), func() {
-			for _, line := range summary.SurvivorLines {
-				out.WriteString(formatSurvivorLine(line))
-				out.WriteString("\n")
-			}
-		})
-	}
-}
-
 func renderFileSummaryTable(summary domain.ReportSummary) string {
 	var buf bytes.Buffer
 

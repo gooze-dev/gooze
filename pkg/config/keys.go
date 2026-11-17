@@ -31,6 +31,7 @@ const (
 	KeyThresholdTimeouts           = "threshold.timeouts"
 	KeyReportFormat                = "report.format"
 	KeyReportGate                  = "report.gate"
+	KeyReportMaxPerFile            = "report.max_per_file"
 	KeyReportOCICompat             = "report.oci.compat"
 	KeyReportOCICompatHosts        = "report.oci.compat_hosts"
 	KeyLogFilename                 = "log.filename"
