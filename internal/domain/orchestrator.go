@@ -256,7 +256,7 @@ func testStatus(ctx context.Context, testAdapter TestRunnerAdapter, workDir, tes
 		return rpt.Timeout
 	}
 
-	output, testErr := testAdapter.RunGoTest(ctx, string(workDir), string(testPath), string(overlay))
+	output, testErr := runMutantTests(ctx, testAdapter, string(workDir), string(testPath), string(overlay))
 	if testErr != nil {
 		if ctx.Err() != nil || errors.Is(testErr, ErrMemoryLimit) || errors.Is(testErr, ErrDiskLimit) {
 			return rpt.Timeout
