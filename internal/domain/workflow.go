@@ -51,6 +51,9 @@ type EstimateArgs struct {
 	// EnumBounds skips the comparison mutants that are equivalent when an
 	// enum's lowest and highest constants bound its type (mutagen.comparison.enum_bounds).
 	EnumBounds bool
+	// Arid selects the arid code that isn't mutated (arid.enabled,
+	// arid.rules, arid.calls).
+	Arid AridOptions
 	// GoCache is where the go command caches its builds: the mutants', and
 	// those generating mutants needs (the type checks of their packages).
 	GoCache GoCache
@@ -62,7 +65,7 @@ type EstimateArgs struct {
 
 // mutationOptions returns the options of the mutations args generates.
 func (a EstimateArgs) mutationOptions() MutationOptions {
-	return MutationOptions{EnumBounds: a.EnumBounds}
+	return MutationOptions{EnumBounds: a.EnumBounds, Arid: a.Arid}
 }
 
 // TestArgs contains the arguments for running mutation tests.

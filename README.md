@@ -94,6 +94,18 @@ network, so being offline has no effect.
 Turn it off with `no-update-check: true` in `gooze.yaml`, `--no-update-check`,
 or `GOOZE_NO_UPDATE_CHECK=true`.
 
+Arid code: `gooze run --arid` (`arid.enabled`) leaves out the mutants that only
+a test of a log text, a timeout, a flag default or a metric could kill. It
+skips logging calls (except those that exit or panic), flag definitions,
+metrics and tracing calls, and the time values handed to timers, timeouts and
+deadlines. A condition that only guards such code is skipped with it, as in
+`if err != nil { log.Print(err) }`. `arid.rules` picks the families (`logging`,
+`time`, `flags`, `metrics`; empty is all of them), and `arid.calls` adds calls
+of your own as `receiver.Function`, such as `example.com/app/audit.*` or
+`*.Tracef`. `gooze run --arid --ignored` lists what is left out, with the reason
+`arid`. It is off by default. Results cached before it was turned on stay
+until their file changes; pass `--no-cache` once to drop them.
+
 Cached results for a file are invalidated when its source content hash changes,
 a test file or another source file of its package changes, a mutator version changes (e.g. after upgrading
 Gooze), or the source file is deleted. The score `gooze run` prints covers every

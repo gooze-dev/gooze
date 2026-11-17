@@ -44,6 +44,9 @@ type MutationOptions struct {
 	// Ignored streams the mutations that the //gooze:ignore directives keep
 	// from being tested, each with its Ignored set, instead of the others.
 	Ignored bool
+	// Arid leaves out the mutants of arid code (see findArid); with Ignored
+	// they are streamed, with AridReason as their reason.
+	Arid AridOptions
 }
 
 // mutagen handles pure mutation generation logic.
@@ -123,6 +126,8 @@ func (mg *mutagen) StreamMutationsWith(ctx context.Context, source rpt.Source, o
 	}
 
 	ignore := buildIgnoreIndex(file, fset, content)
+	ignore.arid = findArid(file, fset.File(file.Pos()), opts.Arid)
+
 	if opts.EnumBounds {
 		ignore.enumBounds = mg.enumBoundMutants(ctx, source, fset, file)
 	}
@@ -215,7 +220,8 @@ func (ix ignoreIndex) visit(n ast.Node, fset *token.FileSet, mutationType mgen.T
 	return true, true
 }
 
-// keepChanged drops the enum bound mutants (see isEnumBoundMutant) and the
+// keepChanged drops the enum bound mutants (see isEnumBoundMutant), the
+// mutants of arid code (see findArid) and the
 // mutations that a directive ignores where they change the file: a line
 // directive of the changed line, counted like the directives (honoring //line
 // comments), or a file or function directive that lists the mutant's
@@ -241,6 +247,7 @@ func (ix ignoreIndex) keepChanged(
 		replacement := func() string { return replacementOf(content, mutation.MutatedCode) }
 
 		return ix.isEnumBoundMutant(mutationType, offset, mutation.MutatedCode) ||
+			ix.arid.contains(offset) ||
 			ix.line[line].ignoresMutant(mutationType, replacement) ||
 			ix.funcRule(line).ignoresMutant(mutationType, replacement) ||
 			ix.file.ignoresMutant(mutationType, replacement)

@@ -54,15 +54,10 @@ func newRunCmd() *cobra.Command {
 		Short: "Run mutation testing",
 		Long:  runLongDescription,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			estimateArgs := runEstimateArgs(args)
-
-			testFlags, err := domain.ParseTestFlags(viper.GetStringSlice(config.KeyRunTestFlags))
+			estimateArgs, testFlags, err := runScanArgs(args)
 			if err != nil {
-				return usageError(err)
+				return err
 			}
-
-			// The tags the tests are built with select the files to mutate.
-			estimateArgs.BuildTags = domain.TestFlagTags(testFlags)
 
 			if runIgnoredFlag {
 				return runIgnored(cmd, estimateArgs)
@@ -95,6 +90,7 @@ func newRunCmd() *cobra.Command {
 
 	thresholds, diffThresholds = configureRunFlags(cmd)
 	addIgnoredFlag(cmd)
+	addAridFlag(cmd)
 
 	return cmd
 }
@@ -189,6 +185,23 @@ func runThresholds(cmd *cobra.Command, diff bool, plain, diffOnly report.Thresho
 	}
 
 	return minimums, nil
+}
+
+// runScanArgs returns the scan settings of a run with its go test flags,
+// whose build tags select the files to mutate. A go test flag gooze sets
+// itself or an unknown arid rule is a usage error.
+func runScanArgs(args []string) (domain.EstimateArgs, []string, error) {
+	estimateArgs := runEstimateArgs(args)
+
+	testFlags, err := domain.ParseTestFlags(viper.GetStringSlice(config.KeyRunTestFlags))
+	if err != nil {
+		return estimateArgs, nil, usageError(err)
+	}
+
+	estimateArgs.BuildTags = domain.TestFlagTags(testFlags)
+	estimateArgs.Arid, err = aridOptions()
+
+	return estimateArgs, testFlags, err
 }
 
 // runEstimateArgs builds the scan settings shared by --estimate and a run

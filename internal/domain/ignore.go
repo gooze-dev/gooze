@@ -130,6 +130,8 @@ type ignoreIndex struct {
 	// enumBounds holds the equivalent enum bound mutants (see
 	// enumBoundMutants), when mutagen.comparison.enum_bounds is on.
 	enumBounds map[int]string
+	// arid is the arid code (see findArid), when arid.enabled is on.
+	arid aridRanges
 }
 
 func buildIgnoreIndex(file *ast.File, fset *token.FileSet, content []byte) ignoreIndex {
