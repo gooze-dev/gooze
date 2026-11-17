@@ -270,3 +270,304 @@ func TestJoinLines(t *testing.T) {
 		}
 	}
 }
+
+// recordingModel hands every message it gets to msgs.
+type recordingModel struct{ msgs chan tea.Msg }
+
+func (r recordingModel) Init() tea.Cmd { return nil }
+func (r recordingModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	select {
+	case r.msgs <- msg:
+	default:
+	}
+
+	return r, nil
+}
+func (r recordingModel) View() string { return "" }
+
+// headlessTUI is a TUI whose program runs without a terminal: it reads no
+// input.
+func headlessTUI(output *bytes.Buffer) *TUI {
+	tui := NewTUI(output)
+	tui.options = []tea.ProgramOption{tea.WithInput(nil)}
+
+	return tui
+}
+
+// sentinelMsg marks the end of what a test sent.
+type sentinelMsg struct{}
+
+// startRecording starts a TUI whose program records its messages.
+func startRecording(t *testing.T) (*TUI, chan tea.Msg) {
+	t.Helper()
+
+	msgs := make(chan tea.Msg, 256)
+	tui := headlessTUI(&bytes.Buffer{})
+
+	if err := tui.startWithModel(recordingModel{msgs: msgs}); err != nil {
+		t.Fatalf("startWithModel error = %v", err)
+	}
+
+	t.Cleanup(func() { tui.Close(context.Background()) })
+
+	return tui, msgs
+}
+
+// sentOf returns the messages of type T the program got before the sentinel
+// sent now.
+func sentOf[T tea.Msg](t *testing.T, tui *TUI, msgs chan tea.Msg) []T {
+	t.Helper()
+
+	tui.send(sentinelMsg{})
+
+	var got []T
+
+	for {
+		select {
+		case msg := <-msgs:
+			switch msg := msg.(type) {
+			case sentinelMsg:
+				return got
+			case T:
+				got = append(got, msg)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("the program did not get the messages")
+		}
+	}
+}
+
+func canceledContext() context.Context {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	return ctx
+}
+
+func TestTUI_DisplaysSendTheirMessages(t *testing.T) {
+	tui, msgs := startRecording(t)
+	ctx := context.Background()
+
+	tui.DisplayConcurrencyInfo(ctx, 2, 1, 3)
+	if got := sentOf[concurrencyMsg](t, tui, msgs); len(got) != 1 || got[0] != (concurrencyMsg{threads: 2, shardIndex: 1, shards: 3}) {
+		t.Fatalf("concurrency messages = %+v", got)
+	}
+
+	tui.DisplayUpcomingTestsInfo(ctx, 5)
+	if got := sentOf[upcomingMsg](t, tui, msgs); len(got) != 1 || got[0].count != 5 {
+		t.Fatalf("upcoming messages = %+v", got)
+	}
+
+	tui.DisplayStartingTestInfo(ctx, mutationWithOrigin(), 7)
+	if got := sentOf[startMutationMsg](t, tui, msgs); len(got) != 1 || got[0].id != "hash" || got[0].thread != 7 {
+		t.Fatalf("start messages = %+v, want the first four characters of the ID on thread 7", got)
+	}
+
+	tui.DisplayCompletedTestInfo(ctx, mutationWithOrigin(), completedResult())
+	if got := sentOf[completedMutationMsg](t, tui, msgs); len(got) != 1 || got[0].id != "hash" || got[0].status != "killed" {
+		t.Fatalf("completed messages = %+v, want the first four characters of the ID, killed", got)
+	}
+
+	tui.DisplayMutationScore(ctx, domain.MutationScore{Total: 2, Killed: 1, Survived: 1})
+	if got := sentOf[mutationScoreMsg](t, tui, msgs); len(got) != 1 || got[0].score.Killed != 1 {
+		t.Fatalf("score messages = %+v", got)
+	}
+
+	if err := tui.DisplayEstimation(ctx, domain.Estimation{Total: 4}, nil); err != nil {
+		t.Fatalf("DisplayEstimation error = %v", err)
+	}
+
+	if got := sentOf[estimationMsg](t, tui, msgs); len(got) != 1 || got[0].total != 4 {
+		t.Fatalf("estimation messages = %+v", got)
+	}
+
+	tui.DisplayUpdateNotice(ctx, domain.UpdateNotice{Latest: "v9.9.9"})
+	if got := sentOf[updateNoticeMsg](t, tui, msgs); len(got) != 1 || got[0].latest != "v9.9.9" {
+		t.Fatalf("update notices = %+v", got)
+	}
+}
+
+func TestTUI_DisplayCompletedTestInfo_StatusWithoutAResultIsUnknown(t *testing.T) {
+	tui, msgs := startRecording(t)
+	mutation := mutationWithOrigin()
+
+	for name, result := range map[string]m.Result{
+		"no result of the mutagen": mResultEmpty(),
+		"an empty list of results": {mutation.Type: nil},
+	} {
+		tui.DisplayCompletedTestInfo(context.Background(), mutation, result)
+
+		if got := sentOf[completedMutationMsg](t, tui, msgs); len(got) != 1 || got[0].status != "unknown" {
+			t.Fatalf("%s: completed messages = %+v, want one of unknown status", name, got)
+		}
+	}
+}
+
+func TestTUI_DisplaysSendNothingOnceCanceled(t *testing.T) {
+	tui, msgs := startRecording(t)
+	ctx := canceledContext()
+
+	tui.DisplayConcurrencyInfo(ctx, 2, 1, 3)
+	tui.DisplayUpcomingTestsInfo(ctx, 5)
+	tui.DisplayStartingTestInfo(ctx, mutationWithOrigin(), 7)
+	tui.DisplayCompletedTestInfo(ctx, mutationWithOrigin(), completedResult())
+	tui.DisplayMutationScore(ctx, domain.MutationScore{Total: 2})
+	tui.DisplayUpdateNotice(ctx, domain.UpdateNotice{Latest: "v9.9.9"})
+
+	if err := tui.DisplayEstimation(ctx, domain.Estimation{Total: 4}, nil); !errors.Is(err, context.Canceled) {
+		t.Fatalf("DisplayEstimation error = %v, want context.Canceled", err)
+	}
+
+	tui.send(sentinelMsg{})
+
+	for {
+		select {
+		case msg := <-msgs:
+			switch msg.(type) {
+			case sentinelMsg:
+				return
+			case concurrencyMsg, upcomingMsg, startMutationMsg, completedMutationMsg, mutationScoreMsg, updateNoticeMsg, estimationMsg:
+				t.Fatalf("got %#v after the context was canceled", msg)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("the program did not get the sentinel")
+		}
+	}
+}
+
+// renderedBy starts the TUI with options, closes it and returns what it drew.
+func renderedBy(t *testing.T, options ...StartOption) string {
+	t.Helper()
+
+	var buf bytes.Buffer
+
+	tui := headlessTUI(&buf)
+	if err := tui.Start(context.Background(), options...); err != nil {
+		t.Fatalf("Start error = %v", err)
+	}
+
+	if !tui.started {
+		t.Fatal("Start did not start the program")
+	}
+
+	tui.Close(context.Background())
+
+	return buf.String()
+}
+
+func TestTUI_StartPicksTheModelOfTheMode(t *testing.T) {
+	if got := renderedBy(t, WithTestMode()); !strings.Contains(got, "Initializing test execution") {
+		t.Errorf("test mode drew %q", got)
+	}
+
+	for name, options := range map[string][]StartOption{"estimate mode": {WithEstimateMode()}, "no mode": nil} {
+		if got := renderedBy(t, options...); !strings.Contains(got, "Loading mutation list") {
+			t.Errorf("%s drew %q", name, got)
+		}
+	}
+}
+
+func TestTUI_StartDoesNothingOnceCanceled(t *testing.T) {
+	tui := NewTUI(&bytes.Buffer{})
+
+	if err := tui.Start(canceledContext()); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Start error = %v, want context.Canceled", err)
+	}
+
+	if tui.started || tui.program != nil {
+		t.Fatal("Start started the program with a canceled context")
+	}
+}
+
+func TestTUI_StartsOneProgram(t *testing.T) {
+	tui, _ := startRecording(t)
+	program := tui.program
+
+	if err := tui.startWithModel(quitModel{}); err != nil {
+		t.Fatalf("second startWithModel error = %v", err)
+	}
+
+	if !tui.started || tui.program != program {
+		t.Fatal("a second start replaced the running program")
+	}
+}
+
+// isDone reports whether done is closed within the wait.
+func isDone(done <-chan struct{}, wait time.Duration) bool {
+	select {
+	case <-done:
+		return true
+	case <-time.After(wait):
+		return false
+	}
+}
+
+func TestTUI_CloseQuitsTheProgramOnce(t *testing.T) {
+	tui, _ := startRecording(t)
+
+	tui.Close(canceledContext())
+
+	if tui.closed || isDone(tui.done, 50*time.Millisecond) {
+		t.Fatal("Close with a canceled context quit the program")
+	}
+
+	tui.Close(context.Background())
+
+	if !tui.closed || !isDone(tui.done, 5*time.Second) {
+		t.Fatal("Close did not quit the program")
+	}
+}
+
+func TestTUI_CloseAndWaitWithoutAProgramReturn(t *testing.T) {
+	tui := NewTUI(&bytes.Buffer{})
+	tui.started = true
+
+	returned := make(chan struct{})
+
+	go func() {
+		tui.Close(context.Background())
+		tui.Wait(context.Background())
+		close(returned)
+	}()
+
+	if !isDone(returned, 5*time.Second) {
+		t.Fatal("Close and Wait did not return for a TUI without a program")
+	}
+
+	if tui.closed {
+		t.Fatal("Close marked a TUI without a program as closed")
+	}
+}
+
+func TestTUI_WaitBlocksUntilTheProgramQuits(t *testing.T) {
+	tui, _ := startRecording(t)
+
+	waited := make(chan struct{})
+
+	go func() {
+		tui.Wait(context.Background())
+		close(waited)
+	}()
+
+	if isDone(waited, 50*time.Millisecond) {
+		t.Fatal("Wait returned while the program runs")
+	}
+
+	tui.Close(context.Background())
+
+	if !isDone(waited, 5*time.Second) {
+		t.Fatal("Wait did not return after the program quit")
+	}
+}
+
+func TestJoinLines_LeavesItsArgumentsAlone(t *testing.T) {
+	lines := []string{"", "a", "b"}
+
+	if got := joinLines(lines...); got != "a\nb" {
+		t.Fatalf("joinLines = %q", got)
+	}
+
+	if lines[0] != "" {
+		t.Fatalf("joinLines wrote %q over its first argument", lines[0])
+	}
+}

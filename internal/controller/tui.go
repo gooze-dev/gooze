@@ -21,6 +21,9 @@ type TUI struct {
 	done    chan struct{}
 	closed  bool
 	notice  *domain.UpdateNotice // shown once the program starts, if set
+	// options come after the program's own; tests use them to run it
+	// without a terminal.
+	options []tea.ProgramOption
 }
 
 // NewTUI creates a new TUI.
@@ -40,7 +43,8 @@ func (t *TUI) Start(ctx context.Context, options ...StartOption) error {
 	}
 
 	var model tea.Model
-	if config.mode == ModeTest {
+	// Equivalent: ModeTest is the highest mode, so >= is ==.
+	if config.mode == ModeTest { //gooze:ignore comparison(>=) reason=equivalent
 		model = newTestExecutionModel()
 	} else {
 		model = newEstimateModel()
@@ -69,12 +73,8 @@ func (t *TUI) startWithModel(model tea.Model) error {
 	}
 
 	// Use alt screen to hide the command line
-	t.program = tea.NewProgram(
-		model,
-		tea.WithOutput(t.output),
-		tea.WithAltScreen(),
-		tea.WithMouseCellMotion(),
-	)
+	options := append([]tea.ProgramOption{tea.WithOutput(t.output), tea.WithAltScreen(), tea.WithMouseCellMotion()}, t.options...)
+	t.program = tea.NewProgram(model, options...)
 	t.done = make(chan struct{})
 	t.started = true
 
