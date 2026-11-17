@@ -650,6 +650,7 @@ func encodeResult(result m.Result) []rpt.Result {
 				MutationID: res.MutationID,
 				Status:     res.Status,
 				Err:        errString,
+				KilledBy:   res.KilledBy,
 			})
 		}
 
@@ -669,21 +670,14 @@ func decodeResult(entries []rpt.Result) m.Result {
 
 	for _, entry := range entries {
 		mutationType := mgen.Type{Name: entry.Name, Version: entry.Version}
-		result[mutationType] = make([]struct {
-			MutationID string
-			Status     rpt.TestStatus
-			Err        error
-		}, 0, len(entry.Mutations))
+		result[mutationType] = make([]m.MutationOutcome, 0, len(entry.Mutations))
 
 		for _, mut := range entry.Mutations {
-			result[mutationType] = append(result[mutationType], struct {
-				MutationID string
-				Status     rpt.TestStatus
-				Err        error
-			}{
+			result[mutationType] = append(result[mutationType], m.MutationOutcome{
 				MutationID: mut.MutationID,
 				Status:     mut.Status,
 				Err:        nil,
+				KilledBy:   mut.KilledBy,
 			})
 		}
 	}

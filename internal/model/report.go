@@ -6,10 +6,16 @@ import (
 )
 
 // Result represents the test results for mutations grouped by type.
-type Result map[mgen.Type][]struct {
+type Result map[mgen.Type][]MutationOutcome
+
+// MutationOutcome is the outcome of testing one mutation.
+type MutationOutcome struct {
 	MutationID string
 	Status     rpt.TestStatus
 	Err        error
+	// KilledBy names the first test that failed on a killed mutation, or ""
+	// when the output doesn't name one.
+	KilledBy string
 }
 
 // Report represents the result of testing a mutation source file.

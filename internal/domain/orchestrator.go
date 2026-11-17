@@ -130,9 +130,9 @@ func (ws *workspace) Run(ctx context.Context, mutation m.Mutation) (m.Result, er
 
 	defer restore()
 
-	status := ws.runTests(ctx, tmpTestPath)
+	status, killedBy := ws.runTests(ctx, tmpTestPath)
 
-	return resultForStatus(mutation, status), nil
+	return resultForOutcome(mutation, status, killedBy), nil
 }
 
 // CheckTests runs the tests of mutation's package in the workspace's copy of
@@ -244,37 +244,8 @@ func writeFile(ctx context.Context, fsAdapter SourceFSAdapter, path m.Path, cont
 	return nil
 }
 
-func (ws *workspace) runTests(ctx context.Context, testPath m.Path) rpt.TestStatus {
+func (ws *workspace) runTests(ctx context.Context, testPath m.Path) (rpt.TestStatus, string) {
 	return testStatus(ctx, ws.testAdapter, ws.tmpDir, testPath, "")
-}
-
-// testStatus runs the tests of testPath's package in workDir, reading the
-// files mapped in overlay (if any) instead of their originals, and classifies
-// the outcome.
-func testStatus(ctx context.Context, testAdapter TestRunnerAdapter, workDir, testPath, overlay m.Path) rpt.TestStatus {
-	if err := ctx.Err(); err != nil {
-		return rpt.Timeout
-	}
-
-	output, testErr := runMutantTests(ctx, testAdapter, string(workDir), string(testPath), string(overlay))
-	if testErr != nil {
-		if ctx.Err() != nil || errors.Is(testErr, ErrMemoryLimit) || errors.Is(testErr, ErrDiskLimit) {
-			return rpt.Timeout
-		}
-
-		if isBuildFailure(output) {
-			slog.Debug("Mutation did not compile", "test", testPath)
-			return rpt.Error
-		}
-
-		return rpt.Killed
-	}
-
-	if strings.Contains(output, "[no test files]") {
-		return rpt.NotCovered
-	}
-
-	return rpt.Survived
 }
 
 // runUnmutatedTests runs the tests of testPath's package in workDir without an
@@ -368,9 +339,9 @@ func (ws *overlayWorkspace) Run(ctx context.Context, mutation m.Mutation) (m.Res
 
 	// The source lives in the same package as its test and its path is
 	// absolute, so it selects the package to test from the project root.
-	status := testStatus(ctx, ws.testAdapter, root, sourcePath, overlayPath)
+	status, killedBy := testStatus(ctx, ws.testAdapter, root, sourcePath, overlayPath)
 
-	return resultForStatus(mutation, status), nil
+	return resultForOutcome(mutation, status, killedBy), nil
 }
 
 // writeOverlay writes mutatedCode and an overlay that maps sourcePath to it
@@ -459,11 +430,7 @@ func resultForNoTest(mutation m.Mutation) m.Result {
 
 func resultForStatus(mutation m.Mutation, status rpt.TestStatus) m.Result {
 	result := m.Result{}
-	result[mutation.Type] = []struct {
-		MutationID string
-		Status     rpt.TestStatus
-		Err        error
-	}{
+	result[mutation.Type] = []m.MutationOutcome{
 		{
 			MutationID: mutation.ID,
 			Status:     status,

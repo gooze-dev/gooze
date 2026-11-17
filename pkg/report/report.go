@@ -168,6 +168,8 @@ type MutationResult struct {
 	MutationID string     `yaml:"mutationid"`
 	Status     TestStatus `yaml:"status"`
 	Err        string     `yaml:"err,omitempty"`
+	// KilledBy names the first test that failed on a killed mutation.
+	KilledBy string `yaml:"killed_by,omitempty"`
 }
 
 // Index is the content of IndexFileName: totals per status and, per source

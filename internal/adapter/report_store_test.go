@@ -1678,3 +1678,66 @@ func TestLocalReportStore_Partial(t *testing.T) {
 	_, err = rs.LoadPartial(ctx, dir)
 	require.Error(t, err)
 }
+
+func TestLocalReportStore_KeepsTheKillingTest(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	rs := &LocalReportStore{}
+	report := m.Report{
+		Source: rpt.Source{Origin: &rpt.File{FullPath: "/abs/path/file1.go", Hash: "abc123"}},
+		Result: m.Result{mgen.Boolean: {
+			{MutationID: "m1", Status: rpt.Killed, KilledBy: "TestToggle"},
+			{MutationID: "m2", Status: rpt.Survived},
+		}},
+	}
+
+	if err := rs.SaveReports(context.Background(), m.Path(dir), reportSpill(t, report)); err != nil {
+		t.Fatalf("SaveReports returned error: %v", err)
+	}
+
+	files, err := filepath.Glob(filepath.Join(dir, "*.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var written string
+
+	for _, file := range files {
+		content, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		written += string(content)
+	}
+
+	if got := strings.Count(written, "killed_by: TestToggle"); got != 1 {
+		t.Fatalf("the report files name the killing test %d times, want once:\n%s", got, written)
+	}
+
+	if got := strings.Count(written, "killed_by"); got != 1 {
+		t.Fatalf("a mutation without a killing test has a killed_by key:\n%s", written)
+	}
+
+	loaded, err := rs.LoadSpillReports(context.Background(), m.Path(dir))
+	if err != nil {
+		t.Fatalf("LoadSpillReports returned error: %v", err)
+	}
+	defer loaded.Close()
+
+	var got []m.MutationOutcome
+
+	err = loaded.Range(func(_ uint64, report m.Report) error {
+		got = append(got, report.Result[mgen.Boolean]...)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := []m.MutationOutcome{{MutationID: "m1", Status: rpt.Killed, KilledBy: "TestToggle"}, {MutationID: "m2", Status: rpt.Survived}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("loaded %+v, want %+v", got, want)
+	}
+}
