@@ -47,7 +47,13 @@ func (a *LocalTestRunnerAdapter) SetDiskLimit(limit int64) {
 // RunGoTest runs 'go test -vet=off' for the package that contains testFile,
 // with -overlay when overlay is set.
 func (a *LocalTestRunnerAdapter) RunGoTest(ctx context.Context, workDir, testFile, overlay string) (string, error) {
-	cmd := newGoTestCommand(ctx, workDir, testFile, overlay, a.flags)
+	return a.runGoTest(ctx, workDir, testFile, overlay, a.flags)
+}
+
+// runGoTest runs go test with flags after gooze's own, under the adapter's
+// limits and environment.
+func (a *LocalTestRunnerAdapter) runGoTest(ctx context.Context, workDir, testFile, overlay string, flags []string) (string, error) {
+	cmd := newGoTestCommand(ctx, workDir, testFile, overlay, flags)
 
 	// A killed go test can't remove its work directory, so it goes in one
 	// removed here, timed out or not. Removing "" does nothing.

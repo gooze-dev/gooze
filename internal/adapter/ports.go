@@ -6,6 +6,7 @@ var (
 	_ domain.SourceFSAdapter   = (*LocalSourceFSAdapter)(nil)
 	_ domain.GoFileAdapter     = (*LocalGoFileAdapter)(nil)
 	_ domain.TestRunnerAdapter = (*LocalTestRunnerAdapter)(nil)
+	_ domain.MutantTestRunner  = (*LocalTestRunnerAdapter)(nil)
 	_ domain.BuildEnvironment  = (*LocalTestRunnerAdapter)(nil)
 	_ domain.ExprTypes         = (*ExprTypes)(nil)
 	_ domain.BuildEnvironment  = (*ExprTypes)(nil)
