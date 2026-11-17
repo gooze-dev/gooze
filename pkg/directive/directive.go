@@ -4,7 +4,8 @@
 // mutagen names separated by commas or whitespace. Names are case-insensitive;
 // an empty list ignores every mutagen. A name may be followed by the
 // replacements it ignores in parentheses, comparison(!=, <=): only the
-// mutants that write one of them are ignored.
+// mutants that write one of them are ignored. The list ends at reason=<why>,
+// such as reason=equivalent (see Reasons); what follows it is a free note.
 package directive
 
 import (
@@ -31,16 +32,40 @@ type Name struct {
 	Replacements []string
 }
 
+// ReasonKey starts the reason of a directive; the reason follows it without
+// a space.
+const ReasonKey = "reason="
+
+// Reasons are the reasons to ignore a mutant that tools know: it can't change
+// what the code does, killing it isn't worth a test, a test is planned, or
+// tests gooze doesn't run already kill it.
+var Reasons = []string{"equivalent", "not-useful", "deferred", "tested-elsewhere"}
+
+// Reason is why a directive ignores its mutants: the text after ReasonKey, as
+// written, with its byte offsets [Start, End) in the parsed text.
+type Reason struct {
+	Text  string
+	Start int
+	End   int
+}
+
+// Known reports whether the reason is one of Reasons.
+func (r Reason) Known() bool {
+	return slices.Contains(Reasons, r.Text)
+}
+
 // Directive is a parsed //gooze:ignore comment. Offsets are byte offsets in
 // the parsed text.
 type Directive struct {
 	// Keyword is the offset of Keyword.
 	Keyword int
-	// End is the offset where the name list ends: the end of the comment
+	// End is the offset where the directive ends: the end of the comment
 	// without trailing whitespace and without the closing */ of a block comment.
 	End int
 	// Names are the listed mutagen names in source order.
 	Names []Name
+	// Reason is the reason that ends the name list, or nil without one.
+	Reason *Reason
 }
 
 // IgnoresAll reports whether the directive lists no names and so ignores
@@ -118,7 +143,9 @@ func Parse(text string) (Directive, bool) {
 		}
 	}
 
-	return Directive{Keyword: lo, End: hi, Names: parseNames(text, listStart, hi)}, true
+	listEnd, reason := splitReason(text, listStart, hi)
+
+	return Directive{Keyword: lo, End: hi, Names: parseNames(text, listStart, listEnd), Reason: reason}, true
 }
 
 // ParseLine finds the first directive among the comments of one line of Go
@@ -155,6 +182,11 @@ func (d Directive) shift(offset int) Directive {
 		d.Names[i].End += offset
 	}
 
+	if d.Reason != nil {
+		d.Reason.Start += offset
+		d.Reason.End += offset
+	}
+
 	return d
 }
 
@@ -171,7 +203,7 @@ func parseNames(text string, lo, hi int) []Name {
 	)
 
 	for i, r := range text[lo:hi] {
-		separator := !inList && (r == ',' || unicode.IsSpace(r))
+		separator := !inList && isSeparator(r)
 
 		switch {
 		case separator && inName:
@@ -189,6 +221,36 @@ func parseNames(text string, lo, hi int) []Name {
 	}
 
 	return names
+}
+
+// isSeparator reports whether r separates the names of a directive.
+func isSeparator(r rune) bool {
+	return r == ',' || unicode.IsSpace(r)
+}
+
+// splitReason finds the reason in text[lo:hi]: the first name that starts
+// with ReasonKey, up to the next comma or whitespace. It returns where the
+// names before it end, which is hi without a reason.
+func splitReason(text string, lo, hi int) (int, *Reason) {
+	var inName, inList bool
+
+	for i, r := range text[lo:hi] {
+		separator := !inList && isSeparator(r)
+
+		if key := lo + i; !separator && !inName && strings.HasPrefix(text[key:hi], ReasonKey) {
+			start, end := key+len(ReasonKey), hi
+			if length := strings.IndexFunc(text[start:hi], isSeparator); length >= 0 {
+				end = start + length
+			}
+
+			return key, &Reason{Text: text[start:end], Start: start, End: end}
+		}
+
+		inName = !separator
+		inList = inParentheses(inList, inName, r)
+	}
+
+	return hi, nil
 }
 
 // inParentheses returns whether the parser is inside a name's parentheses

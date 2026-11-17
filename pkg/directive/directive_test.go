@@ -221,3 +221,67 @@ func TestDirective_IgnoresMutant(t *testing.T) {
 	require.True(t, ok)
 	assert.True(t, all.IgnoresMutant("comparison", "!="))
 }
+
+func TestParse_Reason(t *testing.T) {
+	cases := []struct {
+		text   string
+		names  []string
+		reason string // "-" when the directive has none
+	}{
+		{text: "//gooze:ignore comparison reason=equivalent", names: []string{"comparison"}, reason: "equivalent"},
+		{text: "//gooze:ignore reason=not-useful", names: []string{}, reason: "not-useful"},
+		{text: "//gooze:ignore comparison, numbers reason=deferred until the parser is split", names: []string{"comparison", "numbers"}, reason: "deferred"},
+		{text: "//gooze:ignore comparison,reason=tested-elsewhere,see the e2e suite", names: []string{"comparison"}, reason: "tested-elsewhere"},
+		{text: "//gooze:ignore reason=equivalent comparison", names: []string{}, reason: "equivalent"},
+		{text: "/* gooze:ignore numbers(0) reason=equivalent */", names: []string{"numbers"}, reason: "equivalent"},
+		{text: "//gooze:ignore comparison reason=Legacy", names: []string{"comparison"}, reason: "Legacy"},
+		{text: "//gooze:ignore comparison reason=", names: []string{"comparison"}, reason: ""},
+		{text: "//gooze:ignore comparison reason= equivalent", names: []string{"comparison"}, reason: ""},
+		{text: "//gooze:ignore reason=a reason=b", names: []string{}, reason: "a"},
+		{text: "//gooze:ignore comparison", names: []string{"comparison"}, reason: "-"},
+		{text: "//gooze:ignore comparison(reason=x)", names: []string{"comparison"}, reason: "-"},
+		{text: "//gooze:ignore comparison Reason=x", names: []string{"comparison", "Reason=x"}, reason: "-"},
+		{text: "//gooze:ignore noreason=x", names: []string{"noreason=x"}, reason: "-"},
+		{text: "//gooze:ignore reason", names: []string{"reason"}, reason: "-"},
+	}
+
+	for _, tc := range cases {
+		d, ok := Parse(tc.text)
+		require.True(t, ok, tc.text)
+		assert.Equal(t, tc.names, names(d), tc.text)
+		assert.Equal(t, len(tc.names) == 0, d.IgnoresAll(), tc.text)
+
+		if tc.reason == "-" {
+			assert.Nil(t, d.Reason, tc.text)
+			continue
+		}
+
+		require.NotNil(t, d.Reason, tc.text)
+		assert.Equal(t, tc.reason, d.Reason.Text, tc.text)
+		assert.Equal(t, tc.reason, tc.text[d.Reason.Start:d.Reason.End], tc.text)
+	}
+}
+
+func TestParse_ReasonOffsets(t *testing.T) {
+	text := "x := 1 // gooze:ignore numbers(0), comparison reason=equivalent counts are never negative  "
+
+	d, ok := ParseLine(text)
+	require.True(t, ok)
+	require.NotNil(t, d.Reason)
+	assert.Equal(t, "equivalent", text[d.Reason.Start:d.Reason.End], "ParseLine shifts the reason with the names")
+	assert.Equal(t, "reason=", text[d.Reason.Start-len(ReasonKey):d.Reason.Start])
+	assert.Equal(t, "comparison", text[d.Names[1].Start:d.Names[1].End])
+	assert.Equal(t, len(text)-2, d.End, "the note after the reason is part of the directive")
+}
+
+func TestReason_Known(t *testing.T) {
+	assert.Equal(t, []string{"equivalent", "not-useful", "deferred", "tested-elsewhere"}, Reasons)
+
+	for _, reason := range Reasons {
+		assert.True(t, Reason{Text: reason}.Known(), reason)
+	}
+
+	assert.False(t, Reason{Text: "Equivalent"}.Known(), "reasons are lower case")
+	assert.False(t, Reason{Text: "legacy"}.Known())
+	assert.False(t, Reason{}.Known())
+}
