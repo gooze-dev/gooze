@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/olekukonko/tablewriter"
 	"github.com/olekukonko/tablewriter/tw"
@@ -165,12 +166,14 @@ func (s *SimpleUI) DisplayCompletedTestInfo(ctx context.Context, currentMutation
 		return
 	}
 
-	status := unknownStatusLabel
+	status, killedBy := unknownStatusLabel, ""
 	if results, ok := mutationResult[currentMutation.Type]; ok && len(results) > 0 {
 		status = formatTestStatus(results[0].Status)
+		// " by TestX" after the status, and nothing without a test name.
+		killedBy = strings.TrimSuffix(" by "+results[0].KilledBy, " by ")
 	}
 
-	s.printf("Completed mutation %s (%s) -> %s\n", currentMutation.ID[:4], currentMutation.Type.Name, status)
+	s.printf("Completed mutation %s (%s) -> %s%s\n", currentMutation.ID[:4], currentMutation.Type.Name, status, killedBy)
 
 	// A mutant that did not build is noise in a log, where diffs read as
 	// survivors; gooze report view lists it by file and line.

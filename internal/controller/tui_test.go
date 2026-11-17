@@ -85,11 +85,7 @@ func TestTUI_DisplayCompletedTestInfo_WithDiff(t *testing.T) {
 	}
 
 	survivedResult := m.Result{
-		mgen.Arithmetic: []struct {
-			MutationID string
-			Status     rpt.TestStatus
-			Err        error
-		}{{MutationID: "hash-10", Status: rpt.Survived}},
+		mgen.Arithmetic: []m.MutationOutcome{{MutationID: "hash-10", Status: rpt.Survived}},
 	}
 
 	// Start TUI in test mode
@@ -117,11 +113,7 @@ func TestTUI_DisplayCompletedTestInfo_WithoutDiff(t *testing.T) {
 	}
 
 	killedResult := m.Result{
-		mgen.Arithmetic: []struct {
-			MutationID string
-			Status     rpt.TestStatus
-			Err        error
-		}{{MutationID: "hash-10", Status: rpt.Killed}},
+		mgen.Arithmetic: []m.MutationOutcome{{MutationID: "hash-10", Status: rpt.Killed}},
 	}
 
 	// Start TUI in test mode
@@ -210,11 +202,7 @@ func mutationWithoutOrigin() m.Mutation {
 
 func completedResult() m.Result {
 	return m.Result{
-		mgen.Arithmetic: []struct {
-			MutationID string
-			Status     rpt.TestStatus
-			Err        error
-		}{{MutationID: "hash-1", Status: rpt.Killed}},
+		mgen.Arithmetic: []m.MutationOutcome{{MutationID: "hash-1", Status: rpt.Killed}},
 	}
 }
 

@@ -177,16 +177,8 @@ func TestSimpleUI_OtherDisplays(t *testing.T) {
 	ui.DisplayStartingTestInfo(ctx, m.Mutation{ID: "efgh5678901234", Type: mgen.Boolean, Source: rpt.Source{Origin: &rpt.File{ShortPath: "a.go", FullPath: "path/a.go"}}}, 0)
 
 	result := m.Result{
-		mgen.Arithmetic: []struct {
-			MutationID string
-			Status     rpt.TestStatus
-			Err        error
-		}{{MutationID: "abcd1234567890", Status: rpt.Killed}},
-		mgen.Boolean: []struct {
-			MutationID string
-			Status     rpt.TestStatus
-			Err        error
-		}{{MutationID: "efgh5678901234", Status: rpt.Survived}},
+		mgen.Arithmetic: []m.MutationOutcome{{MutationID: "abcd1234567890", Status: rpt.Killed}},
+		mgen.Boolean:    []m.MutationOutcome{{MutationID: "efgh5678901234", Status: rpt.Survived}},
 	}
 	ui.DisplayCompletedTestInfo(ctx, m.Mutation{ID: "abcd1234567890", Type: mgen.Arithmetic}, result)
 	ui.DisplayCompletedTestInfo(ctx, m.Mutation{ID: "efgh5678901234", Type: mgen.Boolean, Source: rpt.Source{Origin: &rpt.File{FullPath: "path/a.go"}}, DiffCode: []byte("--- original\n+++ mutated\n@@\n")}, result)
@@ -408,5 +400,29 @@ func TestSimpleUI_DisplayMutationScore_NarrowedRunPrintsHint(t *testing.T) {
 	want := "Mutation score: " + formatMutationScore(score) + "\n" + runReportsHint(score) + "\n"
 	if got := buf.String(); got != want {
 		t.Fatalf("output = %q, want %q", got, want)
+	}
+}
+
+func TestSimpleUI_DisplayCompletedTestInfo_NamesTheKillingTest(t *testing.T) {
+	for name, tt := range map[string]struct {
+		outcome m.MutationOutcome
+		want    string
+	}{
+		"killed by a test":     {outcome: m.MutationOutcome{Status: rpt.Killed, KilledBy: "TestSum"}, want: "Completed mutation abcd (arithmetic) -> killed by TestSum\n"},
+		"killed, test unknown": {outcome: m.MutationOutcome{Status: rpt.Killed}, want: "Completed mutation abcd (arithmetic) -> killed\n"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var buf bytes.Buffer
+
+			cmd := &cobra.Command{}
+			cmd.SetOut(&buf)
+
+			mutation := m.Mutation{ID: "abcd1234567890", Type: mgen.Arithmetic}
+			NewSimpleUI(cmd).DisplayCompletedTestInfo(context.Background(), mutation, m.Result{mgen.Arithmetic: {tt.outcome}})
+
+			if buf.String() != tt.want {
+				t.Fatalf("output = %q, want %q", buf.String(), tt.want)
+			}
+		})
 	}
 }

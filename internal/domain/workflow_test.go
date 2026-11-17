@@ -748,11 +748,7 @@ func TestWorkflow_TestWithSkippedMutation(t *testing.T) {
 	}
 
 	skippedResult := m.Result{
-		mgen.Arithmetic: []struct {
-			MutationID string
-			Status     rpt.TestStatus
-			Err        error
-		}{{MutationID: "hash-0", Status: rpt.Skipped}},
+		mgen.Arithmetic: []m.MutationOutcome{{MutationID: "hash-0", Status: rpt.Skipped}},
 	}
 
 	mockReporter.EXPECT().StartTest(ctx).Return(nil).Once()
@@ -828,11 +824,7 @@ func TestWorkflow_TestMutationIDExactMatchDoesNotUseHigherID(t *testing.T) {
 	}
 
 	result := m.Result{
-		mgen.Arithmetic: []struct {
-			MutationID string
-			Status     rpt.TestStatus
-			Err        error
-		}{
+		mgen.Arithmetic: []m.MutationOutcome{
 			{MutationID: "hash-1", Status: rpt.Killed},
 			{MutationID: "hash-3", Status: rpt.Survived},
 		},
@@ -911,11 +903,7 @@ func TestWorkflow_TestEmptyResultEntriesReturnsError(t *testing.T) {
 	}
 
 	result := m.Result{
-		mgen.Arithmetic: []struct {
-			MutationID string
-			Status     rpt.TestStatus
-			Err        error
-		}{},
+		mgen.Arithmetic: []m.MutationOutcome{},
 	}
 
 	mockReporter.EXPECT().StartTest(ctx).Return(nil).Once()
@@ -1083,11 +1071,7 @@ func TestWorkflow_TestWithSurvivedMutation(t *testing.T) {
 
 	// Mock a survived mutation result
 	survivedResult := m.Result{
-		mgen.Arithmetic: []struct {
-			MutationID string
-			Status     rpt.TestStatus
-			Err        error
-		}{{MutationID: "hash-0", Status: rpt.Survived}},
+		mgen.Arithmetic: []m.MutationOutcome{{MutationID: "hash-0", Status: rpt.Survived}},
 	}
 
 	mockReporter.EXPECT().StartTest(ctx).Return(nil).Once()
@@ -1171,11 +1155,7 @@ func TestWorkflow_TestWithKilledMutation(t *testing.T) {
 
 	// Mock a killed mutation result
 	killedResult := m.Result{
-		mgen.Arithmetic: []struct {
-			MutationID string
-			Status     rpt.TestStatus
-			Err        error
-		}{{MutationID: "hash-0", Status: rpt.Killed}},
+		mgen.Arithmetic: []m.MutationOutcome{{MutationID: "hash-0", Status: rpt.Killed}},
 	}
 
 	mockReporter.EXPECT().StartTest(ctx).Return(nil).Once()
@@ -1456,11 +1436,7 @@ func TestWorkflow_TestExactMutationIDMatch(t *testing.T) {
 	}
 
 	result := m.Result{
-		mgen.Arithmetic: []struct {
-			MutationID string
-			Status     rpt.TestStatus
-			Err        error
-		}{
+		mgen.Arithmetic: []m.MutationOutcome{
 			{MutationID: "hash-0", Status: rpt.Killed},
 			{MutationID: "hash-1", Status: rpt.Survived},
 		},
