@@ -63,6 +63,10 @@ func newRunCmd() *cobra.Command {
 			// The tags the tests are built with select the files to mutate.
 			estimateArgs.BuildTags = domain.TestFlagTags(testFlags)
 
+			if runIgnoredFlag {
+				return runIgnored(cmd, estimateArgs)
+			}
+
 			if runEstimateFlag {
 				return workflow.Estimate(cmd.Context(), estimateArgs)
 			}
@@ -89,6 +93,7 @@ func newRunCmd() *cobra.Command {
 	}
 
 	thresholds, diffThresholds = configureRunFlags(cmd)
+	addIgnoredFlag(cmd)
 
 	return cmd
 }

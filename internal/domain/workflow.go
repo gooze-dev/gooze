@@ -195,6 +195,9 @@ type MergeArgs struct {
 // Workflow defines the interface for the mutation testing workflow.
 type Workflow interface {
 	Estimate(ctx context.Context, args EstimateArgs) error
+	// Ignored lists the mutants that //gooze:ignore directives keep from
+	// being tested.
+	Ignored(ctx context.Context, args IgnoredArgs) error
 	Test(ctx context.Context, args TestArgs) error
 	View(ctx context.Context, args ViewArgs) error
 	Merge(ctx context.Context, args MergeArgs) error

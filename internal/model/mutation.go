@@ -19,4 +19,13 @@ type Mutation struct {
 	// Funcs names the function declaration the mutation is in: "Name", plus
 	// "Type.Name" for a method. Nil outside any function.
 	Funcs []string
+	// Ignored is set when a //gooze:ignore directive keeps the mutation from
+	// being tested; only a listing of the ignored mutations holds those.
+	Ignored *Ignored
+}
+
+// Ignored is why a directive ignores a mutation.
+type Ignored struct {
+	// Reason is the directive's reason=, as written, or "" without one.
+	Reason string
 }
