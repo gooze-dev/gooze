@@ -76,8 +76,17 @@ func mutagenField() Field {
 	}}
 }
 
+// Values that more than one setting shares.
+const (
+	offValue  = "off"
+	fileValue = "file"
+)
+
 // failFastPolicies are run.fail_fast's values, the default first.
-var failFastPolicies = []string{"off", "gate", "file", "first"}
+var failFastPolicies = []string{offValue, "gate", fileValue, "first"}
+
+// diffTestsPolicies are run.diff_tests's values, the default first.
+var diffTestsPolicies = []string{fileValue, "unchanged", offValue}
 
 func runField() Field {
 	return Field{Name: "run", Kind: KindObject, Doc: "Mutation run settings.", Children: []Field{
@@ -87,6 +96,10 @@ func runField() Field {
 		{Name: "mutation_disk", Kind: KindInt, Default: 0, Init: 1024, Min: new(0), Doc: "Disk space limit of a mutation's tests in MiB, for their temp files and their build; above it they are killed and the mutation is reported as a timeout. 0 is no limit."},
 		{Name: "coverage_profile", Kind: KindString, Default: "", Doc: "Go coverage profile; mutations on uncovered lines are reported as not_covered without running tests."},
 		{Name: diffName, Kind: KindString, Default: "", Doc: "Git ref to diff against; only lines changed since its merge base with HEAD are mutated. Requires git. Empty runs everything."},
+		{
+			Name: "diff_tests", Kind: KindEnum, Default: diffTestsPolicies[0], Enum: slices.Clone(diffTestsPolicies),
+			Doc: "What a changed x_test.go does to a diff run's scope: file puts the whole x.go in scope, since its tests can kill mutants anywhere in it; unchanged does so only when x.go has no changed lines of its own; off keeps every file to its changed lines.",
+		},
 		{
 			Name: "mutagens", Kind: KindStringList, Default: []string{},
 			Enum: mgen.Names(),

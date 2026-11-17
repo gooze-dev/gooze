@@ -33,9 +33,10 @@ const (
 
 	coverageProfileFlagName = "coverage-profile"
 
-	diffFlagName     = "diff"
-	runFlagName      = "run"
-	mutagensFlagName = "mutagens"
+	diffFlagName      = "diff"
+	diffTestsFlagName = "diff-tests"
+	runFlagName       = "run"
+	mutagensFlagName  = "mutagens"
 
 	workspaceFlagName = "workspace"
 	failFastFlagName  = "fail-fast"

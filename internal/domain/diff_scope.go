@@ -19,15 +19,39 @@ type DiffInfo struct {
 	Files int
 }
 
+// DiffTests is what a changed test file does to the diff scope of the source
+// it tests.
+type DiffTests string
+
+const (
+	// DiffTestsFile puts the whole source in scope, since new or edited tests
+	// can kill mutants anywhere in it.
+	DiffTestsFile DiffTests = "file"
+	// DiffTestsUnchanged does so only for a source without changed lines of
+	// its own; one that has them keeps to them.
+	DiffTestsUnchanged DiffTests = "unchanged"
+	// DiffTestsOff leaves the scope to the changed lines of the sources.
+	DiffTestsOff DiffTests = "off"
+)
+
 // DiffScope decides which sources and lines a diff-mode run mutates. A nil
 // scope means diff mode is off and everything is in scope.
 type DiffScope struct {
 	changes ChangeSet
+	tests   DiffTests
 }
 
 // NewDiffScope returns the scope of the given changes.
 func NewDiffScope(changes ChangeSet) *DiffScope {
 	return &DiffScope{changes: changes}
+}
+
+// WithTests sets what a changed test file does to the scope of its source.
+// Without it, or with an empty policy, the scope follows DiffTestsFile.
+func (s *DiffScope) WithTests(policy DiffTests) *DiffScope {
+	s.tests = policy
+
+	return s
 }
 
 // Info returns the ref and merge base of the scope.
@@ -36,7 +60,8 @@ func (s *DiffScope) Info() DiffInfo {
 }
 
 // InScope reports whether any mutation of source can be in scope: its file
-// has changed lines, or the test file paired with it changed.
+// has changed lines, or the test file paired with it changed and the policy
+// for changed tests widens the scope.
 func (s *DiffScope) InScope(source rpt.Source) bool {
 	if s == nil {
 		return true
@@ -46,18 +71,11 @@ func (s *DiffScope) InScope(source rpt.Source) bool {
 		return false
 	}
 
-	if s.testChanged(source) {
-		return true
-	}
-
-	change, ok := s.changes.Files[source.Origin.FullPath]
-
-	return ok && (change.Whole || len(change.Lines) > 0)
+	return s.widened(source) || s.sourceChanged(source)
 }
 
-// Includes reports whether a mutation of source on line is in scope. A
-// changed test file puts the whole source it tests in scope, since new or
-// edited tests can kill mutants anywhere in it.
+// Includes reports whether a mutation of source on line is in scope: the line
+// changed, or a changed test file put the whole source it tests in scope.
 func (s *DiffScope) Includes(source rpt.Source, line int) bool {
 	if s == nil {
 		return true
@@ -67,18 +85,14 @@ func (s *DiffScope) Includes(source rpt.Source, line int) bool {
 		return false
 	}
 
-	if s.testChanged(source) {
-		return true
-	}
-
-	return s.changes.Files[source.Origin.FullPath].Contains(line)
+	return s.widened(source) || s.changes.Files[source.Origin.FullPath].Contains(line)
 }
 
 // ReportScope returns what reports of source record about the lines tested:
 // nil when the whole file is in scope (diff mode off, a new file, or a changed
-// test), otherwise the base and changed line ranges.
+// test that widened the scope), otherwise the base and changed line ranges.
 func (s *DiffScope) ReportScope(source rpt.Source) *rpt.Scope {
-	if s == nil || source.Origin == nil || s.testChanged(source) {
+	if s == nil || source.Origin == nil || s.widened(source) {
 		return nil
 	}
 
@@ -111,6 +125,27 @@ func (s *DiffScope) ChangedTests() int {
 	}
 
 	return count
+}
+
+// widened reports whether source is in scope in full because its test file
+// changed.
+func (s *DiffScope) widened(source rpt.Source) bool {
+	switch s.tests {
+	case DiffTestsOff:
+		return false
+	case DiffTestsUnchanged:
+		return !s.sourceChanged(source) && s.testChanged(source)
+	case DiffTestsFile:
+	}
+
+	return s.testChanged(source)
+}
+
+// sourceChanged reports whether source has changed lines of its own.
+func (s *DiffScope) sourceChanged(source rpt.Source) bool {
+	change := s.changes.Files[source.Origin.FullPath]
+
+	return change.Whole || len(change.Lines) > 0
 }
 
 // testChanged reports whether source's own x_test.go changed. A source without
@@ -154,7 +189,7 @@ func (w *workflow) diffScope(ctx context.Context, args EstimateArgs) (*DiffScope
 		return nil, fmt.Errorf("diff against %s: %w", args.Diff, err)
 	}
 
-	return NewDiffScope(changes), nil
+	return NewDiffScope(changes).WithTests(args.DiffTests), nil
 }
 
 // narrowToScope keeps only the changed sources in diff scope, so a diff run
