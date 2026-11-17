@@ -44,6 +44,7 @@ func TestConfigDefaults(t *testing.T) {
 		"run.mutation_disk":              0,
 		"run.coverage_profile":           "",
 		"run.diff":                       "",
+		"run.diff_tests":                 "file",
 		"run.mutagens":                   []string{},
 		"run.workspace":                  "overlay",
 		"run.fail_fast":                  "off",

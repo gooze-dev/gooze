@@ -122,6 +122,63 @@ func TestRunCmd_FailFastFlag(t *testing.T) {
 	}
 }
 
+func TestRunCmd_DiffTestsFlag(t *testing.T) {
+	for _, tt := range []struct {
+		args []string
+		env  string
+		want domain.DiffTests
+	}{
+		{args: []string{"run", "./..."}, want: domain.DiffTestsFile},
+		{args: []string{"run", "--diff-tests", "unchanged", "./..."}, want: domain.DiffTestsUnchanged},
+		{args: []string{"run", "./..."}, env: "off", want: domain.DiffTestsOff},
+	} {
+		t.Run(string(tt.want), func(t *testing.T) {
+			if tt.env != "" {
+				t.Setenv("GOOZE_RUN_DIFF_TESTS", tt.env)
+			}
+
+			mockWorkflow := domainmocks.NewMockWorkflow(t)
+
+			cmd := newRootCmd()
+			cmd.AddCommand(newRunCmd())
+			cmd.SetOut(&bytes.Buffer{})
+			cmd.SetErr(&bytes.Buffer{})
+
+			originalWorkflow := workflow
+			workflow = mockWorkflow
+			defer func() { workflow = originalWorkflow }()
+			// Rebind run.diff_tests to a fresh, unset flag so later tests see the default.
+			defer newRunCmd()
+
+			mockWorkflow.On("Test", mock.Anything, mock.MatchedBy(func(args domain.TestArgs) bool {
+				return args.DiffTests == tt.want
+			})).Return(nil)
+
+			cmd.SetArgs(tt.args)
+			require.NoError(t, cmd.Execute())
+			mockWorkflow.AssertExpectations(t)
+		})
+	}
+}
+
+func TestRunCmd_RejectsUnknownDiffTests(t *testing.T) {
+	cmd := newRootCmd()
+	cmd.AddCommand(newRunCmd())
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+
+	// A mock without expectations: a run that gets past the check fails at once.
+	originalWorkflow := workflow
+	workflow = domainmocks.NewMockWorkflow(t)
+	defer func() { workflow = originalWorkflow }()
+	defer newRunCmd()
+
+	cmd.SetArgs([]string{"run", "--diff-tests", "never", "./..."})
+	err := cmd.Execute()
+	require.EqualError(t, err, `invalid run.diff_tests: "never" is not one of file, unchanged, off`)
+	assert.Equal(t, m.ExitUsage, exitCode(context.Background(), err, false))
+}
+
 func TestRunCmd_RejectsUnknownFailFast(t *testing.T) {
 	mockWorkflow := domainmocks.NewMockWorkflow(t)
 

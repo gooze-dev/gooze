@@ -39,6 +39,9 @@ type EstimateArgs struct {
 	// Diff is a git ref; when set, only lines changed since its merge base
 	// with HEAD are mutated. Empty mutates everything in scope.
 	Diff string
+	// DiffTests is what a changed test file does to the diff scope of the
+	// source it tests; empty is DiffTestsFile.
+	DiffTests DiffTests
 	// Run is a regular expression, as for go test -run; when set, only
 	// functions whose name or Type.Name matches are mutated.
 	Run string

@@ -19,6 +19,7 @@ func TestDefaults(t *testing.T) {
 		KeyRunMutationDisk:             0,
 		KeyRunCoverageProfile:          "",
 		KeyRunDiff:                     "",
+		KeyRunDiffTests:                "file",
 		KeyRunMutagens:                 []string{},
 		KeyRunWorkspace:                "overlay",
 		KeyRunFailFast:                 "off",
@@ -77,7 +78,7 @@ func TestLookup_Object(t *testing.T) {
 		names = append(names, child.Name)
 	}
 
-	assert.Equal(t, []string{"parallel", "mutation_timeout", "mutation_memory", "mutation_disk", "coverage_profile", "diff", "mutagens", "workspace", "fail_fast", "go_cache", "go_cache_size", "go_cache_prewarm", "test_flags"}, names)
+	assert.Equal(t, []string{"parallel", "mutation_timeout", "mutation_memory", "mutation_disk", "coverage_profile", "diff", "diff_tests", "mutagens", "workspace", "fail_fast", "go_cache", "go_cache_size", "go_cache_prewarm", "test_flags"}, names)
 }
 
 func TestLookup_Missing(t *testing.T) {
@@ -104,6 +105,7 @@ func TestLookup_Kinds(t *testing.T) {
 		KeyRunMutationTimeout:        KindInt,
 		KeyRunCoverageProfile:        KindString,
 		KeyRunDiff:                   KindString,
+		KeyRunDiffTests:              KindEnum,
 		KeyRunMutagens:               KindStringList,
 		KeyRunWorkspace:              KindEnum,
 		KeyRunFailFast:               KindEnum,
@@ -260,6 +262,14 @@ func TestRunFailFastListsItsValues(t *testing.T) {
 	assert.Equal(t, KindEnum, field.Kind)
 	assert.Equal(t, "off", field.Default)
 	assert.Equal(t, []string{"off", "gate", "file", "first"}, field.Enum)
+}
+
+func TestRunDiffTestsListsItsValues(t *testing.T) {
+	field, ok := Lookup(KeyRunDiffTests)
+	require.True(t, ok)
+	assert.Equal(t, KindEnum, field.Kind)
+	assert.Equal(t, "file", field.Default)
+	assert.Equal(t, []string{"file", "unchanged", "off"}, field.Enum)
 }
 
 var thresholdKeys = []string{

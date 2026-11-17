@@ -12,6 +12,7 @@ const (
 	KeyRunMutationDisk             = "run.mutation_disk"
 	KeyRunCoverageProfile          = "run.coverage_profile"
 	KeyRunDiff                     = "run.diff"
+	KeyRunDiffTests                = "run.diff_tests"
 	KeyRunMutagens                 = "run.mutagens"
 	KeyRunWorkspace                = "run.workspace"
 	KeyRunFailFast                 = "run.fail_fast"

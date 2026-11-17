@@ -33,6 +33,7 @@ var runPatternFlag string
 var runMutagensFlag []string
 var runWorkspaceFlag string
 var runFailFastFlag string
+var runDiffTestsFlag string
 var runGoCacheFlag string
 var runGoCacheSizeFlag int
 var runGoCachePrewarmFlag bool
@@ -121,6 +122,14 @@ func init() {
 	rootCmd.AddCommand(runCmd)
 }
 
+// configureDiffFlags adds the flags that set a diff run's scope.
+func configureDiffFlags(cmd *cobra.Command) {
+	cmd.Flags().StringVar(&runDiffFlag, diffFlagName, schemaDefault[string](config.KeyRunDiff), "git ref to diff against; mutate only lines changed since its merge base with HEAD (requires git)")
+	bindFlagToConfig(cmd.Flags().Lookup(diffFlagName), config.KeyRunDiff)
+	cmd.Flags().StringVar(&runDiffTestsFlag, diffTestsFlagName, schemaDefault[string](config.KeyRunDiffTests), "with --diff, what a changed x_test.go puts in scope: file (all of x.go), unchanged (all of x.go only when it has no changed lines of its own) or off (changed lines only)")
+	bindFlagToConfig(cmd.Flags().Lookup(diffTestsFlagName), config.KeyRunDiffTests)
+}
+
 // configureRunFlags adds run's flags and returns its threshold flags: the
 // plain ones, and the ones for --diff runs.
 func configureRunFlags(cmd *cobra.Command) (report.ThresholdFlags, report.ThresholdFlags) {
@@ -141,8 +150,7 @@ func configureRunFlags(cmd *cobra.Command) (report.ThresholdFlags, report.Thresh
 	cmd.Flags().StringVar(&runCoverageProfileFlag, coverageProfileFlagName, schemaDefault[string](config.KeyRunCoverageProfile), "path to a Go coverage profile; mutations on uncovered lines are reported as not_covered without running tests")
 	bindFlagToConfig(cmd.Flags().Lookup(coverageProfileFlagName), config.KeyRunCoverageProfile)
 
-	cmd.Flags().StringVar(&runDiffFlag, diffFlagName, schemaDefault[string](config.KeyRunDiff), "git ref to diff against; mutate only lines changed since its merge base with HEAD (requires git)")
-	bindFlagToConfig(cmd.Flags().Lookup(diffFlagName), config.KeyRunDiff)
+	configureDiffFlags(cmd)
 
 	cmd.Flags().StringVar(&runPatternFlag, runFlagName, "", "mutate only functions matching this regular expression, as for go test -run (matches Name, or Type.Name for methods)")
 
@@ -192,13 +200,14 @@ func runEstimateArgs(args []string) domain.EstimateArgs {
 	}
 
 	return domain.EstimateArgs{
-		Paths:    parsePaths(args),
-		Exclude:  viper.GetStringSlice(config.KeyPathsExclude),
-		UseCache: !viper.GetBool(config.KeyNoCache),
-		Reports:  m.Path(viper.GetString(config.KeyOutput)),
-		Diff:     viper.GetString(config.KeyRunDiff),
-		Run:      runPatternFlag,
-		Mutagens: viper.GetStringSlice(config.KeyRunMutagens),
+		Paths:     parsePaths(args),
+		Exclude:   viper.GetStringSlice(config.KeyPathsExclude),
+		UseCache:  !viper.GetBool(config.KeyNoCache),
+		Reports:   m.Path(viper.GetString(config.KeyOutput)),
+		Diff:      viper.GetString(config.KeyRunDiff),
+		DiffTests: domain.DiffTests(viper.GetString(config.KeyRunDiffTests)),
+		Run:       runPatternFlag,
+		Mutagens:  viper.GetStringSlice(config.KeyRunMutagens),
 
 		EnumBounds: viper.GetBool(config.KeyMutagenComparisonEnumBounds),
 		GoCache: domain.GoCache{
