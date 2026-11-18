@@ -31,7 +31,8 @@ const (
 	mutationMemoryFlagName  = "mutation-memory"
 	mutationDiskFlagName    = "mutation-disk"
 
-	coverageProfileFlagName = "coverage-profile"
+	coverageProfileFlagName    = "coverage-profile"
+	coverageConditionsFlagName = "coverage-conditions"
 
 	diffFlagName      = "diff"
 	diffTestsFlagName = "diff-tests"

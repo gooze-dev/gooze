@@ -259,6 +259,46 @@ func TestRunCmd_CoverageProfileFlag(t *testing.T) {
 	mockWorkflow.AssertExpectations(t)
 }
 
+func TestRunCmd_CoverageConditionsFlag(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		args []string
+		env  string
+		want bool
+	}{
+		{name: "on by default", args: []string{"run", "./..."}, want: true},
+		{name: "flag turns it off", args: []string{"run", "--coverage-conditions=false", "./..."}, want: false},
+		{name: "env turns it off", args: []string{"run", "./..."}, env: "false", want: false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.env != "" {
+				t.Setenv("GOOZE_RUN_COVERAGE_CONDITIONS", tt.env)
+			}
+
+			mockWorkflow := domainmocks.NewMockWorkflow(t)
+
+			cmd := newRootCmd()
+			cmd.AddCommand(newRunCmd())
+			cmd.SetOut(&bytes.Buffer{})
+			cmd.SetErr(&bytes.Buffer{})
+
+			originalWorkflow := workflow
+			workflow = mockWorkflow
+			defer func() { workflow = originalWorkflow }()
+			// Rebind run.coverage_conditions to a fresh, unset flag so later tests see the default.
+			defer newRunCmd()
+
+			mockWorkflow.On("Test", mock.Anything, mock.MatchedBy(func(args domain.TestArgs) bool {
+				return args.CoverageConditions == tt.want
+			})).Return(nil)
+
+			cmd.SetArgs(tt.args)
+			require.NoError(t, cmd.Execute())
+			mockWorkflow.AssertExpectations(t)
+		})
+	}
+}
+
 func TestRunCmd_CoverageProfileDefaultsEmpty(t *testing.T) {
 	mockWorkflow := domainmocks.NewMockWorkflow(t)
 

@@ -43,6 +43,7 @@ func TestConfigDefaults(t *testing.T) {
 		"run.mutation_memory":            0,
 		"run.mutation_disk":              0,
 		"run.coverage_profile":           "",
+		"run.coverage_conditions":        true,
 		"run.diff":                       "",
 		"run.diff_tests":                 "file",
 		"run.mutagens":                   []string{},

@@ -25,6 +25,8 @@ var runParallelFlag int
 var runShardFlag string
 var runEstimateFlag bool
 var runCoverageProfileFlag string
+
+var runCoverageConditionsFlag bool
 var runDiffFlag string
 
 // runPatternFlag (--run) and runMutagensFlag (--mutagens) narrow a run to
@@ -99,23 +101,32 @@ func newRunCmd() *cobra.Command {
 // the config.
 func runTestArgs(estimateArgs domain.EstimateArgs, shardIndex, totalShards int, minimums domain.Thresholds) domain.TestArgs {
 	return domain.TestArgs{
-		EstimateArgs:    estimateArgs,
-		Reports:         estimateArgs.Reports,
-		Threads:         configInt(config.KeyRunParallel),
-		ShardIndex:      shardIndex,
-		TotalShardCount: totalShards,
-		MutationTimeout: time.Duration(configInt(config.KeyRunMutationTimeout)) * time.Second,
-		MutationMemory:  int64(configInt(config.KeyRunMutationMemory)) << mebibyteShift,
-		MutationDisk:    int64(configInt(config.KeyRunMutationDisk)) << mebibyteShift,
-		CoverageProfile: m.Path(viper.GetString(config.KeyRunCoverageProfile)),
-		Workspace:       domain.WorkspaceMode(viper.GetString(config.KeyRunWorkspace)),
-		Thresholds:      minimums,
-		FailFast:        domain.FailFast(viper.GetString(config.KeyRunFailFast)),
+		EstimateArgs:       estimateArgs,
+		Reports:            estimateArgs.Reports,
+		Threads:            configInt(config.KeyRunParallel),
+		ShardIndex:         shardIndex,
+		TotalShardCount:    totalShards,
+		MutationTimeout:    time.Duration(configInt(config.KeyRunMutationTimeout)) * time.Second,
+		MutationMemory:     int64(configInt(config.KeyRunMutationMemory)) << mebibyteShift,
+		MutationDisk:       int64(configInt(config.KeyRunMutationDisk)) << mebibyteShift,
+		CoverageProfile:    m.Path(viper.GetString(config.KeyRunCoverageProfile)),
+		CoverageConditions: viper.GetBool(config.KeyRunCoverageConditions),
+		Workspace:          domain.WorkspaceMode(viper.GetString(config.KeyRunWorkspace)),
+		Thresholds:         minimums,
+		FailFast:           domain.FailFast(viper.GetString(config.KeyRunFailFast)),
 	}
 }
 
 func init() {
 	rootCmd.AddCommand(runCmd)
+}
+
+// configureCoverageFlags adds the flags of a run with a coverage profile.
+func configureCoverageFlags(cmd *cobra.Command) {
+	cmd.Flags().StringVar(&runCoverageProfileFlag, coverageProfileFlagName, schemaDefault[string](config.KeyRunCoverageProfile), "path to a Go coverage profile; mutations on uncovered lines are reported as not_covered without running tests")
+	bindFlagToConfig(cmd.Flags().Lookup(coverageProfileFlagName), config.KeyRunCoverageProfile)
+	cmd.Flags().BoolVar(&runCoverageConditionsFlag, coverageConditionsFlagName, schemaDefault[bool](config.KeyRunCoverageConditions), "with --coverage-profile, also report the mutations of a condition as not_covered when the code it guards never ran")
+	bindFlagToConfig(cmd.Flags().Lookup(coverageConditionsFlagName), config.KeyRunCoverageConditions)
 }
 
 // configureDiffFlags adds the flags that set a diff run's scope.
@@ -143,9 +154,7 @@ func configureRunFlags(cmd *cobra.Command) (report.ThresholdFlags, report.Thresh
 	cmd.Flags().StringVarP(&runShardFlag, "shard", "s", "", "shard index and total shard count in the format INDEX/TOTAL (e.g., 0/3)")
 	cmd.Flags().BoolVar(&runEstimateFlag, "estimate", false, "list source files and applicable mutation counts without running tests")
 
-	cmd.Flags().StringVar(&runCoverageProfileFlag, coverageProfileFlagName, schemaDefault[string](config.KeyRunCoverageProfile), "path to a Go coverage profile; mutations on uncovered lines are reported as not_covered without running tests")
-	bindFlagToConfig(cmd.Flags().Lookup(coverageProfileFlagName), config.KeyRunCoverageProfile)
-
+	configureCoverageFlags(cmd)
 	configureDiffFlags(cmd)
 
 	cmd.Flags().StringVar(&runPatternFlag, runFlagName, "", "mutate only functions matching this regular expression, as for go test -run (matches Name, or Type.Name for methods)")

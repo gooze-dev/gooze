@@ -109,3 +109,106 @@ func TestCoverageIndex_Uncovered_UnknownLinesAreNotUncovered(t *testing.T) {
 		t.Fatal("file missing from the profile must not be uncovered")
 	}
 }
+
+// The profile of
+//
+//	10	if a < b {
+//	11		return a
+//	12	}
+//	13	return b
+//
+// when a < b never held.
+const guardProfile = "mode: set\nmod/a.go:10.2,10.11 1 3\nmod/a.go:10.11,12.3 1 0\nmod/a.go:13.2,13.10 1 3\n"
+
+func TestCoverageIndex_UncoveredAt(t *testing.T) {
+	idx, err := ParseCoverage([]byte(guardProfile + "mod/b.go:10.11,12.3 1 0\nmod/b.go:10.11,12.3 1 2\nmod/d.go:10.11,12.3 1 0\n"))
+	require.NoError(t, err)
+
+	tests := []struct {
+		name         string
+		path         string
+		line, column int
+		want         bool
+	}{
+		{"first statement of the block that never ran", "a.go", 11, 3, true},
+		{"start of that block", "a.go", 10, 11, true},
+		{"last column of that block", "a.go", 12, 2, true},
+		{"end of that block, which is past it", "a.go", 12, 3, false},
+		{"the condition, on the line of the block's brace", "a.go", 10, 5, false},
+		{"before the block on its first line", "a.go", 10, 10, false},
+		{"a block that ran", "a.go", 13, 2, false},
+		{"outside every block", "a.go", 3, 1, false},
+		{"a file the profile lacks", "c.go", 11, 3, false},
+		{"a block that ran in one of its entries", "b.go", 11, 3, false},
+		{"before a block that never ran, on its first line", "d.go", 10, 5, false},
+		{"after the start of a block on its first line", "d.go", 10, 12, true},
+		{"on the last line of a block, left of its first column", "d.go", 12, 1, true},
+		{"past a block that never ran", "d.go", 13, 1, false},
+		{"the line before a block, right of its first column", "d.go", 9, 20, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, idx.UncoveredAt(tt.path, tt.line, tt.column))
+		})
+	}
+
+	var none *CoverageIndex
+
+	require.False(t, none.UncoveredAt("a.go", 11, 3))
+}
+
+func TestCoverageIndex_NilCoversNothing(t *testing.T) {
+	var none *CoverageIndex
+
+	require.False(t, none.Covers("a.go", 11))
+	require.False(t, none.Uncovered("a.go", 11))
+}
+
+func TestParseCoverage_CountBelowOneIsNotCovered(t *testing.T) {
+	idx, err := ParseCoverage([]byte("mode: count\nmod/a.go:10.1,12.5 2 -1\nmod/a.go:14.1,15.5 1 0\n"))
+	require.NoError(t, err)
+
+	require.True(t, idx.Uncovered("a.go", 11))
+	require.True(t, idx.Uncovered("a.go", 14))
+}
+
+func TestParseCoverage_PathOfOneLetter(t *testing.T) {
+	idx, err := ParseCoverage([]byte("mode: set\na:10.1,12.5 2 1\n:10.1,12.5 2 1\n"))
+	require.NoError(t, err)
+
+	require.Len(t, idx.files, 1)
+	require.True(t, idx.Covers("a", 11))
+}
+
+func TestCoverageIndex_PathAsTheProfileWritesIt(t *testing.T) {
+	idx, err := ParseCoverage([]byte("mode: set\na.go:10.1,12.5 2 1\n"))
+	require.NoError(t, err)
+
+	require.True(t, idx.Covers("a.go", 11))
+	require.False(t, idx.Covers("ba.go", 11))
+}
+
+func TestCoverageIndex_ShortestPathIsTheFile(t *testing.T) {
+	// Many entries, so that a pick by map order would fail on some run.
+	profile := "mode: set\nmod/a.go:10.1,12.5 2 1\nmod/x/a.go:10.1,12.5 2 0\nmod/y/a.go:10.1,12.5 2 0\n" +
+		"mod/z/a.go:10.1,12.5 2 0\nmod/w/a.go:10.1,12.5 2 0\n"
+
+	for range 20 {
+		idx, err := ParseCoverage([]byte(profile))
+		require.NoError(t, err)
+
+		require.True(t, idx.Covers("a.go", 11))
+		require.Equal(t, "mod/w/a.go", idx.resolve("w/a.go"))
+		require.Empty(t, idx.resolve("missing.go"))
+	}
+}
+
+func TestCoverageIndex_SameLengthPathsResolveByName(t *testing.T) {
+	idx, err := ParseCoverage([]byte("mode: set\nb/a.go:10.1,12.5 2 0\na/a.go:10.1,12.5 2 1\nc/a.go:10.1,12.5 2 0\n"))
+	require.NoError(t, err)
+
+	for range 20 {
+		require.Equal(t, "a/a.go", idx.resolve("a.go"))
+	}
+}

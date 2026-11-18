@@ -77,6 +77,9 @@ type TestArgs struct {
 	TotalShardCount int
 	MutationTimeout time.Duration
 	CoverageProfile m.Path
+	// CoverageConditions reports the mutants of a condition as not covered
+	// when the profile shows the code it guards never ran.
+	CoverageConditions bool
 	// Workspace selects how mutants are built: through -overlay in the project
 	// (the default) or in a per-worker deep copy of it.
 	Workspace WorkspaceMode
@@ -384,6 +387,8 @@ func (w *workflow) testMutations(ctx context.Context, args TestArgs, sel Selecti
 		slog.Error("Failed to load coverage profile", "error", err)
 		return nil, fmt.Errorf("load coverage profile: %w", err)
 	}
+
+	gate.Conditions = args.CoverageConditions
 
 	// Fail-fast cancels runCtx with its verdict; an interruption cancels ctx.
 	runCtx, stop := context.WithCancelCause(ctx)
@@ -1552,7 +1557,7 @@ func (w *workflow) dispatchMutations(
 				return nil
 			}
 
-			if gate != nil && gate.Uncovered(mutation.Source.Origin.ShortPath, mutation.Line) {
+			if gate.NotCovered(mutation) {
 				mutation.MutatedCode = nil
 				result := resultForStatus(mutation, rpt.NotCovered)
 

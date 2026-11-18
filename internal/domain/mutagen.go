@@ -133,6 +133,7 @@ func (mg *mutagen) StreamMutationsWith(ctx context.Context, source rpt.Source, o
 	}
 
 	funcs := buildFuncIndex(file, fset)
+	fn = findGuards(file, fset.File(file.Pos())).mark(content, fn)
 	typed := typeInfo{
 		strings:    mg.stringExprs(ctx, source, mutationTypes),
 		integers:   mg.integerExprs(ctx, source, mutationTypes),
