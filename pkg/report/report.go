@@ -73,6 +73,9 @@ const (
 	// NotCovered indicates the mutated line is not exercised by any test, so the
 	// mutation survives without running tests.
 	NotCovered
+	// Equivalent indicates the mutation can't change what the program does,
+	// so no test can kill it: it is not tested and not scored.
+	Equivalent
 )
 
 // String returns the lower-case name of the status.
@@ -90,6 +93,8 @@ func (t TestStatus) String() string {
 		return "timeout"
 	case NotCovered:
 		return "not_covered"
+	case Equivalent:
+		return "equivalent"
 	default:
 		return "unknown"
 	}
@@ -170,11 +175,14 @@ type MutationResult struct {
 	Err        string     `yaml:"err,omitempty"`
 	// KilledBy names the first test that failed on a killed mutation.
 	KilledBy string `yaml:"killed_by,omitempty"`
+	// Rule names the built-in rule that holds an Equivalent mutation for one.
+	Rule string `yaml:"rule,omitempty"`
 }
 
 // Index is the content of IndexFileName: totals per status and, per source
 // hash and mutagen, the report files that hold its results. FailedMutations
-// counts Error and Timeout; IgnoredMutations counts Skipped.
+// counts Error and Timeout; IgnoredMutations counts Skipped. The Equivalent
+// mutations are apart from TotalMutations.
 type Index struct {
 	TotalMutations      int           `yaml:"total_mutations"`
 	KilledMutations     int           `yaml:"killed_mutations"`
@@ -182,6 +190,7 @@ type Index struct {
 	FailedMutations     int           `yaml:"failed_mutations"`
 	IgnoredMutations    int           `yaml:"ignored_mutations"`
 	NotCoveredMutations int           `yaml:"not_covered_mutations"`
+	EquivalentMutations int           `yaml:"equivalent_mutations,omitempty"`
 	Result              []IndexResult `yaml:"result"`
 }
 

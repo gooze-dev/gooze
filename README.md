@@ -115,6 +115,19 @@ mutants would be killed if they ran, because they enter the block, so the score
 can come out lower than before. `--coverage-conditions=false`
 (`run.coverage_conditions: false`) runs them as before.
 
+Equivalent mutants: a mutant that a built-in rule holds for equivalent (it
+can't change what the program does, so no test can kill it) is no longer
+dropped silently. A run records it with the status `equivalent` and the name of
+the rule (`minimum-operand`, `counting-loop`, `ignored-result`, `map-size-hint`,
+`strconv-bit-size`, `half-rotation`, `enum-bound`), without testing it. It is
+not scored: it is left out of the score, the mutation counts, the thresholds,
+the survivor list and the SARIF, Code Climate and annotation formats. The score
+line names how many there are, e.g.
+`Mutation score: 100.00% (13 killed, 0 survived; 3 equivalent, not scored)`,
+`gooze report view --all` lists them, `_index.yaml` counts them as
+`equivalent_mutations` and the metrics format as `gooze_mutants_equivalent`.
+Files whose results are cached show theirs once they are tested again.
+
 Cached results for a file are invalidated when its source content hash changes,
 a test file or another source file of its package changes, a mutator version changes (e.g. after upgrading
 Gooze), or the source file is deleted. The score `gooze run` prints covers every

@@ -100,8 +100,8 @@ func walkIgnored(
 	var walkErr error
 
 	constraints := map[ast.Node]bool{}
-	markEquivalentSubtrees(file, constraints)
-	partlyEquivalent := markPartlyEquivalent(file, constraints)
+	markEquivalentSubtrees(file, skipEquivalent(constraints))
+	partlyEquivalent := markPartlyEquivalent(file, skipEquivalent(constraints))
 
 	ast.Inspect(file, func(n ast.Node) bool {
 		if n == nil || walkErr != nil {
@@ -117,7 +117,7 @@ func walkIgnored(
 		nodeLine := fset.PositionFor(n.Pos(), true).Line
 		mutations := generateMutationsForNode(mutationType, n, fset, content, source, checks.typed.comparison)
 
-		for _, mutation := range checks.keepBuilding(mutationType, dropEquivalent(mutations, n, fset, partlyEquivalent), n, fset, content) {
+		for _, mutation := range checks.keepBuilding(mutationType, sortEquivalent(mutations, n, fset, partlyEquivalent, false), n, fset, content) {
 			if !ignore.markIgnored(&mutation, nodeLine, fset, tokenFile, content, funcs) {
 				continue
 			}

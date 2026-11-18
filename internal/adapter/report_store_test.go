@@ -1741,3 +1741,40 @@ func TestLocalReportStore_KeepsTheKillingTest(t *testing.T) {
 		t.Fatalf("loaded %+v, want %+v", got, want)
 	}
 }
+
+func TestLocalReportStore_KeepsEquivalentMutantsApart(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	rs := &LocalReportStore{}
+	want := []m.MutationOutcome{
+		{MutationID: "m1", Status: rpt.Killed},
+		{MutationID: "m2", Status: rpt.Equivalent, Rule: "minimum-operand"},
+	}
+	report := m.Report{
+		Source: rpt.Source{Origin: &rpt.File{FullPath: "/abs/path/file1.go", Hash: "abc123"}},
+		Result: m.Result{mgen.Comparison: want},
+	}
+
+	require.NoError(t, rs.SaveReports(context.Background(), m.Path(dir), reportSpill(t, report)))
+	require.NoError(t, rs.RegenerateIndex(context.Background(), m.Path(dir)))
+
+	index, err := os.ReadFile(filepath.Join(dir, rpt.IndexFileName))
+	require.NoError(t, err)
+	require.Contains(t, string(index), "total_mutations: 1\n")
+	require.Contains(t, string(index), "killed_mutations: 1\n")
+	require.Contains(t, string(index), "equivalent_mutations: 1\n")
+
+	loaded, err := rs.LoadSpillReports(context.Background(), m.Path(dir))
+	require.NoError(t, err)
+
+	defer loaded.Close()
+
+	var got []m.MutationOutcome
+
+	require.NoError(t, loaded.Range(func(_ uint64, report m.Report) error {
+		got = append(got, report.Result[mgen.Comparison]...)
+		return nil
+	}))
+	require.Equal(t, want, got)
+}

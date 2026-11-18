@@ -26,6 +26,15 @@ type Mutation struct {
 	// condition: the first statement of an if or for body, or of a case
 	// clause. Nil when the mutation isn't in such a condition.
 	Guards *Position
+	// Equivalent is set when a built-in rule holds the mutation for
+	// equivalent: it is reported as such and never tested.
+	Equivalent *Equivalent
+}
+
+// Equivalent is why a mutation can't change what the program does.
+type Equivalent struct {
+	// Rule names the built-in rule that recognized it.
+	Rule string
 }
 
 // Position is a place in a source file, both counted from 1; the column in

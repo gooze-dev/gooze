@@ -9,22 +9,40 @@ import (
 	m "gooze.dev/pkg/gooze/internal/model"
 )
 
-// markEquivalentSubtrees adds to skip the expressions of file whose every
+// The built-in rules that hold a mutant for equivalent, as reports name them.
+const (
+	RuleIgnoredResult  = "ignored-result"
+	RuleMapSizeHint    = "map-size-hint"
+	RuleStrconvBitSize = "strconv-bit-size"
+	RuleHalfRotation   = "half-rotation"
+	RuleEnumBound      = "enum-bound"
+)
+
+// markEquivalent records that every mutant of n is equivalent by rule.
+type markEquivalent func(n ast.Node, rule string)
+
+// skipEquivalent returns the markEquivalent that adds each node to skip, for
+// a walk that leaves the equivalent mutants out.
+func skipEquivalent(skip map[ast.Node]bool) markEquivalent {
+	return func(n ast.Node, _ string) { skip[n] = true }
+}
+
+// markEquivalentSubtrees marks the expressions of file whose every
 // mutant is equivalent, so the walk generates nothing inside them: the
 // constant values returned next to a non-nil error or a false ok, which
 // callers don't read (see markIgnoredResults), and the size hints of
 // make(map[K]V, n), which only change allocation (see markMapSizeHint).
-func markEquivalentSubtrees(file *ast.File, skip map[ast.Node]bool) {
+func markEquivalentSubtrees(file *ast.File, mark markEquivalent) {
 	ast.Inspect(file, func(n ast.Node) bool {
 		switch node := n.(type) {
 		case *ast.FuncDecl:
 			if node.Body != nil {
-				markIgnoredResults(node.Type, node.Body, skip)
+				markIgnoredResults(node.Type, node.Body, mark)
 			}
 		case *ast.FuncLit:
-			markIgnoredResults(node.Type, node.Body, skip)
+			markIgnoredResults(node.Type, node.Body, mark)
 		case *ast.CallExpr:
-			markMapSizeHint(node, skip)
+			markMapSizeHint(node, mark)
 		}
 
 		return true
@@ -37,7 +55,7 @@ func markEquivalentSubtrees(file *ast.File, skip map[ast.Node]bool) {
 // (makeslice: cap out of range), as are channel buffer sizes, which are
 // behavior. The map type is recognized from the syntax, so a named map type
 // keeps its mutants.
-func markMapSizeHint(call *ast.CallExpr, skip map[ast.Node]bool) {
+func markMapSizeHint(call *ast.CallExpr, mark markEquivalent) {
 	if !isPredeclared(call.Fun, "make") {
 		return
 	}
@@ -47,7 +65,7 @@ func markMapSizeHint(call *ast.CallExpr, skip map[ast.Node]bool) {
 	switch args := call.Args; len(args) { //nolint:gocritic // see above
 	case 2:
 		if _, ok := args[0].(*ast.MapType); ok && isSafeHint(args[1]) {
-			skip[args[1]] = true
+			mark(args[1], RuleMapSizeHint)
 		}
 	}
 }
@@ -81,7 +99,7 @@ func isSafeHint(e ast.Expr) bool {
 // values are marked (see isConstantValue): a computed value may be a partial
 // result that callers do read, as io.Reader's n is. Nested function literals
 // are left to their own call.
-func markIgnoredResults(fnType *ast.FuncType, body *ast.BlockStmt, skip map[ast.Node]bool) {
+func markIgnoredResults(fnType *ast.FuncType, body *ast.BlockStmt, mark markEquivalent) {
 	results := resultTypes(fnType)
 	if len(results) == 0 {
 		return
@@ -101,7 +119,7 @@ func markIgnoredResults(fnType *ast.FuncType, body *ast.BlockStmt, skip map[ast.
 		if ok && len(ret.Results) == len(results) && failure(ret.Results[last]) { //gooze:ignore comparison
 			for _, value := range ret.Results[:last] {
 				if isConstantValue(value) {
-					skip[value] = true
+					mark(value, RuleIgnoredResult)
 				}
 			}
 		}
@@ -238,19 +256,19 @@ var strconvBitSizeArg = map[string]int{"ParseInt": 2, "ParseUint": 2, "ParseFloa
 // size. RotateLeft isn't one: its size depends on the host.
 var halfRotations = map[string]string{"RotateLeft8": "4", "RotateLeft16": "8", "RotateLeft32": "16", "RotateLeft64": "32"}
 
-// markPartlyEquivalent finds the nodes with an equivalent mutant next to ones
-// that can be killed, so skip can't hold them whole.
+// markPartlyEquivalent returns, with their rule, the nodes with an equivalent
+// mutant next to ones that can be killed, so they can't be marked whole.
 //
 // In the literal bitSize 64 of a strconv call, ParseFloat treats every size but
-// 32 as 64, so its literal goes in skip. ParseInt and ParseUint read 0 as the
+// 32 as 64, so its literal is marked whole. ParseInt and ParseUint read 0 as the
 // size of int, which is 64 on the 64-bit hosts gooze mostly runs on, so only
 // the mutant to 0 is equivalent: the literal is in the returned set.
 //
 // Rotating by half a value's size gives the same result in either direction,
 // so the sign of such an amount is in the returned set; the literal inside
 // keeps its mutants. See dropEquivalent.
-func markPartlyEquivalent(file *ast.File, skip map[ast.Node]bool) map[ast.Node]bool {
-	partly := map[ast.Node]bool{}
+func markPartlyEquivalent(file *ast.File, mark markEquivalent) map[ast.Node]string {
+	partly := map[ast.Node]string{}
 	strconvName, bitsName := importName(file, "strconv"), importName(file, "math/bits")
 
 	ast.Inspect(file, func(n ast.Node) bool {
@@ -260,7 +278,7 @@ func markPartlyEquivalent(file *ast.File, skip map[ast.Node]bool) map[ast.Node]b
 		}
 
 		if sign := halfRotationSign(call, bitsName); sign != nil {
-			partly[sign] = true
+			partly[sign] = RuleHalfRotation
 		}
 
 		function, lit := strconvBitSize64(call, strconvName)
@@ -269,9 +287,9 @@ func markPartlyEquivalent(file *ast.File, skip map[ast.Node]bool) map[ast.Node]b
 		case lit == nil:
 		// Equivalent: ParseFloat sorts first of the functions strconvBitSize64 returns.
 		case function == "ParseFloat": //gooze:ignore comparison
-			skip[lit] = true
+			mark(lit, RuleStrconvBitSize)
 		default:
-			partly[lit] = true
+			partly[lit] = RuleStrconvBitSize
 		}
 
 		return true
@@ -340,22 +358,33 @@ func importName(file *ast.File, path string) string {
 	return ""
 }
 
-// dropEquivalent removes the equivalent mutants of n when n is in partly (see
-// markPartlyEquivalent): every mutant of a sign, and the one that turns a
-// number into 0.
-func dropEquivalent(mutations []m.Mutation, n ast.Node, fset *token.FileSet, partly map[ast.Node]bool) []m.Mutation {
-	if !partly[n] {
+// sortEquivalent handles the equivalent mutants of n when n is in partly
+// (see markPartlyEquivalent): every mutant of a sign, and the one that turns
+// a number into 0. With keep they stay, with their rule; without it they are
+// removed.
+func sortEquivalent(mutations []m.Mutation, n ast.Node, fset *token.FileSet, partly map[ast.Node]string, keep bool) []m.Mutation {
+	rule, ok := partly[n]
+	if !ok {
 		return mutations
 	}
 
-	if _, isSign := n.(*ast.UnaryExpr); isSign {
-		return nil
-	}
-
+	_, isSign := n.(*ast.UnaryExpr)
 	offset := fset.Position(n.Pos()).Offset
 
-	return slices.DeleteFunc(mutations, func(mutation m.Mutation) bool {
+	isEquivalent := func(mutation m.Mutation) bool {
 		// Equivalent: a number's mutants start with 0 or 1, so <= '0' is == '0'.
-		return mutation.MutatedCode[offset] == '0' //gooze:ignore comparison
-	})
+		return isSign || mutation.MutatedCode[offset] == '0' //gooze:ignore comparison
+	}
+
+	if !keep {
+		return slices.DeleteFunc(mutations, isEquivalent)
+	}
+
+	for i, mutation := range mutations {
+		if isEquivalent(mutation) {
+			mutations[i].Equivalent = &m.Equivalent{Rule: rule}
+		}
+	}
+
+	return mutations
 }

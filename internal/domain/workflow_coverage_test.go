@@ -102,6 +102,19 @@ func TestWorkflow_Test_CoverageGateSkipsUncovered(t *testing.T) {
 func coverageStatuses(t *testing.T, profile string, conditions bool, mutations ...m.Mutation) map[string]rpt.TestStatus {
 	t.Helper()
 
+	statuses := map[string]rpt.TestStatus{}
+	for id, outcome := range runOutcomes(t, profile, conditions, mutations...) {
+		statuses[id] = outcome.Status
+	}
+
+	return statuses
+}
+
+// runOutcomes runs the mutations of pkg/foo.go under profile and returns what
+// is reported of each one; the tests kill every mutant they run.
+func runOutcomes(t *testing.T, profile string, conditions bool, mutations ...m.Mutation) map[string]m.MutationOutcome {
+	t.Helper()
+
 	ctx := context.Background()
 
 	mockFSAdapter := new(domainmocks.MockSourceFSAdapter)
@@ -166,17 +179,39 @@ func coverageStatuses(t *testing.T, profile string, conditions bool, mutations .
 		CoverageConditions: conditions,
 	}))
 
-	statuses := map[string]rpt.TestStatus{}
+	outcomes := map[string]m.MutationOutcome{}
 
 	for _, report := range saved {
 		for _, entries := range report.Result {
 			for _, entry := range entries {
-				statuses[entry.MutationID] = entry.Status
+				outcomes[entry.MutationID] = entry
 			}
 		}
 	}
 
-	return statuses
+	return outcomes
+}
+
+func TestWorkflow_Test_EquivalentMutantIsReportedWithoutRunning(t *testing.T) {
+	outcomes := runOutcomes(t, "mode: set\n", true,
+		m.Mutation{ID: "equivalent", Line: 10, Equivalent: &m.Equivalent{Rule: "minimum-operand"}},
+		m.Mutation{ID: "tested", Line: 10},
+	)
+
+	assert.Equal(t, map[string]m.MutationOutcome{
+		"equivalent": {MutationID: "equivalent", Status: rpt.Equivalent, Rule: "minimum-operand"},
+		"tested":     {MutationID: "tested", Status: rpt.Killed},
+	}, outcomes)
+}
+
+func TestWorkflow_Test_EquivalentWinsOverNotCovered(t *testing.T) {
+	outcomes := runOutcomes(t, "mode: set\nmod/pkg/foo.go:10.1,10.20 1 0\n", true,
+		m.Mutation{ID: "equivalent", Line: 10, Equivalent: &m.Equivalent{Rule: "counting-loop"}},
+		m.Mutation{ID: "uncovered", Line: 10},
+	)
+
+	assert.Equal(t, rpt.Equivalent, outcomes["equivalent"].Status)
+	assert.Equal(t, rpt.NotCovered, outcomes["uncovered"].Status)
 }
 
 // The profile of

@@ -82,3 +82,27 @@ func TestSummary_TimeoutsKilled(t *testing.T) {
 	assert.True(t, merged.TimeoutsKilled, "a merge keeps the policy")
 	assert.InDelta(t, 0.75, merged.Score(), 0)
 }
+
+func TestSummary_EquivalentIsCountedApart(t *testing.T) {
+	var s Summary
+
+	for _, status := range []TestStatus{Killed, Survived, Equivalent, Equivalent} {
+		s.Add(status)
+	}
+
+	// Not in Total: nothing that reads the totals counts a mutant no test can kill.
+	assert.Equal(t, Summary{Total: 2, Killed: 1, Survived: 1, Equivalent: 2}, s)
+	assert.Equal(t, 2, s.Scored())
+	assert.InDelta(t, 0.5, s.Score(), 1e-9)
+
+	s.Merge(Summary{Total: 1, Killed: 1, Equivalent: 3})
+	assert.Equal(t, Summary{Total: 3, Killed: 2, Survived: 1, Equivalent: 5}, s)
+}
+
+func TestSummarize_Equivalent(t *testing.T) {
+	r := Report{Result: []Result{
+		{Name: "comparison", Mutations: []MutationResult{{Status: Killed}, {Status: Equivalent, Rule: "minimum-operand"}}},
+	}}
+
+	assert.Equal(t, Summary{Total: 1, Killed: 1, Equivalent: 1}, Summarize(r))
+}

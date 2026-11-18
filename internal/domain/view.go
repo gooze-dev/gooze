@@ -400,8 +400,11 @@ func reportFailures(report m.Report) (survivors, buildErrors []Survivor) {
 
 	for _, mutationType := range sortedResultTypes(report.Result) {
 		for _, entry := range report.Result[mutationType] {
-			// Equivalent mutant: Killed is the lowest status.
-			if entry.Status == rpt.Killed { //gooze:ignore comparison
+			// A switch, not ==, which would add equivalent mutants: Killed is
+			// the lowest status and Equivalent the highest.
+			switch entry.Status { //nolint:exhaustive // the others are failures
+			case rpt.Killed, rpt.Equivalent:
+				// Equivalent: no test could kill it, so it is no survivor.
 				continue
 			}
 

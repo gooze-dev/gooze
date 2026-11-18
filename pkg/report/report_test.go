@@ -15,6 +15,7 @@ func TestTestStatus_Values(t *testing.T) {
 	assert.Equal(t, TestStatus(3), Timeout)
 	assert.Equal(t, TestStatus(4), Error)
 	assert.Equal(t, TestStatus(5), NotCovered)
+	assert.Equal(t, TestStatus(6), Equivalent)
 }
 
 func TestTestStatus_String(t *testing.T) {
@@ -25,6 +26,7 @@ func TestTestStatus_String(t *testing.T) {
 		Timeout:        "timeout",
 		Error:          "error",
 		NotCovered:     "not_covered",
+		Equivalent:     "equivalent",
 		TestStatus(42): "unknown",
 	}
 
@@ -37,6 +39,12 @@ func TestTestStatus_EncodesAsInteger(t *testing.T) {
 	data, err := yaml.Marshal(MutationResult{MutationID: "m", Status: NotCovered})
 	require.NoError(t, err)
 	assert.Equal(t, "mutationid: m\nstatus: 5\n", string(data))
+}
+
+func TestMutationResult_RuleOfAnEquivalentMutant(t *testing.T) {
+	data, err := yaml.Marshal(MutationResult{MutationID: "m", Status: Equivalent, Rule: "minimum-operand"})
+	require.NoError(t, err)
+	assert.Equal(t, "mutationid: m\nstatus: 6\nrule: minimum-operand\n", string(data))
 }
 
 func TestSource_Key(t *testing.T) {

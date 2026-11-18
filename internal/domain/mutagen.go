@@ -8,7 +8,6 @@ import (
 	"go/ast"
 	"go/scanner"
 	"go/token"
-	"slices"
 	"sync"
 
 	"gooze.dev/pkg/gooze/internal/domain/mutagens"
@@ -47,6 +46,9 @@ type MutationOptions struct {
 	// Arid leaves out the mutants of arid code (see findArid); with Ignored
 	// they are streamed, with AridReason as their reason.
 	Arid AridOptions
+	// Equivalent streams the mutants the built-in rules hold for equivalent
+	// too, each with its Equivalent set, instead of leaving them out.
+	Equivalent bool
 }
 
 // mutagen handles pure mutation generation logic.
@@ -125,12 +127,7 @@ func (mg *mutagen) StreamMutationsWith(ctx context.Context, source rpt.Source, o
 		return err
 	}
 
-	ignore := buildIgnoreIndex(file, fset, content)
-	ignore.arid = findArid(file, fset.File(file.Pos()), opts.Arid)
-
-	if opts.EnumBounds {
-		ignore.enumBounds = mg.enumBoundMutants(ctx, source, fset, file)
-	}
+	ignore := mg.ignoreIndex(ctx, source, fset, file, content, opts)
 
 	funcs := buildFuncIndex(file, fset)
 	fn = findGuards(file, fset.File(file.Pos())).mark(content, fn)
@@ -140,6 +137,7 @@ func (mg *mutagen) StreamMutationsWith(ctx context.Context, source rpt.Source, o
 		unordered:  mg.unorderedExprs(ctx, source, mutationTypes),
 		comparison: mg.comparisonFacts(ctx, source, mutationTypes),
 	}
+	typed.comparison.Equivalent = opts.Equivalent
 	checks := newBuildChecks(file, fset, typed)
 
 	walk := walkMutations
@@ -156,6 +154,20 @@ func (mg *mutagen) StreamMutationsWith(ctx context.Context, source rpt.Source, o
 	checks.logSkipped(source.Origin.FullPath)
 
 	return nil
+}
+
+// ignoreIndex returns what opts and the directives of file leave out of its
+// mutations.
+func (mg *mutagen) ignoreIndex(ctx context.Context, source rpt.Source, fset *token.FileSet, file *ast.File, content []byte, opts MutationOptions) ignoreIndex {
+	ignore := buildIgnoreIndex(file, fset, content)
+	ignore.arid = findArid(file, fset.File(file.Pos()), opts.Arid)
+	ignore.equivalent = opts.Equivalent
+
+	if opts.EnumBounds {
+		ignore.enumBounds = mg.enumBoundMutants(ctx, source, fset, file)
+	}
+
+	return ignore
 }
 
 func validateSource(source rpt.Source) error {
@@ -241,18 +253,33 @@ func (ix ignoreIndex) keepChanged(
 		return mutations
 	}
 
-	return slices.DeleteFunc(mutations, func(mutation m.Mutation) bool {
+	kept := mutations[:0]
+
+	for _, mutation := range mutations {
 		// An unchanged mutation (offset -1) has no position, so no rule.
 		offset := firstDifference(content, mutation.MutatedCode)
 		line := fset.PositionFor(tokenFile.Pos(offset), true).Line
 		replacement := func() string { return replacementOf(content, mutation.MutatedCode) }
 
-		return ix.isEnumBoundMutant(mutationType, offset, mutation.MutatedCode) ||
-			ix.arid.contains(offset) ||
+		if ix.arid.contains(offset) ||
 			ix.line[line].ignoresMutant(mutationType, replacement) ||
 			ix.funcRule(line).ignoresMutant(mutationType, replacement) ||
-			ix.file.ignoresMutant(mutationType, replacement)
-	})
+			ix.file.ignoresMutant(mutationType, replacement) {
+			continue
+		}
+
+		if ix.isEnumBoundMutant(mutationType, offset, mutation.MutatedCode) {
+			if !ix.equivalent {
+				continue
+			}
+
+			mutation.Equivalent = &m.Equivalent{Rule: RuleEnumBound}
+		}
+
+		kept = append(kept, mutation)
+	}
+
+	return kept
 }
 
 // replacementOf returns the token mutated writes where it differs from
@@ -320,16 +347,22 @@ func walkMutations(
 		return nil
 	}
 
-	var walkErr error
-
-	// Nodes the walk skips: type constraints, and subtrees whose every mutant
-	// is equivalent.
+	// The type constraints, which the walk skips, and the subtrees whose
+	// every mutant is equivalent, by their rule.
 	constraints := map[ast.Node]bool{}
-	markEquivalentSubtrees(file, constraints)
-	partlyEquivalent := markPartlyEquivalent(file, constraints)
+	equivalent := map[ast.Node]string{}
+	mark := func(n ast.Node, rule string) { equivalent[n] = rule }
+
+	markEquivalentSubtrees(file, mark)
+
+	walk := &mutationWalk{
+		mutationType: mutationType, file: file, fset: fset, content: content, source: source,
+		ignore: ignore, funcs: funcs, checks: checks, differ: differ, fn: fn,
+		partlyEquivalent: markPartlyEquivalent(file, mark),
+	}
 
 	ast.Inspect(file, func(n ast.Node) bool {
-		if n == nil || walkErr != nil {
+		if n == nil || walk.err != nil {
 			return false
 		}
 
@@ -337,26 +370,65 @@ func walkMutations(
 			return false
 		}
 
-		mutate, descend := ignore.visit(n, fset, mutationType)
-		if !mutate {
-			return descend
+		rule, whole := equivalent[n]
+		if !whole {
+			return walk.visit(n, "")
 		}
 
-		mutations := generateMutationsForNode(mutationType, n, fset, content, source, checks.typed.comparison)
-		for _, mutation := range ignore.keepChanged(checks.keepBuilding(mutationType, dropEquivalent(mutations, n, fset, partlyEquivalent), n, fset, content), fset, file, content, mutationType) {
-			mutation.Line = lineForOffset(content, firstDifference(content, mutation.MutatedCode))
-			mutation.Funcs = funcs.at(mutation.Line)
-			mutation.DiffCode = differ.Diff(content, mutation.MutatedCode)
-
-			if walkErr = fn(mutation); walkErr != nil {
-				break
-			}
+		if ignore.equivalent {
+			ast.Inspect(n, func(inner ast.Node) bool { return inner != nil && walk.visit(inner, rule) })
 		}
 
-		return descend && walkErr == nil
+		return false
 	})
 
-	return walkErr
+	return walk.err
+}
+
+// mutationWalk hands the mutations of one mutagen in a file to fn, node by
+// node, until fn fails with err.
+type mutationWalk struct {
+	mutationType     mgen.Type
+	file             *ast.File
+	fset             *token.FileSet
+	content          []byte
+	source           rpt.Source
+	ignore           ignoreIndex
+	funcs            funcIndex
+	checks           *buildChecks
+	differ           Differ
+	fn               func(m.Mutation) error
+	partlyEquivalent map[ast.Node]string
+	err              error
+}
+
+// visit hands over the mutations of n, as equivalent by rule if it has one,
+// and reports whether the walk goes on inside n.
+func (w *mutationWalk) visit(n ast.Node, rule string) bool {
+	mutate, descend := w.ignore.visit(n, w.fset, w.mutationType)
+	if !mutate {
+		return descend
+	}
+
+	mutations := generateMutationsForNode(w.mutationType, n, w.fset, w.content, w.source, w.checks.typed.comparison)
+	mutations = sortEquivalent(mutations, n, w.fset, w.partlyEquivalent, w.ignore.equivalent)
+	mutations = w.checks.keepBuilding(w.mutationType, mutations, n, w.fset, w.content)
+
+	for _, mutation := range w.ignore.keepChanged(mutations, w.fset, w.file, w.content, w.mutationType) {
+		if rule != "" {
+			mutation.Equivalent = &m.Equivalent{Rule: rule}
+		}
+
+		mutation.Line = lineForOffset(w.content, firstDifference(w.content, mutation.MutatedCode))
+		mutation.Funcs = w.funcs.at(mutation.Line)
+		mutation.DiffCode = w.differ.Diff(w.content, mutation.MutatedCode)
+
+		if w.err = w.fn(mutation); w.err != nil {
+			return false
+		}
+	}
+
+	return descend
 }
 
 // markTypeParams adds the type parameter list of a generic function or type

@@ -1,6 +1,7 @@
 package report
 
-// Summary counts mutation results by status.
+// Summary counts mutation results by status. Total leaves out the Equivalent
+// ones: no test can kill them, so they are no part of what was tested.
 type Summary struct {
 	Total      int
 	Killed     int
@@ -9,16 +10,20 @@ type Summary struct {
 	Timeout    int
 	Error      int
 	NotCovered int
+	Equivalent int
 	// TimeoutsKilled counts timed-out mutations as killed in the score
 	// (threshold.timeouts: killed); Timeout still counts them.
 	TimeoutsKilled bool
 }
 
-// Add counts one mutation result. Unknown statuses count only towards Total.
+// Add counts one mutation result. Unknown statuses count only towards Total,
+// and Equivalent only towards itself.
 func (s *Summary) Add(status TestStatus) {
-	s.Total++
-
 	switch status {
+	case Equivalent:
+		s.Equivalent++
+
+		return
 	case Killed:
 		s.Killed++
 	case Survived:
@@ -32,6 +37,8 @@ func (s *Summary) Add(status TestStatus) {
 	case NotCovered:
 		s.NotCovered++
 	}
+
+	s.Total++
 }
 
 // Merge adds the counts of other to s.
@@ -43,6 +50,7 @@ func (s *Summary) Merge(other Summary) {
 	s.Timeout += other.Timeout
 	s.Error += other.Error
 	s.NotCovered += other.NotCovered
+	s.Equivalent += other.Equivalent
 	s.TimeoutsKilled = s.TimeoutsKilled || other.TimeoutsKilled
 }
 

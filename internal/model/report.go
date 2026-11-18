@@ -16,6 +16,8 @@ type MutationOutcome struct {
 	// KilledBy names the first test that failed on a killed mutation, or ""
 	// when the output doesn't name one.
 	KilledBy string
+	// Rule names the built-in rule that holds an equivalent mutation for one.
+	Rule string
 }
 
 // Report represents the result of testing a mutation source file.
