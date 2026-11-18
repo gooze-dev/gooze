@@ -18,6 +18,7 @@ func TestDefaults(t *testing.T) {
 		KeyRunMutationMemory:           0,
 		KeyRunMutationDisk:             0,
 		KeyRunCoverageProfile:          "",
+		KeyRunCoverageConditions:       true,
 		KeyRunDiff:                     "",
 		KeyRunDiffTests:                "file",
 		KeyRunMutagens:                 []string{},
@@ -81,7 +82,7 @@ func TestLookup_Object(t *testing.T) {
 		names = append(names, child.Name)
 	}
 
-	assert.Equal(t, []string{"parallel", "mutation_timeout", "mutation_memory", "mutation_disk", "coverage_profile", "diff", "diff_tests", "mutagens", "workspace", "fail_fast", "go_cache", "go_cache_size", "go_cache_prewarm", "test_flags"}, names)
+	assert.Equal(t, []string{"parallel", "mutation_timeout", "mutation_memory", "mutation_disk", "coverage_profile", "coverage_conditions", "diff", "diff_tests", "mutagens", "workspace", "fail_fast", "go_cache", "go_cache_size", "go_cache_prewarm", "test_flags"}, names)
 }
 
 func TestLookup_Missing(t *testing.T) {
@@ -107,6 +108,7 @@ func TestLookup_Kinds(t *testing.T) {
 		KeyPathsExclude:              KindStringList,
 		KeyRunMutationTimeout:        KindInt,
 		KeyRunCoverageProfile:        KindString,
+		KeyRunCoverageConditions:     KindBool,
 		KeyRunDiff:                   KindString,
 		KeyRunDiffTests:              KindEnum,
 		KeyRunMutagens:               KindStringList,

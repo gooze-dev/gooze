@@ -116,6 +116,7 @@ func runField() Field {
 		{Name: "mutation_memory", Kind: KindInt, Default: 0, Init: 1024, Min: new(0), Doc: "Memory limit of a mutation's tests in MiB, all their processes together; above it they are killed and the mutation is reported as a timeout. 0 is no limit. Linux only."},
 		{Name: "mutation_disk", Kind: KindInt, Default: 0, Init: 1024, Min: new(0), Doc: "Disk space limit of a mutation's tests in MiB, for their temp files and their build; above it they are killed and the mutation is reported as a timeout. 0 is no limit."},
 		{Name: "coverage_profile", Kind: KindString, Default: "", Doc: "Go coverage profile; mutations on uncovered lines are reported as not_covered without running tests."},
+		{Name: "coverage_conditions", Kind: KindBool, Default: true, Doc: "With a coverage profile, also report the mutations of a condition as not_covered when the code it guards never ran: the body of an if or a for statement, or a case clause. false runs them."},
 		{Name: diffName, Kind: KindString, Default: "", Doc: "Git ref to diff against; only lines changed since its merge base with HEAD are mutated. Requires git. Empty runs everything."},
 		{
 			Name: "diff_tests", Kind: KindEnum, Default: diffTestsPolicies[0], Enum: slices.Clone(diffTestsPolicies),

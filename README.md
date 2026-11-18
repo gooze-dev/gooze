@@ -106,6 +106,15 @@ of your own as `receiver.Function`, such as `example.com/app/audit.*` or
 `arid`. It is off by default. Results cached before it was turned on stay
 until their file changes; pass `--no-cache` once to drop them.
 
+Conditions of untested branches: with `--coverage-profile`, the mutants of a
+condition are reported as `not_covered`, without running tests, when the profile
+shows that the code it guards never ran: the body of an `if` or a `for`
+statement, or a `case` clause. In `if err != nil { return err }` with no test of
+the error, the finding is the missing test, not a weak one. Some of those
+mutants would be killed if they ran, because they enter the block, so the score
+can come out lower than before. `--coverage-conditions=false`
+(`run.coverage_conditions: false`) runs them as before.
+
 Cached results for a file are invalidated when its source content hash changes,
 a test file or another source file of its package changes, a mutator version changes (e.g. after upgrading
 Gooze), or the source file is deleted. The score `gooze run` prints covers every

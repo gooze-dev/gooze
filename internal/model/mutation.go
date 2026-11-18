@@ -22,6 +22,16 @@ type Mutation struct {
 	// Ignored is set when a //gooze:ignore directive keeps the mutation from
 	// being tested; only a listing of the ignored mutations holds those.
 	Ignored *Ignored
+	// Guards is where the code starts that only runs through the mutated
+	// condition: the first statement of an if or for body, or of a case
+	// clause. Nil when the mutation isn't in such a condition.
+	Guards *Position
+}
+
+// Position is a place in a source file, both counted from 1; the column in
+// bytes, as in a Go coverage profile.
+type Position struct {
+	Line, Column int
 }
 
 // Ignored is why a directive ignores a mutation.
