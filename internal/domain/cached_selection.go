@@ -86,12 +86,16 @@ func (w *workflow) selectedCached(ctx context.Context, sel Selection, sources so
 
 	selected := map[string]bool{}
 
+	// The stored results hold the equivalent mutants too.
+	opts := sel.Options
+	opts.Equivalent = true
+
 	err = sources.scanned.Range(func(_ uint64, source rpt.Source) error {
 		if _, ok := changed[source.Key()]; ok || !sel.InScope(source) || !owns(source) {
 			return nil
 		}
 
-		return w.streamMutations(ctx, source, sel.Options, func(mutation m.Mutation) error {
+		return w.streamMutations(ctx, source, opts, func(mutation m.Mutation) error {
 			if sel.Includes(mutation) {
 				selected[source.Key()+"/"+mutationKey(mutation.Type.Name, mutation.Type.Version, mutation.ID)] = true
 			}

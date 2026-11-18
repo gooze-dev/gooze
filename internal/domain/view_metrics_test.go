@@ -23,6 +23,7 @@ gooze_mutants_not_covered 1
 gooze_mutants_timeout 0
 gooze_mutants_skipped 0
 gooze_mutants_error 1
+gooze_mutants_equivalent 0
 # EOF
 `
 
@@ -48,6 +49,7 @@ gooze_diff_mutants_not_covered 1
 gooze_diff_mutants_timeout 0
 gooze_diff_mutants_skipped 0
 gooze_diff_mutants_error 1
+gooze_diff_mutants_equivalent 0
 # EOF
 `, out, "a --diff run scores only the changed lines, so its metrics don't compare with a full run's")
 }
@@ -63,6 +65,7 @@ gooze_mutants_not_covered 0
 gooze_mutants_timeout 0
 gooze_mutants_skipped 0
 gooze_mutants_error 0
+gooze_mutants_equivalent 0
 # EOF
 `, out, "no score without mutations: 100% would read like a result")
 }

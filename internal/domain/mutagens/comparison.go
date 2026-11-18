@@ -6,7 +6,6 @@ import (
 	"go/parser"
 	"go/token"
 	"regexp"
-	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -31,7 +30,17 @@ type Facts struct {
 	// gives keys in [0, len) over: slices, arrays, pointers to arrays,
 	// strings and integers. A map's keys can be negative.
 	Indexed map[[2]int]bool
+	// Equivalent generates the mutants the rules hold for equivalent too,
+	// each with its Equivalent set, instead of leaving them out.
+	Equivalent bool
 }
+
+// The rules that hold a comparison mutant for equivalent, as reports name
+// them.
+const (
+	RuleMinimumOperand = "minimum-operand"
+	RuleCountingLoop   = "counting-loop"
+)
 
 // isIndexed reports whether facts know e as indexed.
 func (f Facts) isIndexed(fset *token.FileSet, e ast.Expr) bool {
@@ -42,16 +51,35 @@ func (f Facts) isIndexed(fset *token.FileSet, e ast.Expr) bool {
 // facts tell about the types: the key of a range over an indexed expression
 // is in [0, len), so 0 is its minimum and len(x)-1 its maximum.
 func GenerateComparisonMutationsWith(n ast.Node, fset *token.FileSet, content []byte, source rpt.Source, facts Facts) []m.Mutation {
-	alternatives := getComparisonAlternatives
-
-	if expr, ok := n.(*ast.BinaryExpr); ok && isComparisonOp(expr.Op) {
-		skip := []token.Token{equivalentMutantOp(expr, fset, content, facts), countingLoopMutantOp(expr, fset, content)}
-		alternatives = func(op token.Token) []token.Token {
-			return slices.DeleteFunc(getComparisonAlternatives(op), func(alt token.Token) bool { return slices.Contains(skip, alt) })
-		}
+	expr, ok := n.(*ast.BinaryExpr)
+	if !ok || !isComparisonOp(expr.Op) {
+		return nil
 	}
 
-	return generateBinaryExprMutations(n, fset, content, source, mgen.Comparison, isComparisonOp, alternatives)
+	// The operator of the equivalent mutant of each rule; the first rule
+	// keeps a mutant that two hold for equivalent.
+	equivalent := map[token.Token]string{countingLoopMutantOp(expr, fset, content): RuleCountingLoop}
+	equivalent[equivalentMutantOp(expr, fset, content, facts)] = RuleMinimumOperand
+
+	var mutations []m.Mutation
+
+	for _, op := range getComparisonAlternatives(expr.Op) {
+		rule, isEquivalent := equivalent[op]
+		if isEquivalent && !facts.Equivalent {
+			continue
+		}
+
+		generated := generateBinaryExprMutations(n, fset, content, source, mgen.Comparison, isComparisonOp, func(token.Token) []token.Token { return []token.Token{op} })
+		for i := range generated {
+			if isEquivalent {
+				generated[i].Equivalent = &m.Equivalent{Rule: rule}
+			}
+		}
+
+		mutations = append(mutations, generated...)
+	}
+
+	return mutations
 }
 
 func isComparisonOp(op token.Token) bool {

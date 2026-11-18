@@ -290,3 +290,46 @@ func TestMutagen_EnumBoundsCachedPerPackage(t *testing.T) {
 	assert.Contains(t, stream(), "return k >= KindC")
 	assert.Equal(t, 5, parser.parsed, "p.go and the changed kinds.go")
 }
+
+func TestMutagen_EnumBoundMutantsStreamAsEquivalent(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "kinds.go"), []byte(kinds), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "p.go"), []byte("package p\n\nfunc f(k Kind) bool {\n\treturn k == KindC\n}\n"), 0o600))
+
+	mg, ok := newTestMutagen().(domain.MutagenWithOptions)
+	require.True(t, ok)
+
+	stream := func(opts domain.MutationOptions) (tested, equivalent []string) {
+		err := mg.StreamMutationsWith(context.Background(), makeSourceV2(t, filepath.Join(dir, "p.go")), opts, func(mutation m.Mutation) error {
+			text := mutatedLineTexts([]m.Mutation{mutation})[0]
+
+			if mutation.Equivalent == nil {
+				tested = append(tested, text)
+
+				return nil
+			}
+
+			require.Equal(t, domain.RuleEnumBound, mutation.Equivalent.Rule)
+
+			equivalent = append(equivalent, text)
+
+			return nil
+		}, mgen.Comparison)
+		require.NoError(t, err)
+
+		return tested, equivalent
+	}
+
+	tested, equivalent := stream(domain.MutationOptions{EnumBounds: true, Equivalent: true})
+	assert.Equal(t, []string{"return k >= KindC"}, equivalent)
+	assert.NotContains(t, tested, "return k >= KindC")
+
+	left, none := stream(domain.MutationOptions{EnumBounds: true})
+	assert.Equal(t, tested, left)
+	assert.Empty(t, none)
+
+	// Without the rule the mutant is one to test.
+	all, none := stream(domain.MutationOptions{Equivalent: true})
+	assert.Contains(t, all, "return k >= KindC")
+	assert.Empty(t, none)
+}

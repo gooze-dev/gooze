@@ -171,6 +171,8 @@ func (s *SimpleUI) DisplayCompletedTestInfo(ctx context.Context, currentMutation
 		status = formatTestStatus(results[0].Status)
 		// " by TestX" after the status, and nothing without a test name.
 		killedBy = strings.TrimSuffix(" by "+results[0].KilledBy, " by ")
+		// " (rule)" after an equivalent mutant, and nothing without a rule.
+		killedBy += strings.TrimSuffix(" ("+results[0].Rule+")", " ()")
 	}
 
 	s.printf("Completed mutation %s (%s) -> %s%s\n", currentMutation.ID[:4], currentMutation.Type.Name, status, killedBy)

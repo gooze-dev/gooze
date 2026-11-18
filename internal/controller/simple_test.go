@@ -409,6 +409,7 @@ func TestSimpleUI_DisplayCompletedTestInfo_NamesTheKillingTest(t *testing.T) {
 		want    string
 	}{
 		"killed by a test":     {outcome: m.MutationOutcome{Status: rpt.Killed, KilledBy: "TestSum"}, want: "Completed mutation abcd (arithmetic) -> killed by TestSum\n"},
+		"equivalent by a rule": {outcome: m.MutationOutcome{Status: rpt.Equivalent, Rule: "minimum-operand"}, want: "Completed mutation abcd (arithmetic) -> equivalent (minimum-operand)\n"},
 		"killed, test unknown": {outcome: m.MutationOutcome{Status: rpt.Killed}, want: "Completed mutation abcd (arithmetic) -> killed\n"},
 	} {
 		t.Run(name, func(t *testing.T) {

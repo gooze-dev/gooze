@@ -495,8 +495,12 @@ func (w *workflow) generateMutations(ctx context.Context, sources pkg.FileSpill[
 		return nil, total, fmt.Errorf("create mutations spill: %w", err)
 	}
 
+	// A run reports the equivalent mutants too.
+	opts := sel.Options
+	opts.Equivalent = true
+
 	err = sources.Range(func(_ uint64, source rpt.Source) error {
-		return w.streamMutations(ctx, source, sel.Options, func(mutation m.Mutation) error {
+		return w.streamMutations(ctx, source, opts, func(mutation m.Mutation) error {
 			if (include != nil && !include(mutation)) || !sel.Includes(mutation) {
 				return nil
 			}
@@ -1557,9 +1561,8 @@ func (w *workflow) dispatchMutations(
 				return nil
 			}
 
-			if gate.NotCovered(mutation) {
+			if result, ok := resultWithoutRun(mutation, gate); ok {
 				mutation.MutatedCode = nil
-				result := resultForStatus(mutation, rpt.NotCovered)
 
 				if err := sendOutcome(ctx, results, mutationOutcome{mutation: mutation, result: result}); err != nil {
 					return err
@@ -1573,6 +1576,23 @@ func (w *workflow) dispatchMutations(
 			return dispatch(ctx, queues, mutation)
 		})
 	}
+}
+
+// resultWithoutRun returns the result of a mutation that isn't run, if it is one: an
+// equivalent mutant, whatever its coverage, or one no test covers.
+func resultWithoutRun(mutation m.Mutation, gate *CoverageIndex) (m.Result, bool) {
+	if mutation.Equivalent != nil {
+		result := resultForStatus(mutation, rpt.Equivalent)
+		result[mutation.Type][0].Rule = mutation.Equivalent.Rule
+
+		return result, true
+	}
+
+	if gate.NotCovered(mutation) {
+		return resultForStatus(mutation, rpt.NotCovered), true
+	}
+
+	return nil, false
 }
 
 // sendOutcome delivers a precomputed outcome to the collector, respecting cancellation.

@@ -41,6 +41,17 @@ func formatMutationScore(score domain.MutationScore) string {
 	return fmt.Sprintf("%.2f%% (%s)", score.Score()*100, breakdown)
 }
 
+// equivalentCount names the equivalent mutants apart from the scored ones, or
+// returns "" without any.
+func equivalentCount(score domain.MutationScore) string {
+	// Equivalent mutants: counts are never negative.
+	if score.Equivalent == 0 { //gooze:ignore comparison
+		return ""
+	}
+
+	return fmt.Sprintf("; %d equivalent, not scored", score.Equivalent)
+}
+
 // runReportsHint tells where a narrowed run wrote its reports and how to add
 // them to the main reports, and that a shard left its thresholds to merge.
 func runReportsHint(score domain.MutationScore) string {
@@ -60,7 +71,7 @@ func runReportsHint(score domain.MutationScore) string {
 func scoreBreakdown(score domain.MutationScore) string {
 	// Equivalent mutants: counts and lengths are never negative.
 	if score.Total == 0 { //gooze:ignore comparison
-		return noMutations(score)
+		return noMutations(score) + equivalentCount(score)
 	}
 
 	parts := []string{
@@ -85,7 +96,7 @@ func scoreBreakdown(score domain.MutationScore) string {
 		}
 	}
 
-	text := strings.Join(parts, ", ")
+	text := strings.Join(parts, ", ") + equivalentCount(score)
 	// Equivalent mutants: counts and lengths are never negative.
 	if score.Cached > 0 || score.Tested > 0 { //gooze:ignore comparison
 		text += fmt.Sprintf("; %d cached, %d tested", score.Cached, score.Tested)

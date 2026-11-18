@@ -88,10 +88,10 @@ func TestMerge_ScopesShowTheDiffThenTheWholeProject(t *testing.T) {
 	assert.Contains(t, diffCQ.String(), `"check_name": "gooze/survived"`)
 	assert.Equal(t, "gooze_mutation_score_percent 66.67\n"+
 		"gooze_mutants_total 3\ngooze_mutants_killed 2\ngooze_mutants_survived 1\ngooze_mutants_not_covered 0\n"+
-		"gooze_mutants_timeout 0\ngooze_mutants_skipped 0\ngooze_mutants_error 0\n"+
+		"gooze_mutants_timeout 0\ngooze_mutants_skipped 0\ngooze_mutants_error 0\ngooze_mutants_equivalent 0\n"+
 		"gooze_diff_mutation_score_percent 50\n"+
 		"gooze_diff_mutants_total 2\ngooze_diff_mutants_killed 1\ngooze_diff_mutants_survived 1\ngooze_diff_mutants_not_covered 0\n"+
-		"gooze_diff_mutants_timeout 0\ngooze_diff_mutants_skipped 0\ngooze_diff_mutants_error 0\n"+
+		"gooze_diff_mutants_timeout 0\ngooze_diff_mutants_skipped 0\ngooze_diff_mutants_error 0\ngooze_diff_mutants_equivalent 0\n"+
 		"# EOF\n", metrics.String(), "one file, both scopes, one # EOF")
 	assert.Equal(t, 1, strings.Count(metrics.String(), "# EOF"))
 

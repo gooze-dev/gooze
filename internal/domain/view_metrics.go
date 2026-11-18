@@ -72,6 +72,7 @@ func writeScopeMetrics(out *strings.Builder, score rpt.Summary, diff bool) {
 		{"timeout", score.Timeout},
 		{"skipped", score.Skipped},
 		{"error", score.Error},
+		{"equivalent", score.Equivalent},
 	} {
 		fmt.Fprintf(out, "%smutants_%s %d\n", prefix, metric.name, metric.count)
 	}

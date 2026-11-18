@@ -1,12 +1,17 @@
 package domain_test
 
 import (
+	"context"
+	"errors"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	domain "gooze.dev/pkg/gooze/internal/domain"
 	m "gooze.dev/pkg/gooze/internal/model"
 	mgen "gooze.dev/pkg/gooze/pkg/mutagen"
 )
@@ -469,4 +474,133 @@ func TestMutagen_HalfRotationsKeepTheAmountsNumbers(t *testing.T) {
 	src := "package p\n\nimport \"math/bits\"\n\nfunc f(x uint64) uint64 {\n\treturn bits.RotateLeft64(x, -32)\n}\n"
 
 	require.Len(t, streamTypesFromSource(t, src, mgen.Numbers), 2)
+}
+
+const equivalentRules = `package p
+
+import (
+	"errors"
+	"math/bits"
+	"strconv"
+)
+
+func f(s []int, n uint8) (int, error) {
+	if len(s) == 0 {
+		return 1, errors.New("empty")
+	}
+
+	m := make(map[int]int, 8)
+
+	for i := 0; i < len(s); i++ {
+		m[i] = s[i]
+	}
+
+	_ = bits.RotateLeft8(n, -4)
+	_, _ = strconv.ParseInt("1", 10, 64)
+	_, _ = strconv.ParseFloat("1", 64)
+
+	return len(m), nil
+}
+`
+
+// streamWith returns the mutations of src under opts.
+func streamWith(t *testing.T, src string, opts domain.MutationOptions, types ...mgen.Type) []m.Mutation {
+	t.Helper()
+
+	path := filepath.Join(t.TempDir(), "p.go")
+	require.NoError(t, os.WriteFile(path, []byte(src), 0o600))
+
+	mg, ok := newTestMutagen().(domain.MutagenWithOptions)
+	require.True(t, ok)
+
+	var mutations []m.Mutation
+
+	require.NoError(t, mg.StreamMutationsWith(context.Background(), makeSourceV2(t, path), opts, func(mutation m.Mutation) error {
+		mutations = append(mutations, mutation)
+
+		return nil
+	}, types...))
+
+	return mutations
+}
+
+func TestMutagen_StreamsEquivalentMutantsWithTheirRule(t *testing.T) {
+	types := []mgen.Type{mgen.Comparison, mgen.Numbers, mgen.Unary}
+
+	rules := map[int][]string{}
+	tested := map[string]bool{}
+
+	for _, mutation := range streamWith(t, equivalentRules, domain.MutationOptions{Equivalent: true}, types...) {
+		if mutation.Equivalent == nil {
+			tested[mutation.ID] = true
+
+			continue
+		}
+
+		require.NotEmpty(t, mutation.DiffCode)
+		require.Equal(t, []string{"f"}, mutation.Funcs)
+
+		rules[mutation.Line] = append(rules[mutation.Line], mutation.Equivalent.Rule)
+	}
+
+	require.Equal(t, map[int][]string{
+		10: {"minimum-operand"},
+		11: {"ignored-result"},
+		14: {"map-size-hint", "map-size-hint"},
+		16: {"counting-loop"},
+		20: {"half-rotation", "half-rotation"},
+		21: {"strconv-bit-size"},
+		22: {"strconv-bit-size", "strconv-bit-size"},
+	}, rules)
+
+	// The mutants to test are those of a run that leaves the equivalent ones out.
+	plain := map[string]bool{}
+
+	for _, mutation := range streamWith(t, equivalentRules, domain.MutationOptions{}, types...) {
+		require.Nil(t, mutation.Equivalent)
+
+		plain[mutation.ID] = true
+	}
+
+	require.Equal(t, plain, tested)
+}
+
+// The listing of ignored mutants leaves the equivalent ones out: a directive
+// that covers them ignores only what a run would test.
+func TestMutagen_IgnoredLeavesEquivalentMutantsOut(t *testing.T) {
+	types := []mgen.Type{mgen.Comparison, mgen.Numbers, mgen.Unary}
+
+	tested := streamWith(t, equivalentRules, domain.MutationOptions{}, types...)
+	require.NotEmpty(t, tested)
+
+	require.Len(t, ignoredIn(t, "//gooze:ignore\n\n"+equivalentRules, types...), len(tested))
+}
+
+// A failing callback stops the walk inside an equivalent subtree too.
+func TestMutagen_StopsInsideAnEquivalentSubtree(t *testing.T) {
+	const src = `package p
+
+func f(n int) map[int]int {
+	return make(map[int]int, (n+1)*2)
+}
+`
+
+	path := filepath.Join(t.TempDir(), "p.go")
+	require.NoError(t, os.WriteFile(path, []byte(src), 0o600))
+
+	mg, ok := newTestMutagen().(domain.MutagenWithOptions)
+	require.True(t, ok)
+
+	stop := errors.New("stop")
+	calls := 0
+
+	err := mg.StreamMutationsWith(context.Background(), makeSourceV2(t, path), domain.MutationOptions{Equivalent: true}, func(mutation m.Mutation) error {
+		require.NotNil(t, mutation.Equivalent)
+
+		calls++
+
+		return stop
+	}, mgen.Arithmetic)
+	require.ErrorIs(t, err, stop)
+	require.Equal(t, 1, calls)
 }

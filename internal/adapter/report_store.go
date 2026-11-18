@@ -651,6 +651,7 @@ func encodeResult(result m.Result) []rpt.Result {
 				Status:     res.Status,
 				Err:        errString,
 				KilledBy:   res.KilledBy,
+				Rule:       res.Rule,
 			})
 		}
 
@@ -678,6 +679,7 @@ func decodeResult(entries []rpt.Result) m.Result {
 				Status:     mut.Status,
 				Err:        nil,
 				KilledBy:   mut.KilledBy,
+				Rule:       mut.Rule,
 			})
 		}
 	}
@@ -711,7 +713,6 @@ func (b *indexBuilder) add(report m.Report) {
 
 	for mutationType, results := range report.Result {
 		for _, result := range results {
-			b.index.TotalMutations++
 			b.rs.incrementStatusCount(&b.index, result.Status)
 		}
 
@@ -790,8 +791,14 @@ func (rs *LocalReportStore) sourceHex(source rpt.Source) string {
 	return source.Origin.Hash
 }
 
+// incrementStatusCount counts a mutation of status in index: an equivalent
+// one apart from the total.
 func (rs *LocalReportStore) incrementStatusCount(index *rpt.Index, status rpt.TestStatus) {
 	switch status {
+	case rpt.Equivalent:
+		index.EquivalentMutations++
+
+		return
 	case rpt.Killed:
 		index.KilledMutations++
 	case rpt.Survived:
@@ -803,6 +810,8 @@ func (rs *LocalReportStore) incrementStatusCount(index *rpt.Index, status rpt.Te
 	case rpt.NotCovered:
 		index.NotCoveredMutations++
 	}
+
+	index.TotalMutations++
 }
 
 func (rs *LocalReportStore) validateReportsDir(dirPath string) error {

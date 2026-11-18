@@ -395,3 +395,25 @@ func TestWorkflow_View_DiffRunNamesItsChangedTests(t *testing.T) {
 	summary := viewSummary(t, domain.ViewArgs{Reports: m.Path(dir)})
 	assert.Equal(t, 2, summary.Score.ChangedTests)
 }
+
+func TestWorkflow_View_EquivalentMutantsAreNoSurvivors(t *testing.T) {
+	dir := t.TempDir()
+	diff := []byte(survivorDiff)
+	a := rpt.Source{Origin: &rpt.File{ShortPath: "pkg/a.go", FullPath: "/p/pkg/a.go", Hash: "a"}}
+
+	writeReports(t, dir,
+		m.Report{Source: a, Result: m.Result{mgen.Comparison: {{MutationID: "a-1", Status: rpt.Killed}}}},
+		m.Report{Source: a, Result: m.Result{mgen.Comparison: {{MutationID: "a-2", Status: rpt.Equivalent, Rule: "minimum-operand"}}}, Diff: &diff},
+	)
+
+	summary := viewSummary(t, domain.ViewArgs{Reports: m.Path(dir)})
+
+	assert.Equal(t, rpt.Summary{Total: 1, Killed: 1, Equivalent: 1}, summary.Score.Summary)
+	assert.Empty(t, summary.Survivors)
+	assert.Empty(t, summary.BuildErrors)
+
+	out, err := viewFormatted(t, domain.ViewArgs{Reports: m.Path(dir), Format: domain.FormatMetrics}, false)
+	require.NoError(t, err)
+	assert.Contains(t, out, "gooze_mutants_total 1\n")
+	assert.Contains(t, out, "gooze_mutants_equivalent 1\n")
+}
